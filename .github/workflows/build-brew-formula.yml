@@ -56,8 +56,8 @@ jobs:
       - name: Extract checksums
         id: extract_checksums
         run: |
-          AMD64_SHA=$(cat checksums/checksum-amd64/checksum-amd64.txt | head -n 1)
-          ARM64_SHA=$(cat checksums/checksum-arm64/checksum-arm64.txt | head -n 1)
+          AMD64_SHA=$(cat checksums/checksum-safechain-agent-amd64/checksum-safechain-agent-amd64.txt | head -n 1)
+          ARM64_SHA=$(cat checksums/checksum-safechain-agent-arm64/checksum-safechain-agent-arm64.txt | head -n 1)
           
           echo "amd64_sha=$AMD64_SHA" >> $GITHUB_OUTPUT
           echo "arm64_sha=$ARM64_SHA" >> $GITHUB_OUTPUT
