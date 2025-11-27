@@ -71,7 +71,7 @@ jobs:
           AMD64_SHA="${{ steps.extract_checksums.outputs.amd64_sha }}"
           ARM64_SHA="${{ steps.extract_checksums.outputs.arm64_sha }}"
           BINARY_NAME="safechain-agent"
-          FORMULA_FILE="build/Formula/safechain-agent.rb"
+          FORMULA_FILE="Formula/safechain-agent.rb"
           
           # Update version
           sed -i "s/version \"[^\"]*\"/version \"$VERSION\"/" "$FORMULA_FILE"
@@ -96,7 +96,7 @@ jobs:
       - name: Prepare release files
         run: |
           # Copy formula to root
-          cp build/Formula/safechain-agent.rb safechain-agent.rb
+          cp Formula/safechain-agent.rb safechain-agent.rb
           
           # Rename binaries for release (GitHub releases need unique filenames)
           cp binaries/safechain-agent-amd64/safechain-agent safechain-agent-darwin-amd64
@@ -146,12 +146,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: safechain-agent.rb
-          path: build/Formula/safechain-agent.rb
+          path: Formula/safechain-agent.rb
           retention-days: 30
 
       - name: Output formula file
         run: |
           echo "## Updated Formula File"
           echo "\`\`\`ruby"
-          cat build/Formula/safechain-agent.rb
+          cat Formula/safechain-agent.rb
           echo "\`\`\`"

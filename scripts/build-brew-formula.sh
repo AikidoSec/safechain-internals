@@ -8,7 +8,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_DIR="$PROJECT_ROOT/build"
-FORMULA_DIR="$BUILD_DIR/Formula"
+FORMULA_DIR="$PROJECT_ROOT/Formula"
 FORMULA_FILE="$FORMULA_DIR/safechain-agent.rb"
 DIST_DIR="$PROJECT_ROOT/dist"
 BIN_DIR="$PROJECT_ROOT/bin"

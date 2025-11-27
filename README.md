@@ -111,7 +111,7 @@ To install the formula after building:
 make brew-install
 
 # Or manually using brew
-brew install --build-from-source build/Formula/safechain-agent.rb
+brew install --build-from-source Formula/safechain-agent.rb
 ```
 
 The install script will:
