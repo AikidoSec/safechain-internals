@@ -20,9 +20,21 @@ class SafechainAgent < Formula
   end
 
   def install
-    # The downloaded file is the binary itself, rename and install it
+    # The downloaded file is the binary itself
+    # Homebrew downloads it to the build directory
+    # Find the downloaded file (it might have the exact name or be sanitized)
     binary_name = Hardware::CPU.intel? ? "safechain-agent-darwin-amd64" : "safechain-agent-darwin-arm64"
-    bin.install binary_name => "safechain-agent"
+    
+    # Try to find the file - Homebrew might have renamed it
+    downloaded_file = if File.exist?(binary_name)
+      binary_name
+    elsif (file = Dir.glob("*").find { |f| File.file?(f) && File.executable?(f) })
+      file
+    else
+      raise "Could not find downloaded binary file"
+    end
+    
+    bin.install downloaded_file => "safechain-agent"
     chmod 0755, bin/"safechain-agent"
   end
 
