@@ -1,0 +1,141 @@
+name: Build Agent
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+        description: 'Version to build'
+      go_version:
+        required: false
+        type: string
+        default: '1.21'
+        description: 'Go version to use'
+    outputs:
+      amd64_sha:
+        description: 'SHA256 checksum for amd64 binary'
+        value: ${{ jobs.collect-checksums.outputs.amd64_sha }}
+      arm64_sha:
+        description: 'SHA256 checksum for arm64 binary'
+        value: ${{ jobs.collect-checksums.outputs.arm64_sha }}
+      amd64_tarball:
+        description: 'Path to amd64 tarball artifact'
+        value: 'binary-amd64'
+      arm64_tarball:
+        description: 'Path to arm64 tarball artifact'
+        value: 'binary-arm64'
+
+jobs:
+  build-agent:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            goarch: amd64
+            runner: macos-14
+          - arch: arm64
+            goarch: arm64
+            runner: macos-14
+    
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - name: Run tests
+        run: |
+          echo "Running Go tests..."
+          go test -v ./...
+
+      - name: Build binary for ${{ matrix.arch }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+          GIT_COMMIT=$(git rev-parse --short HEAD)
+          
+          LDFLAGS="-X 'github.com/aikido/safechain-agent/cmd/daemon.version=$VERSION' \
+                   -X 'github.com/aikido/safechain-agent/cmd/daemon.buildTime=$BUILD_TIME' \
+                   -X 'github.com/aikido/safechain-agent/cmd/daemon.gitCommit=$GIT_COMMIT'"
+          
+          mkdir -p bin dist
+          
+          echo "Building darwin/${{ matrix.goarch }}..."
+          CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build \
+            -ldflags "$LDFLAGS -s -w" \
+            -trimpath \
+            -o bin/safechain-agent-darwin-${{ matrix.arch }} \
+            ./cmd/daemon
+
+      - name: Create tarball and calculate checksum
+        id: checksum
+        run: |
+          VERSION="${{ inputs.version }}"
+          BINARY_NAME="safechain-agent"
+          
+          # Create tarball
+          mkdir -p temp-${{ matrix.arch }}
+          cp bin/safechain-agent-darwin-${{ matrix.arch }} temp-${{ matrix.arch }}/$BINARY_NAME
+          tar -czf dist/$BINARY_NAME-$VERSION-darwin-${{ matrix.arch }}.tar.gz -C temp-${{ matrix.arch }} $BINARY_NAME
+          SHA=$(shasum -a 256 dist/$BINARY_NAME-$VERSION-darwin-${{ matrix.arch }}.tar.gz | cut -d' ' -f1)
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          
+          echo "${{ matrix.arch }} SHA256: $SHA"
+          
+          # Cleanup temp directory
+          rm -rf temp-${{ matrix.arch }}
+
+      - name: Upload binary and tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.arch }}
+          path: |
+            bin/safechain-agent-darwin-${{ matrix.arch }}
+            dist/safechain-agent-${{ inputs.version }}-darwin-${{ matrix.arch }}.tar.gz
+          retention-days: 30
+
+      - name: Save checksum to file
+        run: |
+          echo "${{ steps.checksum.outputs.sha }}" > checksum-${{ matrix.arch }}.txt
+          echo "${{ matrix.arch }}" >> checksum-${{ matrix.arch }}.txt
+
+      - name: Upload checksum metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksum-${{ matrix.arch }}
+          path: checksum-${{ matrix.arch }}.txt
+          retention-days: 30
+
+  collect-checksums:
+    needs: build-agent
+    runs-on: ubuntu-latest
+    outputs:
+      amd64_sha: ${{ steps.extract.outputs.amd64_sha }}
+      arm64_sha: ${{ steps.extract.outputs.arm64_sha }}
+    steps:
+      - name: Download checksum artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: checksum-*
+          merge-multiple: false
+          path: checksums
+
+      - name: Extract checksums
+        id: extract
+        run: |
+          AMD64_SHA=$(cat checksums/checksum-amd64/checksum-amd64.txt | head -n 1)
+          ARM64_SHA=$(cat checksums/checksum-arm64/checksum-arm64.txt | head -n 1)
+          
+          echo "amd64_sha=$AMD64_SHA" >> $GITHUB_OUTPUT
+          echo "arm64_sha=$ARM64_SHA" >> $GITHUB_OUTPUT
+          
+          echo "AMD64 SHA256: $AMD64_SHA"
+          echo "ARM64 SHA256: $ARM64_SHA"
+

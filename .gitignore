@@ -33,3 +33,6 @@ go.work
 *.tar.gz
 *.zip
 
+# GitHub Actions
+!.github/workflows/
+

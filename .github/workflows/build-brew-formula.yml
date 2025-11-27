@@ -1,0 +1,161 @@
+name: Build Homebrew Formula
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0.0
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  extract-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Extract version from tag or PR
+        id: get_version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Extract version from tag
+            VERSION=${GITHUB_REF#refs/tags/v}
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Extracted version from tag: $VERSION"
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # For PRs, use PR number or default to dev
+            VERSION="pr-${{ github.event.pull_request.number }}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Using PR version: $VERSION"
+          else
+            echo "version=dev" >> $GITHUB_OUTPUT
+            echo "Using default version: dev"
+          fi
+
+  build-agent:
+    needs: extract-version
+    uses: ./.github/workflows/build-agent.yml
+    with:
+      version: ${{ needs.extract-version.outputs.version }}
+    secrets: inherit
+
+  update-formula:
+    needs: [build-agent, extract-version]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download checksum artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: checksum-*
+          merge-multiple: false
+          path: checksums
+
+      - name: Extract checksums
+        id: extract_checksums
+        run: |
+          AMD64_SHA=$(cat checksums/checksum-amd64/checksum-amd64.txt | head -n 1)
+          ARM64_SHA=$(cat checksums/checksum-arm64/checksum-arm64.txt | head -n 1)
+          
+          echo "amd64_sha=$AMD64_SHA" >> $GITHUB_OUTPUT
+          echo "arm64_sha=$ARM64_SHA" >> $GITHUB_OUTPUT
+          
+          echo "AMD64 SHA256: $AMD64_SHA"
+          echo "ARM64 SHA256: $ARM64_SHA"
+
+      - name: Update formula with checksums
+        run: |
+          VERSION="${{ needs.extract-version.outputs.version }}"
+          AMD64_SHA="${{ steps.extract_checksums.outputs.amd64_sha }}"
+          ARM64_SHA="${{ steps.extract_checksums.outputs.arm64_sha }}"
+          BINARY_NAME="safechain-agent"
+          FORMULA_FILE="build/Formula/safechain-agent.rb"
+          
+          # Update version
+          sed -i "s/version \"[^\"]*\"/version \"$VERSION\"/" "$FORMULA_FILE"
+          
+          # Update URLs
+          sed -i "s|url \"[^\"]*darwin-amd64[^\"]*\"|url \"https://github.com/${{ github.repository }}/releases/download/v$VERSION/$BINARY_NAME-$VERSION-darwin-amd64.tar.gz\"|" "$FORMULA_FILE"
+          sed -i "s|url \"[^\"]*darwin-arm64[^\"]*\"|url \"https://github.com/${{ github.repository }}/releases/download/v$VERSION/$BINARY_NAME-$VERSION-darwin-arm64.tar.gz\"|" "$FORMULA_FILE"
+          
+          # Update checksums using a Python script for reliability
+          python3 <<EOF
+          import re
+          
+          with open("$FORMULA_FILE", "r") as f:
+              content = f.read()
+          
+          # Update amd64 checksum (in intel block)
+          content = re.sub(
+              r'(if Hardware::CPU\.intel\?.*?sha256 ")([^"]+)(")',
+              rf'\1$AMD64_SHA\3',
+              content,
+              flags=re.DOTALL
+          )
+          
+          # Update arm64 checksum (in arm block)
+          content = re.sub(
+              r'(if Hardware::CPU\.arm\?.*?sha256 ")([^"]+)(")',
+              rf'\1$ARM64_SHA\3',
+              content,
+              flags=re.DOTALL
+          )
+          
+          # Fallback: simple replacements if regex didn't work
+          content = content.replace('sha256 "REPLACE_WITH_ACTUAL_SHA256"', f'sha256 "$AMD64_SHA"', 1)
+          content = content.replace('sha256 "REPLACE_WITH_ACTUAL_SHA256"', f'sha256 "$ARM64_SHA"', 1)
+          
+          with open("$FORMULA_FILE", "w") as f:
+              f.write(content)
+          EOF
+          
+          echo "Formula updated:"
+          cat "$FORMULA_FILE"
+
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          merge-multiple: false
+          path: binaries
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            binaries/binary-amd64/safechain-agent-${{ needs.extract-version.outputs.version }}-darwin-amd64.tar.gz
+            binaries/binary-arm64/safechain-agent-${{ needs.extract-version.outputs.version }}-darwin-arm64.tar.gz
+          body: |
+            ## safechain-agent ${{ needs.extract-version.outputs.version }}
+            
+            ### Installation
+            
+            ```bash
+            brew install --build-from-source build/Formula/safechain-agent.rb
+            ```
+            
+            ### Checksums
+            
+            - **darwin/amd64 (Intel)**: `${{ steps.extract_checksums.outputs.amd64_sha }}`
+            - **darwin/arm64 (Apple Silicon)**: `${{ steps.extract_checksums.outputs.arm64_sha }}`
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload updated formula
+        uses: actions/upload-artifact@v4
+        with:
+          name: homebrew-formula
+          path: build/Formula/safechain-agent.rb
+          retention-days: 30
+
+      - name: Output formula file
+        run: |
+          echo "## Updated Formula File"
+          echo "\`\`\`ruby"
+          cat build/Formula/safechain-agent.rb
+          echo "\`\`\`"

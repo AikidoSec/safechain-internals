@@ -59,6 +59,8 @@ make build
 
 #### Building the Homebrew Formula
 
+##### Local Build
+
 To build the complete Homebrew formula (including binaries for both architectures and updating checksums):
 
 ```bash
@@ -77,6 +79,25 @@ This script will:
 - Create tarballs for each architecture
 - Calculate SHA256 checksums
 - Update the formula file with checksums and version
+
+##### Automated Build via GitHub Actions
+
+The project includes a GitHub Actions workflow that automatically builds the Homebrew formula when you push a version tag:
+
+1. **Create and push a version tag:**
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+2. **The workflow will automatically:**
+   - Build binaries for both `darwin/amd64` and `darwin/arm64`
+   - Create tarballs and calculate checksums
+   - Update the formula file with the correct checksums
+   - Create a GitHub Release with the tarballs attached
+   - Upload artifacts for download
+
+The workflow is defined in `.github/workflows/build-brew-formula.yml` and triggers on tags matching `v*` (e.g., `v1.0.0`, `v2.1.3`).
 
 #### Installing the Homebrew Formula
 
