@@ -1,6 +1,6 @@
-# safechain-agent
+# Aikido SC-Agent
 
-In progress implementation of an Agent that will wrap Aikido the following scanners to make local development secure:
+In progress implementation of an Agent that will wrap the following scanners to make local development secure:
 - safe-chain
 - githook
 - VS code extensions scanner
