@@ -11,17 +11,11 @@ class SafechainAgent < Formula
   on_macos do
     if Hardware::CPU.intel?
       url "https://github.com/aikido/safechain-agent/releases/download/v0.1.0/safechain-agent-0.1.0-darwin-amd64.tar.gz"
-      sha256 "[0;32m✓[0m Creating tarball: safechain-agent-0.1.0-darwin-amd64.tar.gz
-[0;32m✓[0m Tarball created: /Users/tat/Work/Aikido/Safechain-agent/dist/safechain-agent-0.1.0-darwin-amd64.tar.gz
-[0;32m✓[0m SHA256: 3b1dc3372d083b958f804ba10891668df25705f3f54a78c3c2bf77c888031f8c
-3b1dc3372d083b958f804ba10891668df25705f3f54a78c3c2bf77c888031f8c"
+      sha256 "REPLACE_WITH_ACTUAL_SHA256"
     end
     if Hardware::CPU.arm?
       url "https://github.com/aikido/safechain-agent/releases/download/v0.1.0/safechain-agent-0.1.0-darwin-arm64.tar.gz"
-      sha256 "[0;32m✓[0m Creating tarball: safechain-agent-0.1.0-darwin-arm64.tar.gz
-[0;32m✓[0m Tarball created: /Users/tat/Work/Aikido/Safechain-agent/dist/safechain-agent-0.1.0-darwin-arm64.tar.gz
-[0;32m✓[0m SHA256: 20f173a337db19c8b75d15c1c840f1b6623c9b9f17b9d3a1932921f3e5f00037
-20f173a337db19c8b75d15c1c840f1b6623c9b9f17b9d3a1932921f3e5f00037"
+      sha256 "REPLACE_WITH_ACTUAL_SHA256"
     end
   end
 
@@ -69,4 +63,3 @@ class SafechainAgent < Formula
     system "#{bin}/safechain-agent", "--version"
   end
 end
-
