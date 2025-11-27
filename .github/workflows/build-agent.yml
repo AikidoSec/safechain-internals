@@ -19,12 +19,6 @@ on:
       arm64_sha:
         description: 'SHA256 checksum for arm64 binary'
         value: ${{ jobs.collect-checksums.outputs.arm64_sha }}
-      amd64_tarball:
-        description: 'Path to amd64 tarball artifact'
-        value: 'binary-amd64'
-      arm64_tarball:
-        description: 'Path to arm64 tarball artifact'
-        value: 'binary-arm64'
 
 jobs:
   build-agent:
@@ -65,7 +59,7 @@ jobs:
                    -X 'github.com/aikido/safechain-agent/cmd/daemon.buildTime=$BUILD_TIME' \
                    -X 'github.com/aikido/safechain-agent/cmd/daemon.gitCommit=$GIT_COMMIT'"
           
-          mkdir -p bin dist
+          mkdir -p bin
           
           echo "Building darwin/${{ matrix.goarch }}..."
           CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build \
@@ -74,36 +68,18 @@ jobs:
             -o bin/safechain-agent \
             ./cmd/daemon
 
-      - name: Create tarball and calculate checksum
+      - name: Calculate binary checksum
         id: checksum
         run: |
-          VERSION="${{ inputs.version }}"
-          BINARY_NAME="safechain-agent"
-          
-          # Create tarball
-          mkdir -p temp-${{ matrix.arch }}
-          cp bin/safechain-agent temp-${{ matrix.arch }}/$BINARY_NAME
-          tar -czf dist/$BINARY_NAME-$VERSION-darwin-${{ matrix.arch }}.tar.gz -C temp-${{ matrix.arch }} $BINARY_NAME
-          SHA=$(shasum -a 256 dist/$BINARY_NAME-$VERSION-darwin-${{ matrix.arch }}.tar.gz | cut -d' ' -f1)
+          SHA=$(shasum -a 256 bin/safechain-agent | cut -d' ' -f1)
           echo "sha=$SHA" >> $GITHUB_OUTPUT
-          
           echo "${{ matrix.arch }} SHA256: $SHA"
-          
-          # Cleanup temp directory
-          rm -rf temp-${{ matrix.arch }}
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
           name: safechain-agent-${{ matrix.arch }}
           path: bin/safechain-agent
-          retention-days: 30
-
-      - name: Upload tarball
-        uses: actions/upload-artifact@v4
-        with:
-          name: tarball-${{ matrix.arch }}
-          path: dist/safechain-agent-${{ inputs.version }}-darwin-${{ matrix.arch }}.tar.gz
           retention-days: 30
 
       - name: Save checksum to file

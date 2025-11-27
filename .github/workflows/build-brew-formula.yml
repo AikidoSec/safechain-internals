@@ -76,9 +76,9 @@ jobs:
           # Update version
           sed -i "s/version \"[^\"]*\"/version \"$VERSION\"/" "$FORMULA_FILE"
           
-          # Update URLs
-          sed -i "s|url \"[^\"]*darwin-amd64[^\"]*\"|url \"https://github.com/${{ github.repository }}/releases/download/v$VERSION/$BINARY_NAME-$VERSION-darwin-amd64.tar.gz\"|" "$FORMULA_FILE"
-          sed -i "s|url \"[^\"]*darwin-arm64[^\"]*\"|url \"https://github.com/${{ github.repository }}/releases/download/v$VERSION/$BINARY_NAME-$VERSION-darwin-arm64.tar.gz\"|" "$FORMULA_FILE"
+          # Update URLs to point to binary files in release (architecture-specific, no tarballs)
+          sed -i "s|url \"[^\"]*darwin-amd64[^\"]*\"|url \"https://github.com/${{ github.repository }}/releases/download/v$VERSION/safechain-agent-darwin-amd64\"|" "$FORMULA_FILE"
+          sed -i "s|url \"[^\"]*darwin-arm64[^\"]*\"|url \"https://github.com/${{ github.repository }}/releases/download/v$VERSION/safechain-agent-darwin-arm64\"|" "$FORMULA_FILE"
           
           # Update checksums using the Python script
           python3 scripts/update-formula-checksums.py "$FORMULA_FILE" "$AMD64_SHA" "$ARM64_SHA"
@@ -86,25 +86,31 @@ jobs:
           echo "Formula updated:"
           cat "$FORMULA_FILE"
 
-      - name: Download tarball artifacts
+      - name: Download binary artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: tarball-*
+          pattern: safechain-agent-*
           merge-multiple: false
-          path: tarballs
+          path: binaries
 
-      - name: Copy formula to root for release
+      - name: Prepare release files
         run: |
+          # Copy formula to root
           cp build/Formula/safechain-agent.rb safechain-agent.rb
-          echo "Formula file copied to root as safechain-agent.rb"
+          
+          # Rename binaries for release (GitHub releases need unique filenames)
+          cp binaries/safechain-agent-amd64/safechain-agent safechain-agent-darwin-amd64
+          cp binaries/safechain-agent-arm64/safechain-agent safechain-agent-darwin-arm64
+          
+          echo "Release files prepared"
 
       - name: Create GitHub Release
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            tarballs/tarball-amd64/safechain-agent-${{ needs.extract-version.outputs.version }}-darwin-amd64.tar.gz
-            tarballs/tarball-arm64/safechain-agent-${{ needs.extract-version.outputs.version }}-darwin-arm64.tar.gz
+            safechain-agent-darwin-amd64
+            safechain-agent-darwin-arm64
             safechain-agent.rb
           body: |
             ## safechain-agent ${{ needs.extract-version.outputs.version }}

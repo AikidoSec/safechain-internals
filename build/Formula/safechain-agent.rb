@@ -10,17 +10,20 @@ class SafechainAgent < Formula
 
   on_macos do
     if Hardware::CPU.intel?
-      url "https://github.com/aikido/safechain-agent/releases/download/v0.1.0/safechain-agent-0.1.0-darwin-amd64.tar.gz"
+      url "https://github.com/aikido/safechain-agent/releases/download/v0.1.0/safechain-agent-darwin-amd64"
       sha256 "REPLACE_WITH_ACTUAL_SHA256"
     end
     if Hardware::CPU.arm?
-      url "https://github.com/aikido/safechain-agent/releases/download/v0.1.0/safechain-agent-0.1.0-darwin-arm64.tar.gz"
+      url "https://github.com/aikido/safechain-agent/releases/download/v0.1.0/safechain-agent-darwin-arm64"
       sha256 "REPLACE_WITH_ACTUAL_SHA256"
     end
   end
 
   def install
-    bin.install "safechain-agent"
+    # The downloaded file is the binary itself, rename and install it
+    binary_name = Hardware::CPU.intel? ? "safechain-agent-darwin-amd64" : "safechain-agent-darwin-arm64"
+    bin.install binary_name => "safechain-agent"
+    chmod 0755, bin/"safechain-agent"
   end
 
   def post_install
