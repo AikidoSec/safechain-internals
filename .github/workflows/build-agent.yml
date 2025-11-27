@@ -71,7 +71,7 @@ jobs:
           CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build \
             -ldflags "$LDFLAGS -s -w" \
             -trimpath \
-            -o bin/safechain-agent-darwin-${{ matrix.arch }} \
+            -o bin/safechain-agent \
             ./cmd/daemon
 
       - name: Create tarball and calculate checksum
@@ -82,7 +82,7 @@ jobs:
           
           # Create tarball
           mkdir -p temp-${{ matrix.arch }}
-          cp bin/safechain-agent-darwin-${{ matrix.arch }} temp-${{ matrix.arch }}/$BINARY_NAME
+          cp bin/safechain-agent temp-${{ matrix.arch }}/$BINARY_NAME
           tar -czf dist/$BINARY_NAME-$VERSION-darwin-${{ matrix.arch }}.tar.gz -C temp-${{ matrix.arch }} $BINARY_NAME
           SHA=$(shasum -a 256 dist/$BINARY_NAME-$VERSION-darwin-${{ matrix.arch }}.tar.gz | cut -d' ' -f1)
           echo "sha=$SHA" >> $GITHUB_OUTPUT
@@ -92,13 +92,18 @@ jobs:
           # Cleanup temp directory
           rm -rf temp-${{ matrix.arch }}
 
-      - name: Upload binary and tarball
+      - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: binary-${{ matrix.arch }}
-          path: |
-            bin/safechain-agent-darwin-${{ matrix.arch }}
-            dist/safechain-agent-${{ inputs.version }}-darwin-${{ matrix.arch }}.tar.gz
+          name: safechain-agent-${{ matrix.arch }}
+          path: bin/safechain-agent
+          retention-days: 30
+
+      - name: Upload tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: tarball-${{ matrix.arch }}
+          path: dist/safechain-agent-${{ inputs.version }}-darwin-${{ matrix.arch }}.tar.gz
           retention-days: 30
 
       - name: Save checksum to file

@@ -86,20 +86,20 @@ jobs:
           echo "Formula updated:"
           cat "$FORMULA_FILE"
 
-      - name: Download binary artifacts
+      - name: Download tarball artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: binary-*
+          pattern: tarball-*
           merge-multiple: false
-          path: binaries
+          path: tarballs
 
       - name: Create GitHub Release
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            binaries/binary-amd64/safechain-agent-${{ needs.extract-version.outputs.version }}-darwin-amd64.tar.gz
-            binaries/binary-arm64/safechain-agent-${{ needs.extract-version.outputs.version }}-darwin-arm64.tar.gz
+            tarballs/tarball-amd64/safechain-agent-${{ needs.extract-version.outputs.version }}-darwin-amd64.tar.gz
+            tarballs/tarball-arm64/safechain-agent-${{ needs.extract-version.outputs.version }}-darwin-arm64.tar.gz
           body: |
             ## safechain-agent ${{ needs.extract-version.outputs.version }}
             
