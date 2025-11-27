@@ -123,9 +123,11 @@ create_tarball() {
         checksum=$(shasum -a 256 "$tarball_path" | cut -d' ' -f1)
     fi
     
-    info "Tarball created: $tarball_path"
-    info "SHA256: $checksum"
+    # Output info messages to stderr so they don't get captured in command substitution
+    info "Tarball created: $tarball_path" >&2
+    info "SHA256: $checksum" >&2
     
+    # Only output the checksum to stdout (for command substitution)
     echo "$checksum"
 }
 
@@ -176,46 +178,12 @@ update_formula() {
     sed -i.bak2 "s|url \"[^\"]*darwin-arm64[^\"]*\"|url \"https://github.com/aikido/safechain-agent/releases/download/v$VERSION/$BINARY_NAME-$VERSION-darwin-arm64.tar.gz\"|" "$work_file"
     rm -f "$work_file.bak2"
     
-    # Update SHA256 checksums
-    # Use a temporary file approach that works with macOS sed
-    local checksum_temp_file=$(mktemp)
-    local in_intel_block=0
-    local in_arm_block=0
-    
-    while IFS= read -r line; do
-        # Track which block we're in
-        if [[ "$line" =~ "Hardware::CPU.intel" ]]; then
-            in_intel_block=1
-            in_arm_block=0
-        elif [[ "$line" =~ "Hardware::CPU.arm" ]]; then
-            in_intel_block=0
-            in_arm_block=1
-        elif [[ "$line" =~ "end" ]] && [[ "$in_intel_block" -eq 1 || "$in_arm_block" -eq 1 ]]; then
-            in_intel_block=0
-            in_arm_block=0
-        fi
-        
-        # Replace checksum in the appropriate block
-        if [[ "$line" =~ "REPLACE_WITH_ACTUAL_SHA256" ]]; then
-            if [[ "$in_intel_block" -eq 1 ]]; then
-                line="${line//REPLACE_WITH_ACTUAL_SHA256/$amd64_checksum}"
-            elif [[ "$in_arm_block" -eq 1 ]]; then
-                line="${line//REPLACE_WITH_ACTUAL_SHA256/$arm64_checksum}"
-            fi
-        fi
-        
-        echo "$line" >> "$checksum_temp_file"
-    done < "$work_file"
-    
-    mv "$checksum_temp_file" "$work_file"
-    
-    # Verify replacements worked
-    if grep -q "REPLACE_WITH_ACTUAL_SHA256" "$work_file"; then
-        warn "Some checksum placeholders remain, attempting fallback replacement"
-        # Fallback: simple replacements
-        sed -i.bak2 "s/REPLACE_WITH_ACTUAL_SHA256/$amd64_checksum/" "$work_file"
-        sed -i.bak2 "s/REPLACE_WITH_ACTUAL_SHA256/$arm64_checksum/" "$work_file"
-        rm -f "$work_file.bak2"
+    # Update SHA256 checksums using the Python script
+    info "Updating checksums using Python script..."
+    if python3 "$SCRIPT_DIR/update-formula-checksums.py" "$work_file" "$amd64_checksum" "$arm64_checksum"; then
+        info "Checksums updated successfully"
+    else
+        error "Failed to update checksums in formula file"
     fi
     
     # Move the updated file back to the original location
@@ -237,7 +205,7 @@ update_formula() {
     fi
     
     # Clean up temp file if it still exists
-    rm -f "$temp_file" "$checksum_temp_file"
+    rm -f "$temp_file"
     
     info "Formula updated: $FORMULA_FILE"
 }
@@ -281,14 +249,16 @@ main() {
     
     # Build amd64
     build_binary "darwin" "amd64" "$BIN_DIR"
-    AMD64_CHECKSUM=$(create_tarball "amd64")
+    # Capture only the checksum (info messages go to stderr)
+    AMD64_CHECKSUM=$(create_tarball "amd64" 2>/dev/null)
     
     # Clean binary directory for next build
     rm -f "$BIN_DIR/$BINARY_NAME"
     
     # Build arm64
     build_binary "darwin" "arm64" "$BIN_DIR"
-    ARM64_CHECKSUM=$(create_tarball "arm64")
+    # Capture only the checksum (info messages go to stderr)
+    ARM64_CHECKSUM=$(create_tarball "arm64" 2>/dev/null)
     
     # Update formula
     update_formula "$AMD64_CHECKSUM" "$ARM64_CHECKSUM"

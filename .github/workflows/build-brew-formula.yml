@@ -80,48 +80,8 @@ jobs:
           sed -i "s|url \"[^\"]*darwin-amd64[^\"]*\"|url \"https://github.com/${{ github.repository }}/releases/download/v$VERSION/$BINARY_NAME-$VERSION-darwin-amd64.tar.gz\"|" "$FORMULA_FILE"
           sed -i "s|url \"[^\"]*darwin-arm64[^\"]*\"|url \"https://github.com/${{ github.repository }}/releases/download/v$VERSION/$BINARY_NAME-$VERSION-darwin-arm64.tar.gz\"|" "$FORMULA_FILE"
           
-          # Update checksums using a Python script for reliability
-          # Pass variables as command-line arguments to avoid shell expansion issues
-          python3 - "$FORMULA_FILE" "$AMD64_SHA" "$ARM64_SHA" <<'PYTHON_EOF'
-          import re
-          import sys
-          
-          formula_file = sys.argv[1]
-          amd64_sha = sys.argv[2]
-          arm64_sha = sys.argv[3]
-          
-          with open(formula_file, "r") as f:
-              content = f.read()
-          
-          # Update amd64 checksum (in intel block)
-          def replace_amd64(match):
-              return match.group(1) + amd64_sha + match.group(3)
-          
-          content = re.sub(
-              r'(if Hardware::CPU\.intel\?.*?sha256 ")([^"]+)(")',
-              replace_amd64,
-              content,
-              flags=re.DOTALL
-          )
-          
-          # Update arm64 checksum (in arm block)
-          def replace_arm64(match):
-              return match.group(1) + arm64_sha + match.group(3)
-          
-          content = re.sub(
-              r'(if Hardware::CPU\.arm\?.*?sha256 ")([^"]+)(")',
-              replace_arm64,
-              content,
-              flags=re.DOTALL
-          )
-          
-          # Fallback: simple replacements if regex didn't work
-          content = content.replace('sha256 "REPLACE_WITH_ACTUAL_SHA256"', f'sha256 "{amd64_sha}"', 1)
-          content = content.replace('sha256 "REPLACE_WITH_ACTUAL_SHA256"', f'sha256 "{arm64_sha}"', 1)
-          
-          with open(formula_file, "w") as f:
-              f.write(content)
-          PYTHON_EOF
+          # Update checksums using the Python script
+          python3 scripts/update-formula-checksums.py "$FORMULA_FILE" "$AMD64_SHA" "$ARM64_SHA"
           
           echo "Formula updated:"
           cat "$FORMULA_FILE"
