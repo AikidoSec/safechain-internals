@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aikido/sc-agent/internal/proxy"
 	"github.com/aikido/sc-agent/internal/scannermanager"
 )
 
@@ -22,6 +23,7 @@ type Daemon struct {
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
 	stopOnce sync.Once
+	proxy    *proxy.Proxy
 	registry *scannermanager.Registry
 }
 
@@ -32,6 +34,7 @@ func New(config *Config) (*Daemon, error) {
 		config:   config,
 		ctx:      ctx,
 		cancel:   cancel,
+		proxy:    proxy.New(),
 		registry: scannermanager.NewRegistry(),
 	}
 
@@ -69,6 +72,11 @@ func (d *Daemon) Stop(ctx context.Context) error {
 	var err error
 	d.stopOnce.Do(func() {
 		log.Println("Stopping daemon...")
+
+		if stopErr := d.proxy.Stop(); stopErr != nil {
+			log.Printf("Error stopping proxy: %v", stopErr)
+		}
+
 		d.cancel()
 
 		done := make(chan struct{})
@@ -96,8 +104,12 @@ func (d *Daemon) run(ctx context.Context) {
 
 	log.Println("Daemon is running...")
 
-	err := d.registry.InstallAll(ctx)
-	if err != nil {
+	if err := d.proxy.Start(ctx); err != nil {
+		log.Printf("Failed to start proxy: %v", err)
+		return
+	}
+
+	if err := d.registry.InstallAll(ctx); err != nil {
 		log.Printf("Failed to install all scanners: %v", err)
 		return
 	}
@@ -114,10 +126,10 @@ func (d *Daemon) run(ctx context.Context) {
 }
 
 func (d *Daemon) doWork() {
-	log.Println("Daemon heartbeat")
+
 }
 
 func (d *Daemon) initLogging() {
 	log.SetOutput(os.Stdout)
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	log.SetFlags(log.LstdFlags)
 }
