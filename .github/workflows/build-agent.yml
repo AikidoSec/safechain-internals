@@ -97,6 +97,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -120,6 +123,8 @@ jobs:
           files: |
             sc-agent-darwin-amd64
             sc-agent-darwin-arm64
+            dist/safe-chain-darwin-amd64
+            dist/safe-chain-darwin-arm64
           body: |
             ## sc-agent ${{ needs.extract-version.outputs.version }}
             
