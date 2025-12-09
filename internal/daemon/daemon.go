@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
+
+const logDir = "/var/log/aikido-security/sc-agent"
 
 type Config struct {
 	ConfigPath string
@@ -20,8 +23,7 @@ type Daemon struct {
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
 	stopOnce sync.Once
-	running  bool
-	mu       sync.RWMutex
+	logFile  *os.File
 }
 
 func New(config *Config) (*Daemon, error) {
@@ -41,14 +43,6 @@ func New(config *Config) (*Daemon, error) {
 }
 
 func (d *Daemon) Start(ctx context.Context) error {
-	d.mu.Lock()
-	if d.running {
-		d.mu.Unlock()
-		return fmt.Errorf("daemon is already running")
-	}
-	d.running = true
-	d.mu.Unlock()
-
 	log.Println("Starting sc-agent daemon...")
 
 	mergedCtx, cancel := context.WithCancel(ctx)
@@ -66,10 +60,6 @@ func (d *Daemon) Start(ctx context.Context) error {
 	go d.run(mergedCtx)
 
 	<-mergedCtx.Done()
-
-	d.mu.Lock()
-	d.running = false
-	d.mu.Unlock()
 
 	log.Println("Daemon main loop stopped")
 	d.wg.Wait()
@@ -95,6 +85,10 @@ func (d *Daemon) Stop(ctx context.Context) error {
 		case <-ctx.Done():
 			err = fmt.Errorf("timeout waiting for daemon to stop")
 			log.Println("Timeout waiting for daemon to stop")
+		}
+
+		if d.logFile != nil {
+			d.logFile.Close()
 		}
 	})
 	return err
@@ -124,14 +118,19 @@ func (d *Daemon) doWork() {
 }
 
 func (d *Daemon) initLogging() error {
-	log.SetOutput(os.Stdout)
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
+	}
+
+	logPath := filepath.Join(logDir, "sc-agent.log")
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %w", err)
+	}
+
+	d.logFile = f
+	log.SetOutput(f)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	return nil
-}
-
-func (d *Daemon) IsRunning() bool {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	return d.running
 }
