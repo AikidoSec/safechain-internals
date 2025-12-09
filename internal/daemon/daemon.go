@@ -7,6 +7,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/aikido/sc-agent/internal/scannermanager"
 )
 
 type Config struct {
@@ -20,15 +22,17 @@ type Daemon struct {
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
 	stopOnce sync.Once
+	registry *scannermanager.Registry
 }
 
 func New(config *Config) (*Daemon, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	d := &Daemon{
-		config: config,
-		ctx:    ctx,
-		cancel: cancel,
+		config:   config,
+		ctx:      ctx,
+		cancel:   cancel,
+		registry: scannermanager.NewRegistry(),
 	}
 
 	d.initLogging()
@@ -91,6 +95,12 @@ func (d *Daemon) run(ctx context.Context) {
 	defer ticker.Stop()
 
 	log.Println("Daemon is running...")
+
+	err := d.registry.InstallAll(ctx)
+	if err != nil {
+		log.Printf("Failed to install all scanners: %v", err)
+		return
+	}
 
 	for {
 		select {

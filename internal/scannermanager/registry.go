@@ -3,6 +3,7 @@ package scannermanager
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/aikido/sc-agent/internal/scanner"
 	"github.com/aikido/sc-agent/internal/scanner/githook"
@@ -48,6 +49,7 @@ func (r *Registry) List() []string {
 
 func (r *Registry) InstallAll(ctx context.Context) error {
 	for name, s := range r.scanners {
+		log.Printf("Installing scanner '%s'", name)
 		if err := s.Install(ctx); err != nil {
 			return fmt.Errorf("failed to install scanner '%s': %w", name, err)
 		}
