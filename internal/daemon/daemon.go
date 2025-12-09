@@ -5,12 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
-
-const logDir = "/var/log/aikido-security/sc-agent"
 
 type Config struct {
 	ConfigPath string
@@ -23,7 +20,6 @@ type Daemon struct {
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
 	stopOnce sync.Once
-	logFile  *os.File
 }
 
 func New(config *Config) (*Daemon, error) {
@@ -35,9 +31,7 @@ func New(config *Config) (*Daemon, error) {
 		cancel: cancel,
 	}
 
-	if err := d.initLogging(); err != nil {
-		return nil, fmt.Errorf("failed to initialize logging: %w", err)
-	}
+	d.initLogging()
 
 	return d, nil
 }
@@ -86,10 +80,6 @@ func (d *Daemon) Stop(ctx context.Context) error {
 			err = fmt.Errorf("timeout waiting for daemon to stop")
 			log.Println("Timeout waiting for daemon to stop")
 		}
-
-		if d.logFile != nil {
-			d.logFile.Close()
-		}
 	})
 	return err
 }
@@ -117,20 +107,7 @@ func (d *Daemon) doWork() {
 	log.Println("Daemon heartbeat")
 }
 
-func (d *Daemon) initLogging() error {
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return fmt.Errorf("failed to create log directory: %w", err)
-	}
-
-	logPath := filepath.Join(logDir, "sc-agent.log")
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open log file: %w", err)
-	}
-
-	d.logFile = f
-	log.SetOutput(f)
+func (d *Daemon) initLogging() {
+	log.SetOutput(os.Stdout)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-
-	return nil
 }
