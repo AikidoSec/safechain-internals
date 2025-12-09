@@ -10,6 +10,7 @@ import (
 
 	"github.com/aikido/sc-agent/internal/proxy"
 	"github.com/aikido/sc-agent/internal/scannermanager"
+	"github.com/aikido/sc-agent/internal/version"
 )
 
 type Config struct {
@@ -44,7 +45,7 @@ func New(config *Config) (*Daemon, error) {
 }
 
 func (d *Daemon) Start(ctx context.Context) error {
-	log.Println("Starting sc-agent daemon...")
+	log.Print("Starting sc-agent daemon: ", version.Info())
 
 	mergedCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
