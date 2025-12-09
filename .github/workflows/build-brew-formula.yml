@@ -4,9 +4,18 @@ on:
   push:
     tags:
       - 'v*'  # Trigger on version tags like v1.0.0
+    branches:
+      - main
+      - alpha-build
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (without v prefix, e.g. 1.0.0)'
+        required: false
+        default: ''
 
 jobs:
   extract-version:
@@ -14,19 +23,31 @@ jobs:
     outputs:
       version: ${{ steps.get_version.outputs.version }}
     steps:
-      - name: Extract version from tag or PR
+      - name: Extract version from tag, PR, or input
         id: get_version
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            # Manual trigger with version input
+            VERSION="${{ github.event.inputs.version }}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Using manual version: $VERSION"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             # Extract version from tag
             VERSION=${GITHUB_REF#refs/tags/v}
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "Extracted version from tag: $VERSION"
           elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # For PRs, use PR number or default to dev
+            # For PRs, use PR number
             VERSION="pr-${{ github.event.pull_request.number }}"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "Using PR version: $VERSION"
+          elif [[ "${{ github.ref }}" == refs/heads/* ]]; then
+            # For branch pushes, use branch name and short SHA
+            BRANCH=${GITHUB_REF#refs/heads/}
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+            VERSION="${BRANCH}-${SHORT_SHA}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Using branch version: $VERSION"
           else
             echo "version=dev" >> $GITHUB_OUTPUT
             echo "Using default version: dev"
@@ -104,7 +125,7 @@ jobs:
           
           echo "Release files prepared"
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release (tag)
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
@@ -139,6 +160,36 @@ jobs:
             - **darwin/arm64 (Apple Silicon)**: `${{ steps.extract_checksums.outputs.arm64_sha }}`
           draft: false
           prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Pre-Release (branch push)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.extract-version.outputs.version }}
+          files: |
+            safechain-agent-darwin-amd64
+            safechain-agent-darwin-arm64
+            safechain-agent.rb
+          body: |
+            ## safechain-agent ${{ needs.extract-version.outputs.version }} (Pre-release)
+            
+            This is an automated pre-release build from branch `${{ github.ref_name }}`.
+            
+            ### Installation
+            
+            ```bash
+            curl -L -O https://github.com/${{ github.repository }}/releases/download/v${{ needs.extract-version.outputs.version }}/safechain-agent.rb
+            brew install --build-from-source ./safechain-agent.rb
+            ```
+            
+            ### Checksums
+            
+            - **darwin/amd64 (Intel)**: `${{ steps.extract_checksums.outputs.amd64_sha }}`
+            - **darwin/arm64 (Apple Silicon)**: `${{ steps.extract_checksums.outputs.arm64_sha }}`
+          draft: false
+          prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
