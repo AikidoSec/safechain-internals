@@ -55,9 +55,9 @@ jobs:
           BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
           GIT_COMMIT=$(git rev-parse --short HEAD)
           
-          LDFLAGS="-X 'github.com/aikido/safechain-agent/cmd/daemon.version=$VERSION' \
-                   -X 'github.com/aikido/safechain-agent/cmd/daemon.buildTime=$BUILD_TIME' \
-                   -X 'github.com/aikido/safechain-agent/cmd/daemon.gitCommit=$GIT_COMMIT'"
+          LDFLAGS="-X 'github.com/aikido/sc-agent/cmd/daemon.version=$VERSION' \
+                   -X 'github.com/aikido/sc-agent/cmd/daemon.buildTime=$BUILD_TIME' \
+                   -X 'github.com/aikido/sc-agent/cmd/daemon.gitCommit=$GIT_COMMIT'"
           
           mkdir -p bin
           
@@ -65,33 +65,33 @@ jobs:
           CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build \
             -ldflags "$LDFLAGS -s -w" \
             -trimpath \
-            -o bin/safechain-agent \
+            -o bin/sc-agent \
             ./cmd/daemon
 
       - name: Calculate binary checksum
         id: checksum
         run: |
-          SHA=$(shasum -a 256 bin/safechain-agent | cut -d' ' -f1)
+          SHA=$(shasum -a 256 bin/sc-agent | cut -d' ' -f1)
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "${{ matrix.arch }} SHA256: $SHA"
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: safechain-agent-${{ matrix.arch }}
-          path: bin/safechain-agent
+          name: sc-agent-${{ matrix.arch }}
+          path: bin/sc-agent
           retention-days: 30
 
       - name: Save checksum to file
         run: |
-          echo "${{ steps.checksum.outputs.sha }}" > checksum-safechain-agent-${{ matrix.arch }}.txt
-          echo "${{ matrix.arch }}" >> checksum-safechain-agent-${{ matrix.arch }}.txt
+          echo "${{ steps.checksum.outputs.sha }}" > checksum-sc-agent-${{ matrix.arch }}.txt
+          echo "${{ matrix.arch }}" >> checksum-sc-agent-${{ matrix.arch }}.txt
 
       - name: Upload checksum metadata
         uses: actions/upload-artifact@v4
         with:
-          name: checksum-safechain-agent-${{ matrix.arch }}
-          path: checksum-safechain-agent-${{ matrix.arch }}.txt
+          name: checksum-sc-agent-${{ matrix.arch }}
+          path: checksum-sc-agent-${{ matrix.arch }}.txt
           retention-days: 30
 
   collect-checksums:
@@ -111,8 +111,8 @@ jobs:
       - name: Extract checksums
         id: extract
         run: |
-          AMD64_SHA=$(cat checksums/checksum-safechain-agent-amd64/checksum-safechain-agent-amd64.txt | head -n 1)
-          ARM64_SHA=$(cat checksums/checksum-safechain-agent-arm64/checksum-safechain-agent-arm64.txt | head -n 1)
+          AMD64_SHA=$(cat checksums/checksum-sc-agent-amd64/checksum-sc-agent-amd64.txt | head -n 1)
+          ARM64_SHA=$(cat checksums/checksum-sc-agent-arm64/checksum-sc-agent-arm64.txt | head -n 1)
           
           echo "amd64_sha=$AMD64_SHA" >> $GITHUB_OUTPUT
           echo "arm64_sha=$ARM64_SHA" >> $GITHUB_OUTPUT
