@@ -1,3 +1,3 @@
-module github.com/aikido/safechain-agent
+module github.com/aikido/sc-agent
 
 go 1.21

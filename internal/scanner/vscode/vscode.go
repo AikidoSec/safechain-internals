@@ -3,7 +3,7 @@ package vscode
 import (
 	"context"
 
-	"github.com/aikido/safechain-agent/internal/scanner"
+	"github.com/aikido/sc-agent/internal/scanner"
 )
 
 type VSCodeScanner struct{}

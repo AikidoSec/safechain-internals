@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e
 
-# Script to install the Homebrew formula for safechain-agent
+# Script to install the Homebrew formula for sc-agent
 # This script installs the formula from the local build directory
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-FORMULA_FILE="$PROJECT_ROOT/Formula/safechain-agent.rb"
+FORMULA_FILE="$PROJECT_ROOT/Formula/sc-agent.rb"
 
 # Colors for output
 RED='\033[0;31m'
@@ -50,8 +50,8 @@ check_prerequisites() {
 
 # Check if already installed
 check_installed() {
-    if brew list safechain-agent &>/dev/null; then
-        warn "safechain-agent is already installed"
+    if brew list sc-agent &>/dev/null; then
+        warn "sc-agent is already installed"
         read -p "Do you want to reinstall? (y/N): " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -59,13 +59,13 @@ check_installed() {
             exit 0
         fi
         step "Uninstalling existing installation..."
-        brew uninstall safechain-agent 2>/dev/null || true
+        brew uninstall sc-agent 2>/dev/null || true
     fi
 }
 
 # Install the formula
 install_formula() {
-    step "Installing safechain-agent from local formula..."
+    step "Installing sc-agent from local formula..."
     
     if [ ! -r "$FORMULA_FILE" ]; then
         error "Cannot read formula file: $FORMULA_FILE"
@@ -73,8 +73,8 @@ install_formula() {
     
     # Homebrew requires formulae to be in a tap, but we can use a local tap
     # Create a local tap directory structure
-    local tap_name="aikido/safechain-agent-local"
-    local tap_dir="aikido/homebrew-safechain-agent-local"
+    local tap_name="aikido/sc-agent-local"
+    local tap_dir="aikido/homebrew-sc-agent-local"
     
     # Get Homebrew prefix and tap path
     local brew_prefix
@@ -102,10 +102,10 @@ install_formula() {
     # Copy formula to tap
     step "Copying formula to local tap..."
     if [ -w "$tap_path/Formula" ]; then
-        cp "$FORMULA_FILE" "$tap_path/Formula/safechain-agent.rb" || {
+        cp "$FORMULA_FILE" "$tap_path/Formula/sc-agent.rb" || {
             error "Cannot copy formula to tap directory"
         }
-    elif sudo cp "$FORMULA_FILE" "$tap_path/Formula/safechain-agent.rb" 2>/dev/null; then
+    elif sudo cp "$FORMULA_FILE" "$tap_path/Formula/sc-agent.rb" 2>/dev/null; then
         info "Formula copied using sudo"
     else
         error "Cannot write to tap directory: $tap_path/Formula\nPlease check permissions"
@@ -126,17 +126,17 @@ install_formula() {
         export HOMEBREW_NO_AUTO_UPDATE=1
         
         # Install using the full path to the formula file in the tap
-        if HOMEBREW_NO_INSTALL_FROM_API=1 HOMEBREW_NO_AUTO_UPDATE=1 brew install --build-from-source "$tap_path/Formula/safechain-agent.rb"; then
-            info "Successfully installed safechain-agent"
+        if HOMEBREW_NO_INSTALL_FROM_API=1 HOMEBREW_NO_AUTO_UPDATE=1 brew install --build-from-source "$tap_path/Formula/sc-agent.rb"; then
+            info "Successfully installed sc-agent"
         else
             # Fallback: try adding tap and installing by name
             warn "Direct path install failed, trying tap method..."
             # Create a symlink or use brew tap with file:// protocol
             if brew tap --force "$tap_name" 2>/dev/null || true; then
-                if HOMEBREW_NO_INSTALL_FROM_API=1 HOMEBREW_NO_AUTO_UPDATE=1 brew install --build-from-source "$tap_name/safechain-agent"; then
-                    info "Successfully installed safechain-agent"
+                if HOMEBREW_NO_INSTALL_FROM_API=1 HOMEBREW_NO_AUTO_UPDATE=1 brew install --build-from-source "$tap_name/sc-agent"; then
+                    info "Successfully installed sc-agent"
                 else
-                    error "Failed to install safechain-agent"
+                    error "Failed to install sc-agent"
                 fi
             else
                 error "Failed to add tap and install formula"
@@ -153,24 +153,24 @@ show_post_install_info() {
     echo "=========================================="
     echo "Installation Complete!"
     echo "=========================================="
-    info "safechain-agent has been installed"
+    info "sc-agent has been installed"
     echo ""
     echo "Next steps:"
     echo ""
     echo "1. Start the daemon:"
-    echo "   launchctl load ~/Library/LaunchAgents/homebrew.mxcl.safechain-agent.plist"
+    echo "   launchctl load ~/Library/LaunchAgents/homebrew.mxcl.sc-agent.plist"
     echo ""
     echo "2. Check daemon status:"
-    echo "   launchctl list | grep safechain-agent"
+    echo "   launchctl list | grep sc-agent"
     echo ""
     echo "3. View logs:"
-    echo "   tail -f /usr/local/var/log/safechain-agent.log"
+    echo "   tail -f /usr/local/var/log/sc-agent.log"
     echo ""
     echo "4. Stop the daemon:"
-    echo "   launchctl unload ~/Library/LaunchAgents/homebrew.mxcl.safechain-agent.plist"
+    echo "   launchctl unload ~/Library/LaunchAgents/homebrew.mxcl.sc-agent.plist"
     echo ""
     echo "5. Uninstall:"
-    echo "   brew uninstall safechain-agent"
+    echo "   brew uninstall sc-agent"
     echo ""
 }
 

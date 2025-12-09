@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Script to build Homebrew formula for safechain-agent
+# Script to build Homebrew formula for sc-agent
 # This script builds binaries for both architectures, creates tarballs,
 # calculates checksums, and updates the formula file.
 
@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_DIR="$PROJECT_ROOT/build"
 FORMULA_DIR="$PROJECT_ROOT/Formula"
-FORMULA_FILE="$FORMULA_DIR/safechain-agent.rb"
+FORMULA_FILE="$FORMULA_DIR/sc-agent.rb"
 DIST_DIR="$PROJECT_ROOT/dist"
 BIN_DIR="$PROJECT_ROOT/bin"
 
@@ -21,7 +21,7 @@ NC='\033[0m' # No Color
 
 # Default values
 VERSION="${VERSION:-0.1.0}"
-BINARY_NAME="safechain-agent"
+BINARY_NAME="sc-agent"
 
 # Functions
 error() {
@@ -84,9 +84,9 @@ build_binary() {
     BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
     GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
     
-    LDFLAGS="-X 'github.com/aikido/safechain-agent/cmd/daemon.version=$VERSION' \
-             -X 'github.com/aikido/safechain-agent/cmd/daemon.buildTime=$BUILD_TIME' \
-             -X 'github.com/aikido/safechain-agent/cmd/daemon.gitCommit=$GIT_COMMIT'"
+    LDFLAGS="-X 'github.com/aikido/sc-agent/cmd/daemon.version=$VERSION' \
+             -X 'github.com/aikido/sc-agent/cmd/daemon.buildTime=$BUILD_TIME' \
+             -X 'github.com/aikido/sc-agent/cmd/daemon.gitCommit=$GIT_COMMIT'"
     
     CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build \
         -ldflags "$LDFLAGS -s -w" \
@@ -174,8 +174,8 @@ update_formula() {
     rm -f "$work_file.bak2"
     
     # Update URLs
-    sed -i.bak2 "s|url \"[^\"]*darwin-amd64[^\"]*\"|url \"https://github.com/aikido/safechain-agent/releases/download/v$VERSION/$BINARY_NAME-$VERSION-darwin-amd64.tar.gz\"|" "$work_file"
-    sed -i.bak2 "s|url \"[^\"]*darwin-arm64[^\"]*\"|url \"https://github.com/aikido/safechain-agent/releases/download/v$VERSION/$BINARY_NAME-$VERSION-darwin-arm64.tar.gz\"|" "$work_file"
+    sed -i.bak2 "s|url \"[^\"]*darwin-amd64[^\"]*\"|url \"https://github.com/aikido/sc-agent/releases/download/v$VERSION/$BINARY_NAME-$VERSION-darwin-amd64.tar.gz\"|" "$work_file"
+    sed -i.bak2 "s|url \"[^\"]*darwin-arm64[^\"]*\"|url \"https://github.com/aikido/sc-agent/releases/download/v$VERSION/$BINARY_NAME-$VERSION-darwin-arm64.tar.gz\"|" "$work_file"
     rm -f "$work_file.bak2"
     
     # Update SHA256 checksums using the Python script

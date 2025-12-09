@@ -1,13 +1,13 @@
 .PHONY: build install clean test run help version brew-formula brew-install brew-build-all
 
 # Variables
-BINARY_NAME=safechain-agent
+BINARY_NAME=sc-agent
 VERSION?=dev
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LDFLAGS=-X 'github.com/aikido/safechain-agent/cmd/daemon.version=$(VERSION)' \
-		-X 'github.com/aikido/safechain-agent/cmd/daemon.buildTime=$(BUILD_TIME)' \
-		-X 'github.com/aikido/safechain-agent/cmd/daemon.gitCommit=$(GIT_COMMIT)'
+LDFLAGS=-X 'github.com/aikido/sc-agent/cmd/daemon.version=$(VERSION)' \
+		-X 'github.com/aikido/sc-agent/cmd/daemon.buildTime=$(BUILD_TIME)' \
+		-X 'github.com/aikido/sc-agent/cmd/daemon.gitCommit=$(GIT_COMMIT)'
 
 # Build directories
 BIN_DIR=bin

@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-# Installation script for safechain-agent daemon
+# Installation script for sc-agent daemon
 
-BINARY_NAME="safechain-agent"
+BINARY_NAME="sc-agent"
 INSTALL_DIR="/usr/local/bin"
-PLIST_NAME="homebrew.mxcl.safechain-agent.plist"
+PLIST_NAME="homebrew.mxcl.sc-agent.plist"
 PLIST_DIR="$HOME/Library/LaunchAgents"
 PLIST_PATH="$PLIST_DIR/$PLIST_NAME"
 LOG_DIR="/usr/local/var/log"

@@ -1,4 +1,4 @@
-# Safechain-agent
+# sc-agent
 
 A daemon service that runs continuously on macOS, packaged as a Homebrew formula.
 
@@ -111,7 +111,7 @@ To install the formula after building:
 make brew-install
 
 # Or manually using brew
-brew install --build-from-source Formula/safechain-agent.rb
+brew install --build-from-source Formula/sc-agent.rb
 ```
 
 The install script will:
@@ -124,7 +124,7 @@ The install script will:
 #### Installing from a Tap (once published)
 
 ```bash
-brew install aikido/safechain-agent/safechain-agent
+brew install aikido/sc-agent/sc-agent
 ```
 
 ## Daemon Management
@@ -132,29 +132,29 @@ brew install aikido/safechain-agent/safechain-agent
 ### Start the daemon
 
 ```bash
-launchctl load ~/Library/LaunchAgents/homebrew.mxcl.safechain-agent.plist
+launchctl load ~/Library/LaunchAgents/homebrew.mxcl.sc-agent.plist
 ```
 
 ### Stop the daemon
 
 ```bash
-launchctl unload ~/Library/LaunchAgents/homebrew.mxcl.safechain-agent.plist
+launchctl unload ~/Library/LaunchAgents/homebrew.mxcl.sc-agent.plist
 ```
 
 ### Check daemon status
 
 ```bash
-launchctl list | grep safechain-agent
+launchctl list | grep sc-agent
 ```
 
 ### View logs
 
 ```bash
 # Standard output
-tail -f /usr/local/var/log/safechain-agent.log
+tail -f /usr/local/var/log/sc-agent.log
 
 # Error output
-tail -f /usr/local/var/log/safechain-agent.error.log
+tail -f /usr/local/var/log/sc-agent.error.log
 ```
 
 ## Uninstallation
@@ -166,7 +166,7 @@ tail -f /usr/local/var/log/safechain-agent.error.log
 Or if installed via Homebrew:
 
 ```bash
-brew uninstall safechain-agent
+brew uninstall sc-agent
 ```
 
 ## Development
@@ -203,7 +203,7 @@ The project includes a pluggable scanner system for different protection engines
 The `scannermanager` package provides a registry to manage all scanners:
 
 ```go
-import "github.com/aikido/safechain-agent/internal/scannermanager"
+import "github.com/aikido/sc-agent/internal/scannermanager"
 
 // Create a new registry (automatically registers all scanners)
 registry := scannermanager.NewRegistry()

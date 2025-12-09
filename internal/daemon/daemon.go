@@ -49,7 +49,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 	d.running = true
 	d.mu.Unlock()
 
-	log.Println("Starting safechain-agent daemon...")
+	log.Println("Starting sc-agent daemon...")
 
 	mergedCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
