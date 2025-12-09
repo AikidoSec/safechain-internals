@@ -34,7 +34,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Create daemon instance
 	d, err := daemon.New(&daemon.Config{
 		ConfigPath: *configPath,
 		LogLevel:   *logLevel,
@@ -43,14 +42,12 @@ func main() {
 		log.Fatalf("Failed to create daemon: %v", err)
 	}
 
-	// Setup signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
-	// Start daemon in a goroutine
 	errChan := make(chan error, 1)
 	go func() {
 		if err := d.Start(ctx); err != nil {
@@ -58,12 +55,10 @@ func main() {
 		}
 	}()
 
-	// Wait for signal or error
 	select {
 	case sig := <-sigChan:
 		log.Printf("Received signal: %v, shutting down gracefully...", sig)
 		cancel()
-		// Give daemon time to shutdown
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer shutdownCancel()
 		if err := d.Stop(shutdownCtx); err != nil {
