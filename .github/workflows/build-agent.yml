@@ -1,27 +1,25 @@
 name: Build Agent
 
 on:
-  workflow_call:
-    inputs:
-      version:
-        required: true
-        type: string
-        description: 'Version to build'
-      go_version:
-        required: false
-        type: string
-        default: '1.21'
-        description: 'Go version to use'
-    outputs:
-      amd64_sha:
-        description: 'SHA256 checksum for amd64 binary'
-        value: ${{ jobs.collect-checksums.outputs.amd64_sha }}
-      arm64_sha:
-        description: 'SHA256 checksum for arm64 binary'
-        value: ${{ jobs.collect-checksums.outputs.arm64_sha }}
+  push:
+    tags:
+      - 'v*'
 
 jobs:
+  extract-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
   build-agent:
+    needs: extract-version
     strategy:
       matrix:
         include:
@@ -42,7 +40,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ inputs.go_version }}
+          go-version: '1.21'
 
       - name: Run tests
         run: |
@@ -51,13 +49,13 @@ jobs:
 
       - name: Build binary for ${{ matrix.arch }}
         run: |
-          VERSION="${{ inputs.version }}"
+          VERSION="${{ needs.extract-version.outputs.version }}"
           BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
           GIT_COMMIT=$(git rev-parse --short HEAD)
           
-          LDFLAGS="-X 'github.com/aikido/sc-agent/cmd/daemon.version=$VERSION' \
-                   -X 'github.com/aikido/sc-agent/cmd/daemon.buildTime=$BUILD_TIME' \
-                   -X 'github.com/aikido/sc-agent/cmd/daemon.gitCommit=$GIT_COMMIT'"
+          LDFLAGS="-X 'github.com/aikido/safechain-agent/cmd/daemon.version=$VERSION' \
+                   -X 'github.com/aikido/safechain-agent/cmd/daemon.buildTime=$BUILD_TIME' \
+                   -X 'github.com/aikido/safechain-agent/cmd/daemon.gitCommit=$GIT_COMMIT'"
           
           mkdir -p bin
           
@@ -65,58 +63,78 @@ jobs:
           CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build \
             -ldflags "$LDFLAGS -s -w" \
             -trimpath \
-            -o bin/sc-agent \
+            -o bin/safechain-agent-darwin-${{ matrix.arch }} \
             ./cmd/daemon
 
       - name: Calculate binary checksum
         id: checksum
         run: |
-          SHA=$(shasum -a 256 bin/sc-agent | cut -d' ' -f1)
+          SHA=$(shasum -a 256 bin/safechain-agent-darwin-${{ matrix.arch }} | cut -d' ' -f1)
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "${{ matrix.arch }} SHA256: $SHA"
 
-      - name: Upload binary
+      - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sc-agent-${{ matrix.arch }}
-          path: bin/sc-agent
+          name: safechain-agent-darwin-${{ matrix.arch }}
+          path: bin/safechain-agent-darwin-${{ matrix.arch }}
           retention-days: 30
 
       - name: Save checksum to file
         run: |
-          echo "${{ steps.checksum.outputs.sha }}" > checksum-sc-agent-${{ matrix.arch }}.txt
-          echo "${{ matrix.arch }}" >> checksum-sc-agent-${{ matrix.arch }}.txt
+          echo "${{ steps.checksum.outputs.sha }}" > checksum-${{ matrix.arch }}.txt
 
-      - name: Upload checksum metadata
+      - name: Upload checksum artifact
         uses: actions/upload-artifact@v4
         with:
-          name: checksum-sc-agent-${{ matrix.arch }}
-          path: checksum-sc-agent-${{ matrix.arch }}.txt
+          name: checksum-${{ matrix.arch }}
+          path: checksum-${{ matrix.arch }}.txt
           retention-days: 30
 
-  collect-checksums:
-    needs: build-agent
+  release:
+    needs: [extract-version, build-agent]
     runs-on: ubuntu-latest
-    outputs:
-      amd64_sha: ${{ steps.extract.outputs.amd64_sha }}
-      arm64_sha: ${{ steps.extract.outputs.arm64_sha }}
+    permissions:
+      contents: write
     steps:
-      - name: Download checksum artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: checksum-*
-          merge-multiple: false
-          path: checksums
+          path: artifacts
 
-      - name: Extract checksums
-        id: extract
+      - name: Prepare release files
+        id: checksums
         run: |
-          AMD64_SHA=$(cat checksums/checksum-sc-agent-amd64/checksum-sc-agent-amd64.txt | head -n 1)
-          ARM64_SHA=$(cat checksums/checksum-sc-agent-arm64/checksum-sc-agent-arm64.txt | head -n 1)
+          mv artifacts/safechain-agent-darwin-amd64/safechain-agent-darwin-amd64 .
+          mv artifacts/safechain-agent-darwin-arm64/safechain-agent-darwin-arm64 .
+          
+          AMD64_SHA=$(cat artifacts/checksum-amd64/checksum-amd64.txt)
+          ARM64_SHA=$(cat artifacts/checksum-arm64/checksum-arm64.txt)
           
           echo "amd64_sha=$AMD64_SHA" >> $GITHUB_OUTPUT
           echo "arm64_sha=$ARM64_SHA" >> $GITHUB_OUTPUT
-          
-          echo "AMD64 SHA256: $AMD64_SHA"
-          echo "ARM64 SHA256: $ARM64_SHA"
 
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            safechain-agent-darwin-amd64
+            safechain-agent-darwin-arm64
+          body: |
+            ## safechain-agent ${{ needs.extract-version.outputs.version }}
+            
+            ### Installation
+            
+            ```bash
+            brew tap AikidoSec/sc-agent
+            brew install safechain-agent
+            ```
+            
+            ### Checksums
+            
+            - **darwin/amd64 (Intel)**: `${{ steps.checksums.outputs.amd64_sha }}`
+            - **darwin/arm64 (Apple Silicon)**: `${{ steps.checksums.outputs.arm64_sha }}`
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
