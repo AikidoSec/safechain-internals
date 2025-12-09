@@ -63,6 +63,8 @@ jobs:
   update-formula:
     needs: [build-agent, extract-version]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
