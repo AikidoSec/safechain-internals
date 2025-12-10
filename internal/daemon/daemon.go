@@ -121,13 +121,13 @@ func (d *Daemon) run(ctx context.Context) {
 			log.Println("Context cancelled, stopping daemon loop")
 			return
 		case <-ticker.C:
-			d.doWork()
+			d.heartbeat()
 		}
 	}
 }
 
-func (d *Daemon) doWork() {
-
+func (d *Daemon) heartbeat() {
+	// To add periodic checks for the daemon and scanners
 }
 
 func (d *Daemon) initLogging() {

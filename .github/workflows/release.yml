@@ -1,0 +1,145 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  extract-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+  build-agent:
+    needs: extract-version
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            goarch: amd64
+            runner: macos-14
+          - arch: arm64
+            goarch: arm64
+            runner: macos-14
+    
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Run tests
+        run: |
+          echo "Running Go tests..."
+          go test -v ./...
+
+      - name: Build binary for ${{ matrix.arch }}
+        run: |
+          VERSION="${{ needs.extract-version.outputs.version }}"
+          BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+          GIT_COMMIT=$(git rev-parse --short HEAD)
+          
+          LDFLAGS="-X 'github.com/aikido/sc-agent/internal/version.Version=$VERSION' \
+                   -X 'github.com/aikido/sc-agent/internal/version.BuildTime=$BUILD_TIME' \
+                   -X 'github.com/aikido/sc-agent/internal/version.GitCommit=$GIT_COMMIT'"
+          
+          mkdir -p bin
+          
+          echo "Building darwin/${{ matrix.goarch }}..."
+          CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build \
+            -ldflags "$LDFLAGS -s -w" \
+            -trimpath \
+            -o bin/sc-agent-darwin-${{ matrix.arch }} \
+            ./cmd/daemon
+
+      - name: Calculate binary checksum
+        id: checksum
+        run: |
+          SHA=$(shasum -a 256 bin/sc-agent-darwin-${{ matrix.arch }} | cut -d' ' -f1)
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "${{ matrix.arch }} SHA256: $SHA"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sc-agent-darwin-${{ matrix.arch }}
+          path: bin/sc-agent-darwin-${{ matrix.arch }}
+          retention-days: 30
+
+      - name: Save checksum to file
+        run: |
+          echo "${{ steps.checksum.outputs.sha }}" > checksum-${{ matrix.arch }}.txt
+
+      - name: Upload checksum artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksum-${{ matrix.arch }}
+          path: checksum-${{ matrix.arch }}.txt
+          retention-days: 30
+
+  release:
+    needs: [extract-version, build-agent]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        id: checksums
+        run: |
+          mv artifacts/sc-agent-darwin-amd64/sc-agent-darwin-amd64 .
+          mv artifacts/sc-agent-darwin-arm64/sc-agent-darwin-arm64 .
+          
+          AMD64_SHA=$(cat artifacts/checksum-amd64/checksum-amd64.txt)
+          ARM64_SHA=$(cat artifacts/checksum-arm64/checksum-arm64.txt)
+          
+          echo "amd64_sha=$AMD64_SHA" >> $GITHUB_OUTPUT
+          echo "arm64_sha=$ARM64_SHA" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            sc-agent-darwin-amd64
+            sc-agent-darwin-arm64
+            dist/safe-chain-darwin-amd64
+            dist/safe-chain-darwin-arm64
+          body: |
+            ## sc-agent ${{ needs.extract-version.outputs.version }}
+            
+            ### Installation
+            
+            ```bash
+            brew tap AikidoSec/sc-agent
+            brew install sc-agent
+            ```
+            
+            ### Checksums
+            
+            - **darwin/amd64 (Intel)**: `${{ steps.checksums.outputs.amd64_sha }}`
+            - **darwin/arm64 (Apple Silicon)**: `${{ steps.checksums.outputs.arm64_sha }}`
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

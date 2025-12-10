@@ -11,12 +11,7 @@ import (
 	"time"
 
 	"github.com/aikido/sc-agent/internal/daemon"
-)
-
-var (
-	version   = "dev"
-	buildTime = "unknown"
-	gitCommit = "unknown"
+	"github.com/aikido/sc-agent/internal/version"
 )
 
 func main() {
@@ -28,9 +23,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("sc-agent version %s\n", version)
-		fmt.Printf("Build time: %s\n", buildTime)
-		fmt.Printf("Git commit: %s\n", gitCommit)
+		fmt.Print(version.Info())
 		os.Exit(0)
 	}
 
