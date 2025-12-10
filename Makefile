@@ -1,4 +1,4 @@
-.PHONY: build install clean test run help version brew-formula brew-install brew-build-all
+.PHONY: build clean test run help
 
 # Variables
 BINARY_NAME=sc-agent
@@ -31,16 +31,6 @@ build-release: ## Build release binary with optimizations
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$(LDFLAGS) -s -w" -trimpath -o $(BIN_DIR)/$(BINARY_NAME) ./cmd/daemon
 	@echo "Release binary built: $(BIN_DIR)/$(BINARY_NAME)"
 
-install: build ## Install the daemon to /usr/local/bin
-	@echo "Installing $(BINARY_NAME)..."
-	sudo cp $(BIN_DIR)/$(BINARY_NAME) /usr/local/bin/
-	@echo "Installed to /usr/local/bin/$(BINARY_NAME)"
-
-uninstall: ## Remove the daemon from /usr/local/bin
-	@echo "Uninstalling $(BINARY_NAME)..."
-	sudo rm -f /usr/local/bin/$(BINARY_NAME)
-	@echo "Uninstalled $(BINARY_NAME)"
-
 run: build ## Run the daemon locally
 	$(BIN_DIR)/$(BINARY_NAME)
 
@@ -50,41 +40,3 @@ test: ## Run tests
 clean: ## Clean build artifacts
 	rm -rf $(BIN_DIR) $(DIST_DIR)
 	@echo "Cleaned build artifacts"
-
-version: ## Show version information
-	@echo "Version: $(VERSION)"
-	@echo "Build Time: $(BUILD_TIME)"
-	@echo "Git Commit: $(GIT_COMMIT)"
-
-# Homebrew packaging
-package: build-release ## Create Homebrew package
-	@echo "Creating Homebrew package..."
-	@mkdir -p $(DIST_DIR)
-	tar -czf $(DIST_DIR)/$(BINARY_NAME)-$(VERSION).tar.gz -C $(BIN_DIR) $(BINARY_NAME)
-	@echo "Package created: $(DIST_DIR)/$(BINARY_NAME)-$(VERSION).tar.gz"
-
-# Homebrew targets
-brew-formula: ## Build Homebrew formula (builds binaries, creates tarballs, updates formula)
-	@./scripts/build-brew-formula.sh
-
-brew-install: brew-formula ## Install Homebrew formula (builds and installs)
-	@./scripts/install-brew-formula.sh
-
-brew-build-all: ## Build binaries for both architectures (for Homebrew)
-	@echo "Building binaries for both architectures..."
-	@mkdir -p $(BIN_DIR) $(DIST_DIR)
-	@echo "Building darwin/amd64..."
-	@CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
-		-ldflags "$(LDFLAGS) -s -w" \
-		-trimpath \
-		-o $(BIN_DIR)/$(BINARY_NAME)-darwin-amd64 \
-		./cmd/daemon
-	@echo "Building darwin/arm64..."
-	@CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build \
-		-ldflags "$(LDFLAGS) -s -w" \
-		-trimpath \
-		-o $(BIN_DIR)/$(BINARY_NAME)-darwin-arm64 \
-		./cmd/daemon
-	@echo "Binaries built:"
-	@ls -lh $(BIN_DIR)/$(BINARY_NAME)-darwin-*
-
