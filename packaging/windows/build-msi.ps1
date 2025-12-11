@@ -28,7 +28,7 @@ Write-Host "  Output directory: $OutputDir"
 Write-Host "  Project directory: $ProjectDir"
 
 # Build the MSI
-$OutputMsi = Join-Path $OutputDir "sc-agent-$Version-windows-amd64.msi"
+$OutputMsi = Join-Path $OutputDir "sc-agent-windows-amd64.msi"
 
 wix build $WxsFile `
     -d Version=$Version `
