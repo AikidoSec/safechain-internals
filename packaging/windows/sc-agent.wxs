@@ -4,7 +4,8 @@
   <Package Name="Aikido SC-Agent"
            Manufacturer="Aikido Security"
            Version="$(var.Version)"
-           UpgradeCode="E8F3A9B2-7C4D-4E5F-9A8B-1C2D3E4F5A6B"
+           ProductCode="5d8fd7e2-55b5-4fc4-82b2-de8ee83f0061"
+           UpgradeCode="adb9d7b9-de00-4953-af0e-9c1e9ec15c81"
            Scope="perMachine">
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
@@ -13,7 +14,7 @@
 
     <!-- Define installation directory structure -->
     <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLDIR" Name="Aikido">
+      <Directory Id="INSTALLDIR" Name="AikidoSecurity">
         <Directory Id="AGENTDIR" Name="sc-agent">
           <Directory Id="BINDIR" Name="bin" />
         </Directory>
@@ -28,14 +29,17 @@
 
     <!-- Components -->
     <ComponentGroup Id="ProductComponents" Directory="BINDIR">
-      <Component Id="ScAgentExe" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+      <Component Id="ScAgentExe" Guid="3a2f5c8e-e57f-4ce4-ab7f-fa89e94c48cb">
         <File Id="ScAgentExeFile" Source="$(var.BinDir)\sc-agent.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="SafeChainExe" Guid="e528ac7f-1342-4b26-b87b-1259c6e35f6c">
+        <File Id="SafeChainExeFile" Source="$(var.BinDir)\safe-chain.exe" KeyPath="yes" />
       </Component>
     </ComponentGroup>
 
     <!-- Add to PATH -->
     <DirectoryRef Id="BINDIR">
-      <Component Id="PathComponent" Guid="C3D4E5F6-A7B8-9012-CDEF-123456789012">
+      <Component Id="PathComponent" Guid="5809b6b6-57a0-4c2a-9d55-7b274ceb916a">
         <Environment Id="PATH" Name="PATH" Value="[BINDIR]" Permanent="no" Part="last" Action="set" System="yes" />
       </Component>
     </DirectoryRef>

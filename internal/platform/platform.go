@@ -1,7 +1,7 @@
 package platform
 
 type Config struct {
-	BinDir string
+	SafeChainBinary string
 }
 
 func Get() *Config {

@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/aikido/sc-agent/internal/platform"
 )
@@ -25,9 +24,7 @@ func (p *Proxy) Start(ctx context.Context) error {
 	p.ctx, p.cancel = context.WithCancel(ctx)
 
 	cfg := platform.Get()
-	binaryPath := filepath.Join(cfg.BinDir, "safe-chain")
-
-	p.cmd = exec.CommandContext(p.ctx, binaryPath, "run-proxy")
+	p.cmd = exec.CommandContext(p.ctx, cfg.SafeChainBinary, "run-proxy")
 	p.cmd.Stdout = os.Stdout
 	p.cmd.Stderr = os.Stderr
 

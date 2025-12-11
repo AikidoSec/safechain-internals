@@ -125,6 +125,10 @@ jobs:
           go build -ldflags $LDFLAGS -trimpath -o bin/sc-agent.exe ./cmd/daemon
         shell: pwsh
 
+      - name: Copy safe-chain to bin
+        run: Copy-Item -Path "dist\safe-chain-windows-amd64.exe" -Destination "bin\safe-chain.exe"
+        shell: pwsh
+
       - name: Calculate binary checksum
         id: checksum
         run: |

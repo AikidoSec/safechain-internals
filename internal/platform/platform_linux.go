@@ -4,6 +4,6 @@ package platform
 
 func getConfig() *Config {
 	return &Config{
-		BinDir: "/usr/local/bin",
+		SafeChainBinary: "/usr/local/bin/safe-chain",
 	}
 }

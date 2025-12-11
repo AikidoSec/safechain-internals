@@ -4,6 +4,6 @@ package platform
 
 func getConfig() *Config {
 	return &Config{
-		BinDir: "/opt/homebrew/bin",
+		SafeChainBinary: "/opt/homebrew/bin/sc-agent",
 	}
 }
