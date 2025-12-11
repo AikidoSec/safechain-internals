@@ -18,7 +18,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
-  build-agent:
+  build-darwin:
     needs: extract-version
     strategy:
       matrix:
@@ -82,17 +82,96 @@ jobs:
 
       - name: Save checksum to file
         run: |
-          echo "${{ steps.checksum.outputs.sha }}" > checksum-${{ matrix.arch }}.txt
+          echo "${{ steps.checksum.outputs.sha }}" > checksum-darwin-${{ matrix.arch }}.txt
 
       - name: Upload checksum artifact
         uses: actions/upload-artifact@v4
         with:
-          name: checksum-${{ matrix.arch }}
-          path: checksum-${{ matrix.arch }}.txt
+          name: checksum-darwin-${{ matrix.arch }}
+          path: checksum-darwin-${{ matrix.arch }}.txt
+          retention-days: 30
+
+  build-windows:
+    needs: extract-version
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Build Windows binary
+        run: |
+          $VERSION = "${{ needs.extract-version.outputs.version }}"
+          $BUILD_TIME = (Get-Date -Format "yyyy-MM-dd_HH:mm:ss")
+          $GIT_COMMIT = git rev-parse --short HEAD
+          
+          $LDFLAGS = "-X 'github.com/aikido/sc-agent/internal/version.Version=$VERSION' -X 'github.com/aikido/sc-agent/internal/version.BuildTime=$BUILD_TIME' -X 'github.com/aikido/sc-agent/internal/version.GitCommit=$GIT_COMMIT' -s -w"
+          
+          New-Item -ItemType Directory -Force -Path bin
+          
+          $env:CGO_ENABLED = "0"
+          $env:GOOS = "windows"
+          $env:GOARCH = "amd64"
+          
+          go build -ldflags $LDFLAGS -trimpath -o bin/sc-agent.exe ./cmd/daemon
+        shell: pwsh
+
+      - name: Calculate binary checksum
+        id: checksum
+        run: |
+          $hash = Get-FileHash -Path bin/sc-agent.exe -Algorithm SHA256
+          "sha=$($hash.Hash)" >> $env:GITHUB_OUTPUT
+          Write-Host "windows/amd64 SHA256: $($hash.Hash)"
+        shell: pwsh
+
+      - name: Install WiX Toolset
+        run: dotnet tool install -g wix
+
+      - name: Add WiX UI extension
+        run: wix extension add WixToolset.UI.wixext
+
+      - name: Build MSI installer
+        run: |
+          .\packaging\windows\build-msi.ps1 -Version "${{ needs.extract-version.outputs.version }}" -BinDir ".\bin" -OutputDir ".\dist"
+        shell: pwsh
+
+      - name: Upload Windows binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sc-agent-windows-amd64
+          path: bin/sc-agent.exe
+          retention-days: 30
+
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sc-agent-windows-msi
+          path: dist/*.msi
+          retention-days: 30
+
+      - name: Save checksum to file
+        run: |
+          echo "${{ steps.checksum.outputs.sha }}" > checksum-windows-amd64.txt
+        shell: bash
+
+      - name: Upload checksum artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksum-windows-amd64
+          path: checksum-windows-amd64.txt
           retention-days: 30
 
   release:
-    needs: [extract-version, build-agent]
+    needs: [extract-version, build-darwin, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -110,12 +189,16 @@ jobs:
         run: |
           mv artifacts/sc-agent-darwin-amd64/sc-agent-darwin-amd64 .
           mv artifacts/sc-agent-darwin-arm64/sc-agent-darwin-arm64 .
+          mv artifacts/sc-agent-windows-amd64/sc-agent.exe ./sc-agent-windows-amd64.exe
+          mv artifacts/sc-agent-windows-msi/*.msi .
           
-          AMD64_SHA=$(cat artifacts/checksum-amd64/checksum-amd64.txt)
-          ARM64_SHA=$(cat artifacts/checksum-arm64/checksum-arm64.txt)
+          DARWIN_AMD64_SHA=$(cat artifacts/checksum-darwin-amd64/checksum-darwin-amd64.txt)
+          DARWIN_ARM64_SHA=$(cat artifacts/checksum-darwin-arm64/checksum-darwin-arm64.txt)
+          WINDOWS_AMD64_SHA=$(cat artifacts/checksum-windows-amd64/checksum-windows-amd64.txt)
           
-          echo "amd64_sha=$AMD64_SHA" >> $GITHUB_OUTPUT
-          echo "arm64_sha=$ARM64_SHA" >> $GITHUB_OUTPUT
+          echo "darwin_amd64_sha=$DARWIN_AMD64_SHA" >> $GITHUB_OUTPUT
+          echo "darwin_arm64_sha=$DARWIN_ARM64_SHA" >> $GITHUB_OUTPUT
+          echo "windows_amd64_sha=$WINDOWS_AMD64_SHA" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -123,6 +206,8 @@ jobs:
           files: |
             sc-agent-darwin-amd64
             sc-agent-darwin-arm64
+            sc-agent-windows-amd64.exe
+            *.msi
             dist/safe-chain-darwin-amd64
             dist/safe-chain-darwin-arm64
           body: |
@@ -130,15 +215,22 @@ jobs:
             
             ### Installation
             
+            **macOS (Homebrew):**
             ```bash
             brew tap AikidoSec/sc-agent
             brew install sc-agent
             ```
             
+            **Windows:**
+            Download and run `sc-agent-${{ needs.extract-version.outputs.version }}-windows-amd64.msi`
+            
             ### Checksums
             
-            - **darwin/amd64 (Intel)**: `${{ steps.checksums.outputs.amd64_sha }}`
-            - **darwin/arm64 (Apple Silicon)**: `${{ steps.checksums.outputs.arm64_sha }}`
+            | Platform | Architecture | SHA256 |
+            |----------|--------------|--------|
+            | macOS | Intel (amd64) | `${{ steps.checksums.outputs.darwin_amd64_sha }}` |
+            | macOS | Apple Silicon (arm64) | `${{ steps.checksums.outputs.darwin_arm64_sha }}` |
+            | Windows | amd64 | `${{ steps.checksums.outputs.windows_amd64_sha }}` |
           draft: false
           prerelease: false
         env:

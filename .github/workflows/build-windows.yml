@@ -1,0 +1,80 @@
+name: Build Windows MSI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'packaging/windows/**'
+      - '.github/workflows/build-windows.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'packaging/windows/**'
+      - '.github/workflows/build-windows.yml'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Build Windows binary
+        run: |
+          $VERSION = "dev"
+          $BUILD_TIME = (Get-Date -Format "yyyy-MM-dd_HH:mm:ss")
+          $GIT_COMMIT = git rev-parse --short HEAD
+          
+          $LDFLAGS = "-X 'github.com/aikido/sc-agent/internal/version.Version=$VERSION' -X 'github.com/aikido/sc-agent/internal/version.BuildTime=$BUILD_TIME' -X 'github.com/aikido/sc-agent/internal/version.GitCommit=$GIT_COMMIT' -s -w"
+          
+          New-Item -ItemType Directory -Force -Path bin
+          
+          $env:CGO_ENABLED = "0"
+          $env:GOOS = "windows"
+          $env:GOARCH = "amd64"
+          
+          go build -ldflags $LDFLAGS -trimpath -o bin/sc-agent.exe ./cmd/daemon
+        shell: pwsh
+
+      - name: Install WiX Toolset
+        run: dotnet tool install -g wix
+
+      - name: Add WiX UI extension
+        run: wix extension add WixToolset.UI.wixext
+
+      - name: Build MSI installer
+        run: |
+          .\packaging\windows\build-msi.ps1 -Version "dev" -BinDir ".\bin" -OutputDir ".\dist"
+        shell: pwsh
+
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sc-agent-windows-msi
+          path: dist/*.msi
+          retention-days: 30
+
+      - name: Upload Windows binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sc-agent-windows-exe
+          path: bin/sc-agent.exe
+          retention-days: 30

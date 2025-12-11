@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Aikido SC-Agent"
+           Manufacturer="Aikido Security"
+           Version="$(var.Version)"
+           UpgradeCode="E8F3A9B2-7C4D-4E5F-9A8B-1C2D3E4F5A6B"
+           Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    
+    <Media Id="1" Cabinet="sc-agent.cab" EmbedCab="yes" />
+
+    <!-- Define installation directory structure -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLDIR" Name="Aikido">
+        <Directory Id="AGENTDIR" Name="sc-agent">
+          <Directory Id="BINDIR" Name="bin" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Main feature -->
+    <Feature Id="MainFeature" Title="SC-Agent" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="PathComponent" />
+    </Feature>
+
+    <!-- Components -->
+    <ComponentGroup Id="ProductComponents" Directory="BINDIR">
+      <Component Id="ScAgentExe" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+        <File Id="ScAgentExeFile" Source="$(var.BinDir)\sc-agent.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="SafeChainExe" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901" Condition="EXISTS('$(var.BinDir)\safe-chain.exe')">
+        <File Id="SafeChainExeFile" Source="$(var.BinDir)\safe-chain.exe" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Add to PATH -->
+    <DirectoryRef Id="BINDIR">
+      <Component Id="PathComponent" Guid="C3D4E5F6-A7B8-9012-CDEF-123456789012">
+        <Environment Id="PATH" Name="PATH" Value="[BINDIR]" Permanent="no" Part="last" Action="set" System="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Custom UI text -->
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.ProjectDir)\packaging\windows\license.rtf" />
+
+    <!-- UI -->
+    <UI>
+      <UIRef Id="WixUI_InstallDir" />
+      <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+    </UI>
+
+  </Package>
+</Wix>

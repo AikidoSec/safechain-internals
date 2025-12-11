@@ -1,0 +1,53 @@
+# Build MSI installer for sc-agent
+# Requires: WiX Toolset v4+ (dotnet tool install -g wix)
+
+param(
+    [Parameter(Mandatory=$true)]
+    [string]$Version,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$BinDir = ".\bin",
+    
+    [Parameter(Mandatory=$false)]
+    [string]$OutputDir = ".\dist"
+)
+
+$ErrorActionPreference = "Stop"
+
+# Ensure output directory exists
+if (-not (Test-Path $OutputDir)) {
+    New-Item -ItemType Directory -Path $OutputDir | Out-Null
+}
+
+$ProjectDir = (Get-Item (Split-Path -Parent $MyInvocation.MyCommand.Path)).Parent.Parent.FullName
+$WxsFile = Join-Path $ProjectDir "packaging\windows\sc-agent.wxs"
+
+Write-Host "Building MSI installer for sc-agent v$Version"
+Write-Host "  Binary directory: $BinDir"
+Write-Host "  Output directory: $OutputDir"
+Write-Host "  Project directory: $ProjectDir"
+
+# Build the MSI
+$OutputMsi = Join-Path $OutputDir "sc-agent-$Version-windows-amd64.msi"
+
+wix build $WxsFile `
+    -d Version=$Version `
+    -d BinDir=$BinDir `
+    -d ProjectDir=$ProjectDir `
+    -ext WixToolset.UI.wixext `
+    -arch x64 `
+    -o $OutputMsi
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "MSI built successfully: $OutputMsi" -ForegroundColor Green
+    
+    # Calculate checksum
+    $hash = Get-FileHash -Path $OutputMsi -Algorithm SHA256
+    Write-Host "SHA256: $($hash.Hash)"
+    
+    # Save checksum to file
+    $hash.Hash | Out-File -FilePath "$OutputMsi.sha256" -NoNewline
+} else {
+    Write-Host "MSI build failed" -ForegroundColor Red
+    exit 1
+}
