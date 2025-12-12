@@ -50,19 +50,17 @@ jobs:
                    -X 'github.com/aikido/sc-agent/internal/version.BuildTime=$BUILD_TIME' \
                    -X 'github.com/aikido/sc-agent/internal/version.GitCommit=$GIT_COMMIT'"
           
-          mkdir -p bin
-          
           echo "Building darwin/${{ matrix.goarch }}..."
           CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build \
             -ldflags "$LDFLAGS -s -w" \
             -trimpath \
-            -o bin/sc-agent-darwin-${{ matrix.arch }} \
+            -o sc-agent-darwin-${{ matrix.arch }} \
             ./cmd/daemon
 
       - name: Calculate binary checksum
         id: checksum
         run: |
-          SHA=$(shasum -a 256 bin/sc-agent-darwin-${{ matrix.arch }} | cut -d' ' -f1)
+          SHA=$(shasum -a 256 sc-agent-darwin-${{ matrix.arch }} | cut -d' ' -f1)
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "${{ matrix.arch }} SHA256: $SHA"
           echo "$SHA" > checksum-darwin-${{ matrix.arch }}.txt
@@ -72,5 +70,5 @@ jobs:
         with:
           name: sc-agent-darwin-${{ matrix.arch }}
           path: |
-            bin/sc-agent-darwin-${{ matrix.arch }}
+            sc-agent-darwin-${{ matrix.arch }}
             checksum-darwin-${{ matrix.arch }}.txt
