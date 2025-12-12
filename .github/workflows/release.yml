@@ -70,8 +70,6 @@ jobs:
           files: |
             sc-agent-darwin-amd64
             sc-agent-darwin-arm64
-            sc-agent-windows-amd64.exe
-            sc-agent-windows-arm64.exe
             sc-agent-windows-amd64.msi
             sc-agent-windows-arm64.msi
             dist/safe-chain-darwin-amd64
@@ -82,10 +80,10 @@ jobs:
             
             | Platform | Architecture | SHA256 |
             |----------|--------------|--------|
-            | macOS | Intel (amd64) | `${{ steps.checksums.outputs.darwin_amd64_sha }}` |
-            | macOS | Apple Silicon (arm64) | `${{ steps.checksums.outputs.darwin_arm64_sha }}` |
-            | Windows | amd64 | `${{ steps.checksums.outputs.windows_amd64_sha }}` |
-            | Windows | arm64 | `${{ steps.checksums.outputs.windows_arm64_sha }}` |
+            | macOS | amd64 | ${{ steps.checksums.outputs.darwin_amd64_sha }} |
+            | macOS | arm64 | ${{ steps.checksums.outputs.darwin_arm64_sha }} |
+            | Windows | amd64 | ${{ steps.checksums.outputs.windows_amd64_sha }} |
+            | Windows | arm64 | ${{ steps.checksums.outputs.windows_arm64_sha }} |
           draft: false
           prerelease: false
         env:
