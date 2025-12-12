@@ -1,4 +1,4 @@
-name: Build Agent
+name: Build Unix
 
 on:
   push:
@@ -7,9 +7,14 @@ on:
   pull_request:
     branches:
       - main
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
 
 jobs:
-  build-agent:
+  build-unix:
     strategy:
       matrix:
         include:
@@ -24,8 +29,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -39,7 +42,7 @@ jobs:
 
       - name: Build binary for ${{ matrix.arch }}
         run: |
-          VERSION="dev"
+          VERSION="${{ inputs.version || 'dev' }}"
           BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
           GIT_COMMIT=$(git rev-parse --short HEAD)
           
@@ -62,10 +65,12 @@ jobs:
           SHA=$(shasum -a 256 bin/sc-agent-darwin-${{ matrix.arch }} | cut -d' ' -f1)
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "${{ matrix.arch }} SHA256: $SHA"
+          echo "$SHA" > checksum-darwin-${{ matrix.arch }}.txt
 
-      - name: Upload binary artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: sc-agent-darwin-${{ matrix.arch }}
-          path: bin/sc-agent-darwin-${{ matrix.arch }}
-          retention-days: 30
+          path: |
+            bin/sc-agent-darwin-${{ matrix.arch }}
+            checksum-darwin-${{ matrix.arch }}.txt
