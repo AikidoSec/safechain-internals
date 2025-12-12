@@ -28,19 +28,16 @@ type Daemon struct {
 	registry *scannermanager.Registry
 }
 
-func New(config *Config) (*Daemon, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-
+func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
 	d := &Daemon{
-		config:   config,
 		ctx:      ctx,
 		cancel:   cancel,
+		config:   config,
 		proxy:    proxy.New(),
 		registry: scannermanager.NewRegistry(),
 	}
 
 	d.initLogging()
-
 	return d, nil
 }
 
@@ -65,7 +62,6 @@ func (d *Daemon) Start(ctx context.Context) error {
 
 	log.Println("Daemon main loop stopped")
 	d.wg.Wait()
-
 	return nil
 }
 

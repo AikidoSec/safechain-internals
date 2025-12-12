@@ -27,16 +27,16 @@ func main() {
 		os.Exit(0)
 	}
 
-	d, err := daemon.New(&daemon.Config{
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	d, err := daemon.New(ctx, cancel, &daemon.Config{
 		ConfigPath: *configPath,
 		LogLevel:   *logLevel,
 	})
 	if err != nil {
 		log.Fatalf("Failed to create daemon: %v", err)
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
