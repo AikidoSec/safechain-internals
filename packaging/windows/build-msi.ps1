@@ -5,6 +5,9 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$Version,
     
+    [Parameter(Mandatory=$true)]
+    [string]$Arch,
+    
     [Parameter(Mandatory=$false)]
     [string]$BinDir = ".\bin",
     
@@ -16,6 +19,8 @@ $ErrorActionPreference = "Stop"
 
 if ($Version -eq "dev" -or [string]::IsNullOrEmpty($Version)) {
     $WixVersion = "0.0.0-dev"
+} else {
+    $WixVersion = $Version
 }
 
 # Ensure output directory exists
@@ -32,14 +37,15 @@ Write-Host "  Output directory: $OutputDir"
 Write-Host "  Project directory: $ProjectDir"
 
 # Build the MSI
-$OutputMsi = Join-Path $OutputDir "sc-agent-windows-amd64.msi"
+$OutputMsi = Join-Path $OutputDir "sc-agent-windows-$Arch.msi"
+$WixArch = if ($Arch -eq "arm64") { "arm64" } else { "x64" }
 
 wix build $WxsFile `
     -d Version=$WixVersion `
     -d BinDir=$BinDir `
     -d ProjectDir=$ProjectDir `
     -ext WixToolset.UI.wixext `
-    -arch x64 `
+    -arch $WixArch `
     -o $OutputMsi
 
 if ($LASTEXITCODE -eq 0) {

@@ -49,10 +49,10 @@ jobs:
         run: |
           mv artifacts/sc-agent-darwin-amd64/sc-agent-darwin-amd64 .
           mv artifacts/sc-agent-darwin-arm64/sc-agent-darwin-arm64 .
-          mv artifacts/sc-agent-windows-amd64/sc-agent.exe ./sc-agent-windows-amd64.exe
-          mv artifacts/sc-agent-windows-amd64/*.msi .
-          mv artifacts/sc-agent-windows-arm64/sc-agent.exe ./sc-agent-windows-arm64.exe
-          mv artifacts/sc-agent-windows-arm64/*.msi .
+          mv artifacts/sc-agent-windows-amd64/sc-agent-windows-amd64.exe .
+          mv artifacts/sc-agent-windows-amd64/sc-agent-windows-amd64.msi .
+          mv artifacts/sc-agent-windows-arm64/sc-agent-windows-arm64.exe .
+          mv artifacts/sc-agent-windows-arm64/sc-agent-windows-arm64.msi .
           
           DARWIN_AMD64_SHA=$(cat artifacts/sc-agent-darwin-amd64/checksum-darwin-amd64.txt)
           DARWIN_ARM64_SHA=$(cat artifacts/sc-agent-darwin-arm64/checksum-darwin-arm64.txt)
@@ -72,7 +72,8 @@ jobs:
             sc-agent-darwin-arm64
             sc-agent-windows-amd64.exe
             sc-agent-windows-arm64.exe
-            *.msi
+            sc-agent-windows-amd64.msi
+            sc-agent-windows-arm64.msi
             dist/safe-chain-darwin-amd64
             dist/safe-chain-darwin-arm64
           body: |
