@@ -14,6 +14,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+if ($Version -eq "dev" -or [string]::IsNullOrEmpty($Version)) {
+    $WixVersion = "0.0.0-dev"
+}
+
 # Ensure output directory exists
 if (-not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir | Out-Null
@@ -22,7 +26,7 @@ if (-not (Test-Path $OutputDir)) {
 $ProjectDir = (Get-Item (Split-Path -Parent $MyInvocation.MyCommand.Path)).Parent.Parent.FullName
 $WxsFile = Join-Path $ProjectDir "packaging\windows\sc-agent.wxs"
 
-Write-Host "Building MSI installer for sc-agent v$Version"
+Write-Host "Building MSI installer for sc-agent v$Version (WiX version: $WixVersion)"
 Write-Host "  Binary directory: $BinDir"
 Write-Host "  Output directory: $OutputDir"
 Write-Host "  Project directory: $ProjectDir"
@@ -31,7 +35,7 @@ Write-Host "  Project directory: $ProjectDir"
 $OutputMsi = Join-Path $OutputDir "sc-agent-windows-amd64.msi"
 
 wix build $WxsFile `
-    -d Version=$Version `
+    -d Version=$WixVersion `
     -d BinDir=$BinDir `
     -d ProjectDir=$ProjectDir `
     -ext WixToolset.UI.wixext `
