@@ -54,10 +54,10 @@ jobs:
           mv artifacts/sc-agent-windows-arm64/sc-agent-windows-arm64.exe .
           mv artifacts/sc-agent-windows-arm64/sc-agent-windows-arm64.msi .
           
-          DARWIN_AMD64_SHA=$(cat artifacts/sc-agent-darwin-amd64/checksum-darwin-amd64.txt)
-          DARWIN_ARM64_SHA=$(cat artifacts/sc-agent-darwin-arm64/checksum-darwin-arm64.txt)
-          WINDOWS_AMD64_SHA=$(cat artifacts/sc-agent-windows-amd64/checksum-windows-amd64.txt)
-          WINDOWS_ARM64_SHA=$(cat artifacts/sc-agent-windows-arm64/checksum-windows-arm64.txt)
+          DARWIN_AMD64_SHA=$(cat artifacts/sc-agent-darwin-amd64/checksum-darwin-amd64.txt | tr -d '\n\r ')
+          DARWIN_ARM64_SHA=$(cat artifacts/sc-agent-darwin-arm64/checksum-darwin-arm64.txt | tr -d '\n\r ')
+          WINDOWS_AMD64_SHA=$(cat artifacts/sc-agent-windows-amd64/checksum-windows-amd64.txt | tr -d '\n\r ')
+          WINDOWS_ARM64_SHA=$(cat artifacts/sc-agent-windows-arm64/checksum-windows-arm64.txt | tr -d '\n\r ')
           
           echo "darwin_amd64_sha=$DARWIN_AMD64_SHA" >> $GITHUB_OUTPUT
           echo "darwin_arm64_sha=$DARWIN_ARM64_SHA" >> $GITHUB_OUTPUT
@@ -80,10 +80,10 @@ jobs:
             
             | Platform | Architecture | SHA256 |
             |----------|--------------|--------|
-            | macOS | amd64 | ${{ steps.checksums.outputs.darwin_amd64_sha }} |
-            | macOS | arm64 | ${{ steps.checksums.outputs.darwin_arm64_sha }} |
-            | Windows | amd64 | ${{ steps.checksums.outputs.windows_amd64_sha }} |
-            | Windows | arm64 | ${{ steps.checksums.outputs.windows_arm64_sha }} |
+            | macOS | amd64 | `${{ steps.checksums.outputs.darwin_amd64_sha }}` |
+            | macOS | arm64 | `${{ steps.checksums.outputs.darwin_arm64_sha }}` |
+            | Windows | amd64 | `${{ steps.checksums.outputs.windows_amd64_sha }}` |
+            | Windows | arm64 | `${{ steps.checksums.outputs.windows_arm64_sha }}` |
           draft: false
           prerelease: false
         env:
