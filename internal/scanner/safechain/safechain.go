@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	repoURL      = "https://github.com/AikidoSecSec/safe-chain"
+	repoURL      = "https://github.com/AikidoSec/safe-chain"
 	githubAPIURL = "https://api.github.com/repos/AikidoSec/safe-chain/releases/latest"
 	binaryName   = "safe-chain"
 )
