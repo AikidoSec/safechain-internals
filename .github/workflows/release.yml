@@ -72,8 +72,6 @@ jobs:
             aikido-agent-darwin-arm64
             AikidoAgent.amd64.msi
             AikidoAgent.arm64.msi
-            dist/safe-chain-darwin-amd64
-            dist/safe-chain-darwin-arm64
           body: |
             ## aikido-agent ${{ needs.extract-version.outputs.version }}
             ### Checksums

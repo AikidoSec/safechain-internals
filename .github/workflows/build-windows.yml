@@ -53,10 +53,6 @@ jobs:
           go build -ldflags $LDFLAGS -trimpath -o bin/AikidoAgent.exe ./cmd/daemon
         shell: pwsh
 
-      - name: Copy safe-chain to bin
-        run: Copy-Item -Path "dist\safe-chain-windows-${{ matrix.goarch }}.exe" -Destination "bin\safe-chain.exe"
-        shell: pwsh
-
       - name: Calculate binary checksum
         run: |
           $hash = (Get-FileHash -Path bin/AikidoAgent.exe -Algorithm SHA256).Hash.ToLower()
