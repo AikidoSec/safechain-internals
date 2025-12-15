@@ -1,4 +1,4 @@
-# Build MSI installer for aikido-agent
+# Build MSI installer for Aikido Agent
 # Requires: WiX Toolset v4+ (dotnet tool install -g wix)
 
 param(
@@ -29,15 +29,15 @@ if (-not (Test-Path $OutputDir)) {
 }
 
 $ProjectDir = (Get-Item (Split-Path -Parent $MyInvocation.MyCommand.Path)).Parent.Parent.FullName
-$WxsFile = Join-Path $ProjectDir "packaging\windows\aikido-agent.wxs"
+$WxsFile = Join-Path $ProjectDir "packaging\windows\AikidoAgent.wxs"
 
-Write-Host "Building MSI installer for aikido-agent v$Version (WiX version: $WixVersion)"
+Write-Host "Building MSI installer for Aikido Agent v$Version (WiX version: $WixVersion)"
 Write-Host "  Binary directory: $BinDir"
 Write-Host "  Output directory: $OutputDir"
 Write-Host "  Project directory: $ProjectDir"
 
 # Build the MSI
-$OutputMsi = Join-Path $OutputDir "aikido-agent-windows-$Arch.msi"
+$OutputMsi = Join-Path $OutputDir "AikidoAgent.$Arch.msi"
 $WixArch = if ($Arch -eq "arm64") { "arm64" } else { "x64" }
 
 wix build $WxsFile `
