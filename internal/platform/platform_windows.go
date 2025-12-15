@@ -2,8 +2,10 @@
 
 package platform
 
+import "path/filepath"
+
 func getConfig() *Config {
 	return &Config{
-		SafeChainBinary: "C:\\Program Files\\AikidoSecurity\\aikido-agent\\bin\\safe-chain.exe",
+		SafeChainBinary: filepath.Join(homeDir, ".safe-chain", "bin", "safe-chain.exe"),
 	}
 }

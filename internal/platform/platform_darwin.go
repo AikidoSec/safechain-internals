@@ -2,8 +2,10 @@
 
 package platform
 
+import "path/filepath"
+
 func getConfig() *Config {
 	return &Config{
-		SafeChainBinary: "/opt/homebrew/bin/aikido-agent",
+		SafeChainBinary: filepath.Join(homeDir, ".safe-chain", "bin", "safe-chain"),
 	}
 }
