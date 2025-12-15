@@ -3,6 +3,7 @@ package safechain
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,6 +49,7 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 	}
 
 	downloadURL := utils.BuildDownloadURL(repoURL, version, binaryName)
+	log.Printf("Downloading safechain binary from %s...", downloadURL)
 	if err := utils.DownloadBinary(ctx, downloadURL, binaryPath); err != nil {
 		return fmt.Errorf("failed to download binary: %w", err)
 	}
