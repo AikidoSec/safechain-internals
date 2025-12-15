@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/aikido/sc-agent/internal/platform"
-	"github.com/aikido/sc-agent/internal/scanner"
+	"github.com/aikido/aikido-agent/internal/platform"
+	"github.com/aikido/aikido-agent/internal/scanner"
 )
 
 type SafechainScanner struct{}

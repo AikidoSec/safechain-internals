@@ -1,1 +1,1 @@
-# sc-agent
+# aikido-agent

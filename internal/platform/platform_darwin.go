@@ -4,6 +4,6 @@ package platform
 
 func getConfig() *Config {
 	return &Config{
-		SafeChainBinary: "/opt/homebrew/bin/sc-agent",
+		SafeChainBinary: "/opt/homebrew/bin/aikido-agent",
 	}
 }

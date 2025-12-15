@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
-  <Package Name="Aikido SC-Agent"
+  <Package Name="Aikido Agent"
            Manufacturer="Aikido Security"
            Version="$(var.Version)"
            ProductCode="5d8fd7e2-55b5-4fc4-82b2-de8ee83f0061"
@@ -10,27 +10,27 @@
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     
-    <Media Id="1" Cabinet="sc-agent.cab" EmbedCab="yes" />
+    <Media Id="1" Cabinet="aikido-agent.cab" EmbedCab="yes" />
 
     <!-- Define installation directory structure -->
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLDIR" Name="AikidoSecurity">
-        <Directory Id="AGENTDIR" Name="sc-agent">
+        <Directory Id="AGENTDIR" Name="aikido-agent">
           <Directory Id="BINDIR" Name="bin" />
         </Directory>
       </Directory>
     </StandardDirectory>
 
     <!-- Main feature -->
-    <Feature Id="MainFeature" Title="SC-Agent" Level="1">
+    <Feature Id="MainFeature" Title="Aikido-Agent" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
       <ComponentRef Id="PathComponent" />
     </Feature>
 
     <!-- Components -->
     <ComponentGroup Id="ProductComponents" Directory="BINDIR">
-      <Component Id="ScAgentExe" Guid="3a2f5c8e-e57f-4ce4-ab7f-fa89e94c48cb">
-        <File Id="ScAgentExeFile" Source="$(var.BinDir)\sc-agent.exe" KeyPath="yes" />
+      <Component Id="AikidoAgentExe" Guid="3a2f5c8e-e57f-4ce4-ab7f-fa89e94c48cb">
+        <File Id="AikidoAgentExeFile" Source="$(var.BinDir)\aikido-agent.exe" KeyPath="yes" />
       </Component>
       <Component Id="SafeChainExe" Guid="e528ac7f-1342-4b26-b87b-1259c6e35f6c">
         <File Id="SafeChainExeFile" Source="$(var.BinDir)\safe-chain.exe" KeyPath="yes" />
@@ -51,3 +51,4 @@
 
   </Package>
 </Wix>
+

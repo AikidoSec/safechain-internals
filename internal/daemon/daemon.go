@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aikido/sc-agent/internal/proxy"
-	"github.com/aikido/sc-agent/internal/scannermanager"
-	"github.com/aikido/sc-agent/internal/version"
+	"github.com/aikido/aikido-agent/internal/proxy"
+	"github.com/aikido/aikido-agent/internal/scannermanager"
+	"github.com/aikido/aikido-agent/internal/version"
 )
 
 type Config struct {
@@ -42,7 +42,7 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 }
 
 func (d *Daemon) Start(ctx context.Context) error {
-	log.Print("Starting sc-agent daemon: ", version.Info())
+	log.Print("Starting Aikido Agent daemon: ", version.Info())
 
 	mergedCtx, cancel := context.WithCancel(ctx)
 	defer cancel()

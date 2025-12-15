@@ -1,3 +1,3 @@
-module github.com/aikido/sc-agent
+module github.com/aikido/aikido-agent
 
 go 1.24

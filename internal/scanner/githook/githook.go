@@ -3,7 +3,7 @@ package githook
 import (
 	"context"
 
-	"github.com/aikido/sc-agent/internal/scanner"
+	"github.com/aikido/aikido-agent/internal/scanner"
 )
 
 type GitHookScanner struct{}

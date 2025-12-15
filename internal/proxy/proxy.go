@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/aikido/sc-agent/internal/platform"
+	"github.com/aikido/aikido-agent/internal/platform"
 )
 
 type Proxy struct {

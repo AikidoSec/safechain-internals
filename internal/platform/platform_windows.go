@@ -4,6 +4,6 @@ package platform
 
 func getConfig() *Config {
 	return &Config{
-		SafeChainBinary: "C:\\Program Files\\AikidoSecurity\\sc-agent\\bin\\safe-chain.exe",
+		SafeChainBinary: "C:\\Program Files\\AikidoSecurity\\aikido-agent\\bin\\safe-chain.exe",
 	}
 }
