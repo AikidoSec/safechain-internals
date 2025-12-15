@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/aikido/safechain-agent/internal/scanner"
-	"github.com/aikido/safechain-agent/internal/scanner/githook"
-	"github.com/aikido/safechain-agent/internal/scanner/safechain"
-	"github.com/aikido/safechain-agent/internal/scanner/vscode"
+	"github.com/AikidoSec/safechain-agent/internal/scanner"
+	"github.com/AikidoSec/safechain-agent/internal/scanner/githook"
+	"github.com/AikidoSec/safechain-agent/internal/scanner/safechain"
+	"github.com/AikidoSec/safechain-agent/internal/scanner/vscode"
 )
 
 type Registry struct {

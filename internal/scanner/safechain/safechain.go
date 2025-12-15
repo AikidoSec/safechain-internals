@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/aikido/safechain-agent/internal/platform"
-	"github.com/aikido/safechain-agent/internal/scanner"
-	"github.com/aikido/safechain-agent/internal/utils"
+	"github.com/AikidoSec/safechain-agent/internal/platform"
+	"github.com/AikidoSec/safechain-agent/internal/scanner"
+	"github.com/AikidoSec/safechain-agent/internal/utils"
 )
 
 const (
-	repoURL      = "https://github.com/AikidoSec/safe-chain"
+	repoURL      = "https://github.com/AikidoSecSec/safe-chain"
 	githubAPIURL = "https://api.github.com/repos/AikidoSec/safe-chain/releases/latest"
 	binaryName   = "safe-chain"
 )

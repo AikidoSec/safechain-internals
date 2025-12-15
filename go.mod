@@ -1,3 +1,3 @@
-module github.com/aikido/safechain-agent
+module github.com/AikidoSec/safechain-agent
 
 go 1.24

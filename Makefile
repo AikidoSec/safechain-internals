@@ -5,9 +5,9 @@ BINARY_NAME=safechain-agent
 VERSION?=dev
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LDFLAGS=-X 'github.com/aikido/safechain-agent/internal/version.Version=$(VERSION)' \
-		-X 'github.com/aikido/safechain-agent/internal/version.BuildTime=$(BUILD_TIME)' \
-		-X 'github.com/aikido/safechain-agent/internal/version.GitCommit=$(GIT_COMMIT)'
+LDFLAGS=-X 'github.com/AikidoSec/safechain-agent/internal/version.Version=$(VERSION)' \
+		-X 'github.com/AikidoSec/safechain-agent/internal/version.BuildTime=$(BUILD_TIME)' \
+		-X 'github.com/AikidoSec/safechain-agent/internal/version.GitCommit=$(GIT_COMMIT)'
 
 # Build directories
 BIN_DIR=bin

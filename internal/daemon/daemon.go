@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aikido/safechain-agent/internal/proxy"
-	"github.com/aikido/safechain-agent/internal/scannermanager"
-	"github.com/aikido/safechain-agent/internal/version"
+	"github.com/AikidoSec/safechain-agent/internal/proxy"
+	"github.com/AikidoSec/safechain-agent/internal/scannermanager"
+	"github.com/AikidoSec/safechain-agent/internal/version"
 )
 
 type Config struct {

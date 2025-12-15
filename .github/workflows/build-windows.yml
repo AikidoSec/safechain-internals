@@ -42,7 +42,7 @@ jobs:
           $BUILD_TIME = (Get-Date -Format "yyyy-MM-dd_HH:mm:ss")
           $GIT_COMMIT = git rev-parse --short HEAD
           
-          $LDFLAGS = "-X 'github.com/aikido/safechain-agent/internal/version.Version=$VERSION' -X 'github.com/aikido/safechain-agent/internal/version.BuildTime=$BUILD_TIME' -X 'github.com/aikido/safechain-agent/internal/version.GitCommit=$GIT_COMMIT' -s -w"
+          $LDFLAGS = "-X 'github.com/AikidoSec/safechain-agent/internal/version.Version=$VERSION' -X 'github.com/AikidoSec/safechain-agent/internal/version.BuildTime=$BUILD_TIME' -X 'github.com/AikidoSec/safechain-agent/internal/version.GitCommit=$GIT_COMMIT' -s -w"
           
           New-Item -ItemType Directory -Force -Path bin
           
