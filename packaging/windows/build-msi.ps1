@@ -29,7 +29,7 @@ if (-not (Test-Path $OutputDir)) {
 }
 
 $ProjectDir = (Get-Item (Split-Path -Parent $MyInvocation.MyCommand.Path)).Parent.Parent.FullName
-$WxsFile = Join-Path $ProjectDir "packaging\windows\AikidoAgent.wxs"
+$WxsFile = Join-Path $ProjectDir "packaging\windows\SafeChainAgent.wxs"
 
 Write-Host "Building MSI installer for Aikido Agent v$Version (WiX version: $WixVersion)"
 Write-Host "  Binary directory: $BinDir"
@@ -37,7 +37,7 @@ Write-Host "  Output directory: $OutputDir"
 Write-Host "  Project directory: $ProjectDir"
 
 # Build the MSI
-$OutputMsi = Join-Path $OutputDir "AikidoAgent.$Arch.msi"
+$OutputMsi = Join-Path $OutputDir "SafeChainAgent.$Arch.msi"
 $WixArch = if ($Arch -eq "arm64") { "arm64" } else { "x64" }
 
 wix build $WxsFile `

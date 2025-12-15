@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aikido/aikido-agent/internal/daemon"
-	"github.com/aikido/aikido-agent/internal/version"
+	"github.com/aikido/safechain-agent/internal/daemon"
+	"github.com/aikido/safechain-agent/internal/version"
 )
 
 func main() {

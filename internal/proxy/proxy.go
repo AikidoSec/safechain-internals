@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/aikido/aikido-agent/internal/platform"
+	"github.com/aikido/safechain-agent/internal/platform"
 )
 
 type Proxy struct {

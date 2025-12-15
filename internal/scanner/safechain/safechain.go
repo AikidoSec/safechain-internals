@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/aikido/aikido-agent/internal/platform"
-	"github.com/aikido/aikido-agent/internal/scanner"
-	"github.com/aikido/aikido-agent/internal/utils"
+	"github.com/aikido/safechain-agent/internal/platform"
+	"github.com/aikido/safechain-agent/internal/scanner"
+	"github.com/aikido/safechain-agent/internal/utils"
 )
 
 const (

@@ -10,12 +10,12 @@
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     
-    <Media Id="1" Cabinet="AikidoAgent.cab" EmbedCab="yes" />
+    <Media Id="1" Cabinet="SafeChainAgent.cab" EmbedCab="yes" />
 
     <!-- Define installation directory structure -->
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLDIR" Name="AikidoSecurity">
-        <Directory Id="AGENTDIR" Name="AikidoAgent">
+        <Directory Id="AGENTDIR" Name="SafeChainAgent">
           <Directory Id="BINDIR" Name="bin" />
         </Directory>
       </Directory>
@@ -30,7 +30,7 @@
     <!-- Components -->
     <ComponentGroup Id="ProductComponents" Directory="BINDIR">
         <Component Id="AikidoAgentExe" Guid="3a2f5c8e-e57f-4ce4-ab7f-fa89e94c48cb">
-        <File Id="AikidoAgentExeFile" Source="$(var.BinDir)\AikidoAgent.exe" KeyPath="yes" />
+        <File Id="AikidoAgentExeFile" Source="$(var.BinDir)\SafeChainAgent.exe" KeyPath="yes" />
       </Component>
     </ComponentGroup>
 
