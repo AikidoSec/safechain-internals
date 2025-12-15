@@ -32,9 +32,6 @@
         <Component Id="AikidoAgentExe" Guid="3a2f5c8e-e57f-4ce4-ab7f-fa89e94c48cb">
         <File Id="AikidoAgentExeFile" Source="$(var.BinDir)\AikidoAgent.exe" KeyPath="yes" />
       </Component>
-      <Component Id="SafeChainExe" Guid="e528ac7f-1342-4b26-b87b-1259c6e35f6c">
-        <File Id="SafeChainExeFile" Source="$(var.BinDir)\safe-chain.exe" KeyPath="yes" />
-      </Component>
     </ComponentGroup>
 
     <!-- Add to PATH -->
