@@ -49,10 +49,10 @@ jobs:
         run: |
           mv artifacts/aikido-agent-darwin-amd64/aikido-agent-darwin-amd64 .
           mv artifacts/aikido-agent-darwin-arm64/aikido-agent-darwin-arm64 .
-          mv artifacts/aikido-agent-windows-amd64/aikido-agent-windows-amd64.exe .
-          mv artifacts/aikido-agent-windows-amd64/aikido-agent-windows-amd64.msi .
-          mv artifacts/aikido-agent-windows-arm64/aikido-agent-windows-arm64.exe .
-          mv artifacts/aikido-agent-windows-arm64/aikido-agent-windows-arm64.msi .
+          mv artifacts/aikido-agent-windows-amd64/AikidoAgent.amd64.exe .
+          mv artifacts/aikido-agent-windows-amd64/AikidoAgent.amd64.msi .
+          mv artifacts/aikido-agent-windows-arm64/AikidoAgent.arm64.exe .
+          mv artifacts/aikido-agent-windows-arm64/AikidoAgent.arm64.msi .
           
           DARWIN_AMD64_SHA=$(cat artifacts/aikido-agent-darwin-amd64/checksum-darwin-amd64.txt | tr -d '\n\r ')
           DARWIN_ARM64_SHA=$(cat artifacts/aikido-agent-darwin-arm64/checksum-darwin-arm64.txt | tr -d '\n\r ')
@@ -70,8 +70,8 @@ jobs:
           files: |
             aikido-agent-darwin-amd64
             aikido-agent-darwin-arm64
-            aikido-agent-windows-amd64.msi
-            aikido-agent-windows-arm64.msi
+            AikidoAgent.amd64.msi
+            AikidoAgent.arm64.msi
             dist/safe-chain-darwin-amd64
             dist/safe-chain-darwin-arm64
           body: |
