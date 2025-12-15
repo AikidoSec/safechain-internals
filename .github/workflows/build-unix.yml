@@ -46,21 +46,21 @@ jobs:
           BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
           GIT_COMMIT=$(git rev-parse --short HEAD)
           
-          LDFLAGS="-X 'github.com/aikido/sc-agent/internal/version.Version=$VERSION' \
-                   -X 'github.com/aikido/sc-agent/internal/version.BuildTime=$BUILD_TIME' \
-                   -X 'github.com/aikido/sc-agent/internal/version.GitCommit=$GIT_COMMIT'"
+          LDFLAGS="-X 'github.com/aikido/aikido-agent/internal/version.Version=$VERSION' \
+                   -X 'github.com/aikido/aikido-agent/internal/version.BuildTime=$BUILD_TIME' \
+                   -X 'github.com/aikido/aikido-agent/internal/version.GitCommit=$GIT_COMMIT'"
           
           echo "Building darwin/${{ matrix.goarch }}..."
           CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build \
             -ldflags "$LDFLAGS -s -w" \
             -trimpath \
-            -o sc-agent-darwin-${{ matrix.arch }} \
+            -o aikido-agent-darwin-${{ matrix.arch }} \
             ./cmd/daemon
 
       - name: Calculate binary checksum
         id: checksum
         run: |
-          SHA=$(shasum -a 256 sc-agent-darwin-${{ matrix.arch }} | cut -d' ' -f1)
+          SHA=$(shasum -a 256 aikido-agent-darwin-${{ matrix.arch }} | cut -d' ' -f1)
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "${{ matrix.arch }} SHA256: $SHA"
           echo "$SHA" > checksum-darwin-${{ matrix.arch }}.txt
@@ -68,7 +68,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: sc-agent-darwin-${{ matrix.arch }}
+          name: aikido-agent-darwin-${{ matrix.arch }}
           path: |
-            sc-agent-darwin-${{ matrix.arch }}
+            aikido-agent-darwin-${{ matrix.arch }}
             checksum-darwin-${{ matrix.arch }}.txt

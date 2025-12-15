@@ -47,17 +47,17 @@ jobs:
       - name: Prepare release files
         id: checksums
         run: |
-          mv artifacts/sc-agent-darwin-amd64/sc-agent-darwin-amd64 .
-          mv artifacts/sc-agent-darwin-arm64/sc-agent-darwin-arm64 .
-          mv artifacts/sc-agent-windows-amd64/sc-agent-windows-amd64.exe .
-          mv artifacts/sc-agent-windows-amd64/sc-agent-windows-amd64.msi .
-          mv artifacts/sc-agent-windows-arm64/sc-agent-windows-arm64.exe .
-          mv artifacts/sc-agent-windows-arm64/sc-agent-windows-arm64.msi .
+          mv artifacts/aikido-agent-darwin-amd64/aikido-agent-darwin-amd64 .
+          mv artifacts/aikido-agent-darwin-arm64/aikido-agent-darwin-arm64 .
+          mv artifacts/aikido-agent-windows-amd64/aikido-agent-windows-amd64.exe .
+          mv artifacts/aikido-agent-windows-amd64/aikido-agent-windows-amd64.msi .
+          mv artifacts/aikido-agent-windows-arm64/aikido-agent-windows-arm64.exe .
+          mv artifacts/aikido-agent-windows-arm64/aikido-agent-windows-arm64.msi .
           
-          DARWIN_AMD64_SHA=$(cat artifacts/sc-agent-darwin-amd64/checksum-darwin-amd64.txt | tr -d '\n\r ')
-          DARWIN_ARM64_SHA=$(cat artifacts/sc-agent-darwin-arm64/checksum-darwin-arm64.txt | tr -d '\n\r ')
-          WINDOWS_AMD64_SHA=$(cat artifacts/sc-agent-windows-amd64/checksum-windows-amd64.txt | tr -d '\n\r ')
-          WINDOWS_ARM64_SHA=$(cat artifacts/sc-agent-windows-arm64/checksum-windows-arm64.txt | tr -d '\n\r ')
+          DARWIN_AMD64_SHA=$(cat artifacts/aikido-agent-darwin-amd64/checksum-darwin-amd64.txt | tr -d '\n\r ')
+          DARWIN_ARM64_SHA=$(cat artifacts/aikido-agent-darwin-arm64/checksum-darwin-arm64.txt | tr -d '\n\r ')
+          WINDOWS_AMD64_SHA=$(cat artifacts/aikido-agent-windows-amd64/checksum-windows-amd64.txt | tr -d '\n\r ')
+          WINDOWS_ARM64_SHA=$(cat artifacts/aikido-agent-windows-arm64/checksum-windows-arm64.txt | tr -d '\n\r ')
           
           echo "darwin_amd64_sha=$DARWIN_AMD64_SHA" >> $GITHUB_OUTPUT
           echo "darwin_arm64_sha=$DARWIN_ARM64_SHA" >> $GITHUB_OUTPUT
@@ -68,14 +68,14 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            sc-agent-darwin-amd64
-            sc-agent-darwin-arm64
-            sc-agent-windows-amd64.msi
-            sc-agent-windows-arm64.msi
+            aikido-agent-darwin-amd64
+            aikido-agent-darwin-arm64
+            aikido-agent-windows-amd64.msi
+            aikido-agent-windows-arm64.msi
             dist/safe-chain-darwin-amd64
             dist/safe-chain-darwin-arm64
           body: |
-            ## sc-agent ${{ needs.extract-version.outputs.version }}
+            ## aikido-agent ${{ needs.extract-version.outputs.version }}
             ### Checksums
             
             | Platform | Architecture | SHA256 |

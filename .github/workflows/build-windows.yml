@@ -42,7 +42,7 @@ jobs:
           $BUILD_TIME = (Get-Date -Format "yyyy-MM-dd_HH:mm:ss")
           $GIT_COMMIT = git rev-parse --short HEAD
           
-          $LDFLAGS = "-X 'github.com/aikido/sc-agent/internal/version.Version=$VERSION' -X 'github.com/aikido/sc-agent/internal/version.BuildTime=$BUILD_TIME' -X 'github.com/aikido/sc-agent/internal/version.GitCommit=$GIT_COMMIT' -s -w"
+          $LDFLAGS = "-X 'github.com/aikido/aikido-agent/internal/version.Version=$VERSION' -X 'github.com/aikido/aikido-agent/internal/version.BuildTime=$BUILD_TIME' -X 'github.com/aikido/aikido-agent/internal/version.GitCommit=$GIT_COMMIT' -s -w"
           
           New-Item -ItemType Directory -Force -Path bin
           
@@ -50,7 +50,7 @@ jobs:
           $env:GOOS = "windows"
           $env:GOARCH = "${{ matrix.goarch }}"
           
-          go build -ldflags $LDFLAGS -trimpath -o bin/sc-agent.exe ./cmd/daemon
+          go build -ldflags $LDFLAGS -trimpath -o bin/aikido-agent.exe ./cmd/daemon
         shell: pwsh
 
       - name: Copy safe-chain to bin
@@ -59,7 +59,7 @@ jobs:
 
       - name: Calculate binary checksum
         run: |
-          $hash = (Get-FileHash -Path bin/sc-agent.exe -Algorithm SHA256).Hash.ToLower()
+          $hash = (Get-FileHash -Path bin/aikido-agent.exe -Algorithm SHA256).Hash.ToLower()
           echo "$hash" > checksum-windows-${{ matrix.arch }}.txt
           Write-Host "windows/${{ matrix.arch }} SHA256: $hash"
         shell: pwsh
@@ -77,14 +77,14 @@ jobs:
 
       - name: Prepare artifacts
         run: |
-          Move-Item -Path bin\sc-agent.exe -Destination sc-agent-windows-${{ matrix.arch }}.exe
+          Move-Item -Path bin\aikido-agent.exe -Destination aikido-agent-windows-${{ matrix.arch }}.exe
         shell: pwsh
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: sc-agent-windows-${{ matrix.arch }}
+          name: aikido-agent-windows-${{ matrix.arch }}
           path: |
-            sc-agent-windows-${{ matrix.arch }}.msi
-            sc-agent-windows-${{ matrix.arch }}.exe
+            aikido-agent-windows-${{ matrix.arch }}.msi
+            aikido-agent-windows-${{ matrix.arch }}.exe
             checksum-windows-${{ matrix.arch }}.txt
