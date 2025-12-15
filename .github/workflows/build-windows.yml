@@ -26,12 +26,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: "1.21"
 
       - name: Run tests
         run: go test -v ./...
@@ -41,15 +41,15 @@ jobs:
           $VERSION = "${{ inputs.version || 'dev' }}"
           $BUILD_TIME = (Get-Date -Format "yyyy-MM-dd_HH:mm:ss")
           $GIT_COMMIT = git rev-parse --short HEAD
-          
+
           $LDFLAGS = "-X 'github.com/aikido/aikido-agent/internal/version.Version=$VERSION' -X 'github.com/aikido/aikido-agent/internal/version.BuildTime=$BUILD_TIME' -X 'github.com/aikido/aikido-agent/internal/version.GitCommit=$GIT_COMMIT' -s -w"
-          
+
           New-Item -ItemType Directory -Force -Path bin
-          
+
           $env:CGO_ENABLED = "0"
           $env:GOOS = "windows"
           $env:GOARCH = "${{ matrix.goarch }}"
-          
+
           go build -ldflags $LDFLAGS -trimpath -o bin/AikidoAgent.exe ./cmd/daemon
         shell: pwsh
 
@@ -81,10 +81,12 @@ jobs:
         shell: pwsh
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: AikidoAgent.${{ matrix.arch }}
           path: |
             AikidoAgent.${{ matrix.arch }}.msi
             AikidoAgent.${{ matrix.arch }}.exe
             checksum-windows-${{ matrix.arch }}.txt
+
+# TODO: support building proxy

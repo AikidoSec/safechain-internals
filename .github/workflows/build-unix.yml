@@ -24,16 +24,16 @@ jobs:
           - arch: arm64
             goarch: arm64
             runner: macos-14
-    
+
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: "1.21"
 
       - name: Run tests
         run: |
@@ -45,11 +45,11 @@ jobs:
           VERSION="${{ inputs.version || 'dev' }}"
           BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
           GIT_COMMIT=$(git rev-parse --short HEAD)
-          
+
           LDFLAGS="-X 'github.com/aikido/aikido-agent/internal/version.Version=$VERSION' \
                    -X 'github.com/aikido/aikido-agent/internal/version.BuildTime=$BUILD_TIME' \
                    -X 'github.com/aikido/aikido-agent/internal/version.GitCommit=$GIT_COMMIT'"
-          
+
           echo "Building darwin/${{ matrix.goarch }}..."
           CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build \
             -ldflags "$LDFLAGS -s -w" \
@@ -66,9 +66,63 @@ jobs:
           echo "$SHA" > checksum-darwin-${{ matrix.arch }}.txt
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: aikido-agent-darwin-${{ matrix.arch }}
           path: |
             aikido-agent-darwin-${{ matrix.arch }}
             checksum-darwin-${{ matrix.arch }}.txt
+
+  build-unix-proxy:
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            target: aarch64-apple-darwin
+            runner: macos-14
+
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          env-vars: "RUST_TOOLCHAIN=stable"
+
+      - name: cargo check
+        run: |
+          cargo check -p aikido-proxy --target ${{ matrix.target }}
+      - name: clippy
+        run: |
+          cargo clippy -p aikido-proxy --target ${{ matrix.target }}
+      - name: rustfmt
+        run: |
+          cargo fmt -p aikido-proxy --check
+
+      - name: Build proxy binary for ${{ matrix.arch }}
+        run: |
+          cargo build --release -p rama-cli --target ${{ matrix.target }}
+          mv target/${{ matrix.target }}/release/aikido-proxy aikido-proxy-darwin-${{ matrix.arch }}
+
+      - name: Calculate binary checksum
+        id: checksum
+        run: |
+          SHA=$(shasum -a 256 aikido-proxy-darwin-${{ matrix.arch }} | cut -d' ' -f1)
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "${{ matrix.arch }} SHA256: $SHA"
+          echo "$SHA" > checksum-proxy-darwin-${{ matrix.arch }}.txt
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: aikido-proxy-darwin-${{ matrix.arch }}
+          path: |
+            aikido-proxy-darwin-${{ matrix.arch }}
+            checksum-proxy-darwin-${{ matrix.arch }}.txt

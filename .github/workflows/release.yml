@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   extract-version:
@@ -37,7 +37,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -53,16 +53,25 @@ jobs:
           mv artifacts/aikido-agent-windows-amd64/AikidoAgent.amd64.msi .
           mv artifacts/aikido-agent-windows-arm64/AikidoAgent.arm64.exe .
           mv artifacts/aikido-agent-windows-arm64/AikidoAgent.arm64.msi .
-          
+
+          mv artifacts/aikido-proxy-darwin-arm64/aikido-proxy-darwin-arm64 .
+          # TODO: windows proxy
+
           DARWIN_AMD64_SHA=$(cat artifacts/aikido-agent-darwin-amd64/checksum-darwin-amd64.txt | tr -d '\n\r ')
           DARWIN_ARM64_SHA=$(cat artifacts/aikido-agent-darwin-arm64/checksum-darwin-arm64.txt | tr -d '\n\r ')
           WINDOWS_AMD64_SHA=$(cat artifacts/aikido-agent-windows-amd64/checksum-windows-amd64.txt | tr -d '\n\r ')
-          WINDOWS_ARM64_SHA=$(cat artifacts/aikido-agent-windows-arm64/checksum-windows-arm64.txt | tr -d '\n\r ')
-          
+          WINDOWS_ARM64_SHA=$(cat artifacts/aikido-agent-windows-arm64/checksum-windows-arm64.txt | tr -d '\n\r
+
+          PROXY_DARWIN_ARM64_SHA=$(cat artifacts/aikido-proxy-darwin-arm64/checksum-proxy-darwin-arm64.txt | tr -d '\n\r ')
+          # TODO: windows proxy
+
           echo "darwin_amd64_sha=$DARWIN_AMD64_SHA" >> $GITHUB_OUTPUT
           echo "darwin_arm64_sha=$DARWIN_ARM64_SHA" >> $GITHUB_OUTPUT
           echo "windows_amd64_sha=$WINDOWS_AMD64_SHA" >> $GITHUB_OUTPUT
           echo "windows_arm64_sha=$WINDOWS_ARM64_SHA" >> $GITHUB_OUTPUT
+
+          echo "proxy_darwin_arm64_sha=$PROXY_DARWIN_ARM64_SHA" >> $GITHUB_OUTPUT
+          # TODO: windows proxy
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -70,6 +79,7 @@ jobs:
           files: |
             aikido-agent-darwin-amd64
             aikido-agent-darwin-arm64
+            aikido-proxy-darwin-arm64
             AikidoAgent.amd64.msi
             AikidoAgent.arm64.msi
             dist/safe-chain-darwin-amd64
@@ -77,13 +87,20 @@ jobs:
           body: |
             ## aikido-agent ${{ needs.extract-version.outputs.version }}
             ### Checksums
-            
+
             | Platform | Architecture | SHA256 |
             |----------|--------------|--------|
             | macOS | amd64 | `${{ steps.checksums.outputs.darwin_amd64_sha }}` |
             | macOS | arm64 | `${{ steps.checksums.outputs.darwin_arm64_sha }}` |
             | Windows | amd64 | `${{ steps.checksums.outputs.windows_amd64_sha }}` |
             | Windows | arm64 | `${{ steps.checksums.outputs.windows_arm64_sha }}` |
+
+            ## aikido-proxy ${{ needs.extract-version.outputs.version }}
+            ### Checksums
+
+            | Platform | Architecture | SHA256 |
+            |----------|--------------|--------|
+            | macOS | arm64 | `${{ steps.checksums.outputs.proxy_darwin_arm64_sha }}` |
           draft: false
           prerelease: false
         env:

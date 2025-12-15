@@ -1,0 +1,80 @@
+use std::time::Duration;
+
+use rama::{
+    Layer,
+    error::{ErrorContext, OpaqueError},
+    graceful::ShutdownGuard,
+    http::{
+        HeaderValue,
+        header::CONTENT_TYPE,
+        layer::{required_header::AddRequiredResponseHeadersLayer, trace::TraceLayer},
+        server::HttpServer,
+        service::web::{Router, response::IntoResponse},
+    },
+    layer::TimeoutLayer,
+    net::tls::server::TlsPeekRouter,
+    rt::Executor,
+    tcp::server::TcpListener,
+    telemetry::tracing,
+    tls::boring::server::TlsAcceptorLayer,
+};
+
+use crate::{Args, tls::RootCA};
+
+mod pac;
+
+pub async fn run_meta_https_server(
+    args: Args,
+    guard: ShutdownGuard,
+    tls_acceptor: TlsAcceptorLayer,
+    root_ca: RootCA,
+) -> Result<(), OpaqueError> {
+    let http_router = Router::new()
+        .with_get("/ping", "pong")
+        .with_get("/ca", move || {
+            let response = root_ca.as_http_response();
+            std::future::ready(response)
+        })
+        .with_get("/pac", move || {
+            // TODO:
+            // - inject domains into a stateful svc
+            // - inject actual bound proxy addr into a stateful svc
+            let response = (
+                [(
+                    CONTENT_TYPE,
+                    HeaderValue::from_static("application/x-ns-proxy-autoconfig"),
+                )],
+                self::pac::generate_pac_script("127.0.0.1:8888"),
+            )
+                .into_response();
+            std::future::ready(response)
+        });
+
+    let http_svc = (
+        TraceLayer::new_for_http(),
+        AddRequiredResponseHeadersLayer::new()
+            .with_server_header_value(HeaderValue::from_static(crate::utils::env::project_name())),
+    )
+        .into_layer(http_router);
+
+    let http_server = HttpServer::auto(Executor::graceful(guard.clone())).service(http_svc);
+
+    let tcp_svc = TimeoutLayer::new(Duration::from_secs(60)).into_layer(
+        TlsPeekRouter::new(tls_acceptor.into_layer(http_server.clone())).with_fallback(http_server),
+    );
+
+    let tcp_listener = TcpListener::bind(args.meta_bind)
+        .await
+        .map_err(OpaqueError::from_boxed)
+        .context("bind proxy meta http(s) server")?;
+
+    let meta_addr = tcp_listener
+        .local_addr()
+        .context("get bound address for proxy meta http(s) server")?;
+
+    tracing::info!("meta http(s) server bound to: {meta_addr}");
+
+    tcp_listener.serve_graceful(guard, tcp_svc).await;
+
+    Ok(())
+}
