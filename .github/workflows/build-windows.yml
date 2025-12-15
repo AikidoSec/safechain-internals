@@ -83,7 +83,6 @@ jobs:
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: AikidoAgent.${{ matrix.arch }}
           path: |
             AikidoAgent.${{ matrix.arch }}.msi
             AikidoAgent.${{ matrix.arch }}.exe
