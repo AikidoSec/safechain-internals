@@ -36,7 +36,7 @@ jobs:
       - name: Run tests
         run: go test -v ./...
 
-      - name: Build Windows binary for ${{ matrix.arch }}
+      - name: Build Windows binaries for ${{ matrix.arch }}
         run: |
           $VERSION = "${{ inputs.version || 'dev' }}"
           $BUILD_TIME = (Get-Date -Format "yyyy-MM-dd_HH:mm:ss")
@@ -51,13 +51,18 @@ jobs:
           $env:GOARCH = "${{ matrix.goarch }}"
           
           go build -ldflags $LDFLAGS -trimpath -o bin/SafeChainAgent.exe ./cmd/daemon
+          go build -ldflags $LDFLAGS -trimpath -o bin/SafeChainSetup.exe ./cmd/setup
         shell: pwsh
 
-      - name: Calculate binary checksum
+      - name: Calculate binary checksums
         run: |
-          $hash = (Get-FileHash -Path bin/SafeChainAgent.exe -Algorithm SHA256).Hash.ToLower()
-          echo "$hash" > checksum-windows-${{ matrix.arch }}.txt
-          Write-Host "windows/${{ matrix.arch }} SHA256: $hash"
+          $hashAgent = (Get-FileHash -Path bin/SafeChainAgent.exe -Algorithm SHA256).Hash.ToLower()
+          echo "$hashAgent" > checksum-agent-windows-${{ matrix.arch }}.txt
+          Write-Host "windows/${{ matrix.arch }} agent SHA256: $hashAgent"
+          
+          $hashSetup = (Get-FileHash -Path bin/SafeChainSetup.exe -Algorithm SHA256).Hash.ToLower()
+          echo "$hashSetup" > checksum-setup-windows-${{ matrix.arch }}.txt
+          Write-Host "windows/${{ matrix.arch }} setup SHA256: $hashSetup"
         shell: pwsh
 
       - name: Install WiX Toolset
@@ -74,13 +79,16 @@ jobs:
       - name: Prepare artifacts
         run: |
           Move-Item -Path bin\SafeChainAgent.exe -Destination SafeChainAgent.${{ matrix.arch }}.exe
+          Move-Item -Path bin\SafeChainSetup.exe -Destination SafeChainSetup.${{ matrix.arch }}.exe
         shell: pwsh
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: safechain-agent-windows-${{ matrix.arch }}
+          name: safechain-windows-${{ matrix.arch }}
           path: |
             SafeChainAgent.${{ matrix.arch }}.exe
+            SafeChainSetup.${{ matrix.arch }}.exe
             SafeChainAgent.${{ matrix.arch }}.msi
-            checksum-windows-${{ matrix.arch }}.txt
+            checksum-agent-windows-${{ matrix.arch }}.txt
+            checksum-setup-windows-${{ matrix.arch }}.txt

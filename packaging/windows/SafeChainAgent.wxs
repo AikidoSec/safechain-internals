@@ -29,8 +29,11 @@
 
     <!-- Components -->
     <ComponentGroup Id="ProductComponents" Directory="BINDIR">
-        <Component Id="AikidoAgentExe" Guid="3a2f5c8e-e57f-4ce4-ab7f-fa89e94c48cb">
+      <Component Id="AikidoAgentExe" Guid="3a2f5c8e-e57f-4ce4-ab7f-fa89e94c48cb">
         <File Id="AikidoAgentExeFile" Source="$(var.BinDir)\SafeChainAgent.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="AikidoSetupExe" Guid="7b4e9d2f-8c3a-4b5e-9f1d-2e6a8c4b7d9e">
+        <File Id="AikidoSetupExeFile" Source="$(var.BinDir)\SafeChainSetup.exe" KeyPath="yes" />
       </Component>
     </ComponentGroup>
 
