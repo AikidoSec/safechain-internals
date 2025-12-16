@@ -1,7 +1,7 @@
 use rama::{
     Layer as _, Service,
     error::{ErrorContext as _, OpaqueError},
-    extensions::ExtensionsRef as _,
+    extensions::{ExtensionsMut as _, ExtensionsRef as _},
     http::{
         Body, Request, Response, StatusCode,
         client::EasyHttpWebClient,
@@ -12,8 +12,13 @@ use rama::{
         },
         service::web::response::IntoResponse as _,
     },
-    net::{address::DomainTrie, proxy::ProxyTarget},
+    net::{
+        address::DomainTrie,
+        proxy::ProxyTarget,
+        tls::{SecureTransport, client::ClientConfig},
+    },
     telemetry::tracing,
+    tls::boring::client::TlsConnectorDataBuilder,
 };
 
 use crate::firewall::{
@@ -81,6 +86,27 @@ where
                 None => {
                     // TODO: generate clean response per Content-Type
                     return Ok(StatusCode::FORBIDDEN.into_response());
+                }
+            }
+        }
+
+        if let Some(ch) = req
+            .extensions()
+            .get::<SecureTransport>()
+            .and_then(|st| st.client_hello())
+            .cloned()
+        {
+            match TlsConnectorDataBuilder::try_from(&ClientConfig::from(ch)) {
+                Ok(mirror_tls_cfg) => {
+                    tracing::trace!(
+                        "inject TLS Connector data builder based on input TLS ClientHello"
+                    );
+                    req.extensions_mut().insert(mirror_tls_cfg);
+                }
+                Err(err) => {
+                    tracing::debug!(
+                        "failed to create TLS Connector data builder based on input TLS ClientHello: err = {err}; proceed anyway with default rama boring CH"
+                    );
                 }
             }
         }
