@@ -59,7 +59,7 @@ func DetectOS() string {
 	case "linux":
 		return "linux"
 	case "windows":
-		return "windows"
+		return "win"
 	default:
 		return runtime.GOOS
 	}
@@ -104,4 +104,3 @@ func DownloadBinary(ctx context.Context, url, destPath string) error {
 
 	return nil
 }
-
