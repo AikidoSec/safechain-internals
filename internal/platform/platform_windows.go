@@ -19,6 +19,9 @@ func getConfig() *Config {
 	}
 }
 
+// prepareShellEnvironment sets the PowerShell execution policy to RemoteSigned for the current user.
+// This is necessary to allow the safe-chain binary to execute PowerShell scripts during setup,
+// such as modifying the PowerShell profile for shell integration.
 func prepareShellEnvironment(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "powershell", "-Command",
 		"Set-ExecutionPolicy", "-ExecutionPolicy", "RemoteSigned", "-Scope", "CurrentUser", "-Force")
