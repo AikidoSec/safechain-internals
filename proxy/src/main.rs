@@ -11,6 +11,7 @@ use clap::Parser;
 
 pub mod firewall;
 pub mod server;
+pub mod storage;
 pub mod tls;
 pub mod utils;
 
@@ -32,6 +33,10 @@ pub struct Args {
     /// network interface to bind the meta http(s) service to
     #[arg(long = "meta", value_name = "INTERFACE", default_value = "127.0.0.1:0")]
     pub meta_bind: Interface,
+
+    /// secrets storage to use (e.g. for root CA)
+    #[arg(long, value_name = "keyring | <dir>", default_value = "keyring")]
+    pub secrets: self::storage::SyncSecrets,
 
     /// debug logging as default instead of Info; use RUST_LOG env for more options
     #[arg(short = 'v', long, default_value_t = false)]
@@ -59,7 +64,7 @@ async fn main() -> Result<(), BoxError> {
     let graceful_timeout = (args.graceful > 0.).then(|| Duration::from_secs_f64(args.graceful));
 
     let (tls_acceptor, root_ca) =
-        self::tls::new_tls_acceptor_layer().context("prepare TLS acceptor")?;
+        self::tls::new_tls_acceptor_layer(&args).context("prepare TLS acceptor")?;
 
     let (etx, mut erx) = tokio::sync::mpsc::channel::<OpaqueError>(1);
     let graceful = graceful::Shutdown::new(async move {

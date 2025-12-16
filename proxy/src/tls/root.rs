@@ -6,12 +6,14 @@ use rama::{
 };
 
 use super::PemKeyCrtPair;
+use crate::storage::SyncSecrets;
 
-const AIKIDO_SECRET_SVC: &str = crate::utils::env::project_name();
 const AIKIDO_SECRET_ROOT_CA: &str = "tls-root-ca";
 
-pub(super) fn new_root_tls_crt_key_pair() -> Result<PemKeyCrtPair, OpaqueError> {
-    if let Some(pair) = load_root_tls_crt_key_pair()? {
+pub(super) fn new_root_tls_crt_key_pair(
+    secrets: &SyncSecrets,
+) -> Result<PemKeyCrtPair, OpaqueError> {
+    if let Some(pair) = secrets.load_secret_json(AIKIDO_SECRET_ROOT_CA)? {
         tracing::debug!("return (secret) loaded CA crt key pair");
         return Ok(pair);
     }
@@ -39,39 +41,20 @@ pub(super) fn new_root_tls_crt_key_pair() -> Result<PemKeyCrtPair, OpaqueError> 
         .context("PEM CA key string as NonEmpty variant")?,
     };
 
-    store_root_tls_crt_key_pair(&pair).context("store self-generated CA pair")?;
+    secrets
+        .store_secret_json(AIKIDO_SECRET_ROOT_CA, &pair)
+        .context("store self-generated CA pair")?;
 
     Ok(pair)
 }
 
-fn store_root_tls_crt_key_pair(pair: &PemKeyCrtPair) -> Result<(), OpaqueError> {
-    let v = serde_json::to_vec(pair).context("failed to (JSON) serialize PEM key-crt pair")?;
-
-    keyring::Entry::new(AIKIDO_SECRET_ROOT_CA, AIKIDO_SECRET_SVC)
-        .context("create Root ca entry")?
-        .set_secret(&v)
-        .context("store Root CA as secret")?;
-
-    Ok(())
-}
-
-fn load_root_tls_crt_key_pair() -> Result<Option<PemKeyCrtPair>, OpaqueError> {
-    match keyring::Entry::new(AIKIDO_SECRET_ROOT_CA, AIKIDO_SECRET_SVC)
-        .context("create Root CA entry")
-        .and_then(|entry| entry.get_secret().context("load Root CA entry secret"))
-    {
-        Ok(json_content) => Ok(Some(
-            serde_json::from_slice(&json_content).context("json-decode ROOT CA pair info")?,
-        )),
-        Err(err) => {
-            tracing::debug!("failed to read crt secret content: {err}; assume no root crt present");
-            Ok(None)
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::{
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
     use super::*;
 
     use rama::telemetry::tracing;
@@ -80,7 +63,38 @@ mod tests {
     #[traced_test]
     #[test]
     #[ignore]
-    fn test_new_root_tls_crt_key_pair() {
-        let _ = new_root_tls_crt_key_pair().unwrap();
+    fn test_new_root_tls_crt_key_pair_keyring() {
+        let _ = new_root_tls_crt_key_pair(&SyncSecrets::new_keyring()).unwrap();
+    }
+
+    #[traced_test]
+    #[test]
+    fn test_new_root_tls_crt_key_pair_fs() {
+        let dir = unique_empty_temp_dir("test_new_root_tls_crt_key_pair_fs").unwrap();
+        let _ = new_root_tls_crt_key_pair(&SyncSecrets::new_fs(dir)).unwrap();
+    }
+
+    fn unique_empty_temp_dir(prefix: &str) -> std::io::Result<PathBuf> {
+        let base = std::env::temp_dir();
+        let pid = std::process::id();
+
+        for attempt in 0..1000u32 {
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
+
+            let dir = base.join(format!("{prefix}_{pid}_{nanos}_{attempt}"));
+            match std::fs::create_dir(&dir) {
+                Ok(()) => return Ok(dir),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(e),
+            }
+        }
+
+        Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "failed to create unique temp dir",
+        ))
     }
 }

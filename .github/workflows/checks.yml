@@ -43,3 +43,6 @@ jobs:
       - name: test
         run: |
           cargo test --target ${{ matrix.target }} --workspace
+      - name: integration test
+        run: |
+          cargo test --target ${{ matrix.target }} --workspace -- --ignored

@@ -16,6 +16,8 @@ use rama::{
 use secrecy::{ExposeSecret, SecretBox};
 use serde::{Deserialize, Serialize};
 
+use crate::Args;
+
 mod root;
 
 #[derive(Serialize, Deserialize)]
@@ -34,8 +36,8 @@ impl RootCA {
     }
 }
 
-pub fn new_tls_acceptor_layer() -> Result<(TlsAcceptorLayer, RootCA), OpaqueError> {
-    let PemKeyCrtPair { crt, key } = self::root::new_root_tls_crt_key_pair()?;
+pub fn new_tls_acceptor_layer(args: &Args) -> Result<(TlsAcceptorLayer, RootCA), OpaqueError> {
+    let PemKeyCrtPair { crt, key } = self::root::new_root_tls_crt_key_pair(&args.secrets)?;
 
     let root_ca = RootCA(Arc::new(SecretBox::new(Box::new(crt.as_ref().to_owned()))));
 
