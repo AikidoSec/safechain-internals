@@ -103,7 +103,7 @@ async fn main() -> Result<(), BoxError> {
     graceful.spawn_task_fn({
         async move |guard| {
             tracing::info!("spawning proxy server...");
-            if let Err(err) = self::server::proxy::run_proxy_server(args, guard)
+            if let Err(err) = self::server::proxy::run_proxy_server(args, guard, tls_acceptor)
                 .instrument(tracing::debug_span!(
                     "proxy server lifetime",
                     server.service.name = self::utils::env::project_name(),

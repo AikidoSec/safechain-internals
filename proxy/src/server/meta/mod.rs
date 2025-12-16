@@ -3,16 +3,17 @@ use std::time::Duration;
 use rama::{
     Layer,
     error::{ErrorContext, OpaqueError},
+    extensions::ExtensionsRef as _,
     graceful::ShutdownGuard,
     http::{
-        HeaderValue,
+        HeaderValue, Request, StatusCode,
         header::CONTENT_TYPE,
         layer::{required_header::AddRequiredResponseHeadersLayer, trace::TraceLayer},
         server::HttpServer,
         service::web::{Router, response::IntoResponse},
     },
     layer::TimeoutLayer,
-    net::tls::server::TlsPeekRouter,
+    net::tls::{SecureTransport, server::TlsPeekRouter},
     rt::Executor,
     tcp::server::TcpListener,
     telemetry::tracing,
@@ -35,7 +36,12 @@ pub async fn run_meta_https_server(
             let response = root_ca.as_http_response();
             std::future::ready(response)
         })
-        .with_get("/pac", move || {
+        .with_get("/pac", move |req: Request| {
+            if !req.extensions().contains::<SecureTransport>() {
+                tracing::debug!("/pac endpoint only available for TLS connections (as MITM proxy would anyway fail if Root CA is not trusted)");
+                return std::future::ready(StatusCode::NOT_FOUND.into_response());
+            }
+
             // TODO:
             // - inject domains into a stateful svc
             // - inject actual bound proxy addr into a stateful svc
