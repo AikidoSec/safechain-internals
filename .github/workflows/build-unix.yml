@@ -64,19 +64,6 @@ jobs:
             -o safechain-setup-darwin-${{ matrix.arch }} \
             ./cmd/setup
 
-      - name: Calculate binary checksums
-        id: checksum
-        run: |
-          SHA_AGENT=$(shasum -a 256 safechain-agent-darwin-${{ matrix.arch }} | cut -d' ' -f1)
-          echo "sha_agent=$SHA_AGENT" >> $GITHUB_OUTPUT
-          echo "agent ${{ matrix.arch }} SHA256: $SHA_AGENT"
-          echo "$SHA_AGENT" > checksum-agent-darwin-${{ matrix.arch }}.txt
-          
-          SHA_SETUP=$(shasum -a 256 safechain-setup-darwin-${{ matrix.arch }} | cut -d' ' -f1)
-          echo "sha_setup=$SHA_SETUP" >> $GITHUB_OUTPUT
-          echo "setup ${{ matrix.arch }} SHA256: $SHA_SETUP"
-          echo "$SHA_SETUP" > checksum-setup-darwin-${{ matrix.arch }}.txt
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -84,5 +71,3 @@ jobs:
           path: |
             safechain-agent-darwin-${{ matrix.arch }}
             safechain-setup-darwin-${{ matrix.arch }}
-            checksum-agent-darwin-${{ matrix.arch }}.txt
-            checksum-setup-darwin-${{ matrix.arch }}.txt

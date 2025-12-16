@@ -2,66 +2,62 @@ package utils
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"runtime"
 )
 
-type GitHubRelease struct {
-	TagName string `json:"tag_name"`
-}
+func FetchLatestVersion(ctx context.Context, repoURL, binaryName string) (string, error) {
+	latestURL := fmt.Sprintf("%s/releases/latest/download/%s", repoURL, binaryName)
 
-func FetchLatestVersion(ctx context.Context, githubAPIURL string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, githubAPIURL, nil)
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, latestURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch release info: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusFound && resp.StatusCode != http.StatusMovedPermanently {
 		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	var release GitHubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
+	location := resp.Header.Get("Location")
+	if location == "" {
+		return "", fmt.Errorf("no redirect location found")
 	}
 
-	if release.TagName == "" {
-		return "", fmt.Errorf("empty tag name in response")
+	re := regexp.MustCompile(`/releases/download/([^/]+)/`)
+	matches := re.FindStringSubmatch(location)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("failed to extract version from redirect URL: %s", location)
 	}
 
-	return release.TagName, nil
+	return matches[1], nil
 }
 
-func BuildDownloadURL(repoURL, version, binaryName string) string {
-	osName := DetectOS()
-	archName := DetectArch()
-	binaryFileName := fmt.Sprintf("%s-%s-%s", binaryName, osName, archName)
-	if runtime.GOOS == "windows" {
-		binaryFileName += ".exe"
-	}
-	return fmt.Sprintf("%s/releases/download/%s/%s", repoURL, version, binaryFileName)
-}
-
-func DetectOS() string {
+func DetectOS() (string, string) {
 	switch runtime.GOOS {
 	case "darwin":
-		return "macos"
-	case "linux":
-		return "linux"
+		return "macos", ""
 	case "windows":
-		return "win"
+		return "win", ".exe"
 	default:
-		return runtime.GOOS
+		log.Fatalf("unsupported operating system: %s", runtime.GOOS)
+		return "", ""
 	}
 }
 
@@ -72,7 +68,8 @@ func DetectArch() string {
 	case "arm64":
 		return "arm64"
 	default:
-		return runtime.GOARCH
+		log.Fatalf("unsupported architecture: %s", runtime.GOARCH)
+		return ""
 	}
 }
 

@@ -41,13 +41,6 @@ build-darwin: ## Build release binaries for macOS (amd64 and arm64)
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$(LDFLAGS) -s -w" -trimpath -o $(BIN_DIR)/$(SETUP_BINARY_NAME)-darwin-arm64 ./cmd/setup
 	@echo "macOS binaries built"
 
-build-windows: ## Build release binary for Windows (amd64)
-	@echo "Building Windows binary..."
-	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS) -s -w" -trimpath -o $(BIN_DIR)/$(BINARY_NAME).exe ./cmd/daemon
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS) -s -w" -trimpath -o $(BIN_DIR)/$(SETUP_BINARY_NAME).exe ./cmd/setup
-	@echo "Windows binaries built"
-
 build-all: build-darwin build-windows ## Build release binaries for all platforms
 	@echo "All binaries built"
 

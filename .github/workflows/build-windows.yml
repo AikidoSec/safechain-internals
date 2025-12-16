@@ -54,17 +54,6 @@ jobs:
           go build -ldflags $LDFLAGS -trimpath -o bin/SafeChainSetup.exe ./cmd/setup
         shell: pwsh
 
-      - name: Calculate binary checksums
-        run: |
-          $hashAgent = (Get-FileHash -Path bin/SafeChainAgent.exe -Algorithm SHA256).Hash.ToLower()
-          echo "$hashAgent" > checksum-agent-windows-${{ matrix.arch }}.txt
-          Write-Host "windows/${{ matrix.arch }} agent SHA256: $hashAgent"
-          
-          $hashSetup = (Get-FileHash -Path bin/SafeChainSetup.exe -Algorithm SHA256).Hash.ToLower()
-          echo "$hashSetup" > checksum-setup-windows-${{ matrix.arch }}.txt
-          Write-Host "windows/${{ matrix.arch }} setup SHA256: $hashSetup"
-        shell: pwsh
-
       - name: Install WiX Toolset
         run: dotnet tool install -g wix
 
@@ -87,8 +76,4 @@ jobs:
         with:
           name: safechain-windows-${{ matrix.arch }}
           path: |
-            SafeChainAgent.${{ matrix.arch }}.exe
-            SafeChainSetup.${{ matrix.arch }}.exe
             SafeChainAgent.${{ matrix.arch }}.msi
-            checksum-agent-windows-${{ matrix.arch }}.txt
-            checksum-setup-windows-${{ matrix.arch }}.txt

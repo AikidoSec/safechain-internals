@@ -14,19 +14,15 @@ import (
 )
 
 const (
-	repoURL      = "https://github.com/AikidoSec/safe-chain"
-	githubAPIURL = "https://api.github.com/repos/AikidoSec/safe-chain/releases/latest"
-	binaryName   = "safe-chain"
+	repoURL    = "https://github.com/AikidoSec/safe-chain"
+	binaryName = "safe-chain"
 )
 
 type SafechainScanner struct {
-	IncludePython bool
 }
 
 func New() scanner.Scanner {
-	return &SafechainScanner{
-		IncludePython: true,
-	}
+	return &SafechainScanner{}
 }
 
 func (s *SafechainScanner) Name() string {
@@ -34,10 +30,16 @@ func (s *SafechainScanner) Name() string {
 }
 
 func (s *SafechainScanner) Install(ctx context.Context) error {
-	version, err := utils.FetchLatestVersion(ctx, githubAPIURL)
+	osName, osExtension := utils.DetectOS()
+	archName := utils.DetectArch()
+	binaryName := fmt.Sprintf("%s-%s-%s%s", binaryName, osName, archName, osExtension)
+
+	version, err := utils.FetchLatestVersion(ctx, repoURL, binaryName)
 	if err != nil {
 		return fmt.Errorf("failed to fetch latest version: %w", err)
 	}
+
+	log.Printf("Latest safechain version: %s", version)
 
 	cfg := platform.Get()
 	binaryPath := cfg.SafeChainBinaryPath
@@ -47,7 +49,8 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 		return fmt.Errorf("failed to create install directory: %w", err)
 	}
 
-	downloadURL := utils.BuildDownloadURL(repoURL, version, binaryName)
+	downloadURL := fmt.Sprintf("%s/releases/download/%s/%s", repoURL, version, binaryName)
+
 	log.Printf("Downloading safechain binary from %s...", downloadURL)
 	if err := utils.DownloadBinary(ctx, downloadURL, binaryPath); err != nil {
 		return fmt.Errorf("failed to download binary: %w", err)
@@ -62,9 +65,6 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 	}
 
 	args := []string{"setup"}
-	if s.IncludePython {
-		args = append(args, "--include-python")
-	}
 
 	cmd := exec.CommandContext(ctx, binaryPath, args...)
 	cmd.Stdout = os.Stdout
