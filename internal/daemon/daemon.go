@@ -42,7 +42,7 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 }
 
 func (d *Daemon) Start(ctx context.Context) error {
-	log.Print("Starting Aikido Agent daemon: ", version.Info())
+	log.Print("Starting SafeChain Agent daemon:\n", version.Info())
 
 	mergedCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -60,7 +60,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 
 	<-mergedCtx.Done()
 
-	log.Println("Daemon main loop stopped")
+	log.Println("SafeChain Agent main loop stopped")
 	d.wg.Wait()
 	return nil
 }
@@ -68,7 +68,11 @@ func (d *Daemon) Start(ctx context.Context) error {
 func (d *Daemon) Stop(ctx context.Context) error {
 	var err error
 	d.stopOnce.Do(func() {
-		log.Println("Stopping daemon...")
+		log.Println("Stopping SafeChain Agent daemon...")
+
+		if err := d.registry.UninstallAll(ctx); err != nil {
+			log.Printf("Error uninstalling scanners: %v", err)
+		}
 
 		if stopErr := d.proxy.Stop(); stopErr != nil {
 			log.Printf("Error stopping proxy: %v", stopErr)
@@ -84,7 +88,7 @@ func (d *Daemon) Stop(ctx context.Context) error {
 
 		select {
 		case <-done:
-			log.Println("Daemon stopped successfully")
+			log.Println("SafeChain Agent daemon stopped successfully")
 		case <-ctx.Done():
 			err = fmt.Errorf("timeout waiting for daemon to stop")
 			log.Println("Timeout waiting for daemon to stop")
