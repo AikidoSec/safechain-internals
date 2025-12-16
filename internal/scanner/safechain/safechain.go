@@ -41,7 +41,7 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 	}
 
 	cfg := platform.Get()
-	binaryPath := cfg.SafeChainBinary
+	binaryPath := cfg.SafeChainBinaryPath
 	installDir := filepath.Dir(binaryPath)
 
 	if err := os.MkdirAll(installDir, 0755); err != nil {
@@ -77,7 +77,7 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 
 func (s *SafechainScanner) Uninstall(ctx context.Context) error {
 	cfg := platform.Get()
-	cmd := exec.CommandContext(ctx, cfg.SafeChainBinary, "teardown")
+	cmd := exec.CommandContext(ctx, cfg.SafeChainBinaryPath, "teardown")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	log.Printf("Running safe-chain teardown...")
@@ -90,6 +90,6 @@ func (s *SafechainScanner) Uninstall(ctx context.Context) error {
 
 func (s *SafechainScanner) IsInstalled(ctx context.Context) (bool, error) {
 	cfg := platform.Get()
-	_, err := os.Stat(cfg.SafeChainBinary)
+	_, err := os.Stat(cfg.SafeChainBinaryPath)
 	return err == nil, nil
 }
