@@ -13,6 +13,8 @@ jobs:
         include:
           - target: aarch64-apple-darwin
             runner: macos-14
+          - target: x86_64-apple-darwin
+            runner: macos-14-large
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
           - target: aarch64-pc-windows-msvc

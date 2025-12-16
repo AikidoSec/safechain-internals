@@ -80,6 +80,9 @@ jobs:
           - arch: arm64
             target: aarch64-apple-darwin
             runner: macos-14
+          - arch: amd64
+            target: x86_64-apple-darwin
+            runner: macos-14-large
 
     runs-on: ${{ matrix.runner }}
     steps:
