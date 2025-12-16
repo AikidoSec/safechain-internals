@@ -71,7 +71,7 @@ where
 
     async fn serve(&self, mut req: Request) -> Result<Self::Output, Self::Error> {
         let uri = req.uri().clone();
-        tracing::info!(uri = %uri, "serving http(s) over proxy");
+        tracing::debug!(uri = %uri, "serving http(s) over proxy (egress) client");
 
         let Some(ProxyTarget(target)) = req.extensions().get() else {
             tracing::error!(uri = %uri, "error forwarding request: missing proxy target");

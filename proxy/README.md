@@ -1,6 +1,6 @@
 # Safe-chain Proxy
 
-A security-focused SNI/SOCKS5/HTTP/HTTPS system proxy
+A security-focused SOCKS5/HTTP(S) system proxy
 built with <https://ramaproxy.org/>.
 
 ## Quick Start

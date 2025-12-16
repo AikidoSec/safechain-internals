@@ -1,6 +1,6 @@
 [package]
 name = "safechain-proxy"
-description = "MITM SafeChain Proxy for Developer Security"
+description = "MITM SafeChain HTTP(S)/SOCKS5 Proxy for Developer Security"
 version = "0.1.0"
 edition = "2024"
 publish = false

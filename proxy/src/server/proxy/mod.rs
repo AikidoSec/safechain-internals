@@ -15,6 +15,7 @@ use rama::{
     },
     layer::ConsumeErrLayer,
     net::{http::RequestContext, proxy::ProxyTarget, stream::layer::http::BodyLimitLayer},
+    proxy::socks5::{self, Socks5Acceptor, server::Socks5PeekRouter},
     rt::Executor,
     service::service_fn,
     tcp::server::TcpListener,
@@ -47,9 +48,15 @@ pub async fn run_proxy_server(
         .context("fetch local addr of bound TCP port for proxy")?;
 
     let https_client = self::client::new_https_client()?;
-    let mitm_server = self::server::new_mitm_server(guard.clone(), tls_acceptor)?;
 
-    // TODO Also add SOCKS5 version :)
+    let http_proxy_mitm_server =
+        self::server::new_mitm_server(guard.clone(), tls_acceptor.clone())?;
+    let socks5_proxy_mitm_server = self::server::new_mitm_server(guard.clone(), tls_acceptor)?;
+
+    let socks5_proxy_router = Socks5PeekRouter::new(
+        Socks5Acceptor::new()
+            .with_connector(socks5::server::LazyConnector::new(socks5_proxy_mitm_server)),
+    );
 
     let exec = Executor::graceful(guard.clone());
     let http_service = HttpServer::auto(exec).service(
@@ -59,7 +66,7 @@ pub async fn run_proxy_server(
             UpgradeLayer::new(
                 MethodMatcher::CONNECT,
                 service_fn(http_connect_accept),
-                mitm_server,
+                http_proxy_mitm_server,
             ),
             // =============================================
             // HTTP (plain-text) connections
@@ -70,12 +77,14 @@ pub async fn run_proxy_server(
             .into_layer(https_client),
     );
 
-    tracing::info!(proxy.address = %proxy_addr, "local proxy ready");
+    let tcp_inner_svc = socks5_proxy_router.with_fallback(http_service);
+
+    tracing::info!(proxy.address = %proxy_addr, "local HTTP(S)/SOCKS5 proxy ready");
 
     tcp_service
         .serve_graceful(
             guard,
-            BodyLimitLayer::symmetric(MAX_BODY_SIZE).into_layer(http_service),
+            BodyLimitLayer::symmetric(MAX_BODY_SIZE).into_layer(tcp_inner_svc),
         )
         .await;
 
