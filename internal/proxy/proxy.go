@@ -2,12 +2,8 @@ package proxy
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"os"
 	"os/exec"
-
-	"github.com/aikido/aikido-agent/internal/platform"
 )
 
 type Proxy struct {
@@ -21,41 +17,11 @@ func New() *Proxy {
 }
 
 func (p *Proxy) Start(ctx context.Context) error {
-	p.ctx, p.cancel = context.WithCancel(ctx)
-
-	cfg := platform.Get()
-	p.cmd = exec.CommandContext(p.ctx, cfg.SafeChainBinary, "run-proxy")
-	p.cmd.Stdout = os.Stdout
-	p.cmd.Stderr = os.Stderr
-
-	if err := p.cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start proxy: %w", err)
-	}
-
-	log.Printf("Proxy started (pid: %d)", p.cmd.Process.Pid)
-
-	go func() {
-		if err := p.cmd.Wait(); err != nil {
-			if p.ctx.Err() == nil {
-				log.Printf("Proxy process exited with error: %v", err)
-			}
-		}
-	}()
-
+	log.Println("Starting SafeChain Agent proxy...")
 	return nil
 }
 
 func (p *Proxy) Stop() error {
-	if p.cancel != nil {
-		p.cancel()
-	}
-
-	if p.cmd != nil && p.cmd.Process != nil {
-		if err := p.cmd.Process.Kill(); err != nil {
-			log.Printf("Failed to kill proxy process: %v", err)
-		}
-	}
-
-	log.Println("Proxy stopped")
+	log.Println("Stopping SafeChain Agent proxy...")
 	return nil
 }

@@ -1,28 +1,14 @@
-# Aikido Agent
+# SafeChain Agent
 
-A lightweight background agent that provides real-time security scanning for your development environment. The Aikido Agent runs as a daemon, integrates and manages the following security tooling seamlessly into your workflow:
-- Aikido SafeChain
-- Aikido GitHook (WIP)
-- Aikido VsCode extension (WIP)
-- ...
+A lightweight background agent that provides real-time security scanning for your development environment. The SafeChain Agent runs as a daemon, integrates and manages the security tooling seamlessly into your workflow.
 
 ## Installation
 
 ### macOS (Homebrew)
 
 ```bash
-brew tap AikidoSec/AikidoAgent
-brew install AikidoAgent
-```
-
-To start the agent as a background service:
-
-```bash
-brew services start AikidoAgent
-```
-
-To stop the service:
-
-```bash
-brew services stop AikidoAgent
+brew tap AikidoSec/safechain-agent
+brew install safechain-agent
+brew services start safechain-agent
+sudo /opt/homebrew/bin/safechain-setup
 ```

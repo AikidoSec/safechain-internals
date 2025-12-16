@@ -36,13 +36,13 @@ jobs:
       - name: Run tests
         run: go test -v ./...
 
-      - name: Build Windows binary for ${{ matrix.arch }}
+      - name: Build Windows binaries for ${{ matrix.arch }}
         run: |
           $VERSION = "${{ inputs.version || 'dev' }}"
           $BUILD_TIME = (Get-Date -Format "yyyy-MM-dd_HH:mm:ss")
           $GIT_COMMIT = git rev-parse --short HEAD
 
-          $LDFLAGS = "-X 'github.com/aikido/aikido-agent/internal/version.Version=$VERSION' -X 'github.com/aikido/aikido-agent/internal/version.BuildTime=$BUILD_TIME' -X 'github.com/aikido/aikido-agent/internal/version.GitCommit=$GIT_COMMIT' -s -w"
+          $LDFLAGS = "-X 'github.com/AikidoSec/safechain-agent/internal/version.Version=$VERSION' -X 'github.com/AikidoSec/safechain-agent/internal/version.BuildTime=$BUILD_TIME' -X 'github.com/AikidoSec/safechain-agent/internal/version.GitCommit=$GIT_COMMIT' -s -w"
 
           New-Item -ItemType Directory -Force -Path bin
 
@@ -50,18 +50,19 @@ jobs:
           $env:GOOS = "windows"
           $env:GOARCH = "${{ matrix.goarch }}"
 
-          go build -ldflags $LDFLAGS -trimpath -o bin/AikidoAgent.exe ./cmd/daemon
+          go build -ldflags $LDFLAGS -trimpath -o bin/SafeChainAgent.exe ./cmd/daemon
+          go build -ldflags $LDFLAGS -trimpath -o bin/SafeChainSetup.exe ./cmd/setup
         shell: pwsh
 
-      - name: Copy safe-chain to bin
-        run: Copy-Item -Path "dist\safe-chain-windows-${{ matrix.goarch }}.exe" -Destination "bin\safe-chain.exe"
-        shell: pwsh
-
-      - name: Calculate binary checksum
+      - name: Calculate binary checksums
         run: |
-          $hash = (Get-FileHash -Path bin/AikidoAgent.exe -Algorithm SHA256).Hash.ToLower()
-          echo "$hash" > checksum-windows-${{ matrix.arch }}.txt
-          Write-Host "windows/${{ matrix.arch }} SHA256: $hash"
+          $hashAgent = (Get-FileHash -Path bin/SafeChainAgent.exe -Algorithm SHA256).Hash.ToLower()
+          echo "$hashAgent" > checksum-agent-windows-${{ matrix.arch }}.txt
+          Write-Host "windows/${{ matrix.arch }} agent SHA256: $hashAgent"
+
+          $hashSetup = (Get-FileHash -Path bin/SafeChainSetup.exe -Algorithm SHA256).Hash.ToLower()
+          echo "$hashSetup" > checksum-setup-windows-${{ matrix.arch }}.txt
+          Write-Host "windows/${{ matrix.arch }} setup SHA256: $hashSetup"
         shell: pwsh
 
       - name: Install WiX Toolset
@@ -77,13 +78,14 @@ jobs:
 
       - name: Prepare artifacts
         run: |
-          Move-Item -Path bin\AikidoAgent.exe -Destination AikidoAgent.${{ matrix.arch }}.exe
+          Move-Item -Path bin\SafeChainAgent.exe -Destination SafeChainAgent.${{ matrix.arch }}.exe
+          Move-Item -Path bin\SafeChainSetup.exe -Destination SafeChainSetup.${{ matrix.arch }}.exe
         shell: pwsh
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: AikidoAgent.${{ matrix.arch }}
+          name: safechain-windows-${{ matrix.arch }}
           path: |
             AikidoAgent.${{ matrix.arch }}.msi
             AikidoAgent.${{ matrix.arch }}.exe
@@ -165,3 +167,8 @@ jobs:
             AikidoProxy.${{ matrix.arch }}.msi
             AikidoProxy.${{ matrix.arch }}.exe
             checksum-proxy-windows-${{ matrix.arch }}.txt
+            SafeChainAgent.${{ matrix.arch }}.exe
+            SafeChainSetup.${{ matrix.arch }}.exe
+            SafeChainAgent.${{ matrix.arch }}.msi
+            checksum-agent-windows-${{ matrix.arch }}.txt
+            checksum-setup-windows-${{ matrix.arch }}.txt

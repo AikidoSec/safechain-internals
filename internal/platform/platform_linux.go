@@ -2,8 +2,17 @@
 
 package platform
 
+import (
+	"context"
+	"path/filepath"
+)
+
 func getConfig() *Config {
 	return &Config{
-		SafeChainBinary: "/usr/local/bin/safe-chain",
+		SafeChainBinaryPath: filepath.Join(homeDir, ".safe-chain", "bin", "safe-chain"),
 	}
+}
+
+func prepareShellEnvironment(ctx context.Context) error {
+	return nil
 }

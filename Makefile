@@ -1,13 +1,14 @@
-.PHONY: build build-darwin build-windows build-all clean test run help
+.PHONY: build build-setup build-darwin build-windows build-all clean test run run-setup help
 
 # Variables
-BINARY_NAME=aikido-agent
+BINARY_NAME=safechain-agent
+SETUP_BINARY_NAME=safechain-setup
 VERSION?=dev
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LDFLAGS=-X 'github.com/aikido/aikido-agent/internal/version.Version=$(VERSION)' \
-		-X 'github.com/aikido/aikido-agent/internal/version.BuildTime=$(BUILD_TIME)' \
-		-X 'github.com/aikido/aikido-agent/internal/version.GitCommit=$(GIT_COMMIT)'
+LDFLAGS=-X 'github.com/AikidoSec/safechain-agent/internal/version.Version=$(VERSION)' \
+		-X 'github.com/AikidoSec/safechain-agent/internal/version.BuildTime=$(BUILD_TIME)' \
+		-X 'github.com/AikidoSec/safechain-agent/internal/version.GitCommit=$(GIT_COMMIT)'
 
 # Build directories
 BIN_DIR=bin
@@ -25,24 +26,36 @@ build: ## Build the daemon binary for current platform
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME) ./cmd/daemon
 	@echo "Binary built: $(BIN_DIR)/$(BINARY_NAME)"
 
+build-setup: ## Build the setup binary for current platform
+	@echo "Building $(SETUP_BINARY_NAME)..."
+	@mkdir -p $(BIN_DIR)
+	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(SETUP_BINARY_NAME) ./cmd/setup
+	@echo "Binary built: $(BIN_DIR)/$(SETUP_BINARY_NAME)"
+
 build-darwin: ## Build release binaries for macOS (amd64 and arm64)
 	@echo "Building macOS binaries..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$(LDFLAGS) -s -w" -trimpath -o $(BIN_DIR)/$(BINARY_NAME)-darwin-amd64 ./cmd/daemon
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$(LDFLAGS) -s -w" -trimpath -o $(BIN_DIR)/$(BINARY_NAME)-darwin-arm64 ./cmd/daemon
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$(LDFLAGS) -s -w" -trimpath -o $(BIN_DIR)/$(SETUP_BINARY_NAME)-darwin-amd64 ./cmd/setup
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$(LDFLAGS) -s -w" -trimpath -o $(BIN_DIR)/$(SETUP_BINARY_NAME)-darwin-arm64 ./cmd/setup
 	@echo "macOS binaries built"
 
 build-windows: ## Build release binary for Windows (amd64)
 	@echo "Building Windows binary..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS) -s -w" -trimpath -o $(BIN_DIR)/$(BINARY_NAME).exe ./cmd/daemon
-	@echo "Windows binary built: $(BIN_DIR)/$(BINARY_NAME).exe"
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS) -s -w" -trimpath -o $(BIN_DIR)/$(SETUP_BINARY_NAME).exe ./cmd/setup
+	@echo "Windows binaries built"
 
 build-all: build-darwin build-windows ## Build release binaries for all platforms
 	@echo "All binaries built"
 
 run: build ## Run the daemon locally
 	$(BIN_DIR)/$(BINARY_NAME)
+
+run-setup: build-setup ## Run the setup locally
+	$(BIN_DIR)/$(SETUP_BINARY_NAME)
 
 test: ## Run tests
 	go test -v ./...

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="SafeChain Agent"
+           Manufacturer="Aikido Security BV"
+           Version="$(var.Version)"
+           ProductCode="5d8fd7e2-55b5-4fc4-82b2-de8ee83f0061"
+           UpgradeCode="adb9d7b9-de00-4953-af0e-9c1e9ec15c81"
+           Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of SafeChain Agent is already installed." />
+    
+    <Media Id="1" Cabinet="SafeChainAgent.cab" EmbedCab="yes" />
+
+    <!-- Define installation directory structure -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLDIR" Name="AikidoSecurity">
+        <Directory Id="AGENTDIR" Name="SafeChainAgent">
+          <Directory Id="BINDIR" Name="bin" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Main feature -->
+    <Feature Id="MainFeature" Title="Aikido Agent" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="PathComponent" />
+    </Feature>
+
+    <!-- Components -->
+    <ComponentGroup Id="ProductComponents" Directory="BINDIR">
+      <Component Id="AikidoAgentExe" Guid="3a2f5c8e-e57f-4ce4-ab7f-fa89e94c48cb">
+        <File Id="AikidoAgentExeFile" Source="$(var.BinDir)\SafeChainAgent.exe" KeyPath="yes" />
+        <ServiceInstall Id="SafeChainAgentService"
+                        Name="SafeChainAgent"
+                        DisplayName="SafeChain Agent"
+                        Description="Aikido Security SafeChain Agent - monitors and secures the software supply chain"
+                        Start="auto"
+                        Type="ownProcess"
+                        ErrorControl="normal"
+                        Account="NT AUTHORITY\LocalService" />
+        <ServiceControl Id="SafeChainAgentServiceControl"
+                        Name="SafeChainAgent"
+                        Start="install"
+                        Stop="both"
+                        Remove="uninstall"
+                        Wait="yes" />
+        <ServiceConfigFailureActions ServiceName="SafeChainAgent"
+                                     ResetPeriod="86400">
+          <Failure Action="restart" Delay="5000" />
+          <Failure Action="restart" Delay="10000" />
+          <Failure Action="restart" Delay="30000" />
+        </ServiceConfigFailureActions>
+      </Component>
+      <Component Id="AikidoSetupExe" Guid="7b4e9d2f-8c3a-4b5e-9f1d-2e6a8c4b7d9e">
+        <File Id="AikidoSetupExeFile" Source="$(var.BinDir)\SafeChainSetup.exe" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Add to PATH -->
+    <DirectoryRef Id="BINDIR">
+      <Component Id="PathComponent" Guid="5809b6b6-57a0-4c2a-9d55-7b274ceb916a">
+        <Environment Id="PATH" Name="PATH" Value="[BINDIR]" Permanent="no" Part="last" Action="set" System="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- UI with license -->
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.ProjectDir)\packaging\windows\license.rtf" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+    <ui:WixUI Id="WixUI_InstallDir" />
+
+  </Package>
+</Wix>
+

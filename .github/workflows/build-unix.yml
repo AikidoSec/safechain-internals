@@ -40,35 +40,47 @@ jobs:
           echo "Running Go tests..."
           go test -v ./...
 
-      - name: Build binary for ${{ matrix.arch }}
+      - name: Build binaries for ${{ matrix.arch }}
         run: |
           VERSION="${{ inputs.version || 'dev' }}"
           BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
           GIT_COMMIT=$(git rev-parse --short HEAD)
 
-          LDFLAGS="-X 'github.com/aikido/aikido-agent/internal/version.Version=$VERSION' \
-                   -X 'github.com/aikido/aikido-agent/internal/version.BuildTime=$BUILD_TIME' \
-                   -X 'github.com/aikido/aikido-agent/internal/version.GitCommit=$GIT_COMMIT'"
+          LDFLAGS="-X 'github.com/AikidoSec/safechain-agent/internal/version.Version=$VERSION' \
+                   -X 'github.com/AikidoSec/safechain-agent/internal/version.BuildTime=$BUILD_TIME' \
+                   -X 'github.com/AikidoSec/safechain-agent/internal/version.GitCommit=$GIT_COMMIT'"
 
-          echo "Building darwin/${{ matrix.goarch }}..."
+          echo "Building darwin/${{ matrix.goarch }} daemon..."
           CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build \
             -ldflags "$LDFLAGS -s -w" \
             -trimpath \
-            -o aikido-agent-darwin-${{ matrix.arch }} \
+            -o safechain-agent-darwin-${{ matrix.arch }} \
             ./cmd/daemon
 
-      - name: Calculate binary checksum
+          echo "Building darwin/${{ matrix.goarch }} setup..."
+          CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build \
+            -ldflags "$LDFLAGS -s -w" \
+            -trimpath \
+            -o safechain-setup-darwin-${{ matrix.arch }} \
+            ./cmd/setup
+
+      - name: Calculate binary checksums
         id: checksum
         run: |
-          SHA=$(shasum -a 256 aikido-agent-darwin-${{ matrix.arch }} | cut -d' ' -f1)
-          echo "sha=$SHA" >> $GITHUB_OUTPUT
-          echo "${{ matrix.arch }} SHA256: $SHA"
-          echo "$SHA" > checksum-darwin-${{ matrix.arch }}.txt
+          SHA_AGENT=$(shasum -a 256 safechain-agent-darwin-${{ matrix.arch }} | cut -d' ' -f1)
+          echo "sha_agent=$SHA_AGENT" >> $GITHUB_OUTPUT
+          echo "agent ${{ matrix.arch }} SHA256: $SHA_AGENT"
+          echo "$SHA_AGENT" > checksum-agent-darwin-${{ matrix.arch }}.txt
+
+          SHA_SETUP=$(shasum -a 256 safechain-setup-darwin-${{ matrix.arch }} | cut -d' ' -f1)
+          echo "sha_setup=$SHA_SETUP" >> $GITHUB_OUTPUT
+          echo "setup ${{ matrix.arch }} SHA256: $SHA_SETUP"
+          echo "$SHA_SETUP" > checksum-setup-darwin-${{ matrix.arch }}.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: aikido-agent-darwin-${{ matrix.arch }}
+          name: safechain-darwin-${{ matrix.arch }}
           path: |
             aikido-agent-darwin-${{ matrix.arch }}
             checksum-darwin-${{ matrix.arch }}.txt
@@ -129,3 +141,7 @@ jobs:
           path: |
             aikido-proxy-darwin-${{ matrix.arch }}
             checksum-proxy-darwin-${{ matrix.arch }}.txt
+            safechain-agent-darwin-${{ matrix.arch }}
+            safechain-setup-darwin-${{ matrix.arch }}
+            checksum-agent-darwin-${{ matrix.arch }}.txt
+            checksum-setup-darwin-${{ matrix.arch }}.txt
