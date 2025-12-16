@@ -51,11 +51,7 @@ jobs:
           mv artifacts/safechain-darwin-amd64/safechain-setup-darwin-amd64 .
           mv artifacts/safechain-darwin-arm64/safechain-agent-darwin-arm64 .
           mv artifacts/safechain-darwin-arm64/safechain-setup-darwin-arm64 .
-          mv artifacts/safechain-windows-amd64/SafeChainAgent.amd64.exe .
-          mv artifacts/safechain-windows-amd64/SafeChainSetup.amd64.exe .
           mv artifacts/safechain-windows-amd64/SafeChainAgent.amd64.msi .
-          mv artifacts/safechain-windows-arm64/SafeChainAgent.arm64.exe .
-          mv artifacts/safechain-windows-arm64/SafeChainSetup.arm64.exe .
           mv artifacts/safechain-windows-arm64/SafeChainAgent.arm64.msi .
                     
       - name: Create GitHub Release

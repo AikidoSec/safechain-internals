@@ -48,7 +48,7 @@ else
     BINARY_EXT :=
 endif
 
-help: ## Show this help message
+help:
 	@echo 'Usage: make [target]'
 	@echo ''
 	@echo 'Detected platform: $(DETECTED_OS)/$(DETECTED_ARCH)'
@@ -56,51 +56,51 @@ help: ## Show this help message
 	@echo 'Available targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-25s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-build: ## Build the daemon binary for current platform
+build:
 	@echo "Building $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT) ./cmd/daemon
 	@echo "Binary built: $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)"
 
-build-setup: ## Build the setup binary for current platform
+build-setup:
 	@echo "Building $(SETUP_BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(SETUP_BINARY_NAME)$(BINARY_EXT) ./cmd/setup
 	@echo "Binary built: $(BIN_DIR)/$(SETUP_BINARY_NAME)$(BINARY_EXT)"
 
-build-release: ## Build release daemon binary for current platform (stripped)
+build-release:
 	@echo "Building release $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/daemon
 	@echo "Binary built: $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
 
-build-release-setup: ## Build release setup binary for current platform (stripped)
+build-release-setup:
 	@echo "Building release $(SETUP_BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(SETUP_BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/setup
 	@echo "Binary built: $(BIN_DIR)/$(SETUP_BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
 
-build-darwin-amd64: ## Build release binaries for macOS amd64
+build-darwin-amd64:
 	@$(MAKE) GOOS=darwin GOARCH=amd64 build-release build-release-setup
 
-build-darwin-arm64: ## Build release binaries for macOS arm64
+build-darwin-arm64:
 	@$(MAKE) GOOS=darwin GOARCH=arm64 build-release build-release-setup
 
-build-windows-amd64: ## Build release binaries for Windows amd64
+build-windows-amd64:
 	@$(MAKE) GOOS=windows GOARCH=amd64 build-release build-release-setup
 
-build-windows-arm64: ## Build release binaries for Windows arm64
+build-windows-arm64:
 	@$(MAKE) GOOS=windows GOARCH=arm64 build-release build-release-setup
 
-run: build ## Run the daemon locally
+run: build
 	$(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)
 
-run-setup: build-setup ## Run the setup locally
+run-setup: build-setup
 	$(BIN_DIR)/$(SETUP_BINARY_NAME)$(BINARY_EXT)
 
-test: ## Run tests
+test:
 	go test -v ./...
 
-clean: ## Clean build artifacts
+clean:
 	rm -rf $(BIN_DIR)
 	@echo "Cleaned build artifacts"

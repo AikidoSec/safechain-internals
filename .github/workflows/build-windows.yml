@@ -56,15 +56,9 @@ jobs:
           .\packaging\windows\build-msi.ps1 -Version "${{ inputs.version || 'dev' }}" -Arch "${{ matrix.arch }}" -BinDir ".\bin" -OutputDir "."
         shell: pwsh
 
-      - name: Prepare artifacts
-        run: |
-          mv bin/SafeChainAgent.exe SafeChainAgent.${{ matrix.arch }}.exe
-          mv bin/SafeChainSetup.exe SafeChainSetup.${{ matrix.arch }}.exe
-        shell: bash
-
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: safechain-windows-${{ matrix.arch }}
+          name: SafeChainAgent.${{ matrix.arch }}.msi
           path: |
             SafeChainAgent.${{ matrix.arch }}.msi
