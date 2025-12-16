@@ -1,5 +1,3 @@
 [workspace]
-members = [
-    "proxy",
-]
+members = ["proxy"]
 resolver = "3"

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 use rama::{
     error::{BoxError, ErrorContext, OpaqueError},
@@ -41,6 +41,10 @@ pub struct Args {
     #[arg(long, default_value_t = false)]
     pub pretty: bool,
 
+    /// write the tracing output to the provided file instead of stderr
+    #[arg(short = 'o', long)]
+    pub output: Option<PathBuf>,
+
     #[arg(long, value_name = "SECONDS", default_value_t = 1.)]
     /// the graceful shutdown timeout (<= 0.0 = no timeout)
     pub graceful: f64,
@@ -50,7 +54,7 @@ pub struct Args {
 async fn main() -> Result<(), BoxError> {
     let args = Args::parse();
 
-    self::utils::telemetry::init_tracing(&args);
+    self::utils::telemetry::init_tracing(&args)?;
 
     let graceful_timeout = (args.graceful > 0.).then(|| Duration::from_secs_f64(args.graceful));
 

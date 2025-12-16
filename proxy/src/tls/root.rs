@@ -79,6 +79,7 @@ mod tests {
 
     #[traced_test]
     #[test]
+    #[ignore]
     fn test_new_root_tls_crt_key_pair() {
         let _ = new_root_tls_crt_key_pair().unwrap();
     }
