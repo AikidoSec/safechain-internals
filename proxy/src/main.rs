@@ -16,8 +16,8 @@ pub mod utils;
 
 /// CLI arguments for configuring proxy behavior.
 #[derive(Debug, Clone, Parser)]
-#[command(name = "aikido-proxy")]
-#[command(bin_name = "aikido-proxy")]
+#[command(name = "safechain-proxy")]
+#[command(bin_name = "safechain-proxy")]
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// network interface to bind the proxy to

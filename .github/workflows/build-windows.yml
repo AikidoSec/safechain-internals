@@ -119,26 +119,26 @@ jobs:
 
       - name: cargo check
         run: |
-          cargo check -p aikido-proxy --target ${{ matrix.target }}
+          cargo check -p safechain-proxy --target ${{ matrix.target }}
       - name: clippy
         run: |
-          cargo clippy -p aikido-proxy --target ${{ matrix.target }}
+          cargo clippy -p safechain-proxy --target ${{ matrix.target }}
       - name: rustfmt
         run: |
-          cargo fmt -p aikido-proxy --check
+          cargo fmt -p safechain-proxy --check
 
       - name: Build proxy binary for ${{ matrix.arch }}
         run: |
           cargo build --release -p rama-cli --target ${{ matrix.target }}
-          mv target/${{ matrix.target }}/release/aikido-proxy aikido-proxy-darwin-${{ matrix.arch }}
+          mv target/${{ matrix.target }}/release/safechain-proxy safechain-proxy-darwin-${{ matrix.arch }}
 
       - name: Copy proxy binary to bin
-        run: Copy-Item -Path "target\${{ matrix.target }}\release\aikido-proxy.exe -Destination "bin\AikidoProxy.exe"
+        run: Copy-Item -Path "target\${{ matrix.target }}\release\safechain-proxy.exe -Destination "bin\SafeChainProxy.exe"
         shell: pwsh
 
       - name: Calculate binary checksum
         run: |
-          $hash = (Get-FileHash -Path bin/AikidoProxy.exe -Algorithm SHA256).Hash.ToLower()
+          $hash = (Get-FileHash -Path bin/SafeChainProxy.exe -Algorithm SHA256).Hash.ToLower()
           echo "$hash" > checksum-proxy-windows-${{ matrix.arch }}.txt
           Write-Host "windows/proxy-${{ matrix.arch }} SHA256: $hash"
         shell: pwsh
@@ -156,19 +156,14 @@ jobs:
 
       - name: Prepare artifacts
         run: |
-          Move-Item -Path bin\AikidoProxy.exe -Destination AikidoProxy.${{ matrix.arch }}.exe
+          Move-Item -Path bin\SafeChainProxy.exe -Destination SafeChainProxy.${{ matrix.arch }}.exe
         shell: pwsh
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: AikidoProxy.${{ matrix.arch }}
+          name: SafeChainProxy.${{ matrix.arch }}
           path: |
-            AikidoProxy.${{ matrix.arch }}.msi
-            AikidoProxy.${{ matrix.arch }}.exe
+            SafeChainProxy.${{ matrix.arch }}.msi
+            SafeChainProxy.${{ matrix.arch }}.exe
             checksum-proxy-windows-${{ matrix.arch }}.txt
-            SafeChainAgent.${{ matrix.arch }}.exe
-            SafeChainSetup.${{ matrix.arch }}.exe
-            SafeChainAgent.${{ matrix.arch }}.msi
-            checksum-agent-windows-${{ matrix.arch }}.txt
-            checksum-setup-windows-${{ matrix.arch }}.txt

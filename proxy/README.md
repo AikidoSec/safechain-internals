@@ -11,37 +11,37 @@ Run the executable:
 
 ```bash
 # macOS/Linux
-./aikido-proxy
+./safechain-proxy
 
 # Windows
-aikido-proxy.exe
+safechain-proxy.exe
 ```
 
 The proxy will automatically find an available port and display it:
 
 ```
-Aikido proxy running on 127.0.0.1:54321
+SafeChain proxy running on 127.0.0.1:54321
 ```
 
 ### Custom interface
 
-By default the aikido-proxy will run on the local Ipv4 interface (127.0.0.1),
+By default the safechain-proxy will run on the local Ipv4 interface (127.0.0.1),
 on an available port. You can specify a specific (network) "interface" to bind to:
 
 Use the `--bind` or `-b` flag:
 
 ```bash
 # Long form
-./aikido-proxy --bind 127.0.0.1:3128
+./safechain-proxy --bind 127.0.0.1:3128
 
 # Short form
-./aikido-proxy -b '[::]:3128'
+./safechain-proxy -b '[::]:3128'
 ```
 
 ### Usage Command
 
 ```bash
-./aikido-proxy --help
+./safechain-proxy --help
 ```
 
 ## Using the Proxy
@@ -116,7 +116,7 @@ $env:https_proxy = "http://127.0.0.1:3128"
 
 If you get a "port already in use" error:
 1. Try running without `--port` to let the OS assign an available port
-2. Or choose a different port: `./aikido-proxy --port 8080`
+2. Or choose a different port: `./safechain-proxy --port 8080`
 
 ### Proxy Not Working
 
@@ -130,15 +130,15 @@ Enable debug logging to troubleshoot issues:
 
 ```bash
 # macOS/Linux
-RUST_LOG=debug ./aikido-proxy
+RUST_LOG=debug ./safechain-proxy
 
 # Windows (Command Prompt)
 set RUST_LOG=debug
-aikido-proxy.exe
+safechain-proxy.exe
 
 # Windows (PowerShell)
 $env:RUST_LOG = "debug"
-.\aikido-proxy.exe
+.\safechain-proxy.exe
 ```
 
 ## Stopping the Proxy

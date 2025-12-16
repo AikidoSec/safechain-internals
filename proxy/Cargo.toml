@@ -1,6 +1,6 @@
 [package]
-name = "aikido-proxy"
-description = "MITM Aikido Proxy for Developer Security"
+name = "safechain-proxy"
+description = "MITM SafeChain Proxy for Developer Security"
 version = "0.1.0"
 edition = "2024"
 publish = false

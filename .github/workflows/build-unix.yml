@@ -82,8 +82,9 @@ jobs:
         with:
           name: safechain-darwin-${{ matrix.arch }}
           path: |
-            aikido-agent-darwin-${{ matrix.arch }}
-            checksum-darwin-${{ matrix.arch }}.txt
+            safechain-agent-darwin-${{ matrix.arch }}
+            safechain-setup-darwin-${{ matrix.arch }}
+            checksum-agent-darwin-${{ matrix.arch }}.txt
 
   build-unix-proxy:
     strategy:
@@ -113,23 +114,23 @@ jobs:
 
       - name: cargo check
         run: |
-          cargo check -p aikido-proxy --target ${{ matrix.target }}
+          cargo check -p safechain-proxy --target ${{ matrix.target }}
       - name: clippy
         run: |
-          cargo clippy -p aikido-proxy --target ${{ matrix.target }}
+          cargo clippy -p safechain-proxy --target ${{ matrix.target }}
       - name: rustfmt
         run: |
-          cargo fmt -p aikido-proxy --check
+          cargo fmt -p safechain-proxy --check
 
       - name: Build proxy binary for ${{ matrix.arch }}
         run: |
           cargo build --release -p rama-cli --target ${{ matrix.target }}
-          mv target/${{ matrix.target }}/release/aikido-proxy aikido-proxy-darwin-${{ matrix.arch }}
+          mv target/${{ matrix.target }}/release/safechain-proxy safechain-proxy-darwin-${{ matrix.arch }}
 
       - name: Calculate binary checksum
         id: checksum
         run: |
-          SHA=$(shasum -a 256 aikido-proxy-darwin-${{ matrix.arch }} | cut -d' ' -f1)
+          SHA=$(shasum -a 256 safechain-proxy-darwin-${{ matrix.arch }} | cut -d' ' -f1)
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "${{ matrix.arch }} SHA256: $SHA"
           echo "$SHA" > checksum-proxy-darwin-${{ matrix.arch }}.txt
@@ -137,11 +138,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: aikido-proxy-darwin-${{ matrix.arch }}
+          name: safechain-proxy-darwin-${{ matrix.arch }}
           path: |
-            aikido-proxy-darwin-${{ matrix.arch }}
+            safechain-proxy-darwin-${{ matrix.arch }}
             checksum-proxy-darwin-${{ matrix.arch }}.txt
-            safechain-agent-darwin-${{ matrix.arch }}
-            safechain-setup-darwin-${{ matrix.arch }}
-            checksum-agent-darwin-${{ matrix.arch }}.txt
-            checksum-setup-darwin-${{ matrix.arch }}.txt
