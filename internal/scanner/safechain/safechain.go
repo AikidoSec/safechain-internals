@@ -80,6 +80,7 @@ func (s *SafechainScanner) Uninstall(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, cfg.SafeChainBinary, "teardown")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	log.Printf("Running safe-chain teardown...")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to run safe-chain teardown: %w", err)
 	}

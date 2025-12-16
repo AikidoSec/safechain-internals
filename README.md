@@ -7,8 +7,8 @@ A lightweight background agent that provides real-time security scanning for you
 ### macOS (Homebrew)
 
 ```bash
-brew tap AikidoSec/SafeChainAgent
-brew install SafeChainAgent
-brew services start SafeChainAgent
+brew tap AikidoSec/safechain-agent
+brew install safechain-agent
+brew services start safechain-agent
 ```
 

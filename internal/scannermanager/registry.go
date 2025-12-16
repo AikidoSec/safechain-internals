@@ -49,7 +49,7 @@ func (r *Registry) List() []string {
 
 func (r *Registry) InstallAll(ctx context.Context) error {
 	for name, s := range r.scanners {
-		log.Printf("Installing scanner '%s'", name)
+		log.Printf("Installing scanner '%s'...", name)
 		if err := s.Install(ctx); err != nil {
 			return fmt.Errorf("failed to install scanner '%s': %w", name, err)
 		}
@@ -59,6 +59,7 @@ func (r *Registry) InstallAll(ctx context.Context) error {
 
 func (r *Registry) UninstallAll(ctx context.Context) error {
 	for name, s := range r.scanners {
+		log.Printf("Uninstalling scanner '%s'...", name)
 		if err := s.Uninstall(ctx); err != nil {
 			return fmt.Errorf("failed to uninstall scanner '%s': %w", name, err)
 		}
