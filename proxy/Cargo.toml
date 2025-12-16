@@ -17,7 +17,7 @@ serde_json = "1.0"
 
 [dependencies.rama]
 git = "https://github.com/plabayo/rama"
-rev = "c45cec3d84b653f9b0dbb0c322c720c4e6eb1543"
+rev = "755c4c96a0f8ae5a19ffd5c30a00e4099368cc95"
 features = ["http-full", "proxy-full", "dns", "boring"]
 
 [dev-dependencies]
