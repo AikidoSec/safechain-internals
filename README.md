@@ -10,5 +10,6 @@ A lightweight background agent that provides real-time security scanning for you
 brew tap AikidoSec/safechain-agent
 brew install safechain-agent
 brew services start safechain-agent
+sudo /opt/homebrew/bin/safechain-setup
 ```
 
