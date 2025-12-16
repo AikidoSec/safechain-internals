@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 
 	"github.com/AikidoSec/safechain-agent/internal/platform"
 	"github.com/AikidoSec/safechain-agent/internal/scanner"
@@ -54,10 +53,12 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 		return fmt.Errorf("failed to download binary: %w", err)
 	}
 
-	if runtime.GOOS != "windows" {
-		if err := os.Chmod(binaryPath, 0755); err != nil {
-			return fmt.Errorf("failed to make binary executable: %w", err)
-		}
+	if err := os.Chmod(binaryPath, 0755); err != nil {
+		log.Printf("Warning: failed to make binary executable: %v", err)
+	}
+
+	if err := platform.PrepareShellEnvironment(ctx); err != nil {
+		log.Printf("Warning: failed to prepare shell environment: %v", err)
 	}
 
 	args := []string{"setup"}
