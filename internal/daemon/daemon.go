@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"sync"
 	"time"
 
+	"github.com/AikidoSec/safechain-agent/internal/platform"
 	"github.com/AikidoSec/safechain-agent/internal/proxy"
 	"github.com/AikidoSec/safechain-agent/internal/scannermanager"
 	"github.com/AikidoSec/safechain-agent/internal/version"
@@ -131,6 +131,10 @@ func (d *Daemon) heartbeat() {
 }
 
 func (d *Daemon) initLogging() {
-	log.SetOutput(os.Stdout)
+	writer, err := platform.SetupLogging()
+	if err != nil {
+		log.Printf("Failed to setup file logging: %v, using stdout only", err)
+	}
+	log.SetOutput(writer)
 	log.SetFlags(log.LstdFlags)
 }

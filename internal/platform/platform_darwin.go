@@ -4,6 +4,8 @@ package platform
 
 import (
 	"context"
+	"io"
+	"os"
 	"path/filepath"
 )
 
@@ -15,4 +17,8 @@ func getConfig() *Config {
 
 func prepareShellEnvironment(ctx context.Context) error {
 	return nil
+}
+
+func setupLogging() (io.Writer, error) {
+	return os.Stdout, nil
 }

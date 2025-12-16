@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"io"
 	"os"
 )
 
@@ -9,6 +10,7 @@ var homeDir, _ = os.UserHomeDir()
 
 type Config struct {
 	SafeChainBinaryPath string
+	LogDir              string
 }
 
 func Get() *Config {
@@ -17,4 +19,8 @@ func Get() *Config {
 
 func PrepareShellEnvironment(ctx context.Context) error {
 	return prepareShellEnvironment(ctx)
+}
+
+func SetupLogging() (io.Writer, error) {
+	return setupLogging()
 }
