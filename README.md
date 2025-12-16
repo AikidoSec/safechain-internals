@@ -1,6 +1,6 @@
-# SafeChain Agent
+# Safe Chain Agent
 
-A lightweight background agent that provides real-time security scanning for your development environment. The SafeChain Agent runs as a daemon, integrates and manages the security tooling seamlessly into your workflow.
+A lightweight background agent that provides real-time security scanning for your development environment. The Safe Chain Agent runs as a daemon, integrates and manages the security tooling seamlessly into your workflow.
 
 ## Installation
 

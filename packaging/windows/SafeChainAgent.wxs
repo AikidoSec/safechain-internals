@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
-  <Package Name="SafeChain Agent"
+  <Package Name="Safe Chain Agent"
            Manufacturer="Aikido Security BV"
            Version="$(var.Version)"
            ProductCode="5d8fd7e2-55b5-4fc4-82b2-de8ee83f0061"
            UpgradeCode="adb9d7b9-de00-4953-af0e-9c1e9ec15c81"
            Scope="perMachine">
 
-    <MajorUpgrade DowngradeErrorMessage="A newer version of SafeChain Agent is already installed." />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Safe Chain Agent is already installed." />
     
     <Media Id="1" Cabinet="SafeChainAgent.cab" EmbedCab="yes" />
 
@@ -33,8 +33,8 @@
         <File Id="AikidoAgentExeFile" Source="$(var.BinDir)\SafeChainAgent.exe" KeyPath="yes" />
         <ServiceInstall Id="SafeChainAgentService"
                         Name="SafeChainAgent"
-                        DisplayName="SafeChain Agent"
-                        Description="Aikido Security SafeChain Agent - monitors and secures the software supply chain"
+                        DisplayName="Safe Chain Agent"
+                        Description="Aikido Security Safe Chain Agent - monitors and secures the software supply chain"
                         Start="auto"
                         Type="ownProcess"
                         ErrorControl="normal"
