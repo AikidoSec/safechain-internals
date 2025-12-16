@@ -58,6 +58,13 @@ jobs:
           mv artifacts/safechain-windows-arm64/SafeChainSetup.arm64.exe .
           mv artifacts/safechain-windows-arm64/SafeChainAgent.arm64.msi .
 
+          mv artifacts/safechain-darwin-amd64/safechain-proxy-darwin-amd64 .
+          mv artifacts/safechain-darwin-arm64/safechain-proxy-darwin-arm64 .
+          mv artifacts/safechain-windows-amd64/SafeChainProxy.amd64.exe .
+          mv artifacts/safechain-windows-amd64/SafeChainProxy.amd64.msi .
+          mv artifacts/safechain-windows-arm64/SafeChainProxy.arm64.exe .
+          mv artifacts/safechain-windows-arm64/SafeChainProxy.arm64.msi .
+
           AGENT_DARWIN_AMD64_SHA=$(cat artifacts/safechain-darwin-amd64/checksum-agent-darwin-amd64.txt | tr -d '\n\r ')
           SETUP_DARWIN_AMD64_SHA=$(cat artifacts/safechain-darwin-amd64/checksum-setup-darwin-amd64.txt | tr -d '\n\r ')
           AGENT_DARWIN_ARM64_SHA=$(cat artifacts/safechain-darwin-arm64/checksum-agent-darwin-arm64.txt | tr -d '\n\r ')
@@ -66,6 +73,11 @@ jobs:
           SETUP_WINDOWS_AMD64_SHA=$(cat artifacts/safechain-windows-amd64/checksum-setup-windows-amd64.txt | tr -d '\n\r ')
           AGENT_WINDOWS_ARM64_SHA=$(cat artifacts/safechain-windows-arm64/checksum-agent-windows-arm64.txt | tr -d '\n\r ')
           SETUP_WINDOWS_ARM64_SHA=$(cat artifacts/safechain-windows-arm64/checksum-setup-windows-arm64.txt | tr -d '\n\r ')
+
+          AGENT_DARWIN_AMD64_SHA=$(cat artifacts/safechain-darwin-amd64/checksum-proxy-darwin-amd64.txt | tr -d '\n\r ')
+          AGENT_DARWIN_ARM64_SHA=$(cat artifacts/safechain-darwin-arm64/checksum-proxy-darwin-arm64.txt | tr -d '\n\r ')
+          AGENT_WINDOWS_AMD64_SHA=$(cat artifacts/safechain-windows-amd64/checksum-proxy-windows-amd64.txt | tr -d '\n\r ')
+          AGENT_WINDOWS_ARM64_SHA=$(cat artifacts/safechain-windows-arm64/checksum-proxy-windows-arm64.txt | tr -d '\n\r ')
 
           echo "agent_darwin_amd64_sha=$AGENT_DARWIN_AMD64_SHA" >> $GITHUB_OUTPUT
           echo "setup_darwin_amd64_sha=$SETUP_DARWIN_AMD64_SHA" >> $GITHUB_OUTPUT
@@ -76,8 +88,10 @@ jobs:
           echo "agent_windows_arm64_sha=$AGENT_WINDOWS_ARM64_SHA" >> $GITHUB_OUTPUT
           echo "setup_windows_arm64_sha=$SETUP_WINDOWS_ARM64_SHA" >> $GITHUB_OUTPUT
 
+          echo "proxy_darwin_amd64_sha=$PROXY_DARWIN_AMD64_SHA" >> $GITHUB_OUTPUT
           echo "proxy_darwin_arm64_sha=$PROXY_DARWIN_ARM64_SHA" >> $GITHUB_OUTPUT
-          # TODO: windows proxy
+          echo "proxy_windows_amd64_sha=$PROXY_WINDOWS_AMD64_SHA" >> $GITHUB_OUTPUT
+          echo "proxy_windows_arm64_sha=$PROXY_WINDOWS_ARM64_SHA" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -91,6 +105,12 @@ jobs:
             SafeChainAgent.arm64.msi
             SafeChainSetup.amd64.exe
             SafeChainSetup.arm64.exe
+            safechain-proxy-darwin-amd64
+            safechain-proxy-darwin-arm64
+            SafeChainProxy.amd64.msi
+            SafeChainProxy.arm64.msi
+            SafeChainProxy.amd64.exe
+            SafeChainProxy.arm64.exe
           body: |
             ## SafeChain ${{ needs.extract-version.outputs.version }}
 
@@ -102,6 +122,15 @@ jobs:
             | macOS | arm64 | `${{ steps.checksums.outputs.agent_darwin_arm64_sha }}` |
             | Windows | amd64 | `${{ steps.checksums.outputs.agent_windows_amd64_sha }}` |
             | Windows | arm64 | `${{ steps.checksums.outputs.agent_windows_arm64_sha }}` |
+
+            ### Proxy Checksums
+
+            | Platform | Architecture | SHA256 |
+            |----------|--------------|--------|
+            | macOS | amd64 | `${{ steps.checksums.outputs.proxy_darwin_amd64_sha }}` |
+            | macOS | arm64 | `${{ steps.checksums.outputs.proxy_darwin_arm64_sha }}` |
+            | Windows | amd64 | `${{ steps.checksums.outputs.proxy_windows_amd64_sha }}` |
+            | Windows | arm64 | `${{ steps.checksums.outputs.proxy_windows_arm64_sha }}` |
 
             #### Setup Checksums
 
