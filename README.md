@@ -12,4 +12,3 @@ brew install safechain-agent
 brew services start safechain-agent
 sudo /opt/homebrew/bin/safechain-setup
 ```
-
