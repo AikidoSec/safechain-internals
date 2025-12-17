@@ -19,51 +19,31 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            goarch: amd64
           - arch: arm64
-            goarch: arm64
 
     runs-on: windows-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
+          go-version: '1.25'
 
       - name: Run tests
-        run: go test -v ./...
+        run: make test
+        shell: bash
 
       - name: Build Windows binaries for ${{ matrix.arch }}
+        run: make build-windows-${{ matrix.arch }} VERSION="${{ inputs.version || 'dev' }}"
+        shell: bash
+
+      - name: Rename binaries for packaging
         run: |
-          $VERSION = "${{ inputs.version || 'dev' }}"
-          $BUILD_TIME = (Get-Date -Format "yyyy-MM-dd_HH:mm:ss")
-          $GIT_COMMIT = git rev-parse --short HEAD
-
-          $LDFLAGS = "-X 'github.com/AikidoSec/safechain-agent/internal/version.Version=$VERSION' -X 'github.com/AikidoSec/safechain-agent/internal/version.BuildTime=$BUILD_TIME' -X 'github.com/AikidoSec/safechain-agent/internal/version.GitCommit=$GIT_COMMIT' -s -w"
-
-          New-Item -ItemType Directory -Force -Path bin
-
-          $env:CGO_ENABLED = "0"
-          $env:GOOS = "windows"
-          $env:GOARCH = "${{ matrix.goarch }}"
-
-          go build -ldflags $LDFLAGS -trimpath -o bin/SafeChainAgent.exe ./cmd/daemon
-          go build -ldflags $LDFLAGS -trimpath -o bin/SafeChainSetup.exe ./cmd/setup
-        shell: pwsh
-
-      - name: Calculate binary checksums
-        run: |
-          $hashAgent = (Get-FileHash -Path bin/SafeChainAgent.exe -Algorithm SHA256).Hash.ToLower()
-          echo "$hashAgent" > checksum-agent-windows-${{ matrix.arch }}.txt
-          Write-Host "windows/${{ matrix.arch }} agent SHA256: $hashAgent"
-
-          $hashSetup = (Get-FileHash -Path bin/SafeChainSetup.exe -Algorithm SHA256).Hash.ToLower()
-          echo "$hashSetup" > checksum-setup-windows-${{ matrix.arch }}.txt
-          Write-Host "windows/${{ matrix.arch }} setup SHA256: $hashSetup"
-        shell: pwsh
+          mv bin/safechain-agent-windows-${{ matrix.arch }}.exe bin/SafeChainAgent.exe
+          mv bin/safechain-setup-windows-${{ matrix.arch }}.exe bin/SafeChainSetup.exe
+        shell: bash
 
       - name: Install WiX Toolset
         run: dotnet tool install -g wix
@@ -76,27 +56,19 @@ jobs:
           .\packaging\windows\build-msi.ps1 -Version "${{ inputs.version || 'dev' }}" -Arch "${{ matrix.arch }}" -BinDir ".\bin" -OutputDir "."
         shell: pwsh
 
-      - name: Prepare artifacts
-        run: |
-          Move-Item -Path bin\SafeChainAgent.exe -Destination SafeChainAgent.${{ matrix.arch }}.exe
-          Move-Item -Path bin\SafeChainSetup.exe -Destination SafeChainSetup.${{ matrix.arch }}.exe
-        shell: pwsh
-
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
-          name: safechain-windows-${{ matrix.arch }}
+          name: SafeChainAgent.${{ matrix.arch }}.msi
           path: |
-            AikidoAgent.${{ matrix.arch }}.msi
-            AikidoAgent.${{ matrix.arch }}.exe
-            checksum-windows-${{ matrix.arch }}.txt
+            SafeChainAgent.${{ matrix.arch }}.msi
 
   build-windows-proxy:
     strategy:
       matrix:
         include:
           - arch: arm64
-          - target: aarch64-pc-windows-msvc
+            target: aarch64-pc-windows-msvc
             runner: windows-11-arm
           - arch: amd64
             target: x86_64-pc-windows-msvc
@@ -105,12 +77,13 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
+          targets: ${{ matrix.target }}
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
@@ -118,29 +91,21 @@ jobs:
           env-vars: "RUST_TOOLCHAIN=stable"
 
       - name: cargo check
-        run: |
-          cargo check -p safechain-proxy --target ${{ matrix.target }}
-      - name: clippy
-        run: |
-          cargo clippy -p safechain-proxy --target ${{ matrix.target }}
-      - name: rustfmt
-        run: |
-          cargo fmt -p safechain-proxy --check
+        run: cargo check -p safechain-proxy --target ${{ matrix.target }}
 
-      - name: Build proxy binary for ${{ matrix.arch }}
-        run: |
-          cargo build --release -p rama-cli --target ${{ matrix.target }}
-          mv target/${{ matrix.target }}/release/safechain-proxy safechain-proxy-darwin-${{ matrix.arch }}
+      - name: clippy
+        run: cargo clippy -p safechain-proxy --target ${{ matrix.target }}
+
+      - name: rustfmt
+        run: cargo fmt --check
+
+      - name: Build proxy binary for windows/${{ matrix.arch }}
+        run: cargo build --release -p safechain-proxy --target ${{ matrix.target }}
 
       - name: Copy proxy binary to bin
-        run: Copy-Item -Path "target\${{ matrix.target }}\release\safechain-proxy.exe -Destination "bin\SafeChainProxy.exe"
-        shell: pwsh
-
-      - name: Calculate binary checksum
         run: |
-          $hash = (Get-FileHash -Path bin/SafeChainProxy.exe -Algorithm SHA256).Hash.ToLower()
-          echo "$hash" > checksum-proxy-windows-${{ matrix.arch }}.txt
-          Write-Host "windows/proxy-${{ matrix.arch }} SHA256: $hash"
+          New-Item -ItemType Directory -Force -Path bin | Out-Null
+          Copy-Item -Path "target\${{ matrix.target }}\release\safechain-proxy.exe" -Destination "bin\SafeChainProxy.exe" -Force
         shell: pwsh
 
       - name: Install WiX Toolset
@@ -154,16 +119,9 @@ jobs:
           .\packaging\windows\build-msi.ps1 -Version "${{ inputs.version || 'dev' }}" -Arch "${{ matrix.arch }}" -BinDir ".\bin" -OutputDir "."
         shell: pwsh
 
-      - name: Prepare artifacts
-        run: |
-          Move-Item -Path bin\SafeChainProxy.exe -Destination SafeChainProxy.${{ matrix.arch }}.exe
-        shell: pwsh
-
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
-          name: SafeChainProxy.${{ matrix.arch }}
+          name: SafeChainProxy.${{ matrix.arch }}.msi
           path: |
             SafeChainProxy.${{ matrix.arch }}.msi
-            SafeChainProxy.${{ matrix.arch }}.exe
-            checksum-proxy-windows-${{ matrix.arch }}.txt

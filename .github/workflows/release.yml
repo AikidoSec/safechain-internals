@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
 
 jobs:
   extract-version:
@@ -37,7 +37,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -47,52 +47,17 @@ jobs:
       - name: Prepare release files
         id: checksums
         run: |
-          mv artifacts/safechain-darwin-amd64/safechain-agent-darwin-amd64 .
-          mv artifacts/safechain-darwin-amd64/safechain-setup-darwin-amd64 .
-          mv artifacts/safechain-darwin-arm64/safechain-agent-darwin-arm64 .
-          mv artifacts/safechain-darwin-arm64/safechain-setup-darwin-arm64 .
-          mv artifacts/safechain-windows-amd64/SafeChainAgent.amd64.exe .
-          mv artifacts/safechain-windows-amd64/SafeChainSetup.amd64.exe .
-          mv artifacts/safechain-windows-amd64/SafeChainAgent.amd64.msi .
-          mv artifacts/safechain-windows-arm64/SafeChainAgent.arm64.exe .
-          mv artifacts/safechain-windows-arm64/SafeChainSetup.arm64.exe .
-          mv artifacts/safechain-windows-arm64/SafeChainAgent.arm64.msi .
-
-          mv artifacts/safechain-darwin-amd64/safechain-proxy-darwin-amd64 .
-          mv artifacts/safechain-darwin-arm64/safechain-proxy-darwin-arm64 .
-          mv artifacts/safechain-windows-amd64/SafeChainProxy.amd64.exe .
-          mv artifacts/safechain-windows-amd64/SafeChainProxy.amd64.msi .
-          mv artifacts/safechain-windows-arm64/SafeChainProxy.arm64.exe .
-          mv artifacts/safechain-windows-arm64/SafeChainProxy.arm64.msi .
-
-          AGENT_DARWIN_AMD64_SHA=$(cat artifacts/safechain-darwin-amd64/checksum-agent-darwin-amd64.txt | tr -d '\n\r ')
-          SETUP_DARWIN_AMD64_SHA=$(cat artifacts/safechain-darwin-amd64/checksum-setup-darwin-amd64.txt | tr -d '\n\r ')
-          AGENT_DARWIN_ARM64_SHA=$(cat artifacts/safechain-darwin-arm64/checksum-agent-darwin-arm64.txt | tr -d '\n\r ')
-          SETUP_DARWIN_ARM64_SHA=$(cat artifacts/safechain-darwin-arm64/checksum-setup-darwin-arm64.txt | tr -d '\n\r ')
-          AGENT_WINDOWS_AMD64_SHA=$(cat artifacts/safechain-windows-amd64/checksum-agent-windows-amd64.txt | tr -d '\n\r ')
-          SETUP_WINDOWS_AMD64_SHA=$(cat artifacts/safechain-windows-amd64/checksum-setup-windows-amd64.txt | tr -d '\n\r ')
-          AGENT_WINDOWS_ARM64_SHA=$(cat artifacts/safechain-windows-arm64/checksum-agent-windows-arm64.txt | tr -d '\n\r ')
-          SETUP_WINDOWS_ARM64_SHA=$(cat artifacts/safechain-windows-arm64/checksum-setup-windows-arm64.txt | tr -d '\n\r ')
-
-          AGENT_DARWIN_AMD64_SHA=$(cat artifacts/safechain-darwin-amd64/checksum-proxy-darwin-amd64.txt | tr -d '\n\r ')
-          AGENT_DARWIN_ARM64_SHA=$(cat artifacts/safechain-darwin-arm64/checksum-proxy-darwin-arm64.txt | tr -d '\n\r ')
-          AGENT_WINDOWS_AMD64_SHA=$(cat artifacts/safechain-windows-amd64/checksum-proxy-windows-amd64.txt | tr -d '\n\r ')
-          AGENT_WINDOWS_ARM64_SHA=$(cat artifacts/safechain-windows-arm64/checksum-proxy-windows-arm64.txt | tr -d '\n\r ')
-
-          echo "agent_darwin_amd64_sha=$AGENT_DARWIN_AMD64_SHA" >> $GITHUB_OUTPUT
-          echo "setup_darwin_amd64_sha=$SETUP_DARWIN_AMD64_SHA" >> $GITHUB_OUTPUT
-          echo "agent_darwin_arm64_sha=$AGENT_DARWIN_ARM64_SHA" >> $GITHUB_OUTPUT
-          echo "setup_darwin_arm64_sha=$SETUP_DARWIN_ARM64_SHA" >> $GITHUB_OUTPUT
-          echo "agent_windows_amd64_sha=$AGENT_WINDOWS_AMD64_SHA" >> $GITHUB_OUTPUT
-          echo "setup_windows_amd64_sha=$SETUP_WINDOWS_AMD64_SHA" >> $GITHUB_OUTPUT
-          echo "agent_windows_arm64_sha=$AGENT_WINDOWS_ARM64_SHA" >> $GITHUB_OUTPUT
-          echo "setup_windows_arm64_sha=$SETUP_WINDOWS_ARM64_SHA" >> $GITHUB_OUTPUT
-
-          echo "proxy_darwin_amd64_sha=$PROXY_DARWIN_AMD64_SHA" >> $GITHUB_OUTPUT
-          echo "proxy_darwin_arm64_sha=$PROXY_DARWIN_ARM64_SHA" >> $GITHUB_OUTPUT
-          echo "proxy_windows_amd64_sha=$PROXY_WINDOWS_AMD64_SHA" >> $GITHUB_OUTPUT
-          echo "proxy_windows_arm64_sha=$PROXY_WINDOWS_ARM64_SHA" >> $GITHUB_OUTPUT
-
+          mv artifacts/safechain-agent-darwin-amd64/safechain-agent-darwin-amd64 .
+          mv artifacts/safechain-agent-darwin-amd64/safechain-setup-darwin-amd64 .
+          mv artifacts/safechain-agent-darwin-arm64/safechain-agent-darwin-arm64 .
+          mv artifacts/safechain-agent-darwin-arm64/safechain-setup-darwin-arm64 .
+          mv artifacts/SafeChainAgent.amd64.msi/SafeChainAgent.amd64.msi .
+          mv artifacts/SafeChainAgent.arm64.msi/SafeChainAgent.arm64.msi .
+          mv artifacts/safechain-proxy-darwin-amd64/safechain-proxy-darwin-amd64 .
+          mv artifacts/safechain-proxy-darwin-arm64/safechain-proxy-darwin-arm64 .
+          mv artifacts/SafeChainProxy.amd64.msi/SafeChainProxy.amd64.msi .
+          mv artifacts/SafeChainProxy.arm64.msi/SafeChainProxy.arm64.msi .
+                    
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -103,44 +68,9 @@ jobs:
             safechain-setup-darwin-arm64
             SafeChainAgent.amd64.msi
             SafeChainAgent.arm64.msi
-            SafeChainSetup.amd64.exe
-            SafeChainSetup.arm64.exe
             safechain-proxy-darwin-amd64
             safechain-proxy-darwin-arm64
             SafeChainProxy.amd64.msi
             SafeChainProxy.arm64.msi
-            SafeChainProxy.amd64.exe
-            SafeChainProxy.arm64.exe
-          body: |
-            ## SafeChain ${{ needs.extract-version.outputs.version }}
-
-            ### Agent Checksums
-
-            | Platform | Architecture | SHA256 |
-            |----------|--------------|--------|
-            | macOS | amd64 | `${{ steps.checksums.outputs.agent_darwin_amd64_sha }}` |
-            | macOS | arm64 | `${{ steps.checksums.outputs.agent_darwin_arm64_sha }}` |
-            | Windows | amd64 | `${{ steps.checksums.outputs.agent_windows_amd64_sha }}` |
-            | Windows | arm64 | `${{ steps.checksums.outputs.agent_windows_arm64_sha }}` |
-
-            ### Proxy Checksums
-
-            | Platform | Architecture | SHA256 |
-            |----------|--------------|--------|
-            | macOS | amd64 | `${{ steps.checksums.outputs.proxy_darwin_amd64_sha }}` |
-            | macOS | arm64 | `${{ steps.checksums.outputs.proxy_darwin_arm64_sha }}` |
-            | Windows | amd64 | `${{ steps.checksums.outputs.proxy_windows_amd64_sha }}` |
-            | Windows | arm64 | `${{ steps.checksums.outputs.proxy_windows_arm64_sha }}` |
-
-            #### Setup Checksums
-
-            | Platform | Architecture | SHA256 |
-            |----------|--------------|--------|
-            | macOS | amd64 | `${{ steps.checksums.outputs.setup_darwin_amd64_sha }}` |
-            | macOS | arm64 | `${{ steps.checksums.outputs.setup_darwin_arm64_sha }}` |
-            | Windows | amd64 | `${{ steps.checksums.outputs.setup_windows_amd64_sha }}` |
-            | Windows | arm64 | `${{ steps.checksums.outputs.setup_windows_arm64_sha }}` |
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -17,11 +17,11 @@ func New() *Proxy {
 }
 
 func (p *Proxy) Start(ctx context.Context) error {
-	log.Println("Starting SafeChain Agent proxy...")
+	log.Println("Starting Safe Chain Agent proxy...")
 	return nil
 }
 
 func (p *Proxy) Stop() error {
-	log.Println("Stopping SafeChain Agent proxy...")
+	log.Println("Stopping Safe Chain Agent proxy...")
 	return nil
 }

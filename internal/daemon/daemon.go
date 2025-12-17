@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"sync"
 	"time"
 
+	"github.com/AikidoSec/safechain-agent/internal/platform"
 	"github.com/AikidoSec/safechain-agent/internal/proxy"
 	"github.com/AikidoSec/safechain-agent/internal/scannermanager"
 	"github.com/AikidoSec/safechain-agent/internal/version"
@@ -42,7 +42,7 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 }
 
 func (d *Daemon) Start(ctx context.Context) error {
-	log.Print("Starting SafeChain Agent daemon:\n", version.Info())
+	log.Print("Starting Safe Chain Agent daemon:\n", version.Info())
 
 	mergedCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -60,7 +60,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 
 	<-mergedCtx.Done()
 
-	log.Println("SafeChain Agent main loop stopped")
+	log.Println("Safe Chain Agent main loop stopped")
 	d.wg.Wait()
 	return nil
 }
@@ -68,7 +68,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 func (d *Daemon) Stop(ctx context.Context) error {
 	var err error
 	d.stopOnce.Do(func() {
-		log.Println("Stopping SafeChain Agent daemon...")
+		log.Println("Stopping Safe Chain Agent daemon...")
 
 		if err := d.registry.UninstallAll(ctx); err != nil {
 			log.Printf("Error uninstalling scanners: %v", err)
@@ -88,7 +88,7 @@ func (d *Daemon) Stop(ctx context.Context) error {
 
 		select {
 		case <-done:
-			log.Println("SafeChain Agent daemon stopped successfully")
+			log.Println("Safe Chain Agent daemon stopped successfully")
 		case <-ctx.Done():
 			err = fmt.Errorf("timeout waiting for daemon to stop")
 			log.Println("Timeout waiting for daemon to stop")
@@ -131,6 +131,10 @@ func (d *Daemon) heartbeat() {
 }
 
 func (d *Daemon) initLogging() {
-	log.SetOutput(os.Stdout)
+	writer, err := platform.SetupLogging()
+	if err != nil {
+		log.Printf("Failed to setup file logging: %v, using stdout only", err)
+	}
+	log.SetOutput(writer)
 	log.SetFlags(log.LstdFlags)
 }

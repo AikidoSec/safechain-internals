@@ -19,72 +19,38 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            goarch: amd64
             runner: macos-14
           - arch: arm64
-            goarch: arm64
             runner: macos-14
-
+    
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
+          go-version: '1.25'
 
       - name: Run tests
+        run: make test
+
+      - name: Build binaries for darwin/${{ matrix.arch }}
+        run: make build-darwin-${{ matrix.arch }} VERSION="${{ inputs.version || 'dev' }}"
+
+      - name: Prepare artifacts
         run: |
-          echo "Running Go tests..."
-          go test -v ./...
-
-      - name: Build binaries for ${{ matrix.arch }}
-        run: |
-          VERSION="${{ inputs.version || 'dev' }}"
-          BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
-          GIT_COMMIT=$(git rev-parse --short HEAD)
-
-          LDFLAGS="-X 'github.com/AikidoSec/safechain-agent/internal/version.Version=$VERSION' \
-                   -X 'github.com/AikidoSec/safechain-agent/internal/version.BuildTime=$BUILD_TIME' \
-                   -X 'github.com/AikidoSec/safechain-agent/internal/version.GitCommit=$GIT_COMMIT'"
-
-          echo "Building darwin/${{ matrix.goarch }} daemon..."
-          CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build \
-            -ldflags "$LDFLAGS -s -w" \
-            -trimpath \
-            -o safechain-agent-darwin-${{ matrix.arch }} \
-            ./cmd/daemon
-
-          echo "Building darwin/${{ matrix.goarch }} setup..."
-          CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build \
-            -ldflags "$LDFLAGS -s -w" \
-            -trimpath \
-            -o safechain-setup-darwin-${{ matrix.arch }} \
-            ./cmd/setup
-
-      - name: Calculate binary checksums
-        id: checksum
-        run: |
-          SHA_AGENT=$(shasum -a 256 safechain-agent-darwin-${{ matrix.arch }} | cut -d' ' -f1)
-          echo "sha_agent=$SHA_AGENT" >> $GITHUB_OUTPUT
-          echo "agent ${{ matrix.arch }} SHA256: $SHA_AGENT"
-          echo "$SHA_AGENT" > checksum-agent-darwin-${{ matrix.arch }}.txt
-
-          SHA_SETUP=$(shasum -a 256 safechain-setup-darwin-${{ matrix.arch }} | cut -d' ' -f1)
-          echo "sha_setup=$SHA_SETUP" >> $GITHUB_OUTPUT
-          echo "setup ${{ matrix.arch }} SHA256: $SHA_SETUP"
-          echo "$SHA_SETUP" > checksum-setup-darwin-${{ matrix.arch }}.txt
+          mv bin/safechain-agent-darwin-${{ matrix.arch }} safechain-agent-darwin-${{ matrix.arch }}
+          mv bin/safechain-setup-darwin-${{ matrix.arch }} safechain-setup-darwin-${{ matrix.arch }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
-          name: safechain-darwin-${{ matrix.arch }}
+          name: safechain-agent-darwin-${{ matrix.arch }}
           path: |
             safechain-agent-darwin-${{ matrix.arch }}
             safechain-setup-darwin-${{ matrix.arch }}
-            checksum-agent-darwin-${{ matrix.arch }}.txt
 
   build-unix-proxy:
     strategy:
@@ -95,17 +61,18 @@ jobs:
             runner: macos-14
           - arch: amd64
             target: x86_64-apple-darwin
-            runner: macos-14-large
+            runner: macos-14
 
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
+          targets: ${{ matrix.target }}
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
@@ -120,25 +87,19 @@ jobs:
           cargo clippy -p safechain-proxy --target ${{ matrix.target }}
       - name: rustfmt
         run: |
-          cargo fmt -p safechain-proxy --check
+          cargo fmt --check
 
       - name: Build proxy binary for ${{ matrix.arch }}
         run: |
-          cargo build --release -p rama-cli --target ${{ matrix.target }}
+          cargo build --release -p safechain-proxy --target ${{ matrix.target }}
+
+      - name: Prepare artifacts
+        run: |
           mv target/${{ matrix.target }}/release/safechain-proxy safechain-proxy-darwin-${{ matrix.arch }}
 
-      - name: Calculate binary checksum
-        id: checksum
-        run: |
-          SHA=$(shasum -a 256 safechain-proxy-darwin-${{ matrix.arch }} | cut -d' ' -f1)
-          echo "sha=$SHA" >> $GITHUB_OUTPUT
-          echo "${{ matrix.arch }} SHA256: $SHA"
-          echo "$SHA" > checksum-proxy-darwin-${{ matrix.arch }}.txt
-
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: safechain-proxy-darwin-${{ matrix.arch }}
           path: |
             safechain-proxy-darwin-${{ matrix.arch }}
-            checksum-proxy-darwin-${{ matrix.arch }}.txt
