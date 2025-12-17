@@ -118,7 +118,7 @@ impl SyncSecrets {
                 let entry = new_key_ring_entry(key)?;
                 match entry.get_secret() {
                     Ok(v) => v,
-                    Err(keyring::Error::NoEntry) => return Ok(None),
+                    Err(keyring_core::Error::NoEntry) => return Ok(None),
                     Err(err) => {
                         return Err(err.with_context(|| format!("get secret for key '{key}'")));
                     }
@@ -130,6 +130,47 @@ impl SyncSecrets {
     }
 }
 
-fn new_key_ring_entry(key: &str) -> Result<keyring::Entry, OpaqueError> {
-    keyring::Entry::new(key, AIKIDO_SECRET_SVC).context("create Root CA entry")
+#[cfg(target_os = "macos")]
+fn new_key_ring_entry(key: &str) -> Result<keyring_core::Entry, OpaqueError> {
+    use keyring_core::api::CredentialStoreApi;
+    use std::collections::HashMap;
+
+    // NOTE: for production version you might prefer the 'protected' API Instead,
+    // but this does require a proper bundle ID as app-group,
+    // so certainly not possible for a test like this
+    let store =
+        apple_native_keyring_store::keychain::Store::new_with_configuration(&HashMap::from([(
+            "keychain",
+            if sudo::check() == sudo::RunningAs::Root {
+                "system"
+            } else {
+                "user"
+            },
+        )]))
+        .context("create Apple Protected Secret store")?;
+    store
+        .build(key, AIKIDO_SECRET_SVC, None)
+        .context("create Root CA entry")
+}
+
+#[cfg(target_os = "linux")]
+fn new_key_ring_entry(key: &str) -> Result<keyring_core::Entry, OpaqueError> {
+    use keyring_core::api::CredentialStoreApi;
+
+    let store =
+        linux_keyutils_keyring_store::Store::new().context("create Linux KeyUtils Secret store")?;
+    store
+        .build(key, AIKIDO_SECRET_SVC, None)
+        .context("create Root CA entry")
+}
+
+#[cfg(target_os = "windows")]
+fn new_key_ring_entry(key: &str) -> Result<keyring_core::Entry, OpaqueError> {
+    use keyring_core::api::CredentialStoreApi;
+
+    let store =
+        windows_native_keyring_store::Store::new().context("create Windows Native Secret store")?;
+    store
+        .build(key, AIKIDO_SECRET_SVC, None)
+        .context("create Root CA entry")
 }

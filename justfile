@@ -12,7 +12,7 @@ rust-qa:
     cargo test --workspace
 
 rust-qa-full: rust-qa
-    cargo test ---workspace -- --ignored
+    cargo test --workspace -- --ignored
 
 run-proxy *ARGS:
     mkdir -p target/.safechain-proxy
