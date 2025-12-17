@@ -45,15 +45,6 @@
                         Stop="both"
                         Remove="uninstall"
                         Wait="yes" />
-        <ServiceConfigFailureActions ServiceName="SafeChainAgent"
-                                     OnInstall="yes"
-                                     OnReinstall="yes"
-                                     OnUninstall="no"
-                                     ResetPeriod="86400">
-          <Failure Action="restart" Delay="5000" />
-          <Failure Action="restart" Delay="10000" />
-          <Failure Action="restart" Delay="30000" />
-        </ServiceConfigFailureActions>
       </Component>
       <Component Id="AikidoSetupExe" Guid="7b4e9d2f-8c3a-4b5e-9f1d-2e6a8c4b7d9e">
         <File Id="AikidoSetupExeFile" Source="$(var.BinDir)\SafeChainSetup.exe" KeyPath="yes" />
