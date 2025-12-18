@@ -23,8 +23,8 @@ pub mod utils;
 pub struct Args {
     /// network interface to bind the proxy to
     #[arg(
-        short = 'b',
         long,
+        short = 'b',
         value_name = "INTERFACE",
         default_value = "127.0.0.1:0"
     )]
@@ -35,19 +35,32 @@ pub struct Args {
     pub meta_bind: Interface,
 
     /// secrets storage to use (e.g. for root CA)
-    #[arg(long, value_name = "keyring | <dir>", default_value = "keyring")]
+    #[arg(long, value_name = "keyring | data | <dir>", default_value = "keyring")]
     pub secrets: self::storage::SyncSecrets,
 
     /// debug logging as default instead of Info; use RUST_LOG env for more options
-    #[arg(short = 'v', long, default_value_t = false)]
+    #[arg(long, short = 'v', default_value_t = false)]
     pub verbose: bool,
 
     /// enable pretty logging (format for humans)
     #[arg(long, default_value_t = false)]
     pub pretty: bool,
 
-    /// write the tracing output to the provided file instead of stderr
-    #[arg(short = 'o', long)]
+    /// directory in which data will be stored on the filesystem
+    #[arg(
+        long,
+        short = 'D',
+        default_value = {
+            #[cfg(not(target_os = "windows"))]
+            { ".aikido/safechain-proxy" }
+            #[cfg(target_os = "windows")]
+            { ".aikido\\safechain-proxy" }
+        },
+    )]
+    pub data: PathBuf,
+
+    /// write the tracing output to the provided (log) file instead of stderr
+    #[arg(long, short = 'o')]
     pub output: Option<PathBuf>,
 
     #[arg(long, value_name = "SECONDS", default_value_t = 1.)]
@@ -60,6 +73,11 @@ async fn main() -> Result<(), BoxError> {
     let args = Args::parse();
 
     self::utils::telemetry::init_tracing(&args)?;
+
+    tokio::fs::create_dir_all(&args.data)
+        .await
+        .with_context(|| format!("create data directory at path '{}'", args.data.display()))?;
+    tracing::info!(path = ?args.data, "data directory ready to be used");
 
     let graceful_timeout = (args.graceful > 0.).then(|| Duration::from_secs_f64(args.graceful));
 

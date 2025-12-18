@@ -36,3 +36,6 @@ go.work
 
 # Rust
 /target
+
+# bin data storage
+.aikido

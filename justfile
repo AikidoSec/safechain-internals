@@ -15,12 +15,12 @@ rust-qa-full: rust-qa
     cargo test --workspace -- --ignored
 
 run-proxy *ARGS:
-    mkdir -p target/.safechain-proxy
+    mkdir -p .aikido/safechain-proxy
     RUST_LOG=info,safechain_proxy=debug \
     cargo run -- \
         --bind '127.0.0.1:8080' \
         --meta '127.0.0.1:8088' \
-        --secrets target/.safechain-proxy \
+        --secrets .aikido/safechain-proxy \
         {{ARGS}}
 
 rust-update-deps:

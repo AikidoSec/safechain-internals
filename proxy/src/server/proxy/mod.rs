@@ -83,6 +83,10 @@ pub async fn run_proxy_server(
     let tcp_inner_svc = socks5_proxy_router.with_fallback(http_service);
 
     tracing::info!(proxy.address = %proxy_addr, "local HTTP(S)/SOCKS5 proxy ready");
+    crate::server::write_server_socket_address_as_file(&args.data, "proxy", proxy_addr.into())
+        .await?;
+
+    // sent proxy addr to firewall
 
     tcp_service
         .serve_graceful(

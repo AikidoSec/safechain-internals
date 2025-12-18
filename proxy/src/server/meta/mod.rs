@@ -79,6 +79,8 @@ pub async fn run_meta_https_server(
         .context("get bound address for proxy meta http(s) server")?;
 
     tracing::info!("meta http(s) server bound to: {meta_addr}");
+    crate::server::write_server_socket_address_as_file(&args.data, "meta", meta_addr.into())
+        .await?;
 
     tcp_listener.serve_graceful(guard, tcp_svc).await;
 
