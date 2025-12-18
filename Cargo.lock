@@ -2613,6 +2613,7 @@ dependencies = [
  "rama",
  "secrecy",
  "serde",
+ "smol_str",
  "sudo",
  "tokio",
  "tracing-test",

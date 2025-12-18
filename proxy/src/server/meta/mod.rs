@@ -10,7 +10,10 @@ use rama::{
         header::CONTENT_TYPE,
         layer::{required_header::AddRequiredResponseHeadersLayer, trace::TraceLayer},
         server::HttpServer,
-        service::web::{Router, response::IntoResponse},
+        service::web::{
+            Router,
+            response::{Html, IntoResponse},
+        },
     },
     layer::TimeoutLayer,
     net::{
@@ -47,6 +50,7 @@ pub async fn run_meta_https_server(
 
     #[cfg_attr(not(feature = "har"), allow(unused_mut))]
     let mut http_router = Router::new()
+        .with_get("/", Html(META_SITE_INDEX_HTML))
         .with_get("/ping", "pong")
         .with_get("/ca", move || {
             let response = root_ca.as_http_response();
@@ -116,3 +120,31 @@ pub async fn run_meta_https_server(
 
     Ok(())
 }
+
+const META_SITE_INDEX_HTML: &str = r##"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Safechain Proxy</title>
+<style>
+html,body{height:100%}body{margin:0;font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:radial-gradient(900px 500px at 50% 0,rgba(120,110,255,.25),transparent 60%),#05061c;color:#f4f5ff;display:grid;place-items:center}
+main{text-align:center;padding:24px}
+h1{margin:0;font-weight:800;letter-spacing:-.03em;font-size:clamp(40px,6vw,72px);line-height:1.05}
+p{margin:16px auto 0;max-width:46ch;color:rgba(255,255,255,.7)}
+a{display:inline-block;margin-top:28px;padding:12px 20px;border-radius:999px;background:#6f6cff;color:#fff;text-decoration:none;font-weight:700}
+a:hover{filter:brightness(1.05)}
+</style>
+</head>
+<body>
+<main>
+<h1>Safechain Proxy</h1>
+<p>
+    The Proxy's CA has to be installed and trusted
+    by the System in order for the Safechain proxy to operate
+</p>
+<p><a href="/ca" download="safechain-proxy-ca.pem">Download Proxy CA (PEM)</a></p>
+</main>
+</body>
+</html>
+"##;

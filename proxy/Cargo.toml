@@ -17,6 +17,7 @@ secrecy = "0.10"
 tokio = { version = "1.48", features = ["full"] }
 serde = "1.0"
 postcard = { version = "1.1", features = ["alloc"] }
+smol_str = "0.3"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 linux-keyutils-keyring-store = "0.2"
