@@ -23,6 +23,9 @@ use rama::{
     tls::boring::server::TlsAcceptorLayer,
 };
 
+#[cfg(feature = "har")]
+use crate::diagnostics::har::HarClient;
+
 use crate::{Args, tls::RootCA};
 
 mod pac;
@@ -33,6 +36,7 @@ pub async fn run_meta_https_server(
     tls_acceptor: TlsAcceptorLayer,
     root_ca: RootCA,
     proxy_addr_rx: tokio::sync::oneshot::Receiver<SocketAddress>,
+    #[cfg(feature = "har")] har_client: HarClient,
 ) -> Result<(), OpaqueError> {
     let proxy_addr = tokio::time::timeout(Duration::from_secs(8), proxy_addr_rx)
         .await
@@ -41,7 +45,7 @@ pub async fn run_meta_https_server(
 
     tracing::info!("meta HTTP(S) server received proxy address from proxy task: {proxy_addr}");
 
-    let http_router = Router::new()
+    let mut http_router = Router::new()
         .with_get("/ping", "pong")
         .with_get("/ca", move || {
             let response = root_ca.as_http_response();
@@ -66,6 +70,20 @@ pub async fn run_meta_https_server(
                 .into_response();
             std::future::ready(response)
         });
+
+    #[cfg(feature = "har")]
+    {
+        http_router.set_post("/har/toggle", move || {
+            let har_client = har_client.clone();
+            async move {
+                har_client
+                    .switch()
+                    .await
+                    .map(|previous| (!previous).to_string())
+                    .into_response()
+            }
+        });
+    }
 
     let http_svc = (
         TraceLayer::new_for_http(),

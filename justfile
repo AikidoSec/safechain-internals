@@ -17,11 +17,17 @@ rust-qa-full: rust-qa
 run-proxy *ARGS:
     mkdir -p .aikido/safechain-proxy
     RUST_LOG=info,safechain_proxy=debug \
-    cargo run -- \
+    cargo run \
+        --bin safechain-proxy \
+        --features har \
+        -- \
         --bind '127.0.0.1:8080' \
         --meta '127.0.0.1:8088' \
         --secrets .aikido/safechain-proxy \
         {{ARGS}}
+
+proxy-har-toggle:
+    curl -v -XPOST http://127.0.0.1:8088/har/toggle
 
 rust-update-deps:
     cargo upgrades

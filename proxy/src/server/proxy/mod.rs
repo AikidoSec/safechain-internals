@@ -26,7 +26,15 @@ use rama::{
     tls::boring::server::TlsAcceptorLayer,
 };
 
+#[cfg(feature = "har")]
+use rama::{
+    http::layer::har::extensions::RequestComment, layer::AddInputExtensionLayer,
+    utils::str::arcstr::arcstr,
+};
+
 use crate::Args;
+#[cfg(feature = "har")]
+use crate::diagnostics::har::HARExportLayer;
 
 mod client;
 mod server;
@@ -40,6 +48,7 @@ pub async fn run_proxy_server(
     guard: ShutdownGuard,
     tls_acceptor: TlsAcceptorLayer,
     proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
+    #[cfg(feature = "har")] har_export_layer: HARExportLayer,
 ) -> Result<(), OpaqueError> {
     let tcp_service = TcpListener::build()
         .bind(args.bind)
@@ -56,9 +65,20 @@ pub async fn run_proxy_server(
     // TODO: Support (basic auth) username labels for
     // preferences, e.g. --proxy-user 'safechain-min_package_age-48h:'
 
-    let http_proxy_mitm_server =
-        self::server::new_mitm_server(guard.clone(), tls_acceptor.clone())?;
-    let socks5_proxy_mitm_server = self::server::new_mitm_server(guard.clone(), tls_acceptor)?;
+    let http_proxy_mitm_server = self::server::new_mitm_server(
+        guard.clone(),
+        args.mitm_all,
+        tls_acceptor.clone(),
+        #[cfg(feature = "har")]
+        har_export_layer.clone(),
+    )?;
+    let socks5_proxy_mitm_server = self::server::new_mitm_server(
+        guard.clone(),
+        args.mitm_all,
+        tls_acceptor,
+        #[cfg(feature = "har")]
+        har_export_layer.clone(),
+    )?;
 
     let socks5_proxy_router = Socks5PeekRouter::new(
         Socks5Acceptor::new()
@@ -70,6 +90,11 @@ pub async fn run_proxy_server(
         (
             TraceLayer::new_for_http(),
             ConsumeErrLayer::trace(Level::DEBUG),
+            #[cfg(feature = "har")]
+            (
+                AddInputExtensionLayer::new(RequestComment(arcstr!("http(s) proxy connect"))),
+                har_export_layer,
+            ),
             UpgradeLayer::new(
                 MethodMatcher::CONNECT,
                 service_fn(http_connect_accept),

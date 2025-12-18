@@ -22,22 +22,39 @@ use rama::{
     tls::boring::server::TlsAcceptorLayer,
 };
 
+#[cfg(feature = "har")]
+use crate::diagnostics::har::HARExportLayer;
+
+#[cfg(feature = "har")]
+use rama::{
+    http::layer::har::extensions::RequestComment, layer::AddInputExtensionLayer,
+    utils::str::arcstr::arcstr,
+};
+
 use crate::firewall::BLOCK_DOMAINS_VSCODE;
 
 #[derive(Debug, Clone)]
 pub(super) struct MitmServer<S> {
     inner: S,
+    mitm_all: bool,
     forwarder: DefaultForwarder,
     target_domains: DomainTrie<()>,
 }
 
 pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
     guard: ShutdownGuard,
+    mitm_all: bool,
     tls_acceptor: TlsAcceptorLayer,
+    #[cfg(feature = "har")] har_export_layer: HARExportLayer,
 ) -> Result<MitmServer<impl Service<S, Output = (), Error = BoxError> + Clone>, OpaqueError> {
     let https_svc = (
         TraceLayer::new_for_http(),
         ConsumeErrLayer::trace(Level::DEBUG),
+        #[cfg(feature = "har")]
+        (
+            AddInputExtensionLayer::new(RequestComment(arcstr!("http(s) proxy connect"))),
+            har_export_layer,
+        ),
         MapResponseBodyLayer::new(Body::new),
         CompressionLayer::new(),
     )
@@ -56,6 +73,7 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
 
     Ok(MitmServer {
         inner,
+        mitm_all,
         forwarder: DefaultForwarder::ctx(),
         target_domains,
     })
@@ -72,16 +90,20 @@ where
     async fn serve(&self, stream: S) -> Result<Self::Output, Self::Error> {
         let maybe_proxy_target = stream.extensions().get().cloned();
 
-        let result = if !maybe_proxy_target
-            .as_ref()
-            .and_then(|ProxyTarget(target)| target.host.as_domain())
-            .map(|domain| self.target_domains.is_match_parent(domain))
-            .unwrap_or_default()
+        let result = if !self.mitm_all
+            && !maybe_proxy_target
+                .as_ref()
+                .and_then(|ProxyTarget(target)| target.host.as_domain())
+                .map(|domain| self.target_domains.is_match_parent(domain))
+                .unwrap_or_default()
         {
             tracing::debug!("transport-forward incoming stream: target = {maybe_proxy_target:?}",);
             self.forwarder.serve(stream).await
         } else {
-            tracing::debug!("MITM incoming stream: target = {maybe_proxy_target:?}",);
+            tracing::debug!(
+                "MITM (all? {}) incoming stream: target = {maybe_proxy_target:?}",
+                self.mitm_all,
+            );
             self.inner.serve(stream).await
         };
 

@@ -3,6 +3,9 @@
 A security-focused SOCKS5/HTTP(S) system proxy
 built with <https://ramaproxy.org/>.
 
+> Edge Rama Rust docs:
+> <https://ramaproxy.org/docs/rama/>
+
 ## Quick Start
 
 ### Running the Proxy

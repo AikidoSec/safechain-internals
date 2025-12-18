@@ -9,6 +9,7 @@ use rama::{
 
 use clap::Parser;
 
+pub mod diagnostics;
 pub mod firewall;
 pub mod server;
 pub mod storage;
@@ -45,6 +46,10 @@ pub struct Args {
     /// enable pretty logging (format for humans)
     #[arg(long, default_value_t = false)]
     pub pretty: bool,
+
+    /// MITM all traffic, regardless of the firewall host filters
+    #[arg(long = "all", short = 'A')]
+    pub mitm_all: bool,
 
     /// directory in which data will be stored on the filesystem
     #[arg(
@@ -102,6 +107,10 @@ async fn main() -> Result<(), BoxError> {
         }
     });
 
+    #[cfg(feature = "har")]
+    let (har_client, har_export_layer) =
+        { self::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
+
     // used to provide actual bind (socket) address of proxy interface
     // to the meta server for purposes such as PAC (file) generation
     let (proxy_addr_tx, proxy_addr_rx) = tokio::sync::oneshot::channel();
@@ -121,6 +130,8 @@ async fn main() -> Result<(), BoxError> {
                 tls_acceptor,
                 root_ca,
                 proxy_addr_rx,
+                #[cfg(feature = "har")]
+                har_client,
             )
             .instrument(tracing::debug_span!(
                 "meta server lifetime",
@@ -139,15 +150,21 @@ async fn main() -> Result<(), BoxError> {
     graceful.spawn_task_fn({
         async move |guard| {
             tracing::info!("spawning proxy server...");
-            if let Err(err) =
-                self::server::proxy::run_proxy_server(args, guard, tls_acceptor, proxy_addr_tx)
-                    .instrument(tracing::debug_span!(
-                        "proxy server lifetime",
-                        server.service.name = self::utils::env::project_name(),
-                        otel.kind = "server",
-                        network.protocol.name = "tcp",
-                    ))
-                    .await
+            if let Err(err) = self::server::proxy::run_proxy_server(
+                args,
+                guard,
+                tls_acceptor,
+                proxy_addr_tx,
+                #[cfg(feature = "har")]
+                har_export_layer,
+            )
+            .instrument(tracing::debug_span!(
+                "proxy server lifetime",
+                server.service.name = self::utils::env::project_name(),
+                otel.kind = "server",
+                network.protocol.name = "tcp",
+            ))
+            .await
             {
                 tracing::error!("proxy server exited with an error: {err}");
                 let _ = etx.send(err).await;
