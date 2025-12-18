@@ -192,26 +192,12 @@ pub(super) fn new_root_tls_crt_key_pair(
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        path::PathBuf,
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use crate::utils::test::unique_empty_temp_dir;
 
     use super::*;
 
     use rama::telemetry::tracing;
     use tracing_test::traced_test;
-
-    #[traced_test]
-    #[test]
-    #[ignore]
-    fn test_new_root_tls_crt_key_pair_keyring() {
-        let dir = unique_empty_temp_dir("test_new_root_tls_crt_key_pair_keyring").unwrap();
-        let data_storage = SyncCompactDataStorage::try_new(dir).unwrap();
-        for _ in 0..2 {
-            let _ = new_root_tls_crt_key_pair(&SyncSecrets::new_keyring(), &data_storage).unwrap();
-        }
-    }
 
     #[traced_test]
     #[test]
@@ -222,29 +208,5 @@ mod tests {
         for _ in 0..2 {
             let _ = new_root_tls_crt_key_pair(&secrets, &data_storage).unwrap();
         }
-    }
-
-    fn unique_empty_temp_dir(prefix: &str) -> std::io::Result<PathBuf> {
-        let base = std::env::temp_dir();
-        let pid = std::process::id();
-
-        for attempt in 0..1000u32 {
-            let nanos = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos();
-
-            let dir = base.join(format!("{prefix}_{pid}_{nanos}_{attempt}"));
-            match std::fs::create_dir(&dir) {
-                Ok(()) => return Ok(dir),
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-                Err(e) => return Err(e),
-            }
-        }
-
-        Err(std::io::Error::new(
-            std::io::ErrorKind::AlreadyExists,
-            "failed to create unique temp dir",
-        ))
     }
 }

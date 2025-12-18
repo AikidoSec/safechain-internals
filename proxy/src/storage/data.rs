@@ -50,13 +50,44 @@ impl SyncCompactDataStorage {
     pub fn load<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, OpaqueError> {
         let path = self.dir.join(format!("{key}.data"));
 
-        match std::fs::read(&path) {
+        let value: T = match std::fs::read(&path) {
             Ok(raw) => postcard::from_bytes(&raw)
                 .with_context(|| format!("(postcard) decode RAW read data for key '{key}'")),
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(err) => {
                 Err(err.with_context(|| format!("get data for FS path '{}'", path.display())))
             }
-        }
+        }?;
+
+        Ok(Some(value))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::utils::test::unique_empty_temp_dir;
+
+    use super::*;
+
+    use rama::telemetry::tracing;
+    use tracing_test::traced_test;
+
+    #[traced_test]
+    #[test]
+    fn test_data_storage_number_store_can_load() {
+        let dir = unique_empty_temp_dir("test_data_storage_number").unwrap();
+        let data_storage = SyncCompactDataStorage::try_new(dir).unwrap();
+
+        const NUMBER: usize = 42;
+
+        assert!(data_storage.load::<usize>("number").unwrap().is_none());
+
+        data_storage.store("number", &NUMBER).unwrap();
+
+        assert!(data_storage.load::<usize>("string").unwrap().is_none());
+        assert_eq!(
+            NUMBER,
+            data_storage.load::<usize>("number").unwrap().unwrap()
+        );
     }
 }

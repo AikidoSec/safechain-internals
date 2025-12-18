@@ -97,6 +97,7 @@ impl SyncSecrets {
                 );
 
                 let path = dir.join(format!("{key}.secret"));
+                tracing::debug!("secrets FS store (store): {}", path.display());
                 std::fs::write(&path, &raw)
                     .with_context(|| format!("set secret for FS path '{}'", path.display()))
             }
@@ -118,6 +119,7 @@ impl SyncSecrets {
                 );
 
                 let path = dir.join(format!("{key}.secret"));
+                tracing::debug!("secrets FS storage (load): {}", path.display());
                 match std::fs::read(&path) {
                     Ok(v) => v,
                     Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -140,8 +142,9 @@ impl SyncSecrets {
             }
         };
 
-        postcard::from_bytes(&raw)
-            .with_context(|| format!("(postcard) decode RAW read secret for key '{key}'"))
+        let value: T = postcard::from_bytes(&raw)
+            .with_context(|| format!("(postcard) decode RAW read secret for key '{key}'"))?;
+        Ok(Some(value))
     }
 }
 
@@ -179,4 +182,81 @@ fn new_key_ring_entry(store: &Store, key: &str) -> Result<keyring_core::Entry, O
     store
         .build(key, AIKIDO_SECRET_SVC, None)
         .context("create Root CA entry")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use crate::utils::test::unique_empty_temp_dir;
+
+    use super::*;
+
+    use rama::telemetry::tracing;
+    use tracing_test::traced_test;
+
+    #[traced_test]
+    #[test]
+    fn test_secret_storage_fs_number_store_can_load() {
+        let dir = unique_empty_temp_dir("test_secret_storage_fs_number_store_can_load").unwrap();
+        let data_storage = SyncSecrets::new_fs(dir);
+
+        const NUMBER: usize = 42;
+
+        assert!(
+            data_storage
+                .load_secret::<usize>("number")
+                .unwrap()
+                .is_none()
+        );
+
+        data_storage.store_secret("number", &NUMBER).unwrap();
+
+        assert!(
+            data_storage
+                .load_secret::<usize>("string")
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            NUMBER,
+            data_storage
+                .load_secret::<usize>("number")
+                .unwrap()
+                .unwrap()
+        );
+    }
+
+    #[traced_test]
+    #[test]
+    #[ignore]
+    fn test_secret_storage_keyring_number_store_can_load() {
+        let data_storage = SyncSecrets::new_keyring();
+
+        const NUMBER: usize = 42;
+
+        let pid = std::process::id();
+
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+
+        let name = format!("test_{pid}_{nanos}");
+
+        assert!(data_storage.load_secret::<usize>(&name).unwrap().is_none());
+
+        data_storage.store_secret(&name, &NUMBER).unwrap();
+
+        assert!(
+            data_storage
+                .load_secret::<usize>("string")
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            NUMBER,
+            data_storage.load_secret::<usize>(&name).unwrap().unwrap()
+        );
+    }
 }
