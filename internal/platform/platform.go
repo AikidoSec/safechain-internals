@@ -10,6 +10,7 @@ var homeDir, _ = os.UserHomeDir()
 
 type Config struct {
 	SafeChainBinaryPath string
+	SafeChainProxyDir   string
 	LogDir              string
 }
 

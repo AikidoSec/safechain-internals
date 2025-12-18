@@ -12,6 +12,7 @@ import (
 func getConfig() *Config {
 	return &Config{
 		SafeChainBinaryPath: filepath.Join(homeDir, ".safe-chain", "bin", "safe-chain"),
+		SafeChainProxyDir:   filepath.Join(homeDir, ".aikido", "safechain-proxy"),
 	}
 }
 

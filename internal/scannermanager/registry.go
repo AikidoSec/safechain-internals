@@ -6,9 +6,7 @@ import (
 	"log"
 
 	"github.com/AikidoSec/safechain-agent/internal/scanner"
-	"github.com/AikidoSec/safechain-agent/internal/scanner/githook"
 	"github.com/AikidoSec/safechain-agent/internal/scanner/safechain"
-	"github.com/AikidoSec/safechain-agent/internal/scanner/vscode"
 )
 
 type Registry struct {
@@ -21,8 +19,8 @@ func NewRegistry() *Registry {
 	}
 
 	registry.Register(safechain.New())
-	registry.Register(githook.New())
-	registry.Register(vscode.New())
+	//registry.Register(githook.New())
+	//registry.Register(vscode.New())
 
 	return registry
 }
