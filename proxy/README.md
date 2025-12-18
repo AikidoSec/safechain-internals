@@ -23,8 +23,10 @@ safechain-proxy.exe
 The proxy will automatically find an available port and display it:
 
 ```
-SafeChain proxy running on 127.0.0.1:54321
+local HTTP(S)/SOCKS5 proxy ready proxy.address=127.0.0.1:8080
 ```
+
+Or you can get the address from the local data file where it is stored as wel.
 
 ### Custom interface
 
@@ -40,6 +42,10 @@ Use the `--bind` or `-b` flag:
 # Short form
 ./safechain-proxy -b '[::]:3128'
 ```
+
+The meta server's interface can be chosen the same using the `--meta` / `-m` flag.
+Note in case you need advanced socket options it will need to be programmed
+that a config is accepted.
 
 ### Usage Command
 
@@ -59,6 +65,13 @@ npm config set https-proxy http://127.0.0.1:3128
 
 # Now npm install will route through the proxy
 npm install
+```
+
+You can also use username labels to configure
+the proxy connection behavior, e.g.:
+
+```bash
+npm config set proxy http://-min_package_age-48h:@127.0.0.1:3128
 ```
 
 To revert:
@@ -113,6 +126,76 @@ $env:http_proxy = "http://127.0.0.1:3128"
 $env:https_proxy = "http://127.0.0.1:3128"
 ```
 
+## Developer instructions
+
+For ease of use we provide a justfile which
+does require `just` to be insalled: <https://just.systems/man/en/>
+
+Once that is installed you can run all normal tests:
+
+```
+just rust-qa
+```
+
+In case clippy fails you often can fix it automatically using `cargo clippy --fix --allow-dirty`,
+
+To run the proxy for local dev purposes you can just:
+
+```
+just run-proxy
+```
+
+### Har support
+
+Safechain Proxy supports HAR exports,
+but it does require that you compile the `safechain-proxy` binary
+using `--features har`, which is for you done when running (locally) `just run-proxy`.
+
+> In case it is the first time that you run the proxy
+> make sure to trust the root certificate.
+>
+> 1. download the root CA (pem) crt
+>
+> ```bash
+> curl -s http://127.0.0.1:8088/ca -o /tmp/safechain-proxy-ca-crt.pem
+> # will store the PEM data of that (root) CA crt in a tmp location
+> ```
+>
+> 2. install and trust the root CA crt as a system CA,
+>    (see the Slack canvas in `#aikido-rama` for more info on how to
+>     do this for your platform)
+
+In case you want to run HAR exports because you wish to support
+a new target it could be handy to use the `--all` flag when running the proxy
+so that you MITM all traffic, as you might not yet know what domains it uses:
+
+```bash
+just run-proxy -v --all
+````
+
+Once that is done you can start (HAR) recording (in another tab):
+
+```bash
+just proxy-har-toggle
+# should return true
+```
+
+Now download an extension on the app that you wish to support (e.g. google chrome store).
+Once that is done you can stop the HAR recording by using the same cmd:
+
+```bash
+just proxy-har-toggle
+# should return false
+```
+
+The HAR recording file is in your data folder (by default `.aikido/safechain-proxy`)
+in a sub folder named `diagnostics`. Within there you'll find your HAR file
+with a timestamp + seq id in the name.
+
+Using your browser dev tools or a site like <https://toolbox.googleapps.com/apps/har_analyzer/>
+you can inspect the desired target in peace and figure out how to get the info
+from the desired requests and know when to block and when not.
+
 ## Troubleshooting
 
 ### Port Already in Use
@@ -129,18 +212,18 @@ If you get a "port already in use" error:
 
 ### Verbose Logging
 
-Enable debug logging to troubleshoot issues:
+Enable debug (or trace even) logging to troubleshoot issues:
 
 ```bash
 # macOS/Linux
 RUST_LOG=debug ./safechain-proxy
 
 # Windows (Command Prompt)
-set RUST_LOG=debug
+set RUST_LOG=trace
 safechain-proxy.exe
 
 # Windows (PowerShell)
-$env:RUST_LOG = "debug"
+$env:RUST_LOG = "debug,safechain_proxy=trace"
 .\safechain-proxy.exe
 ```
 
@@ -150,7 +233,8 @@ Press `Ctrl+C` to stop the proxy. It will gracefully shut down, waiting up to 30
 
 ## What Does It Do?
 
-The Safe-chain proxy intercepts HTTP/HTTPS traffic from package managers and other tools, allowing Safe-chain to:
+The Safe-chain proxy intercepts HTTP/HTTPS traffic
+from package managers and other tools, allowing Safe-chain to:
 - Scan packages for malware before installation
 - Monitor registry requests
 - Block malicious packages
@@ -158,6 +242,6 @@ The Safe-chain proxy intercepts HTTP/HTTPS traffic from package managers and oth
 
 ## Security
 
-- The proxy only listens on `127.0.0.1` (localhost) - it cannot be accessed from other machines
-- All HTTPS traffic is tunneled securely using CONNECT
+- The proxy and meta servers should only listens on `127.0.0.1` (localhost) -
+  this way it cannot be accessed from other machines
 - Body size limits prevent memory exhaustion attacks
