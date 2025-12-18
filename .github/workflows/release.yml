@@ -71,6 +71,5 @@ jobs:
             safechain-proxy-darwin-amd64
             safechain-proxy-darwin-arm64
             SafeChainProxy.amd64.exe
-            SafeChainProxy.arm64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

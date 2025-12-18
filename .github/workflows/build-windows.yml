@@ -67,9 +67,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - arch: arm64
-            target: aarch64-pc-windows-msvc
-            runner: windows-11-arm
+          # NOTE: windows-11-arm is not YET supported in private Github Action runners
+          # - arch: arm64
+          #   target: aarch64-pc-windows-msvc
+          #   runner: windows-11-arm
           - arch: amd64
             target: x86_64-pc-windows-msvc
             runner: windows-latest

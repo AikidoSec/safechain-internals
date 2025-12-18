@@ -14,7 +14,8 @@ jobs:
           - runner: macos-15
           - runner: macos-15-intel
           - runner: windows-latest
-          - runner: windows-11-arm
+          # NOTE: windows-11-arm is not YET supported in private Github Action runners
+          # - runner: windows-11-arm
           - runner: ubuntu-latest
 
     runs-on: ${{ matrix.runner }}
