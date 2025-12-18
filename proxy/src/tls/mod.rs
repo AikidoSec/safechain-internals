@@ -14,13 +14,11 @@ use rama::{
 };
 
 use secrecy::{ExposeSecret, SecretBox};
-use serde::{Deserialize, Serialize};
 
 use crate::Args;
 
 mod root;
 
-#[derive(Serialize, Deserialize)]
 struct PemKeyCrtPair {
     pub crt: NonEmptyStr,
     pub key: NonEmptyStr,

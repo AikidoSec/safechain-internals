@@ -49,6 +49,9 @@ pub async fn run_proxy_server(
 
     let https_client = self::client::new_https_client()?;
 
+    // TODO: Support (basic auth) username labels for
+    // preferences, e.g. --proxy-user 'safechain-min_package_age-48h:'
+
     let http_proxy_mitm_server =
         self::server::new_mitm_server(guard.clone(), tls_acceptor.clone())?;
     let socks5_proxy_mitm_server = self::server::new_mitm_server(guard.clone(), tls_acceptor)?;

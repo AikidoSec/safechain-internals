@@ -1,4 +1,14 @@
+use std::sync::Arc;
 use std::{path::PathBuf, str::FromStr};
+
+use keyring_core::api::CredentialStoreApi;
+
+#[cfg(target_os = "macos")]
+use ::{apple_native_keyring_store::keychain::Store, std::collections::HashMap};
+#[cfg(target_os = "linux")]
+use linux_keyutils_keyring_store::Store;
+#[cfg(target_os = "windows")]
+use windows_native_keyring_store::Store;
 
 use rama::{
     error::{ErrorContext, ErrorExt as _, OpaqueError},
@@ -21,15 +31,20 @@ pub struct SyncSecrets(Backend);
 #[derive(Debug, Clone)]
 enum Backend {
     Fs { dir: PathBuf },
-    KeyRing,
+    KeyRing { store: Arc<Store> },
 }
 
 const AIKIDO_SECRET_SVC: &str = crate::utils::env::project_name();
 
 #[cfg(test)]
 impl SyncSecrets {
+    /// # Panics
+    ///
+    /// Panics in case the underlying (platform) keychain store failed to be created.
     pub fn new_keyring() -> Self {
-        Self(Backend::KeyRing)
+        Self(Backend::KeyRing {
+            store: try_new_keychain_store().unwrap(),
+        })
     }
 
     pub fn new_fs(dir: PathBuf) -> Self {
@@ -43,7 +58,8 @@ impl FromStr for SyncSecrets {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.trim();
         if s.eq_ignore_ascii_case("keyring") {
-            return Ok(Self(Backend::KeyRing));
+            let store = try_new_keychain_store()?;
+            return Ok(Self(Backend::KeyRing { store }));
         }
 
         let dir = PathBuf::from(s);
@@ -68,23 +84,24 @@ impl FromStr for SyncSecrets {
 }
 
 impl SyncSecrets {
-    pub fn store_secret_json<T: Serialize>(&self, key: &str, value: &T) -> Result<(), OpaqueError> {
-        let raw = serde_json::to_vec(value)
-            .with_context(|| format!("json-encode secret for key '{key}'"))?;
+    pub fn store_secret<T: Serialize>(&self, key: &str, value: &T) -> Result<(), OpaqueError> {
+        let raw = postcard::to_allocvec(value)
+            .with_context(|| format!("(postcard) encode secret for key '{key}'"))?
+            .to_vec();
 
-        match self.0 {
-            Backend::Fs { ref dir } => {
+        match &self.0 {
+            Backend::Fs { dir } => {
                 tracing::warn!(
                     "secrets storage (store) is using FS @ '{}' (key = '{key}'), ensure to use 'keyring' in production!!!",
                     dir.display()
                 );
 
-                let path = dir.join(format!("{key}.secret.json"));
+                let path = dir.join(format!("{key}.secret"));
                 std::fs::write(&path, &raw)
                     .with_context(|| format!("set secret for FS path '{}'", path.display()))
             }
-            Backend::KeyRing => {
-                let entry = new_key_ring_entry(key)?;
+            Backend::KeyRing { store } => {
+                let entry = new_key_ring_entry(store, key)?;
                 entry
                     .set_secret(&raw)
                     .with_context(|| format!("set secret for key '{key}'"))
@@ -92,18 +109,15 @@ impl SyncSecrets {
         }
     }
 
-    pub fn load_secret_json<T: DeserializeOwned>(
-        &self,
-        key: &str,
-    ) -> Result<Option<T>, OpaqueError> {
-        let raw = match self.0 {
-            Backend::Fs { ref dir } => {
+    pub fn load_secret<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, OpaqueError> {
+        let raw = match &self.0 {
+            Backend::Fs { dir } => {
                 tracing::warn!(
                     "secrets storage (load) is using FS @ '{}' (key = '{key}'), ensure to use 'keyring' in production!!!",
                     dir.display()
                 );
 
-                let path = dir.join(format!("{key}.secret.json"));
+                let path = dir.join(format!("{key}.secret"));
                 match std::fs::read(&path) {
                     Ok(v) => v,
                     Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -114,8 +128,8 @@ impl SyncSecrets {
                     }
                 }
             }
-            Backend::KeyRing => {
-                let entry = new_key_ring_entry(key)?;
+            Backend::KeyRing { store } => {
+                let entry = new_key_ring_entry(store, key)?;
                 match entry.get_secret() {
                     Ok(v) => v,
                     Err(keyring_core::Error::NoEntry) => return Ok(None),
@@ -125,51 +139,43 @@ impl SyncSecrets {
                 }
             }
         };
-        serde_json::from_slice(&raw)
-            .with_context(|| format!("json-decode RAW read secret for key '{key}'"))
+
+        postcard::from_bytes(&raw)
+            .with_context(|| format!("(postcard) decode RAW read secret for key '{key}'"))
     }
 }
 
 #[cfg(target_os = "macos")]
-fn new_key_ring_entry(key: &str) -> Result<keyring_core::Entry, OpaqueError> {
-    use keyring_core::api::CredentialStoreApi;
-    use std::collections::HashMap;
-
+fn try_new_keychain_store() -> Result<Arc<Store>, OpaqueError> {
     // NOTE: for production version you might prefer the 'protected' API Instead,
     // but this does require a proper bundle ID as app-group,
     // so certainly not possible for a test like this
-    let store =
-        apple_native_keyring_store::keychain::Store::new_with_configuration(&HashMap::from([(
-            "keychain",
-            if sudo::check() == sudo::RunningAs::Root {
-                "system"
-            } else {
-                "user"
-            },
-        )]))
-        .context("create Apple Protected Secret store")?;
-    store
-        .build(key, AIKIDO_SECRET_SVC, None)
-        .context("create Root CA entry")
+    tracing::warn!(
+        "Consider using the modern Protected MacOS/iOS capabilities for secret storage on thesse platforms!!! Keyring is considered legacy for these purposes..."
+    );
+
+    Store::new_with_configuration(&HashMap::from([(
+        "keychain",
+        if sudo::check() == sudo::RunningAs::Root {
+            "system"
+        } else {
+            "user"
+        },
+    )]))
+    .context("create Apple Keyring Secret store")
 }
 
 #[cfg(target_os = "linux")]
-fn new_key_ring_entry(key: &str) -> Result<keyring_core::Entry, OpaqueError> {
-    use keyring_core::api::CredentialStoreApi;
-
-    let store =
-        linux_keyutils_keyring_store::Store::new().context("create Linux KeyUtils Secret store")?;
-    store
-        .build(key, AIKIDO_SECRET_SVC, None)
-        .context("create Root CA entry")
+fn try_new_keychain_store() -> Result<Arc<Store>, OpaqueError> {
+    linux_keyutils_keyring_store::Store::new().context("create Linux KeyUtils Secret store")
 }
 
 #[cfg(target_os = "windows")]
-fn new_key_ring_entry(key: &str) -> Result<keyring_core::Entry, OpaqueError> {
-    use keyring_core::api::CredentialStoreApi;
+fn try_new_keychain_store() -> Result<Arc<Store>, OpaqueError> {
+    windows_native_keyring_store::Store::new().context("create Windows Native Secret store")
+}
 
-    let store =
-        windows_native_keyring_store::Store::new().context("create Windows Native Secret store")?;
+fn new_key_ring_entry(store: &Store, key: &str) -> Result<keyring_core::Entry, OpaqueError> {
     store
         .build(key, AIKIDO_SECRET_SVC, None)
         .context("create Root CA entry")
