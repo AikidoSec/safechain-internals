@@ -1,6 +1,10 @@
+use std::fmt::Write as _;
+
+use rama::net::address::SocketAddress;
+
 use crate::firewall::BLOCK_DOMAINS_VSCODE;
 
-pub(super) fn generate_pac_script(proxy_addr: &str) -> String {
+pub(super) fn generate_pac_script(proxy_addr: SocketAddress) -> String {
     let mut domains: Vec<String> = BLOCK_DOMAINS_VSCODE.iter().map(|d| d.to_string()).collect();
     domains.sort_unstable_by_key(|b| std::cmp::Reverse(b.len()));
 
@@ -15,7 +19,7 @@ pub(super) fn generate_pac_script(proxy_addr: &str) -> String {
   if (n && host.charCodeAt(n - 1) === 46) host = host.slice(0, n - 1);
   var proxyAddr = ""#,
     );
-    out.push_str(proxy_addr);
+    let _ = write!(&mut out, "{proxy_addr}");
     out.push_str(
         r#"; DIRECT";
   var ds = ["#,

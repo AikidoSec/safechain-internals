@@ -102,6 +102,10 @@ async fn main() -> Result<(), BoxError> {
         }
     });
 
+    // used to provide actual bind (socket) address of proxy interface
+    // to the meta server for purposes such as PAC (file) generation
+    let (proxy_addr_tx, proxy_addr_rx) = tokio::sync::oneshot::channel();
+
     graceful.spawn_task_fn({
         let args = args.clone();
         let etx = etx.clone();
@@ -111,15 +115,20 @@ async fn main() -> Result<(), BoxError> {
 
         async move |guard| {
             tracing::info!("spawning meta http(s) server...");
-            if let Err(err) =
-                self::server::meta::run_meta_https_server(args, guard, tls_acceptor, root_ca)
-                    .instrument(tracing::debug_span!(
-                        "meta server lifetime",
-                        server.service.name = format!("{}-meta", self::utils::env::project_name()),
-                        otel.kind = "server",
-                        network.protocol.name = "http",
-                    ))
-                    .await
+            if let Err(err) = self::server::meta::run_meta_https_server(
+                args,
+                guard,
+                tls_acceptor,
+                root_ca,
+                proxy_addr_rx,
+            )
+            .instrument(tracing::debug_span!(
+                "meta server lifetime",
+                server.service.name = format!("{}-meta", self::utils::env::project_name()),
+                otel.kind = "server",
+                network.protocol.name = "http",
+            ))
+            .await
             {
                 tracing::error!("meta server exited with an error: {err}");
                 let _ = etx.send(err).await;
@@ -130,14 +139,15 @@ async fn main() -> Result<(), BoxError> {
     graceful.spawn_task_fn({
         async move |guard| {
             tracing::info!("spawning proxy server...");
-            if let Err(err) = self::server::proxy::run_proxy_server(args, guard, tls_acceptor)
-                .instrument(tracing::debug_span!(
-                    "proxy server lifetime",
-                    server.service.name = self::utils::env::project_name(),
-                    otel.kind = "server",
-                    network.protocol.name = "tcp",
-                ))
-                .await
+            if let Err(err) =
+                self::server::proxy::run_proxy_server(args, guard, tls_acceptor, proxy_addr_tx)
+                    .instrument(tracing::debug_span!(
+                        "proxy server lifetime",
+                        server.service.name = self::utils::env::project_name(),
+                        otel.kind = "server",
+                        network.protocol.name = "tcp",
+                    ))
+                    .await
             {
                 tracing::error!("proxy server exited with an error: {err}");
                 let _ = etx.send(err).await;

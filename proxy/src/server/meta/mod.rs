@@ -13,7 +13,10 @@ use rama::{
         service::web::{Router, response::IntoResponse},
     },
     layer::TimeoutLayer,
-    net::tls::{SecureTransport, server::TlsPeekRouter},
+    net::{
+        address::SocketAddress,
+        tls::{SecureTransport, server::TlsPeekRouter},
+    },
     rt::Executor,
     tcp::server::TcpListener,
     telemetry::tracing,
@@ -29,7 +32,15 @@ pub async fn run_meta_https_server(
     guard: ShutdownGuard,
     tls_acceptor: TlsAcceptorLayer,
     root_ca: RootCA,
+    proxy_addr_rx: tokio::sync::oneshot::Receiver<SocketAddress>,
 ) -> Result<(), OpaqueError> {
+    let proxy_addr = tokio::time::timeout(Duration::from_secs(8), proxy_addr_rx)
+        .await
+        .context("wait to recv proxy addr from proxy task")?
+        .context("recv proxy addr from proxy task")?;
+
+    tracing::info!("meta HTTP(S) server received proxy address from proxy task: {proxy_addr}");
+
     let http_router = Router::new()
         .with_get("/ping", "pong")
         .with_get("/ca", move || {
@@ -50,7 +61,7 @@ pub async fn run_meta_https_server(
                     CONTENT_TYPE,
                     HeaderValue::from_static("application/x-ns-proxy-autoconfig"),
                 )],
-                self::pac::generate_pac_script("127.0.0.1:8888"),
+                self::pac::generate_pac_script(proxy_addr),
             )
                 .into_response();
             std::future::ready(response)

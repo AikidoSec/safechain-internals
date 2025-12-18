@@ -14,7 +14,10 @@ use rama::{
         service::web::response::IntoResponse,
     },
     layer::ConsumeErrLayer,
-    net::{http::RequestContext, proxy::ProxyTarget, stream::layer::http::BodyLimitLayer},
+    net::{
+        address::SocketAddress, http::RequestContext, proxy::ProxyTarget,
+        stream::layer::http::BodyLimitLayer,
+    },
     proxy::socks5::{self, Socks5Acceptor, server::Socks5PeekRouter},
     rt::Executor,
     service::service_fn,
@@ -36,6 +39,7 @@ pub async fn run_proxy_server(
     args: Args,
     guard: ShutdownGuard,
     tls_acceptor: TlsAcceptorLayer,
+    proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
 ) -> Result<(), OpaqueError> {
     let tcp_service = TcpListener::build()
         .bind(args.bind)
@@ -85,6 +89,11 @@ pub async fn run_proxy_server(
     tracing::info!(proxy.address = %proxy_addr, "local HTTP(S)/SOCKS5 proxy ready");
     crate::server::write_server_socket_address_as_file(&args.data, "proxy", proxy_addr.into())
         .await?;
+    if proxy_addr_tx.send(proxy_addr.into()).is_err() {
+        return Err(OpaqueError::from_display(
+            "failed to send proxy addr to meta server task",
+        ));
+    }
 
     // sent proxy addr to firewall
 
