@@ -25,7 +25,10 @@ func main() {
 	defer cancel()
 
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	// Subscribe to SIGINT, SIGTERM, and SIGQUIT signals
+	// These signals are received via sigChan and are used to trigger a graceful shutdown of the setup
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {
 		<-sigChan
 		fmt.Println("\nSetup interrupted.")
@@ -44,4 +47,5 @@ func main() {
 }
 
 func registerSteps(runner *setup.Runner) {
+	// to be implemented
 }
