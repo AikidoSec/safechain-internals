@@ -1,0 +1,64 @@
+name: Build Windows
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+jobs:
+  build-windows:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+          - arch: arm64
+
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Run tests
+        run: make test
+        shell: bash
+
+      - name: Build Windows binaries for ${{ matrix.arch }}
+        run: make build-windows-${{ matrix.arch }} VERSION="${{ inputs.version || 'dev' }}"
+        shell: bash
+
+      - name: Rename binaries for packaging
+        run: |
+          mv bin/safechain-agent-windows-${{ matrix.arch }}.exe bin/SafeChainAgent.exe
+          mv bin/safechain-setup-windows-${{ matrix.arch }}.exe bin/SafeChainSetup.exe
+        shell: bash
+
+      - name: Install WiX Toolset
+        run: dotnet tool install -g wix
+
+      - name: Add WiX UI extension
+        run: wix extension add WixToolset.UI.wixext
+
+      - name: Build MSI installer
+        run: |
+          .\packaging\windows\build-msi.ps1 -Version "${{ inputs.version || 'dev' }}" -Arch "${{ matrix.arch }}" -BinDir ".\bin" -OutputDir "."
+        shell: pwsh
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SafeChainAgent.${{ matrix.arch }}.msi
+          path: |
+            SafeChainAgent.${{ matrix.arch }}.msi

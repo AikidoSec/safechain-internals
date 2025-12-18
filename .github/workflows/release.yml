@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  extract-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+  build-unix:
+    needs: extract-version
+    uses: ./.github/workflows/build-unix.yml
+    with:
+      version: ${{ needs.extract-version.outputs.version }}
+
+  build-windows:
+    needs: extract-version
+    uses: ./.github/workflows/build-windows.yml
+    with:
+      version: ${{ needs.extract-version.outputs.version }}
+
+  release:
+    needs: [extract-version, build-unix, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        id: checksums
+        run: |
+          mv artifacts/safechain-darwin-amd64/safechain-agent-darwin-amd64 .
+          mv artifacts/safechain-darwin-amd64/safechain-setup-darwin-amd64 .
+          mv artifacts/safechain-darwin-arm64/safechain-agent-darwin-arm64 .
+          mv artifacts/safechain-darwin-arm64/safechain-setup-darwin-arm64 .
+          mv artifacts/SafeChainAgent.amd64.msi/SafeChainAgent.amd64.msi .
+          mv artifacts/SafeChainAgent.arm64.msi/SafeChainAgent.arm64.msi .
+                    
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            safechain-agent-darwin-amd64
+            safechain-agent-darwin-arm64
+            safechain-setup-darwin-amd64
+            safechain-setup-darwin-arm64
+            SafeChainAgent.amd64.msi
+            SafeChainAgent.arm64.msi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
