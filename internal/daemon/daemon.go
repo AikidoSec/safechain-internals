@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AikidoSec/safechain-agent/internal/constants"
 	"github.com/AikidoSec/safechain-agent/internal/platform"
 	"github.com/AikidoSec/safechain-agent/internal/proxy"
 	"github.com/AikidoSec/safechain-agent/internal/scannermanager"
@@ -100,7 +101,7 @@ func (d *Daemon) Stop(ctx context.Context) error {
 func (d *Daemon) run(ctx context.Context) {
 	defer d.wg.Done()
 
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(constants.HeartbeatInterval)
 	defer ticker.Stop()
 
 	log.Println("Daemon is running...")
