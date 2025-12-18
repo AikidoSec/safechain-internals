@@ -113,23 +113,12 @@ jobs:
       - name: Copy proxy binary to bin
         run: |
           New-Item -ItemType Directory -Force -Path bin | Out-Null
-          Copy-Item -Path "target\${{ matrix.target }}\release\safechain-proxy.exe" -Destination "bin\SafeChainProxy.exe" -Force
-        shell: pwsh
-
-      - name: Install WiX Toolset
-        run: dotnet tool install -g wix
-
-      - name: Add WiX UI extension
-        run: wix extension add WixToolset.UI.wixext
-
-      - name: Build MSI installer
-        run: |
-          .\packaging\windows\build-msi.ps1 -Version "${{ inputs.version || 'dev' }}" -Arch "${{ matrix.arch }}" -BinDir ".\bin" -OutputDir "."
+          Copy-Item -Path "target\${{ matrix.target }}\release\safechain-proxy.exe" -Destination "SafeChainProxy.${{ matrix.arch }}.exe" -Force
         shell: pwsh
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SafeChainProxy.${{ matrix.arch }}.msi
+          name: SafeChainProxy.${{ matrix.arch }}.exe
           path: |
-            SafeChainProxy.${{ matrix.arch }}.msi
+            SafeChainProxy.${{ matrix.arch }}.exe

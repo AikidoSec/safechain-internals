@@ -45,6 +45,7 @@ pub async fn run_meta_https_server(
 
     tracing::info!("meta HTTP(S) server received proxy address from proxy task: {proxy_addr}");
 
+    #[cfg_attr(not(feature = "har"), allow(unused_mut))]
     let mut http_router = Router::new()
         .with_get("/ping", "pong")
         .with_get("/ca", move || {

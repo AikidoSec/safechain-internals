@@ -55,8 +55,8 @@ jobs:
           mv artifacts/SafeChainAgent.arm64.msi/SafeChainAgent.arm64.msi .
           mv artifacts/safechain-proxy-darwin-amd64/safechain-proxy-darwin-amd64 .
           mv artifacts/safechain-proxy-darwin-arm64/safechain-proxy-darwin-arm64 .
-          mv artifacts/SafeChainProxy.amd64.msi/SafeChainProxy.amd64.msi .
-          mv artifacts/SafeChainProxy.arm64.msi/SafeChainProxy.arm64.msi .
+          mv artifacts/SafeChainProxy.amd64.exe/SafeChainProxy.amd64.exe .
+          mv artifacts/SafeChainProxy.arm64.exe/SafeChainProxy.arm64.exe .
                     
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -70,7 +70,7 @@ jobs:
             SafeChainAgent.arm64.msi
             safechain-proxy-darwin-amd64
             safechain-proxy-darwin-arm64
-            SafeChainProxy.amd64.msi
-            SafeChainProxy.arm64.msi
+            SafeChainProxy.amd64.exe
+            SafeChainProxy.arm64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

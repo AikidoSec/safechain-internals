@@ -82,12 +82,19 @@ async fn main() -> Result<(), BoxError> {
     tokio::fs::create_dir_all(&args.data)
         .await
         .with_context(|| format!("create data directory at path '{}'", args.data.display()))?;
+    let data_storage = self::storage::SyncCompactDataStorage::try_new(args.data.clone())
+        .with_context(|| {
+            format!(
+                "create compact data storage using dir at path '{}'",
+                args.data.display()
+            )
+        })?;
     tracing::info!(path = ?args.data, "data directory ready to be used");
 
     let graceful_timeout = (args.graceful > 0.).then(|| Duration::from_secs_f64(args.graceful));
 
     let (tls_acceptor, root_ca) =
-        self::tls::new_tls_acceptor_layer(&args).context("prepare TLS acceptor")?;
+        self::tls::new_tls_acceptor_layer(&args, &data_storage).context("prepare TLS acceptor")?;
 
     let (etx, mut erx) = tokio::sync::mpsc::channel::<OpaqueError>(1);
     let graceful = graceful::Shutdown::new(async move {
