@@ -1,33 +1,60 @@
-use std::fmt;
+use std::{fmt, time::Duration};
 
 use rama::{
-    error::OpaqueError,
-    http::Request,
+    Service,
+    error::{ErrorContext as _, OpaqueError},
+    graceful::ShutdownGuard,
+    http::{Request, Response, Uri},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
     utils::str::starts_with_ignore_ascii_case,
 };
+use smol_str::format_smolstr;
 
-use crate::{firewall::pac::PacScriptGenerator, storage::SyncCompactDataStorage};
+use crate::{
+    firewall::{malware_list::RemoteMalwareList, pac::PacScriptGenerator},
+    storage::SyncCompactDataStorage,
+};
 
 use super::BlockRule;
 
-#[expect(dead_code)]
 pub(in crate::firewall) struct BlockRuleVSCode {
-    data: SyncCompactDataStorage,
     target_domains: DomainTrie<()>,
+    remote_malware_list: RemoteMalwareList,
 }
 
 impl BlockRuleVSCode {
-    #[must_use]
-    pub(in crate::firewall) fn new(data: SyncCompactDataStorage) -> Self {
-        Self {
-            data,
+    pub(in crate::firewall) async fn try_new<C>(
+        guard: ShutdownGuard,
+        remote_malware_list_https_client: C,
+        sync_storage: SyncCompactDataStorage,
+    ) -> Result<Self, OpaqueError>
+    where
+        C: Service<Request, Output = Response, Error = OpaqueError>,
+    {
+        // NOTE: should you ever need to share a remote malware list between different rules,
+        // you would simply create it outside of the rule, clone and pass it in.
+        // These remoter malware list resources are cloneable and will share the list,
+        // so it only gets updated once
+        let remote_malware_list = RemoteMalwareList::try_new(
+            guard,
+            Uri::from_static("https://malware-list.aikido.dev/malware_vscode.json"),
+            // NOTE: if you ever wish to make it configurable you would need to pass it into this constructor
+            Duration::from_secs(60 * 10), // 10 mins
+            sync_storage,
+            remote_malware_list_https_client,
+        )
+        .await
+        .context("create remote malware list for vscode block rule")?;
+
+        Ok(Self {
+            // NOTE: should you ever make this list dynamic we would stop hardcoding these target domains here...
             target_domains: ["gallery.vsassets.io", "gallerycdn.vsassets.io"]
                 .into_iter()
                 .map(|domain| (Domain::from_static(domain), ()))
                 .collect(),
-        }
+            remote_malware_list,
+        })
     }
 }
 
@@ -36,14 +63,6 @@ impl fmt::Debug for BlockRuleVSCode {
         f.debug_struct("BlockRuleVSCode").finish()
     }
 }
-
-// NOTE:
-//
-// - This list should probably come from a remote list of known malicious plugins
-// - Is this a global name or do we also need to consider package owner name?
-// - What about the version? Is that of importance?
-
-const VSCODE_BLOCKED_EXT_LIST: &[&str] = &["python"];
 
 impl BlockRule for BlockRuleVSCode {
     #[inline(always)]
@@ -78,21 +97,40 @@ impl BlockRule for BlockRuleVSCode {
             return Ok(Some(req));
         }
 
-        let Some(plugin_name) = path.split('/').nth(2) else {
-            tracing::debug!("VSCode url: plugin name not found in uri path: {path}; passthrough");
+        let mut path_iter = path.split('/').skip(1); // skip extensions
+
+        let Some(publisher_name) = path_iter.next() else {
+            tracing::debug!(
+                "VSCode url: publisher name not found in uri path: {path}; passthrough"
+            );
+            return Ok(Some(req));
+        };
+        let Some(package_name) = path_iter.next() else {
+            tracing::debug!(
+                "VSCode url: publisher name not found in uri path: {path}; passthrough"
+            );
             return Ok(Some(req));
         };
 
-        let plugin_name = plugin_name.trim();
-        if VSCODE_BLOCKED_EXT_LIST
-            .iter()
-            .any(|c| c.eq_ignore_ascii_case(plugin_name))
+        // format defined by remote malware list,
+        // e.g. klustfix.kluster-code-verify
+        // NOTE: do we not need to worry about casing???
+        let fq_package_name = format_smolstr!("{}.{}", publisher_name.trim(), package_name.trim());
+
+        if let Some(_entries) = self
+            .remote_malware_list
+            .find_entries(&fq_package_name)
+            .entries()
         {
-            tracing::debug!("blocked VSCode plugin: {plugin_name}");
+            // NOTE: if we only want to block specific version ranges we would need
+            // to go through the found package entries and compare that with the
+            // version requested in the request :)
+
+            tracing::debug!("blocked VSCode plugin: {fq_package_name}");
             return Ok(None);
         }
 
-        tracing::debug!("VSCode url: plugin {plugin_name}: blocked");
+        tracing::debug!("VSCode url: plugin {fq_package_name}: not blocked; let it go...");
         Ok(Some(req))
     }
 }

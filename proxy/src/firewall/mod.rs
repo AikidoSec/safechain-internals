@@ -1,14 +1,25 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use rama::{
-    error::OpaqueError,
+    Layer as _, Service as _,
+    error::{ErrorContext as _, OpaqueError},
+    graceful::ShutdownGuard,
     http::{
-        HeaderValue, Request, Response, header::CONTENT_TYPE,
+        HeaderValue, Request, Response,
+        client::EasyHttpWebClient,
+        header::CONTENT_TYPE,
+        layer::{
+            retry::{ManagedPolicy, RetryLayer},
+            timeout::TimeoutLayer,
+        },
         service::web::response::IntoResponse as _,
     },
+    layer::MapErrLayer,
     net::address::{Domain, SocketAddress},
+    utils::{backoff::ExponentialBackoff, rng::HasherRng},
 };
 
+pub mod malware_list;
 pub mod rule;
 
 mod pac;
@@ -27,13 +38,55 @@ pub struct Firewall {
 }
 
 impl Firewall {
-    pub fn new(data: SyncCompactDataStorage) -> Self {
-        Self {
+    pub async fn try_new(
+        guard: ShutdownGuard,
+        data: SyncCompactDataStorage,
+    ) -> Result<Self, OpaqueError> {
+        let shared_remote_malware_client = (
+            MapErrLayer::new(OpaqueError::from_std),
+            TimeoutLayer::new(Duration::from_secs(60)), // NOTE: if you have slow servers this might need to be more
+            RetryLayer::new(
+                ManagedPolicy::default().with_backoff(
+                    ExponentialBackoff::new(
+                        Duration::from_millis(100),
+                        Duration::from_secs(30),
+                        0.01,
+                        HasherRng::default,
+                    )
+                    .unwrap(),
+                ),
+            ),
+        )
+            .into_layer(
+                EasyHttpWebClient::connector_builder()
+                    .with_default_transport_connector()
+                    .without_tls_proxy_support()
+                    .without_proxy_support()
+                    .with_tls_support_using_boringssl(None)
+                    .with_default_http_connector()
+                    // connections are shared between remote fetchers
+                    .try_with_default_connection_pool()
+                    .context("create connection pool for proxy web client")?
+                    .build_client(),
+            )
+            .boxed();
+
+        Ok(Self {
             block_rules: Arc::new(vec![
-                self::rule::vscode::BlockRuleVSCode::new(data.clone()).into_dyn(),
-                self::rule::chrome::BlockRuleChrome::new(data).into_dyn(),
+                self::rule::vscode::BlockRuleVSCode::try_new(
+                    guard,
+                    shared_remote_malware_client,
+                    data.clone(),
+                )
+                .await
+                .context("create block rule: vscode")?
+                .into_dyn(),
+                self::rule::chrome::BlockRuleChrome::try_new(data)
+                    .await
+                    .context("create block rule: chrome")?
+                    .into_dyn(),
             ]),
-        }
+        })
     }
 
     pub fn match_domain(&self, domain: &Domain) -> bool {

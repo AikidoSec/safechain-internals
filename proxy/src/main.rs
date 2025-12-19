@@ -119,7 +119,7 @@ async fn main() -> Result<(), BoxError> {
     let (har_client, har_export_layer) =
         { self::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
 
-    let firewall = self::firewall::Firewall::new(data_storage);
+    let firewall = self::firewall::Firewall::try_new(graceful.guard(), data_storage).await?;
 
     // used to provide actual bind (socket) address of proxy interface
     // to the meta server for purposes such as PAC (file) generation

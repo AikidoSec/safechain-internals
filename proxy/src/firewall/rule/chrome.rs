@@ -12,22 +12,20 @@ use crate::{firewall::pac::PacScriptGenerator, storage::SyncCompactDataStorage};
 
 use super::BlockRule;
 
-#[expect(dead_code)]
 pub(in crate::firewall) struct BlockRuleChrome {
-    data: SyncCompactDataStorage,
     target_domains: DomainTrie<()>,
 }
 
 impl BlockRuleChrome {
-    #[must_use]
-    pub(in crate::firewall) fn new(data: SyncCompactDataStorage) -> Self {
-        Self {
-            data,
+    pub(in crate::firewall) async fn try_new(
+        _data: SyncCompactDataStorage, // NOTE data will be used to backup malware list once you use a remote list here
+    ) -> Result<Self, OpaqueError> {
+        Ok(Self {
             target_domains: ["clients2.google.com"]
                 .into_iter()
                 .map(|domain| (Domain::from_static(domain), ()))
                 .collect(),
-        }
+        })
     }
 }
 
@@ -39,11 +37,9 @@ impl fmt::Debug for BlockRuleChrome {
 
 // NOTE:
 //
-// - This list should probably come from a remote list of known malicious plugins
-// - Is this a global name or do we also need to consider package owner name?
-// - What about the version? Is that of importance?
+// Once there is a chrome malware list you'll
+// want to fetch this package info from the (remote) Malware list
 
-// https://chromewebstore.google.com/detail/zoom-for-google-chrome/lajondecmobodlejlcjllhojikagldgd
 const CHROME_BLOCKED_EXT_LIST: &[&str] = &["lajondecmobodlejlcjllhojikagldgd"];
 
 #[derive(Deserialize)]

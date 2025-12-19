@@ -2606,13 +2606,18 @@ name = "safechain-proxy"
 version = "0.1.0"
 dependencies = [
  "apple-native-keyring-store",
+ "arc-swap",
  "clap",
  "keyring-core",
  "linux-keyutils-keyring-store",
  "postcard",
+ "radix_trie",
  "rama",
+ "rand",
  "secrecy",
+ "semver",
  "serde",
+ "serde_json",
  "smol_str",
  "sudo",
  "tokio",
@@ -2678,6 +2683,10 @@ name = "semver"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d767eb0aabc880b29956c35734170f26ed551a859dbd361d140cdbeca61ab1e2"
+dependencies = [
+ "serde",
+ "serde_core",
+]
 
 [[package]]
 name = "serde"
