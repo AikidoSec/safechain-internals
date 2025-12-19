@@ -32,9 +32,9 @@ use rama::{
     utils::str::arcstr::arcstr,
 };
 
-use crate::Args;
 #[cfg(feature = "har")]
 use crate::diagnostics::har::HARExportLayer;
+use crate::{Args, firewall::Firewall};
 
 mod client;
 mod server;
@@ -48,6 +48,7 @@ pub async fn run_proxy_server(
     guard: ShutdownGuard,
     tls_acceptor: TlsAcceptorLayer,
     proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
+    firewall: Firewall,
     #[cfg(feature = "har")] har_export_layer: HARExportLayer,
 ) -> Result<(), OpaqueError> {
     let tcp_service = TcpListener::build()
@@ -60,7 +61,7 @@ pub async fn run_proxy_server(
         .local_addr()
         .context("fetch local addr of bound TCP port for proxy")?;
 
-    let https_client = self::client::new_https_client()?;
+    let https_client = self::client::new_https_client(firewall.clone())?;
 
     // TODO: Support (basic auth) username labels for
     // preferences, e.g. --proxy-user 'safechain-min_package_age-48h:'
@@ -69,6 +70,7 @@ pub async fn run_proxy_server(
         guard.clone(),
         args.mitm_all,
         tls_acceptor.clone(),
+        firewall.clone(),
         #[cfg(feature = "har")]
         har_export_layer.clone(),
     )?;
@@ -76,6 +78,7 @@ pub async fn run_proxy_server(
         guard.clone(),
         args.mitm_all,
         tls_acceptor,
+        firewall,
         #[cfg(feature = "har")]
         har_export_layer.clone(),
     )?;

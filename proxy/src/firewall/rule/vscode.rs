@@ -1,18 +1,39 @@
+use std::fmt;
+
 use rama::{
-    error::OpaqueError, http::Request, telemetry::tracing,
+    error::OpaqueError,
+    http::Request,
+    net::address::{Domain, DomainTrie},
+    telemetry::tracing,
     utils::str::starts_with_ignore_ascii_case,
 };
 
+use crate::storage::SyncCompactDataStorage;
+
 use super::BlockRule;
 
-#[derive(Debug, Clone, Default)]
-#[non_exhaustive]
-pub struct BlockRuleVSCode;
+#[expect(dead_code)]
+pub(in crate::firewall) struct BlockRuleVSCode {
+    data: SyncCompactDataStorage,
+    target_domains: DomainTrie<()>,
+}
 
 impl BlockRuleVSCode {
     #[must_use]
-    pub fn new() -> Self {
-        Self
+    pub(in crate::firewall) fn new(data: SyncCompactDataStorage) -> Self {
+        Self {
+            data,
+            target_domains: ["gallery.vsassets.io", "gallerycdn.vsassets.io"]
+                .into_iter()
+                .map(|domain| (Domain::from_static(domain), ()))
+                .collect(),
+        }
+    }
+}
+
+impl fmt::Debug for BlockRuleVSCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BlockRuleVSCode").finish()
     }
 }
 
@@ -25,7 +46,25 @@ impl BlockRuleVSCode {
 const VSCODE_BLOCKED_EXT_LIST: &[&str] = &["python"];
 
 impl BlockRule for BlockRuleVSCode {
+    #[inline(always)]
+    fn product_name(&self) -> &'static str {
+        "VSCode"
+    }
+
+    #[inline(always)]
+    fn match_domain(&self, domain: &Domain) -> bool {
+        self.target_domains.is_match_parent(domain)
+    }
+
     async fn block_request(&self, req: Request) -> Result<Option<Request>, OpaqueError> {
+        if !crate::firewall::utils::try_get_domain_for_req(&req)
+            .map(|domain| self.match_domain(&domain))
+            .unwrap_or_default()
+        {
+            tracing::trace!("VSCode rule did not match incoming request: passthrough");
+            return Ok(Some(req));
+        }
+
         let path = req.uri().path().trim_start_matches('/');
         if !starts_with_ignore_ascii_case(path, "extensions/") {
             tracing::debug!("VSCode url: path no match: {path}; passthrough");

@@ -2,10 +2,8 @@ use std::fmt::Write as _;
 
 use rama::net::address::SocketAddress;
 
-use crate::firewall::BLOCK_DOMAINS_VSCODE;
-
 pub(super) fn generate_pac_script(proxy_addr: SocketAddress) -> String {
-    let mut domains: Vec<String> = BLOCK_DOMAINS_VSCODE.iter().map(|d| d.to_string()).collect();
+    let mut domains: Vec<String> = ["TODO"].iter().map(|d| d.to_string()).collect();
     domains.sort_unstable_by_key(|b| std::cmp::Reverse(b.len()));
 
     let mut out = String::with_capacity(1024 + domains.iter().map(|d| d.len() + 6).sum::<usize>());

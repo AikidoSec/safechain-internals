@@ -14,7 +14,7 @@ use rama::{
         server::HttpServer,
     },
     layer::ConsumeErrLayer,
-    net::{address::DomainTrie, proxy::ProxyTarget},
+    net::proxy::ProxyTarget,
     rt::Executor,
     stream::Stream,
     tcp::client::service::DefaultForwarder,
@@ -31,20 +31,21 @@ use rama::{
     utils::str::arcstr::arcstr,
 };
 
-use crate::firewall::{BLOCK_DOMAINS_CHROME, BLOCK_DOMAINS_VSCODE};
+use crate::firewall::Firewall;
 
 #[derive(Debug, Clone)]
 pub(super) struct MitmServer<S> {
     inner: S,
     mitm_all: bool,
+    firewall: Firewall,
     forwarder: DefaultForwarder,
-    target_domains: DomainTrie<()>,
 }
 
 pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
     guard: ShutdownGuard,
     mitm_all: bool,
     tls_acceptor: TlsAcceptorLayer,
+    firewall: Firewall,
     #[cfg(feature = "har")] har_export_layer: HARExportLayer,
 ) -> Result<MitmServer<impl Service<S, Output = (), Error = BoxError> + Clone>, OpaqueError> {
     let https_svc = (
@@ -58,27 +59,16 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
         MapResponseBodyLayer::new(Body::new),
         CompressionLayer::new(),
     )
-        .into_layer(super::client::new_https_client()?);
+        .into_layer(super::client::new_https_client(firewall.clone())?);
 
     let inner =
         tls_acceptor.into_layer(HttpServer::auto(Executor::graceful(guard)).service(https_svc));
 
-    // TODO: this should be managed to allow updates and other
-    // dynamic featurues (in future)
-    // TODO^2: this is similar logic from client, we need to merge and centralize this logic
-    let mut target_domains = DomainTrie::new();
-    for domain in BLOCK_DOMAINS_VSCODE {
-        target_domains.insert_domain(domain, ());
-    }
-    for domain in BLOCK_DOMAINS_CHROME {
-        target_domains.insert_domain(domain, ());
-    }
-
     Ok(MitmServer {
         inner,
         mitm_all,
+        firewall,
         forwarder: DefaultForwarder::ctx(),
-        target_domains,
     })
 }
 
@@ -97,7 +87,7 @@ where
             && !maybe_proxy_target
                 .as_ref()
                 .and_then(|ProxyTarget(target)| target.host.as_domain())
-                .map(|domain| self.target_domains.is_match_parent(domain))
+                .map(|domain| self.firewall.match_domain(domain))
                 .unwrap_or_default()
         {
             tracing::debug!("transport-forward incoming stream: target = {maybe_proxy_target:?}",);

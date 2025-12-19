@@ -1,89 +1,48 @@
-use std::{pin::Pin, sync::Arc};
+use std::sync::Arc;
 
 use rama::{error::OpaqueError, http::Request, net::address::Domain};
 
-// NOTE:
-//
-// In the future we probably want these rules to be dynamic.
-//
-// - domain lists should probably be dynamic lists configured via a remote http service,
-//   or via the local (Aikido) Agent
-// - rules logic themselves should be dynamic, rama-roto could be used for that
+pub mod rule;
 
-pub mod chrome;
-pub mod vscode;
+mod utils;
 
-pub const BLOCK_DOMAINS_VSCODE: &[Domain] = &[
-    Domain::from_static("echo.ramaproxy.org"), // TODO: delete this test ramaproxy example :)
-    Domain::from_static("gallery.vsassets.io"),
-    Domain::from_static("gallerycdn.vsassets.io"),
-];
+use crate::storage::SyncCompactDataStorage;
 
-pub const BLOCK_DOMAINS_CHROME: &[Domain] = &[Domain::from_static("clients2.google.com")];
+use self::rule::BlockRule;
 
-pub trait BlockRule: Sized + Send + Sync + 'static {
-    fn block_request(
-        &self,
-        req: Request,
-    ) -> impl Future<Output = Result<Option<Request>, OpaqueError>> + Send + '_;
-
-    fn into_dyn(self) -> DynBlockRule {
-        DynBlockRule {
-            inner: Arc::new(self),
-        }
-    }
+#[derive(Debug, Clone)]
+pub struct Firewall {
+    // NOTE: if we ever want to update these rules on the fly,
+    // e.g. removing/adding them, we can ArcSwap these and have
+    // a background task update these when needed..
+    block_rules: Arc<Vec<self::rule::DynBlockRule>>,
 }
 
-/// Internal trait for dynamic dispatch of Async Traits,
-/// implemented according to the pioneers of this Design Pattern
-/// found at <https://rust-lang.github.io/async-fundamentals-initiative/evaluation/case-studies/builder-provider-api.html#dynamic-dispatch-behind-the-api>
-/// and widely published at <https://blog.rust-lang.org/inside-rust/2023/05/03/stabilizing-async-fn-in-trait.html>.
-trait DynBlockRuleInner {
-    #[allow(clippy::type_complexity)]
-    fn dyn_block_request(
-        &self,
-        req: Request,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<Request>, OpaqueError>> + Send + '_>>;
-}
-
-impl<R: BlockRule> DynBlockRuleInner for R {
-    fn dyn_block_request(
-        &self,
-        req: Request,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<Request>, OpaqueError>> + Send + '_>> {
-        Box::pin(self.block_request(req))
-    }
-}
-
-/// A dyn-patched [`BlockRule`].
-pub struct DynBlockRule {
-    inner: Arc<dyn DynBlockRuleInner + Send + Sync + 'static>,
-}
-
-impl Clone for DynBlockRule {
-    fn clone(&self) -> Self {
+impl Firewall {
+    pub fn new(data: SyncCompactDataStorage) -> Self {
         Self {
-            inner: self.inner.clone(),
+            block_rules: Arc::new(vec![
+                self::rule::vscode::BlockRuleVSCode::new(data.clone()).into_dyn(),
+                self::rule::chrome::BlockRuleChrome::new(data).into_dyn(),
+            ]),
         }
     }
-}
 
-impl std::fmt::Debug for DynBlockRule {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DynBlockRule").finish()
-    }
-}
-
-impl BlockRule for DynBlockRule {
-    fn block_request(
-        &self,
-        req: Request,
-    ) -> impl Future<Output = Result<Option<Request>, OpaqueError>> + Send + '_ {
-        self.inner.dyn_block_request(req)
+    pub fn match_domain(&self, domain: &Domain) -> bool {
+        self.block_rules
+            .iter()
+            .any(|rule| rule.match_domain(domain))
     }
 
-    #[inline]
-    fn into_dyn(self) -> Self {
-        self
+    pub async fn block_request(&self, mut req: Request) -> Result<Option<Request>, OpaqueError> {
+        for rule in self.block_rules.iter() {
+            match rule.block_request(req).await? {
+                Some(r) => req = r,
+                None => {
+                    return Ok(None);
+                }
+            }
+        }
+        Ok(Some(req))
     }
 }

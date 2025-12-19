@@ -107,6 +107,7 @@ async fn main() -> Result<(), BoxError> {
                 if let Some(err) = err {
                     tracing::error!("fatal err received: {err}; abort");
                 } else {
+                    tracing::info!("wait for default signal, no error was received");
                     signal.await;
                     tracing::debug!("default signal triggered: init graceful shutdown");
                 }
@@ -117,6 +118,8 @@ async fn main() -> Result<(), BoxError> {
     #[cfg(feature = "har")]
     let (har_client, har_export_layer) =
         { self::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
+
+    let firewall = self::firewall::Firewall::new(data_storage);
 
     // used to provide actual bind (socket) address of proxy interface
     // to the meta server for purposes such as PAC (file) generation
@@ -162,6 +165,7 @@ async fn main() -> Result<(), BoxError> {
                 guard,
                 tls_acceptor,
                 proxy_addr_tx,
+                firewall,
                 #[cfg(feature = "har")]
                 har_export_layer,
             )

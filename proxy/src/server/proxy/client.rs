@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use rama::{
     Layer as _, Service,
     error::{ErrorContext as _, OpaqueError},
@@ -16,28 +14,23 @@ use rama::{
         mime,
         service::web::response::{Headers, Html, IntoResponse as _},
     },
-    net::{
-        address::DomainTrie,
-        proxy::ProxyTarget,
-        tls::{SecureTransport, client::ClientConfig},
-    },
+    net::tls::{SecureTransport, client::ClientConfig},
     telemetry::tracing,
     tls::boring::client::TlsConnectorDataBuilder,
 };
 
-use crate::firewall::{
-    BLOCK_DOMAINS_CHROME, BLOCK_DOMAINS_VSCODE, BlockRule as _, DynBlockRule,
-    chrome::BlockRuleChrome, vscode::BlockRuleVSCode,
-};
+use crate::firewall::Firewall;
 
 #[derive(Debug, Clone)]
 pub(super) struct HttpClient<S> {
     inner: S,
-    block_rules: DomainTrie<DynBlockRule>,
+    firewall: Firewall,
 }
 
-pub(super) fn new_https_client()
--> Result<HttpClient<impl Service<Request, Output = Response, Error = OpaqueError>>, OpaqueError> {
+pub(super) fn new_https_client(
+    firewall: Firewall,
+) -> Result<HttpClient<impl Service<Request, Output = Response, Error = OpaqueError>>, OpaqueError>
+{
     let inner = (
         RemoveResponseHeaderLayer::hop_by_hop(),
         RemoveRequestHeaderLayer::hop_by_hop(),
@@ -45,6 +38,7 @@ pub(super) fn new_https_client()
         DecompressionLayer::new(),
     )
         .into_layer(
+            // TODO: mock in #[cfg(test)]
             EasyHttpWebClient::connector_builder()
                 .with_default_transport_connector()
                 .without_tls_proxy_support()
@@ -56,22 +50,7 @@ pub(super) fn new_https_client()
                 .build_client(),
         );
 
-    // TODO: this should be managed to allow updates and other
-    // dynamic featurues (in future)
-
-    let mut block_rules = DomainTrie::new();
-
-    let vscode_rule = BlockRuleVSCode::new().into_dyn();
-    for domain in BLOCK_DOMAINS_VSCODE {
-        block_rules.insert_domain(domain, vscode_rule.clone());
-    }
-
-    let chrome_rule = BlockRuleChrome::new().into_dyn();
-    for domain in BLOCK_DOMAINS_CHROME {
-        block_rules.insert_domain(domain, chrome_rule.clone());
-    }
-
-    Ok(HttpClient { inner, block_rules })
+    Ok(HttpClient { inner, firewall })
 }
 
 impl<S> Service<Request> for HttpClient<S>
@@ -85,40 +64,27 @@ where
         let uri = req.uri().clone();
         tracing::debug!(uri = %uri, "serving http(s) over proxy (egress) client");
 
-        let maybe_domain = match req.extensions().get() {
-            Some(ProxyTarget(target)) => target.host.as_domain().map(Cow::Borrowed),
-            // missing proxy target possible in case of http plain text proxy req
-            None => req
-                .uri()
-                .host()
-                .and_then(|h| h.parse().ok().map(Cow::Owned)),
-        };
-
-        if let Some(domain) = maybe_domain.as_deref()
-            && let Some(m) = self.block_rules.match_parent(domain)
-        {
-            let maybe_detected_ct = req.headers().typed_get().and_then(|Accept(qvs)| {
-                qvs.iter().find_map(|qv| {
-                    let r#type = qv.value.subtype();
-                    if r#type == mime::JSON {
-                        Some(ContentType::Json)
-                    } else if r#type == mime::HTML {
-                        Some(ContentType::Html)
-                    } else if r#type == mime::TEXT {
-                        Some(ContentType::Txt)
-                    } else if r#type == mime::XML {
-                        Some(ContentType::Xml)
-                    } else {
-                        None
-                    }
-                })
-            });
-
-            match m.value.block_request(req).await? {
-                Some(r) => req = r,
-                None => {
-                    return Ok(generate_blocked_response(maybe_detected_ct));
+        let maybe_detected_ct = req.headers().typed_get().and_then(|Accept(qvs)| {
+            qvs.iter().find_map(|qv| {
+                let r#type = qv.value.subtype();
+                if r#type == mime::JSON {
+                    Some(ContentType::Json)
+                } else if r#type == mime::HTML {
+                    Some(ContentType::Html)
+                } else if r#type == mime::TEXT {
+                    Some(ContentType::Txt)
+                } else if r#type == mime::XML {
+                    Some(ContentType::Xml)
+                } else {
+                    None
                 }
+            })
+        });
+
+        match self.firewall.block_request(req).await? {
+            Some(r) => req = r,
+            None => {
+                return Ok(generate_blocked_response(maybe_detected_ct));
             }
         }
 
