@@ -2637,7 +2637,6 @@ dependencies = [
  "secrecy",
  "semver",
  "serde",
- "serde_json",
  "smol_str",
  "sudo",
  "tikv-jemallocator",
