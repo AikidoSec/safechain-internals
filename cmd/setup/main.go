@@ -22,14 +22,14 @@ func main() {
 	defer cancel()
 
 	sigChan := make(chan os.Signal, 1)
-
-	// Subscribe to SIGINT, SIGTERM, and SIGQUIT signals
-	// These signals are received via sigChan and are used to trigger a graceful shutdown of the setup
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {
 		<-sigChan
-		fmt.Println("\nSetup interrupted.")
+		fmt.Println("\nSetup interrupted. Press Ctrl+C again to force exit.")
 		cancel()
+		<-sigChan
+		fmt.Println("\nForce exit.")
+		os.Exit(1)
 	}()
 
 	prompter := setup.NewPrompter(os.Stdin, os.Stdout)

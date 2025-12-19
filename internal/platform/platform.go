@@ -37,8 +37,7 @@ func GetConfig() *Config {
 }
 
 func GetProxyRunDir() string {
-	config := GetConfig()
-	return filepath.Join(config.RunDir, "safechain-proxy")
+	return config.RunDir
 }
 
 func GetProxySetupFinishedMarker() string {
