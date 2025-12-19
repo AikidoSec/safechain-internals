@@ -2,26 +2,17 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/AikidoSec/safechain-agent/internal/setup"
-	setsystemproxy "github.com/AikidoSec/safechain-agent/internal/setup/steps/01_set_system_proxy"
-	"github.com/AikidoSec/safechain-agent/internal/version"
+	install_proxy_ca "github.com/AikidoSec/safechain-agent/internal/setup/steps/01_install_proxy_ca"
+	set_system_proxy "github.com/AikidoSec/safechain-agent/internal/setup/steps/02_set_system_proxy"
 )
 
 func main() {
-	var showVersion = flag.Bool("version", false, "Show version information")
-	flag.Parse()
-
-	if *showVersion {
-		fmt.Print(version.Info())
-		os.Exit(0)
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -48,5 +39,6 @@ func main() {
 }
 
 func registerSteps(runner *setup.Runner) {
-	runner.AddStep(setsystemproxy.New("http://localhost:8080"))
+	runner.AddStep(install_proxy_ca.New())
+	runner.AddStep(set_system_proxy.New())
 }

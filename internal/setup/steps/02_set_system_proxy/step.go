@@ -1,17 +1,18 @@
-package setsystemproxy
+package set_system_proxy
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/AikidoSec/safechain-agent/internal/platform"
+	"github.com/AikidoSec/safechain-agent/internal/proxy"
 )
 
 type Step struct {
-	proxyURL string
 }
 
-func New(proxyURL string) *Step {
-	return &Step{proxyURL: proxyURL}
+func New() *Step {
+	return &Step{}
 }
 
 func (s *Step) Name() string {
@@ -23,5 +24,9 @@ func (s *Step) Description() string {
 }
 
 func (s *Step) Run(ctx context.Context) error {
-	return platform.SetSystemProxy(ctx, s.proxyURL)
+	err := proxy.LoadProxyConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load proxy config: %v", err)
+	}
+	return platform.SetSystemProxy(ctx, proxy.ProxyHttpUrl)
 }

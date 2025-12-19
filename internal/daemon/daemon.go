@@ -11,6 +11,7 @@ import (
 	"github.com/AikidoSec/safechain-agent/internal/platform"
 	"github.com/AikidoSec/safechain-agent/internal/proxy"
 	"github.com/AikidoSec/safechain-agent/internal/scannermanager"
+	"github.com/AikidoSec/safechain-agent/internal/setup"
 	"github.com/AikidoSec/safechain-agent/internal/version"
 )
 
@@ -138,6 +139,10 @@ func (d *Daemon) run(ctx context.Context) error {
 }
 
 func (d *Daemon) heartbeat() error {
+	if err := setup.CheckSetupFinished(); err != nil {
+		log.Println("Setup not ran yet, skipping heartbeat checks...")
+		return nil
+	}
 	if err := d.proxy.CheckProxy(); err != nil {
 		return fmt.Errorf("failed to check proxy: %v", err)
 	}

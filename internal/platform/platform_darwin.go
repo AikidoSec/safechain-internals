@@ -4,6 +4,7 @@ package platform
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -20,7 +21,7 @@ var networkServices = []string{
 
 func getConfig() *Config {
 	return &Config{
-		BinaryDir:           "/opt/homebrew/bin/",
+		BinaryDir:           "/opt/homebrew/bin",
 		RunDir:              "/opt/homebrew/var/run/",
 		LogDir:              "/opt/homebrew/var/log/",
 		SafeChainBinaryPath: filepath.Join(homeDir, ".safe-chain", "bin", "safe-chain"),
@@ -93,5 +94,43 @@ func unsetSystemProxy(ctx context.Context) error {
 		}
 	}
 
+	return nil
+}
+
+func installProxyCA(ctx context.Context, certPath string) error {
+	cmd := exec.CommandContext(ctx, "security", "add-trusted-cert",
+		"-d",
+		"-r", "trustRoot",
+		"-k", "/Library/Keychains/System.keychain",
+		certPath)
+
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to add trusted certificate: %v", err)
+	}
+	return nil
+}
+
+func checkProxyCA(ctx context.Context, certPath string) error {
+	cmd := exec.CommandContext(ctx, "security", "find-certificate",
+		"-c", "aikido.dev",
+		"/Library/Keychains/System.keychain")
+
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to check certificate installation: %v", err)
+	}
+	return nil
+}
+
+func uninstallProxyCA(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, "security", "delete-certificate",
+		"-c", "aikido.dev",
+		"/Library/Keychains/System.keychain")
+
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to delete certificate: %v", err)
+	}
 	return nil
 }

@@ -35,3 +35,7 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 func UnsetSystemProxy(ctx context.Context) error {
 	return unsetSystemProxy(ctx)
 }
+
+func InstallProxyCA(ctx context.Context, caCertPath string) error {
+	return installProxyCA(ctx, caCertPath)
+}

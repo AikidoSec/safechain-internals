@@ -48,9 +48,8 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 
 		if !confirmed {
-			r.prompter.Println("Skipping step...")
-			r.prompter.Println()
-			continue
+			r.prompter.Println("Setup cancelled by user.")
+			return fmt.Errorf("user declined to proceed with step %q", step.Name())
 		}
 
 		if err := step.Run(ctx); err != nil {
@@ -63,5 +62,9 @@ func (r *Runner) Run(ctx context.Context) error {
 
 	r.prompter.Println("================")
 	r.prompter.Println("Setup complete!")
+
+	if err := CreateSetupFinishedMarker(); err != nil {
+		return fmt.Errorf("failed to create setup finished marker: %w", err)
+	}
 	return nil
 }
