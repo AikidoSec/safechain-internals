@@ -54,7 +54,7 @@ func (p *Proxy) Start(ctx context.Context) error {
 		"--bind", ProxyBind,
 		"--meta", ProxyMeta,
 		"--data", platform.GetProxyRunDir(),
-		"--output", filepath.Join(config.LogDir, "safechain-proxy.log"),
+		// "--output", filepath.Join(config.LogDir, "safechain-proxy.log"),
 		"--secrets", platform.GetProxyRunDir(),
 	)
 
