@@ -11,8 +11,10 @@ import (
 
 func getConfig() *Config {
 	return &Config{
+		BinaryDir:           "/opt/homebrew/bin/",
+		RunDir:              "/opt/homebrew/var/run/",
+		LogDir:              "/opt/homebrew/var/log/",
 		SafeChainBinaryPath: filepath.Join(homeDir, ".safe-chain", "bin", "safe-chain"),
-		SafeChainProxyDir:   filepath.Join(homeDir, ".aikido", "safechain-proxy"),
 	}
 }
 

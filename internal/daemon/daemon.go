@@ -57,11 +57,21 @@ func (d *Daemon) Start(ctx context.Context) error {
 	}()
 
 	d.wg.Add(1)
-	go d.run(mergedCtx)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- d.run(mergedCtx)
+	}()
 
-	<-mergedCtx.Done()
+	select {
+	case <-mergedCtx.Done():
+		log.Println("Safe Chain Daemon main loop stopped")
+	case err := <-errCh:
+		if err != nil {
+			d.wg.Wait()
+			return err
+		}
+	}
 
-	log.Println("Safe Chain Daemon main loop stopped")
 	d.wg.Wait()
 	return nil
 }
@@ -98,7 +108,7 @@ func (d *Daemon) Stop(ctx context.Context) error {
 	return err
 }
 
-func (d *Daemon) run(ctx context.Context) {
+func (d *Daemon) run(ctx context.Context) error {
 	defer d.wg.Done()
 
 	ticker := time.NewTicker(constants.HeartbeatInterval)
@@ -107,28 +117,31 @@ func (d *Daemon) run(ctx context.Context) {
 	log.Println("Daemon is running...")
 
 	if err := d.proxy.Start(ctx); err != nil {
-		log.Printf("Failed to start proxy: %v", err)
-		return
+		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
 	if err := d.registry.InstallAll(ctx); err != nil {
-		log.Printf("Failed to install all scanners: %v", err)
-		return
+		return fmt.Errorf("failed to install all scanners: %v", err)
 	}
 
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("Context cancelled, stopping daemon loop")
-			return
+			return nil
 		case <-ticker.C:
-			d.heartbeat()
+			if err := d.heartbeat(); err != nil {
+				return fmt.Errorf("failed to heartbeat: %v", err)
+			}
 		}
 	}
 }
 
-func (d *Daemon) heartbeat() {
-	// To add periodic checks for the daemon and scanners
+func (d *Daemon) heartbeat() error {
+	if err := d.proxy.CheckProxy(); err != nil {
+		return fmt.Errorf("failed to check proxy: %v", err)
+	}
+	return nil
 }
 
 func (d *Daemon) initLogging() {

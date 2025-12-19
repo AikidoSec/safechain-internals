@@ -5,20 +5,18 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"path/filepath"
 	"time"
+
+	"github.com/AikidoSec/safechain-agent/internal/platform"
 )
 
 const (
-	ProxyBind    = "127.0.0.1:0"
-	ProxyMeta    = "127.0.0.1:0"
-	ProxySecrets = ".aikido/safechain-proxy"
-)
-
-var (
-	ProxyHttpUrl  string
-	ProxyHttpsUrl string
-	MetaHttpUrl   string
-	MetaHttpsUrl  string
+	ProxyBind          = "127.0.0.1:0"
+	ProxyMeta          = "127.0.0.1:0"
+	ProxySecrets       = "keyring"
+	ProxyReadyTimeout  = 10 * time.Second
+	ProxyReadyInterval = 1 * time.Second
 )
 
 type Proxy struct {
@@ -31,42 +29,55 @@ func New() *Proxy {
 	return &Proxy{}
 }
 
-func (p *Proxy) Start(ctx context.Context) error {
-	log.Println("Starting Safe Chain Proxy...")
+func (p *Proxy) WaitForProxyToBeReady() error {
+	timeout := time.After(ProxyReadyTimeout)
+	ticker := time.NewTicker(ProxyReadyInterval)
+	defer ticker.Stop()
 
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("timeout waiting for proxy to be ready after %s", ProxyReadyTimeout.String())
+		case <-ticker.C:
+			err := LoadProxyConfig()
+			if err == nil {
+				return nil
+			}
+		}
+	}
+}
+
+func (p *Proxy) Start(ctx context.Context) error {
+	config := platform.GetConfig()
 	p.ctx, p.cancel = context.WithCancel(ctx)
 	p.cmd = exec.CommandContext(p.ctx,
-		"safechain-proxy",
+		filepath.Join(config.BinaryDir, "safechain-proxy"),
 		"--bind", ProxyBind,
 		"--meta", ProxyMeta,
-		"--secrets", ProxySecrets,
+		"--data", filepath.Join(config.RunDir, "safechain-proxy"),
+		"--output", filepath.Join(config.LogDir, "safechain-proxy.log"),
+		"--secrets", filepath.Join(config.RunDir, "safechain-proxy"),
 	)
+
+	log.Println("Starting Safe Chain Proxy with command:", p.cmd.String())
 
 	if err := p.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
-	// Wait for proxy to be ready
+
 	log.Println("Waiting for proxy to be ready...")
-	time.Sleep(5 * time.Second) // temp
-
-	var err error
-	ProxyHttpUrl, ProxyHttpsUrl, err = GetProxyUrl()
-	if err != nil {
-		return fmt.Errorf("failed to get proxy url: %v", err)
-	}
-	MetaHttpUrl, MetaHttpsUrl, err = GetMetaUrl()
-	if err != nil {
-		return fmt.Errorf("failed to get meta url: %v", err)
-	}
-
-	log.Println("Proxy URL:", ProxyHttpUrl)
-	log.Println("Meta URL:", MetaHttpUrl)
-
-	if err := Check(); err != nil {
-		return fmt.Errorf("failed to check proxy: %v", err)
+	if err := p.WaitForProxyToBeReady(); err != nil {
+		return fmt.Errorf("failed to wait for proxy to be ready: %v", err)
 	}
 
 	log.Println("Safe Chain Proxy started successfully!")
+	return nil
+}
+
+func (p *Proxy) CheckProxy() error {
+	if err := CheckProxy(); err != nil {
+		return fmt.Errorf("failed to check proxy: %v", err)
+	}
 	return nil
 }
 

@@ -14,8 +14,10 @@ var logDir = filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChai
 
 func getConfig() *Config {
 	return &Config{
-		SafeChainBinaryPath: filepath.Join(homeDir, ".safe-chain", "bin", "safe-chain.exe"),
-		LogDir:              logDir,
+		LogDir:               filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent", "logs"),
+		RunDir:               filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent", "run"),
+		SafeChainBinaryPath:  filepath.Join(homeDir, ".safe-chain", "bin", "safe-chain.exe"),
+		SafeChainProxyRunDir: filepath.Join(homeDir, ".aikido", "safechain-proxy"),
 	}
 }
 

@@ -41,7 +41,7 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 
 	log.Printf("Latest safechain version: %s", version)
 
-	cfg := platform.Get()
+	cfg := platform.GetConfig()
 	binaryPath := cfg.SafeChainBinaryPath
 	installDir := filepath.Dir(binaryPath)
 
@@ -77,7 +77,7 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 }
 
 func (s *SafechainScanner) Uninstall(ctx context.Context) error {
-	cfg := platform.Get()
+	cfg := platform.GetConfig()
 	cmd := exec.CommandContext(ctx, cfg.SafeChainBinaryPath, "teardown")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -90,7 +90,7 @@ func (s *SafechainScanner) Uninstall(ctx context.Context) error {
 }
 
 func (s *SafechainScanner) IsInstalled(ctx context.Context) (bool, error) {
-	cfg := platform.Get()
+	cfg := platform.GetConfig()
 	_, err := os.Stat(cfg.SafeChainBinaryPath)
 	return err == nil, nil
 }

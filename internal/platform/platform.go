@@ -9,12 +9,14 @@ import (
 var homeDir, _ = os.UserHomeDir()
 
 type Config struct {
-	SafeChainBinaryPath string
-	SafeChainProxyDir   string
-	LogDir              string
+	LogDir               string
+	BinaryDir            string
+	RunDir               string
+	SafeChainBinaryPath  string
+	SafeChainProxyRunDir string
 }
 
-func Get() *Config {
+func GetConfig() *Config {
 	return getConfig()
 }
 
