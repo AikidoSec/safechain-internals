@@ -16,6 +16,14 @@ pub mod storage;
 pub mod tls;
 pub mod utils;
 
+#[cfg(target_family = "unix")]
+#[global_allocator]
+static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
+#[cfg(target_os = "windows")]
+#[global_allocator]
+static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 /// CLI arguments for configuring proxy behavior.
 #[derive(Debug, Clone, Parser)]
 #[command(name = "safechain-proxy")]
