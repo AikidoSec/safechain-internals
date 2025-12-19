@@ -47,7 +47,59 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: safechain-darwin-${{ matrix.arch }}
+          name: safechain-agent-darwin-${{ matrix.arch }}
           path: |
             safechain-agent-darwin-${{ matrix.arch }}
             safechain-setup-darwin-${{ matrix.arch }}
+
+  build-unix-proxy:
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            target: aarch64-apple-darwin
+            runner: macos-14
+          - arch: amd64
+            target: x86_64-apple-darwin
+            runner: macos-14
+
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          env-vars: "RUST_TOOLCHAIN=stable"
+
+      - name: cargo check
+        run: |
+          cargo check -p safechain-proxy --target ${{ matrix.target }}
+      - name: clippy
+        run: |
+          cargo clippy -p safechain-proxy --target ${{ matrix.target }}
+      - name: rustfmt
+        run: |
+          cargo fmt --check
+
+      - name: Build proxy binary for ${{ matrix.arch }}
+        run: |
+          cargo build --release -p safechain-proxy --target ${{ matrix.target }}
+
+      - name: Prepare artifacts
+        run: |
+          mv target/${{ matrix.target }}/release/safechain-proxy safechain-proxy-darwin-${{ matrix.arch }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: safechain-proxy-darwin-${{ matrix.arch }}
+          path: |
+            safechain-proxy-darwin-${{ matrix.arch }}
