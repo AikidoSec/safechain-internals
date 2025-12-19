@@ -60,7 +60,7 @@ where
     type Output = S::Output;
     type Error = S::Error;
 
-    async fn serve(&self, mut req: Request) -> Result<Self::Output, Self::Error> {
+    async fn serve(&self, req: Request) -> Result<Self::Output, Self::Error> {
         let uri = req.uri().clone();
         tracing::debug!(uri = %uri, "serving http(s) over proxy (egress) client");
 
@@ -81,14 +81,16 @@ where
             })
         });
 
-        match self.firewall.block_request(req).await? {
-            Some(r) => req = r,
+        let mut mod_req = req;
+
+        match self.firewall.block_request(mod_req).await? {
+            Some(r) => mod_req = r,
             None => {
                 return Ok(generate_blocked_response(maybe_detected_ct));
             }
         }
 
-        if let Some(ch) = req
+        if let Some(ch) = mod_req
             .extensions()
             .get::<SecureTransport>()
             .and_then(|st| st.client_hello())
@@ -99,7 +101,7 @@ where
                     tracing::trace!(
                         "inject TLS Connector data builder based on input TLS ClientHello"
                     );
-                    req.extensions_mut().insert(mirror_tls_cfg);
+                    mod_req.extensions_mut().insert(mirror_tls_cfg);
                 }
                 Err(err) => {
                     tracing::debug!(
@@ -109,7 +111,7 @@ where
             }
         }
 
-        match self.inner.serve(req).await {
+        match self.inner.serve(mod_req).await {
             Ok(resp) => Ok(resp),
             Err(err) => {
                 tracing::error!(uri = %uri, "error forwarding request: {err:?}");

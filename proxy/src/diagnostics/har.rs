@@ -17,8 +17,8 @@ pub struct HarClient {
 }
 
 impl HarClient {
-    /// Returns previous state
-    pub async fn switch(&self) -> Result<bool, OpaqueError> {
+    /// Toggles the har recording status and returns previous state of toggle.
+    pub async fn toggle(&self) -> Result<bool, OpaqueError> {
         let previous = self.toggle_state.load(std::sync::atomic::Ordering::Relaxed);
         self.toggle_tx
             .send(())

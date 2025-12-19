@@ -95,16 +95,19 @@ impl Firewall {
             .any(|rule| rule.match_domain(domain))
     }
 
-    pub async fn block_request(&self, mut req: Request) -> Result<Option<Request>, OpaqueError> {
+    pub async fn block_request(&self, req: Request) -> Result<Option<Request>, OpaqueError> {
+        let mut mod_req = req;
+
         for rule in self.block_rules.iter() {
-            match rule.block_request(req).await? {
-                Some(r) => req = r,
+            match rule.block_request(mod_req).await? {
+                Some(r) => mod_req = r,
                 None => {
                     return Ok(None);
                 }
             }
         }
-        Ok(Some(req))
+
+        Ok(Some(mod_req))
     }
 
     pub fn generate_pac_script_response(
