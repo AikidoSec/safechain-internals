@@ -31,7 +31,7 @@ use rama::{
     utils::str::arcstr::arcstr,
 };
 
-use crate::firewall::BLOCK_DOMAINS_VSCODE;
+use crate::firewall::{BLOCK_DOMAINS_CHROME, BLOCK_DOMAINS_VSCODE};
 
 #[derive(Debug, Clone)]
 pub(super) struct MitmServer<S> {
@@ -52,7 +52,7 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
         ConsumeErrLayer::trace(Level::DEBUG),
         #[cfg(feature = "har")]
         (
-            AddInputExtensionLayer::new(RequestComment(arcstr!("http(s) proxy connect"))),
+            AddInputExtensionLayer::new(RequestComment(arcstr!("http(s) MITM server"))),
             har_export_layer,
         ),
         MapResponseBodyLayer::new(Body::new),
@@ -68,6 +68,9 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
     // TODO^2: this is similar logic from client, we need to merge and centralize this logic
     let mut target_domains = DomainTrie::new();
     for domain in BLOCK_DOMAINS_VSCODE {
+        target_domains.insert_domain(domain, ());
+    }
+    for domain in BLOCK_DOMAINS_CHROME {
         target_domains.insert_domain(domain, ());
     }
 

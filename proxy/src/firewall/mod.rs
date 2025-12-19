@@ -10,6 +10,7 @@ use rama::{error::OpaqueError, http::Request, net::address::Domain};
 //   or via the local (Aikido) Agent
 // - rules logic themselves should be dynamic, rama-roto could be used for that
 
+pub mod chrome;
 pub mod vscode;
 
 pub const BLOCK_DOMAINS_VSCODE: &[Domain] = &[
@@ -17,6 +18,8 @@ pub const BLOCK_DOMAINS_VSCODE: &[Domain] = &[
     Domain::from_static("gallery.vsassets.io"),
     Domain::from_static("gallerycdn.vsassets.io"),
 ];
+
+pub const BLOCK_DOMAINS_CHROME: &[Domain] = &[Domain::from_static("clients2.google.com")];
 
 pub trait BlockRule: Sized + Send + Sync + 'static {
     fn block_request(

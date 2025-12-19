@@ -13,7 +13,7 @@ built with <https://ramaproxy.org/>.
 Run the executable:
 
 ```bash
-# macOS/Linux
+# Unix
 ./safechain-proxy
 
 # Windows
@@ -195,6 +195,42 @@ with a timestamp + seq id in the name.
 Using your browser dev tools or a site like <https://toolbox.googleapps.com/apps/har_analyzer/>
 you can inspect the desired target in peace and figure out how to get the info
 from the desired requests and know when to block and when not.
+
+#### Har as Developer aid
+
+The beauty of Har is that they are not only good for diagnostics,
+but can also aid the developer in finding relevant requests,
+and adding them to their own test suite of requests to replay
+with attached expected behaviour (e.g. whether to block or not).
+
+Example request of chrome store which requests the download link for an extension:
+
+```json
+{
+    "method": "GET",
+    "url": "https://clients2.google.com/service/update2/crx?response=redirect&os=mac&arch=arm64&os_arch=arm64&prod=chromecrx&prodchannel=&prodversion=143.0.7499.111&lang=en-US&acceptformat=crx3,puff&x=id%3Dlajondecmobodlejlcjllhojikagldgd%26installsource%3Dondemand%26uc&authuser=0",
+    "httpVersion": "2",
+    "cookies": [ "..." ],
+    "headers": [ "..." ],
+    "queryString": [],
+    "postData": null,
+    "headersSize": 4075,
+    "bodySize": 0,
+    "comment": "http(s) MITM egress client"
+}
+```
+
+> The cookies and headers are left out of this snippet for the purpose brevity.
+
+Using <https://ramaproxy.org/docs/rama/http/layer/har/spec/struct.Request.html#impl-TryFrom%3CRequest%3E-for-Request> you can easily
+turn this request (deserialized from the json format) into a regular rama http request,
+that you can replay through your service and test if indeed your
+request is correct blocked or not.
+
+This makes it trivial to:
+
+- initially develop a new firewall rule;
+- ensure that rules keep working despite updates in this codebase or the service API.
 
 ## Troubleshooting
 

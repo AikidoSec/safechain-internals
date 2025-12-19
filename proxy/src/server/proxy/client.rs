@@ -26,7 +26,8 @@ use rama::{
 };
 
 use crate::firewall::{
-    BLOCK_DOMAINS_VSCODE, BlockRule as _, DynBlockRule, vscode::BlockRuleVSCode,
+    BLOCK_DOMAINS_CHROME, BLOCK_DOMAINS_VSCODE, BlockRule as _, DynBlockRule,
+    chrome::BlockRuleChrome, vscode::BlockRuleVSCode,
 };
 
 #[derive(Debug, Clone)]
@@ -57,10 +58,17 @@ pub(super) fn new_https_client()
 
     // TODO: this should be managed to allow updates and other
     // dynamic featurues (in future)
+
     let mut block_rules = DomainTrie::new();
+
     let vscode_rule = BlockRuleVSCode::new().into_dyn();
     for domain in BLOCK_DOMAINS_VSCODE {
         block_rules.insert_domain(domain, vscode_rule.clone());
+    }
+
+    let chrome_rule = BlockRuleChrome::new().into_dyn();
+    for domain in BLOCK_DOMAINS_CHROME {
+        block_rules.insert_domain(domain, chrome_rule.clone());
     }
 
     Ok(HttpClient { inner, block_rules })
