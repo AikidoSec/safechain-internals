@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -45,7 +46,7 @@ func setSystemProxy(ctx context.Context, proxyURL string) error {
 	host := parsed.Hostname()
 	port := parsed.Port()
 	if port == "" {
-		port = "8080"
+		return fmt.Errorf("port is required")
 	}
 
 	output, err := exec.CommandContext(ctx, "networksetup", "-listallnetworkservices").Output()
@@ -59,6 +60,8 @@ func setSystemProxy(ctx context.Context, proxyURL string) error {
 		if !strings.Contains(availableServices, service) {
 			continue
 		}
+
+		log.Printf("Setting system proxy for service: %q to %q\n", service, proxyURL)
 
 		if err := exec.CommandContext(ctx, "networksetup", "-setwebproxy", service, host, port).Run(); err != nil {
 			return err
@@ -84,6 +87,8 @@ func unsetSystemProxy(ctx context.Context) error {
 		if !strings.Contains(availableServices, service) {
 			continue
 		}
+
+		log.Println("Unsetting system proxy for service:", service)
 
 		if err := exec.CommandContext(ctx, "sudo", "networksetup", "-setwebproxystate", service, "off").Run(); err != nil {
 			return err

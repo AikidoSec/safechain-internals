@@ -20,6 +20,15 @@ func CreateSetupFinishedMarker() error {
 	return nil
 }
 
+func RemoveSetupFinishedMarker() error {
+	runDir := platform.GetConfig().RunDir
+	setupFinishedPath := filepath.Join(runDir, ".setup_finished")
+	if err := os.Remove(setupFinishedPath); err != nil {
+		return fmt.Errorf("failed to remove setup finished marker: %w", err)
+	}
+	return nil
+}
+
 func CheckSetupFinished() error {
 	runDir := platform.GetConfig().RunDir
 	setupFinishedPath := filepath.Join(runDir, ".setup_finished")

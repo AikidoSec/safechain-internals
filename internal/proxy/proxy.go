@@ -12,9 +12,8 @@ import (
 )
 
 const (
-	ProxyBind          = "127.0.0.1:0"
-	ProxyMeta          = "127.0.0.1:0"
-	ProxySecrets       = "keyring"
+	ProxyBind          = "127.0.0.1:7654"
+	ProxyMeta          = "127.0.0.1:7655"
 	ProxyReadyTimeout  = 10 * time.Second
 	ProxyReadyInterval = 1 * time.Second
 )

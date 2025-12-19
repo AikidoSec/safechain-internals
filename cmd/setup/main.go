@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -13,6 +14,10 @@ import (
 )
 
 func main() {
+	uninstallFlag := flag.Bool("uninstall", false, "Run in uninstall mode")
+	flag.Parse()
+	uninstall := *uninstallFlag
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -28,7 +33,7 @@ func main() {
 	}()
 
 	prompter := setup.NewPrompter(os.Stdin, os.Stdout)
-	runner := setup.NewRunner(prompter)
+	runner := setup.NewRunner(prompter, uninstall)
 
 	registerSteps(runner)
 
@@ -39,6 +44,6 @@ func main() {
 }
 
 func registerSteps(runner *setup.Runner) {
-	runner.AddStep(install_proxy_ca.New())
-	runner.AddStep(set_system_proxy.New())
+	runner.AddStep(install_proxy_ca.New(runner.Uninstall))
+	runner.AddStep(set_system_proxy.New(runner.Uninstall))
 }

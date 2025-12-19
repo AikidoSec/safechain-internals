@@ -3,17 +3,20 @@ package setup
 import (
 	"context"
 	"fmt"
+	"slices"
 )
 
 type Runner struct {
-	steps    []Step
-	prompter *Prompter
+	steps     []Step
+	Uninstall bool
+	prompter  *Prompter
 }
 
-func NewRunner(prompter *Prompter) *Runner {
+func NewRunner(prompter *Prompter, uninstall bool) *Runner {
 	return &Runner{
-		steps:    make([]Step, 0),
-		prompter: prompter,
+		steps:     make([]Step, 0),
+		prompter:  prompter,
+		Uninstall: uninstall,
 	}
 }
 
@@ -31,6 +34,10 @@ func (r *Runner) Run(ctx context.Context) error {
 	r.prompter.Println("SafeChain Setup")
 	r.prompter.Println("================")
 	r.prompter.Print("This setup will run %d step(s).\n\n", total)
+
+	if r.Uninstall {
+		slices.Reverse(r.steps)
+	}
 
 	for i, step := range r.steps {
 		select {
@@ -53,7 +60,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 
 		if err := step.Run(ctx); err != nil {
-			return fmt.Errorf("step %q failed: %w", step.Name(), err)
+			return fmt.Errorf("%q failed: %w", step.Name(), err)
 		}
 
 		r.prompter.Println("✓ Step completed successfully")
@@ -63,8 +70,12 @@ func (r *Runner) Run(ctx context.Context) error {
 	r.prompter.Println("================")
 	r.prompter.Println("Setup complete!")
 
-	if err := CreateSetupFinishedMarker(); err != nil {
-		return fmt.Errorf("failed to create setup finished marker: %w", err)
+	if r.Uninstall {
+		RemoveSetupFinishedMarker()
+	} else {
+		if err := CreateSetupFinishedMarker(); err != nil {
+			return fmt.Errorf("failed to create setup finished marker: %w", err)
+		}
 	}
 	return nil
 }
