@@ -11,14 +11,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
-var networkServices = []string{
-	"Wi-Fi",
-	"USB 10/100/1000 LAN",
-	"Ethernet",
-}
+var serviceRegex = regexp.MustCompile(`^\((\d+)\)\s+(.+)$`)
+var deviceRegex = regexp.MustCompile(`Device:\s*(en\d+)`)
 
 func getConfig() *Config {
 	return &Config{
@@ -37,6 +35,33 @@ func setupLogging() (io.Writer, error) {
 	return os.Stdout, nil
 }
 
+func getNetworkServices(ctx context.Context) ([]string, error) {
+	output, err := exec.CommandContext(ctx, "networksetup", "-listnetworkserviceorder").Output()
+	if err != nil {
+		return nil, err
+	}
+
+	lines := strings.Split(string(output), "\n")
+	var services []string
+	var currentService string
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "*") {
+			continue
+		}
+		if match := serviceRegex.FindStringSubmatch(line); match != nil {
+			currentService = match[2]
+			continue
+		}
+		if currentService != "" && deviceRegex.MatchString(line) {
+			services = append(services, currentService)
+			currentService = ""
+		}
+	}
+	return services, nil
+}
+
 func setSystemProxy(ctx context.Context, proxyURL string) error {
 	parsed, err := url.Parse(proxyURL)
 	if err != nil {
@@ -49,18 +74,12 @@ func setSystemProxy(ctx context.Context, proxyURL string) error {
 		return fmt.Errorf("port is required")
 	}
 
-	output, err := exec.CommandContext(ctx, "networksetup", "-listallnetworkservices").Output()
+	services, err := getNetworkServices(ctx)
 	if err != nil {
 		return err
 	}
 
-	availableServices := string(output)
-
-	for _, service := range networkServices {
-		if !strings.Contains(availableServices, service) {
-			continue
-		}
-
+	for _, service := range services {
 		log.Printf("Setting system proxy for service: %q to %q\n", service, proxyURL)
 
 		if err := exec.CommandContext(ctx, "networksetup", "-setwebproxy", service, host, port).Run(); err != nil {
@@ -76,18 +95,11 @@ func setSystemProxy(ctx context.Context, proxyURL string) error {
 }
 
 func unsetSystemProxy(ctx context.Context) error {
-	output, err := exec.CommandContext(ctx, "networksetup", "-listallnetworkservices").Output()
+	services, err := getNetworkServices(ctx)
 	if err != nil {
 		return err
 	}
-
-	availableServices := string(output)
-
-	for _, service := range networkServices {
-		if !strings.Contains(availableServices, service) {
-			continue
-		}
-
+	for _, service := range services {
 		log.Println("Unsetting system proxy for service:", service)
 
 		if err := exec.CommandContext(ctx, "sudo", "networksetup", "-setwebproxystate", service, "off").Run(); err != nil {

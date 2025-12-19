@@ -69,6 +69,8 @@ func (p *Proxy) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to wait for proxy to be ready: %v", err)
 	}
 
+	log.Println("Proxy URL:", ProxyHttpUrl)
+	log.Println("Meta URL:", MetaHttpUrl)
 	log.Println("Safe Chain Proxy started successfully!")
 	return nil
 }

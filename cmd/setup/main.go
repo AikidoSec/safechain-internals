@@ -44,6 +44,6 @@ func main() {
 }
 
 func registerSteps(runner *setup.Runner) {
-	runner.AddStep(install_proxy_ca.New(runner.Uninstall))
-	runner.AddStep(set_system_proxy.New(runner.Uninstall))
+	runner.AddStep(install_proxy_ca.New())
+	runner.AddStep(set_system_proxy.New())
 }

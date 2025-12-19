@@ -46,8 +46,15 @@ func (r *Runner) Run(ctx context.Context) error {
 		default:
 		}
 
-		r.prompter.Print("[%d/%d] %s\n", i+1, total, step.Name())
-		r.prompter.Print("      %s\n\n", step.Description())
+		name := step.InstallName()
+		description := step.InstallDescription()
+		if r.Uninstall {
+			name = step.UninstallName()
+			description = step.UninstallDescription()
+		}
+
+		r.prompter.Print("[%d/%d] %s\n", i+1, total, name)
+		r.prompter.Print("      %s\n\n", description)
 
 		confirmed, err := r.prompter.Confirm("Proceed with this step?")
 		if err != nil {
@@ -56,19 +63,21 @@ func (r *Runner) Run(ctx context.Context) error {
 
 		if !confirmed {
 			r.prompter.Println("Setup cancelled by user.")
-			return fmt.Errorf("user declined to proceed with step %q", step.Name())
+			return fmt.Errorf("user declined to proceed with step %q", name)
 		}
 
-		if err := step.Run(ctx); err != nil {
-			return fmt.Errorf("%q failed: %w", step.Name(), err)
+		functionToRun := step.Install
+		if r.Uninstall {
+			functionToRun = step.Uninstall
+		}
+
+		if err := functionToRun(ctx); err != nil {
+			return fmt.Errorf("%q failed: %w", name, err)
 		}
 
 		r.prompter.Println("✓ Step completed successfully")
 		r.prompter.Println()
 	}
-
-	r.prompter.Println("================")
-	r.prompter.Println("Setup complete!")
 
 	if r.Uninstall {
 		RemoveSetupFinishedMarker()
@@ -77,5 +86,9 @@ func (r *Runner) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to create setup finished marker: %w", err)
 		}
 	}
+
+	r.prompter.Println("================")
+	r.prompter.Println("Setup complete!")
+
 	return nil
 }

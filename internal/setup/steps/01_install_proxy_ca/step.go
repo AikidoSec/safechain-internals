@@ -12,21 +12,26 @@ import (
 )
 
 type Step struct {
-	uninstall bool
 }
 
-func New(uninstall bool) *Step {
-	return &Step{
-		uninstall: uninstall,
-	}
+func New() *Step {
+	return &Step{}
 }
 
-func (s *Step) Name() string {
+func (s *Step) InstallName() string {
 	return "Install Proxy CA"
 }
 
-func (s *Step) Description() string {
-	return "Installs the SafeChain Proxy certificate authority to the system"
+func (s *Step) InstallDescription() string {
+	return "Installs the Safe Chain Proxy certificate authority"
+}
+
+func (s *Step) UninstallName() string {
+	return "Uninstall Proxy CA"
+}
+
+func (s *Step) UninstallDescription() string {
+	return "Uninstalls the SafeChain Proxy certificate authority"
 }
 
 func (s *Step) DownloadCACertFromProxy() error {
@@ -70,11 +75,4 @@ func (s *Step) Uninstall(ctx context.Context) error {
 	}
 	log.Println("Uninstalled CA cert successfully")
 	return nil
-}
-
-func (s *Step) Run(ctx context.Context) error {
-	if s.uninstall {
-		return s.Uninstall(ctx)
-	}
-	return s.Install(ctx)
 }

@@ -143,7 +143,11 @@ func (d *Daemon) heartbeat() error {
 		log.Println("Setup not ran yet, skipping heartbeat checks...")
 		return nil
 	}
-	_ = d.proxy.CheckProxy()
+	if err := d.proxy.CheckProxy(); err != nil {
+		log.Printf("Failed to check proxy: %v", err)
+	} else {
+		log.Println("Proxy is running")
+	}
 	return nil
 }
 

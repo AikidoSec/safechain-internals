@@ -3,7 +3,6 @@ package proxy
 import (
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -44,7 +43,7 @@ func GetMetaUrl() (string, string, error) {
 }
 
 func Ping(url string) error {
-	resp, err := http.Get(url)
+	resp, err := http.Get(url + "/ping")
 	if err != nil {
 		return fmt.Errorf("failed to ping %s: %v", url, err)
 	}
@@ -85,7 +84,5 @@ func LoadProxyConfig() error {
 		return fmt.Errorf("failed to get meta url: %v", err)
 	}
 
-	log.Println("Proxy URL:", ProxyHttpUrl)
-	log.Println("Meta URL:", MetaHttpUrl)
 	return nil
 }

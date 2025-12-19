@@ -3,40 +3,33 @@ package set_system_proxy
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/AikidoSec/safechain-agent/internal/platform"
 	"github.com/AikidoSec/safechain-agent/internal/proxy"
 )
 
 type Step struct {
-	uninstall bool
 }
 
-func New(uninstall bool) *Step {
-	return &Step{
-		uninstall: uninstall,
-	}
+func New() *Step {
+	return &Step{}
 }
 
-func (s *Step) Name() string {
-	if s.uninstall {
-		return "Remove System Proxy"
-	}
+func (s *Step) InstallName() string {
 	return "Set System Proxy"
 }
 
-func (s *Step) Description() string {
-	if s.uninstall {
-		return "Removes the system-level proxy configuration"
-	}
-	return "Configures the system-level proxy to route traffic through Safe Chain Agent"
+func (s *Step) InstallDescription() string {
+	return "Configures the system-level proxy to route traffic through Safe Chain Proxy"
 }
 
-func (s *Step) Run(ctx context.Context) error {
-	if s.uninstall {
-		return s.Uninstall(ctx)
-	}
-	return s.Install(ctx)
+func (s *Step) UninstallName() string {
+	return "Remove System Proxy"
+}
+
+func (s *Step) UninstallDescription() string {
+	return "Removes the system-level proxy configuration"
 }
 
 func (s *Step) Uninstall(ctx context.Context) error {
@@ -48,5 +41,7 @@ func (s *Step) Install(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to load proxy config: %v", err)
 	}
+	log.Println("Proxy URL:", proxy.ProxyHttpUrl)
+	log.Println("Meta URL:", proxy.MetaHttpUrl)
 	return platform.SetSystemProxy(ctx, proxy.ProxyHttpUrl)
 }
