@@ -8,7 +8,7 @@ use rama::{
 };
 use serde::Deserialize;
 
-use crate::storage::SyncCompactDataStorage;
+use crate::{firewall::pac::PacScriptGenerator, storage::SyncCompactDataStorage};
 
 use super::BlockRule;
 
@@ -60,6 +60,13 @@ impl BlockRule for BlockRuleChrome {
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match_parent(domain)
+    }
+
+    #[inline(always)]
+    fn collect_pac_domains(&self, generator: &mut PacScriptGenerator) {
+        for (domain, _) in self.target_domains.iter() {
+            generator.write_domain(&domain);
+        }
     }
 
     async fn block_request(&self, req: Request) -> Result<Option<Request>, OpaqueError> {

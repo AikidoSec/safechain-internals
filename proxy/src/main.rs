@@ -36,7 +36,7 @@ pub struct Args {
     pub meta_bind: Interface,
 
     /// secrets storage to use (e.g. for root CA)
-    #[arg(long, value_name = "keyring | data | <dir>", default_value = "keyring")]
+    #[arg(long, value_name = "keyring | <dir>", default_value = "keyring")]
     pub secrets: self::storage::SyncSecrets,
 
     /// debug logging as default instead of Info; use RUST_LOG env for more options
@@ -132,6 +132,8 @@ async fn main() -> Result<(), BoxError> {
         let tls_acceptor = tls_acceptor.clone();
         let root_ca = root_ca.clone();
 
+        let firewall = firewall.clone();
+
         async move |guard| {
             tracing::info!("spawning meta http(s) server...");
             if let Err(err) = self::server::meta::run_meta_https_server(
@@ -140,6 +142,7 @@ async fn main() -> Result<(), BoxError> {
                 tls_acceptor,
                 root_ca,
                 proxy_addr_rx,
+                firewall,
                 #[cfg(feature = "har")]
                 har_client,
             )

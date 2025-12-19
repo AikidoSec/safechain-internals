@@ -1,9 +1,17 @@
 use std::sync::Arc;
 
-use rama::{error::OpaqueError, http::Request, net::address::Domain};
+use rama::{
+    error::OpaqueError,
+    http::{
+        HeaderValue, Request, Response, header::CONTENT_TYPE,
+        service::web::response::IntoResponse as _,
+    },
+    net::address::{Domain, SocketAddress},
+};
 
 pub mod rule;
 
+mod pac;
 mod utils;
 
 use crate::storage::SyncCompactDataStorage;
@@ -44,5 +52,30 @@ impl Firewall {
             }
         }
         Ok(Some(req))
+    }
+
+    pub fn generate_pac_script_response(
+        &self,
+        proxy_address: SocketAddress,
+        _req: Request,
+    ) -> Response {
+        // NOTE: in case you ever need to define custom PAC script variants
+        // depending on req properties such as the User-Agent,
+        // here is where you would differentate on such matters...
+
+        let mut script_generator = self::pac::PacScriptGenerator::new(proxy_address);
+        for rule in self.block_rules.iter() {
+            rule.collect_pac_domains(&mut script_generator);
+        }
+        let script_payload = script_generator.into_script();
+
+        (
+            [(
+                CONTENT_TYPE,
+                HeaderValue::from_static("application/x-ns-proxy-autoconfig"),
+            )],
+            script_payload,
+        )
+            .into_response()
     }
 }
