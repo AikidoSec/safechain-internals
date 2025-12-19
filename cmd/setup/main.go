@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/AikidoSec/safechain-agent/internal/setup"
+	setsystemproxy "github.com/AikidoSec/safechain-agent/internal/setup/steps/01_set_system_proxy"
 	"github.com/AikidoSec/safechain-agent/internal/version"
 )
 
@@ -47,5 +48,5 @@ func main() {
 }
 
 func registerSteps(runner *setup.Runner) {
-	// to be implemented
+	runner.AddStep(setsystemproxy.New("http://localhost:8080"))
 }

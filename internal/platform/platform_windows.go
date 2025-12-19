@@ -45,3 +45,11 @@ func setupLogging() (io.Writer, error) {
 
 	return io.MultiWriter(os.Stdout, f), nil
 }
+
+func setSystemProxy(ctx context.Context, proxyURL string) error {
+	return nil
+}
+
+func unsetSystemProxy(ctx context.Context) error {
+	return nil
+}
