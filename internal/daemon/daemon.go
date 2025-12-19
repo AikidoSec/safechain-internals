@@ -117,6 +117,10 @@ func (d *Daemon) run(ctx context.Context) error {
 
 	log.Println("Daemon is running...")
 
+	if err := platform.Init(""); err != nil {
+		return fmt.Errorf("failed to initialize platform: %v", err)
+	}
+
 	if err := d.proxy.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}

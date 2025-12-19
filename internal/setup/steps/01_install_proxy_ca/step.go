@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 
 	"github.com/AikidoSec/safechain-agent/internal/platform"
@@ -40,8 +41,7 @@ func (s *Step) DownloadCACertFromProxy() error {
 		return fmt.Errorf("failed to get meta url: %v", err)
 	}
 
-	config := platform.GetConfig()
-	caCertPath := filepath.Join(config.RunDir, "safechain-proxy", "safechain-proxy-ca-crt.pem")
+	caCertPath := filepath.Join(platform.GetProxyRunDir(), "safechain-proxy-ca-crt.pem")
 	if err := utils.DownloadBinary(context.Background(), metaUrl+"/ca", caCertPath); err != nil {
 		return fmt.Errorf("failed to download ca cert: %v", err)
 	}
@@ -51,8 +51,7 @@ func (s *Step) DownloadCACertFromProxy() error {
 }
 
 func (s *Step) GetCaCertPath() string {
-	config := platform.GetConfig()
-	return filepath.Join(config.RunDir, "safechain-proxy", "safechain-proxy-ca-crt.pem")
+	return filepath.Join(platform.GetProxyRunDir(), "safechain-proxy-ca-crt.pem")
 }
 
 func (s *Step) Install(ctx context.Context) error {
@@ -62,7 +61,7 @@ func (s *Step) Install(ctx context.Context) error {
 	if err := platform.InstallProxyCA(ctx, s.GetCaCertPath()); err != nil {
 		return fmt.Errorf("failed to install ca cert: %v", err)
 	}
-	if err := platform.CheckProxyCA(ctx, s.GetCaCertPath()); err != nil {
+	if err := platform.CheckProxyCA(ctx); err != nil {
 		return fmt.Errorf("failed to check ca cert: %v", err)
 	}
 	log.Println("Installed CA cert successfully")
@@ -72,6 +71,9 @@ func (s *Step) Install(ctx context.Context) error {
 func (s *Step) Uninstall(ctx context.Context) error {
 	if err := platform.UninstallProxyCA(ctx); err != nil {
 		return fmt.Errorf("failed to uninstall ca cert: %v", err)
+	}
+	if err := os.Remove(s.GetCaCertPath()); err != nil {
+		log.Println("failed to remove ca cert: %v", err)
 	}
 	log.Println("Uninstalled CA cert successfully")
 	return nil

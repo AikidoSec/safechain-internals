@@ -3,7 +3,10 @@ package setup
 import (
 	"context"
 	"fmt"
+	"os"
 	"slices"
+
+	"github.com/AikidoSec/safechain-agent/internal/platform"
 )
 
 type Runner struct {
@@ -24,11 +27,25 @@ func (r *Runner) AddStep(step Step) {
 	r.steps = append(r.steps, step)
 }
 
+func (r *Runner) OriginalUser() string {
+	if u := os.Getenv("SUDO_USER"); u != "" {
+		return u
+	}
+	if u := os.Getenv("USER"); u != "" {
+		return u
+	}
+	return "root"
+}
+
 func (r *Runner) Run(ctx context.Context) error {
 	total := len(r.steps)
 	if total == 0 {
 		r.prompter.Println("No setup steps to run.")
 		return nil
+	}
+
+	if err := platform.Init(r.OriginalUser()); err != nil {
+		return fmt.Errorf("failed to initialize platform: %v", err)
 	}
 
 	r.prompter.Println("SafeChain Setup")

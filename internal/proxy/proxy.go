@@ -53,9 +53,9 @@ func (p *Proxy) Start(ctx context.Context) error {
 		filepath.Join(config.BinaryDir, "safechain-proxy"),
 		"--bind", ProxyBind,
 		"--meta", ProxyMeta,
-		"--data", filepath.Join(config.RunDir, "safechain-proxy"),
+		"--data", platform.GetProxyRunDir(),
 		"--output", filepath.Join(config.LogDir, "safechain-proxy.log"),
-		"--secrets", filepath.Join(config.RunDir, "safechain-proxy"),
+		"--secrets", platform.GetProxyRunDir(),
 	)
 
 	log.Println("Starting Safe Chain Proxy with command:", p.cmd.String())

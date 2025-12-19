@@ -2,22 +2,47 @@ package platform
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
-var homeDir, _ = os.UserHomeDir()
-
 type Config struct {
-	LogDir               string
 	BinaryDir            string
 	RunDir               string
+	LogDir               string
 	SafeChainBinaryPath  string
 	SafeChainProxyRunDir string
 }
 
+var config Config
+
+func Init(originalUser string) error {
+	if err := initConfig(originalUser); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(config.RunDir, 0755); err != nil {
+		return fmt.Errorf("failed to create run directory: %v", err)
+	}
+	if err := os.MkdirAll(config.LogDir, 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %v", err)
+	}
+	return nil
+}
+
 func GetConfig() *Config {
-	return getConfig()
+	return &config
+}
+
+func GetProxyRunDir() string {
+	config := GetConfig()
+	return filepath.Join(config.RunDir, "safechain-proxy")
+}
+
+func GetProxySetupFinishedMarker() string {
+	return filepath.Join(GetProxyRunDir(), ".setup_finished")
 }
 
 func PrepareShellEnvironment(ctx context.Context) error {
@@ -40,8 +65,8 @@ func InstallProxyCA(ctx context.Context, caCertPath string) error {
 	return installProxyCA(ctx, caCertPath)
 }
 
-func CheckProxyCA(ctx context.Context, caCertPath string) error {
-	return checkProxyCA(ctx, caCertPath)
+func CheckProxyCA(ctx context.Context) error {
+	return checkProxyCA(ctx)
 }
 
 func UninstallProxyCA(ctx context.Context) error {

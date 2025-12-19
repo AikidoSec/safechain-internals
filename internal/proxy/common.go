@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,7 +28,7 @@ func readProxyConfig(filePath string) (string, error) {
 }
 
 func GetProxyUrl() (string, string, error) {
-	proxyIpPort, err := readProxyConfig(filepath.Join(platform.GetConfig().RunDir, "safechain-proxy", "proxy.addr.txt"))
+	proxyIpPort, err := readProxyConfig(filepath.Join(platform.GetProxyRunDir(), "proxy.addr.txt"))
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read proxy config: %v", err)
 	}
@@ -35,7 +36,7 @@ func GetProxyUrl() (string, string, error) {
 }
 
 func GetMetaUrl() (string, string, error) {
-	metaIpPort, err := readProxyConfig(filepath.Join(platform.GetConfig().RunDir, "safechain-proxy", "meta.addr.txt"))
+	metaIpPort, err := readProxyConfig(filepath.Join(platform.GetProxyRunDir(), "meta.addr.txt"))
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read meta config: %v", err)
 	}
@@ -43,7 +44,12 @@ func GetMetaUrl() (string, string, error) {
 }
 
 func Ping(url string) error {
-	resp, err := http.Get(url + "/ping")
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	resp, err := client.Get(url + "/ping")
 	if err != nil {
 		return fmt.Errorf("failed to ping %s: %v", url, err)
 	}
@@ -64,7 +70,7 @@ func Ping(url string) error {
 }
 
 func CheckProxy() error {
-	metaUrls := []string{MetaHttpUrl} //MetaHttpsUrl
+	metaUrls := []string{MetaHttpUrl, MetaHttpsUrl}
 	for _, url := range metaUrls {
 		if err := Ping(url); err != nil {
 			return fmt.Errorf("failed to ping proxy meta: %v", err)

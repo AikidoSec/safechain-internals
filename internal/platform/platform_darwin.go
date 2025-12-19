@@ -18,13 +18,24 @@ import (
 var serviceRegex = regexp.MustCompile(`^\((\d+)\)\s+(.+)$`)
 var deviceRegex = regexp.MustCompile(`Device:\s*(en\d+)`)
 
-func getConfig() *Config {
-	return &Config{
-		BinaryDir:           "/opt/homebrew/bin",
-		RunDir:              "/opt/homebrew/var/run/",
-		LogDir:              "/opt/homebrew/var/log/",
-		SafeChainBinaryPath: filepath.Join(homeDir, ".safe-chain", "bin", "safe-chain"),
+func initConfig(originalUser string) error {
+	var homeDir string
+	if originalUser != "" {
+		homeDir = filepath.Join("/Users", originalUser)
+	} else {
+		var err error
+		homeDir, err = os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to get home directory: %v", err)
+		}
 	}
+
+	safeChainHomeDir := filepath.Join(homeDir, ".safe-chain")
+	config.BinaryDir = "/opt/homebrew/bin"
+	config.RunDir = filepath.Join(safeChainHomeDir, "run")
+	config.LogDir = filepath.Join(safeChainHomeDir, "logs")
+	config.SafeChainBinaryPath = filepath.Join(safeChainHomeDir, "bin", "safe-chain")
+	return nil
 }
 
 func prepareShellEnvironment(_ context.Context) error {
@@ -102,11 +113,11 @@ func unsetSystemProxy(ctx context.Context) error {
 	for _, service := range services {
 		log.Println("Unsetting system proxy for service:", service)
 
-		if err := exec.CommandContext(ctx, "sudo", "networksetup", "-setwebproxystate", service, "off").Run(); err != nil {
+		if err := exec.CommandContext(ctx, "networksetup", "-setwebproxystate", service, "off").Run(); err != nil {
 			return err
 		}
 
-		if err := exec.CommandContext(ctx, "sudo", "networksetup", "-setsecurewebproxystate", service, "off").Run(); err != nil {
+		if err := exec.CommandContext(ctx, "networksetup", "-setsecurewebproxystate", service, "off").Run(); err != nil {
 			return err
 		}
 	}
@@ -128,7 +139,7 @@ func installProxyCA(ctx context.Context, certPath string) error {
 	return nil
 }
 
-func checkProxyCA(ctx context.Context, certPath string) error {
+func checkProxyCA(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "security", "find-certificate",
 		"-c", "aikido.dev",
 		"/Library/Keychains/System.keychain")

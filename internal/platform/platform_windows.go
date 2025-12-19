@@ -12,13 +12,13 @@ import (
 
 var logDir = filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent", "logs")
 
-func getConfig() *Config {
-	return &Config{
-		LogDir:               filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent", "logs"),
-		RunDir:               filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent", "run"),
-		SafeChainBinaryPath:  filepath.Join(homeDir, ".safe-chain", "bin", "safe-chain.exe"),
-		SafeChainProxyRunDir: filepath.Join(homeDir, ".aikido", "safechain-proxy"),
-	}
+func initConfig(_ string) error {
+	safeChainHomeDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChain")
+	config.LogDir = filepath.Join(safeChainHomeDir, "logs")
+	config.RunDir = filepath.Join(safeChainHomeDir, "run")
+	config.SafeChainBinaryPath = filepath.Join(safeChainHomeDir, "bin", "safe-chain.exe")
+	config.SafeChainProxyRunDir = filepath.Join(safeChainHomeDir, "run", "safechain-proxy")
+	return nil
 }
 
 // prepareShellEnvironment sets the PowerShell execution policy to RemoteSigned for the current user.
@@ -58,7 +58,7 @@ func installProxyCA(ctx context.Context, caCertPath string) error {
 	return nil
 }
 
-func checkProxyCA(ctx context.Context, caCertPath string) error {
+func checkProxyCA(ctx context.Context) error {
 	return nil
 }
 
