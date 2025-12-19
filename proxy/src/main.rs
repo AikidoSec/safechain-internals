@@ -16,6 +16,14 @@ pub mod storage;
 pub mod tls;
 pub mod utils;
 
+#[cfg(target_family = "unix")]
+#[global_allocator]
+static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
+#[cfg(target_os = "windows")]
+#[global_allocator]
+static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 /// CLI arguments for configuring proxy behavior.
 #[derive(Debug, Clone, Parser)]
 #[command(name = "safechain-proxy")]
@@ -36,7 +44,7 @@ pub struct Args {
     pub meta_bind: Interface,
 
     /// secrets storage to use (e.g. for root CA)
-    #[arg(long, value_name = "keyring | data | <dir>", default_value = "keyring")]
+    #[arg(long, value_name = "keyring | <dir>", default_value = "keyring")]
     pub secrets: self::storage::SyncSecrets,
 
     /// debug logging as default instead of Info; use RUST_LOG env for more options
@@ -119,7 +127,7 @@ async fn main() -> Result<(), BoxError> {
     let (har_client, har_export_layer) =
         { self::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
 
-    let firewall = self::firewall::Firewall::new(data_storage);
+    let firewall = self::firewall::Firewall::try_new(graceful.guard(), data_storage).await?;
 
     // used to provide actual bind (socket) address of proxy interface
     // to the meta server for purposes such as PAC (file) generation
@@ -132,6 +140,8 @@ async fn main() -> Result<(), BoxError> {
         let tls_acceptor = tls_acceptor.clone();
         let root_ca = root_ca.clone();
 
+        let firewall = firewall.clone();
+
         async move |guard| {
             tracing::info!("spawning meta http(s) server...");
             if let Err(err) = self::server::meta::run_meta_https_server(
@@ -140,6 +150,7 @@ async fn main() -> Result<(), BoxError> {
                 tls_acceptor,
                 root_ca,
                 proxy_addr_rx,
+                firewall,
                 #[cfg(feature = "har")]
                 har_client,
             )

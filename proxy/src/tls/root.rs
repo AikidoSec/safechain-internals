@@ -70,6 +70,8 @@ pub(super) fn new_root_tls_crt_key_pair(
     data_storage: &SyncCompactDataStorage,
 ) -> Result<PemKeyCrtPair, OpaqueError> {
     if let Some(key_data) = secrets.load_secret::<DataProxyRootCAKey>(AIKIDO_SECRET_ROOT_CA_KEY)? {
+        // NOTE if we want to make this more resiliant we can if cert is no longer found
+        // try to recover it from system certificate storage. See note at the end of this file.
         tracing::debug!("root ca key found — assumption: Cert MUST exist as well!");
         let data_storage: DataProxyRootCACrt = data_storage
             .load(AIKIDO_SECRET_ROOT_CA_CRT)

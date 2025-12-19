@@ -7,7 +7,6 @@ use rama::{
     graceful::ShutdownGuard,
     http::{
         HeaderValue, Request, StatusCode,
-        header::CONTENT_TYPE,
         layer::{required_header::AddRequiredResponseHeadersLayer, trace::TraceLayer},
         server::HttpServer,
         service::web::{
@@ -29,9 +28,7 @@ use rama::{
 #[cfg(feature = "har")]
 use crate::diagnostics::har::HarClient;
 
-use crate::{Args, tls::RootCA};
-
-mod pac;
+use crate::{Args, firewall::Firewall, tls::RootCA};
 
 pub async fn run_meta_https_server(
     args: Args,
@@ -39,6 +36,7 @@ pub async fn run_meta_https_server(
     tls_acceptor: TlsAcceptorLayer,
     root_ca: RootCA,
     proxy_addr_rx: tokio::sync::oneshot::Receiver<SocketAddress>,
+    firewall: Firewall,
     #[cfg(feature = "har")] har_client: HarClient,
 ) -> Result<(), OpaqueError> {
     let proxy_addr = tokio::time::timeout(Duration::from_secs(8), proxy_addr_rx)
@@ -62,17 +60,7 @@ pub async fn run_meta_https_server(
                 return std::future::ready(StatusCode::NOT_FOUND.into_response());
             }
 
-            // TODO:
-            // - inject domains into a stateful svc
-            // - inject actual bound proxy addr into a stateful svc
-            let response = (
-                [(
-                    CONTENT_TYPE,
-                    HeaderValue::from_static("application/x-ns-proxy-autoconfig"),
-                )],
-                self::pac::generate_pac_script(proxy_addr),
-            )
-                .into_response();
+            let response = firewall.generate_pac_script_response(proxy_addr, req);
             std::future::ready(response)
         });
 

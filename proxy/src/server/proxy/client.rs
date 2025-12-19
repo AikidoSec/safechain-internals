@@ -38,7 +38,7 @@ pub(super) fn new_https_client(
         DecompressionLayer::new(),
     )
         .into_layer(
-            // TODO: mock in #[cfg(test)]
+            // TODO: mock in #[cfg(test)] for e2e-like tests
             EasyHttpWebClient::connector_builder()
                 .with_default_transport_connector()
                 .without_tls_proxy_support()

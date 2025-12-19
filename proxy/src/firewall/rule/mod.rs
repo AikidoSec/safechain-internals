@@ -2,6 +2,8 @@ use std::{pin::Pin, sync::Arc};
 
 use rama::{error::OpaqueError, http::Request, net::address::Domain};
 
+pub use super::pac::PacScriptGenerator;
+
 pub mod chrome;
 pub mod vscode;
 
@@ -16,6 +18,8 @@ pub trait BlockRule: Sized + Send + Sync + 'static {
     fn product_name(&self) -> &'static str;
 
     fn match_domain(&self, domain: &Domain) -> bool;
+
+    fn collect_pac_domains(&self, generator: &mut PacScriptGenerator);
 
     fn block_request(
         &self,
@@ -43,6 +47,8 @@ trait DynBlockRuleInner {
     ) -> Pin<Box<dyn Future<Output = Result<Option<Request>, OpaqueError>> + Send + '_>>;
 
     fn dyn_match_domain(&self, domain: &Domain) -> bool;
+
+    fn dyn_collect_pac_domains(&self, generator: &mut PacScriptGenerator);
 }
 
 impl<R: BlockRule> DynBlockRuleInner for R {
@@ -62,6 +68,11 @@ impl<R: BlockRule> DynBlockRuleInner for R {
     #[inline(always)]
     fn dyn_match_domain(&self, domain: &Domain) -> bool {
         self.match_domain(domain)
+    }
+
+    #[inline(always)]
+    fn dyn_collect_pac_domains(&self, generator: &mut PacScriptGenerator) {
+        self.collect_pac_domains(generator);
     }
 }
 
@@ -101,6 +112,11 @@ impl BlockRule for DynBlockRule {
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.inner.dyn_match_domain(domain)
+    }
+
+    #[inline(always)]
+    fn collect_pac_domains(&self, generator: &mut PacScriptGenerator) {
+        self.inner.dyn_collect_pac_domains(generator);
     }
 
     #[inline(always)]
