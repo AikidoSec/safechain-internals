@@ -127,7 +127,20 @@ async fn main() -> Result<(), BoxError> {
     let (har_client, har_export_layer) =
         { self::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
 
-    let firewall = self::firewall::Firewall::try_new(graceful.guard(), data_storage).await?;
+    // ensure to not wait for firewall creation in case shutdown was initiated,
+    // this can happen for example in case remote lists need to be fetched and the
+    // something on the network on either side is not working
+    let firewall = tokio::select! {
+        result = self::firewall::Firewall::try_new(graceful.guard(), data_storage) => {
+            result?
+        }
+
+        _ = graceful.guard_weak().into_cancelled() => {
+            return Err(OpaqueError::from_display(
+                "shutdown initiated prior to firewall created; exit process immediately",
+            ).into());
+        }
+    };
 
     // used to provide actual bind (socket) address of proxy interface
     // to the meta server for purposes such as PAC (file) generation
