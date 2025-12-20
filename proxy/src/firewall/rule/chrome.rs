@@ -140,6 +140,10 @@ impl RuleChrome {
 
         #[derive(Deserialize)]
         struct QueryParameters<'a> {
+            /// cryptic single letter name chosen by Google... Don't blame me.
+            ///
+            /// It contains for the requests we care about the product id in the format
+            /// `x=id=<product_id>`.
             x: Cow<'a, str>,
         }
 

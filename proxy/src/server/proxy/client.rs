@@ -64,13 +64,13 @@ where
 
         let mut mod_req = req;
 
-        if let Some(ch) = mod_req
+        if let Some(tls_client_hello) = mod_req
             .extensions()
             .get::<SecureTransport>()
             .and_then(|st| st.client_hello())
             .cloned()
         {
-            match TlsConnectorDataBuilder::try_from(&ClientConfig::from(ch)) {
+            match TlsConnectorDataBuilder::try_from(&ClientConfig::from(tls_client_hello)) {
                 Ok(mirror_tls_cfg) => {
                     tracing::trace!(
                         "inject TLS Connector data builder based on input TLS ClientHello"
