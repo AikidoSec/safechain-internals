@@ -15,6 +15,7 @@ arc-swap = "1.7"
 clap = { version = "4.5", features = ["derive"] }
 keyring-core = "0.7"
 smallvec = { version = "1.15", features = ["const_generics", "const_new"] }
+humantime = "2.3"
 secrecy = "0.10"
 semver = { version = "1.0", features = ["serde"] }
 tokio = { version = "1.48", features = ["full"] }
@@ -42,7 +43,7 @@ mimalloc = { version = "0.1", default-features = false }
 
 [dependencies.rama]
 git = "https://github.com/plabayo/rama"
-rev = "33ffcdcd69cc1e9a73b5d1f903f84825793f2248"
+rev = "fc991e9e60911c2feb521b012f44d547eeb8fe00"
 features = ["http-full", "proxy-full", "dns", "boring"]
 
 [dev-dependencies]

@@ -24,6 +24,8 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 #[global_allocator]
 static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+// TODO: support dns host maps overwrites (that are used next to normal DNS)
+
 /// CLI arguments for configuring proxy behavior.
 #[derive(Debug, Clone, Parser)]
 #[command(name = "safechain-proxy")]

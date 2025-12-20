@@ -108,6 +108,23 @@ bun install
 curl -x http://127.0.0.1:3128 https://example.com
 ```
 
+For the HTTP(S) proxy we also support username labels, example:
+
+```bash
+curl \
+    -x http://127.0.0.1:3128 \
+    --proxy-user 'system-min_pkg_age-48h:' \  # no password is required
+    https://example.com
+```
+
+The username labels allow one to configure the firewall behaviour,
+such as in the example above where the minimum package is 48 hours,
+instead of whatever the global default is.
+
+| label | example values |
+|-------|----------------|
+| `min-pkg-age` | `2d`, `48h`, `12h_30m`, `2y` |
+
 ### Environment Variables (any tool)
 
 Set these environment variables to make any HTTP client use the proxy:

@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use rama::{
     Layer as _, Service,
     error::{ErrorContext as _, OpaqueError},
@@ -12,8 +14,11 @@ use rama::{
         },
         service::web::response::IntoResponse,
     },
-    net::tls::{SecureTransport, client::ClientConfig},
-    telemetry::tracing,
+    net::{
+        tls::{SecureTransport, client::ClientConfig},
+        user::UserId,
+    },
+    telemetry::tracing::{self, Instrument as _},
     tls::boring::client::TlsConnectorDataBuilder,
 };
 
@@ -85,7 +90,29 @@ where
             }
         }
 
-        match self.inner.serve(mod_req).await {
+        let proxy_user: Cow<'static, str> = mod_req
+            .extensions()
+            .get::<UserId>()
+            .map(|id| match id {
+                UserId::Username(username) => Cow::Owned(username.clone()),
+                UserId::Token(_) => Cow::Borrowed("<TOKEN>"),
+                UserId::Anonymous => Cow::Borrowed("anonymous"),
+            })
+            .unwrap_or_else(|| Cow::Borrowed("anonymous"));
+
+        tracing::debug!("start MITM HTTP(S) web request for user = {proxy_user}");
+
+        match self
+            .inner
+            .serve(mod_req)
+            .instrument(tracing::debug_span!(
+                "MITM HTTP(S) web request",
+                proxy.user = %proxy_user,
+                otel.kind = "client",
+                network.protocol.name = "http",
+            ))
+            .await
+        {
             Ok(resp) => Ok(resp),
             Err(err) => {
                 tracing::error!(uri = %uri, "error forwarding request: {err:?}");

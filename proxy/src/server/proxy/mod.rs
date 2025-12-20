@@ -7,7 +7,7 @@ use rama::{
         Body, Request, Response, StatusCode,
         layer::{
             compression::CompressionLayer, map_response_body::MapResponseBodyLayer,
-            trace::TraceLayer, upgrade::UpgradeLayer,
+            proxy_auth::ProxyAuthLayer, trace::TraceLayer, upgrade::UpgradeLayer,
         },
         matcher::MethodMatcher,
         server::HttpServer,
@@ -32,12 +32,15 @@ use rama::{
     utils::str::arcstr::arcstr,
 };
 
+use crate::{Args, firewall::Firewall};
+
 #[cfg(feature = "har")]
 use crate::diagnostics::har::HARExportLayer;
-use crate::{Args, firewall::Firewall};
 
 mod client;
 mod server;
+
+mod auth;
 
 /// Maximum allowed body size for proxied requests and responses.
 /// Protects against memory exhaustion from excessively large payloads.
@@ -63,9 +66,6 @@ pub async fn run_proxy_server(
 
     let https_client = self::client::new_https_client(firewall.clone())?;
 
-    // TODO: Support (basic auth) username labels for
-    // preferences, e.g. --proxy-user 'safechain-min_package_age-48h:'
-
     let http_proxy_mitm_server = self::server::new_mitm_server(
         guard.clone(),
         args.mitm_all,
@@ -83,6 +83,8 @@ pub async fn run_proxy_server(
         har_export_layer.clone(),
     )?;
 
+    // NOTE: no username labels are (yet) supported in rama-socks5
+    // request the feature if you require that also to work for socks5.
     let socks5_proxy_router = Socks5PeekRouter::new(
         Socks5Acceptor::new()
             .with_connector(socks5::server::LazyConnector::new(socks5_proxy_mitm_server)),
@@ -98,6 +100,9 @@ pub async fn run_proxy_server(
                 AddInputExtensionLayer::new(RequestComment(arcstr!("http(s) proxy connect"))),
                 har_export_layer,
             ),
+            ProxyAuthLayer::new(self::auth::ZeroAuthority::new())
+                .with_allow_anonymous(true)
+                .with_labels::<self::auth::FirewallUserConfigParser>(),
             UpgradeLayer::new(
                 MethodMatcher::CONNECT,
                 service_fn(http_connect_accept),
