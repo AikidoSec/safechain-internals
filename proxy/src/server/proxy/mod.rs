@@ -46,6 +46,9 @@ mod auth;
 /// Protects against memory exhaustion from excessively large payloads.
 const MAX_BODY_SIZE: usize = 500 * 1024 * 1024; // 500 MB
 
+/// Runs the MITM HTTP(S)/SOCKS(5) Proxy server,
+/// including the firewall for blocking relevant requests
+/// and modifying responses.
 pub async fn run_proxy_server(
     args: Args,
     guard: ShutdownGuard,
