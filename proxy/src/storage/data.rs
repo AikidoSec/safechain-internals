@@ -40,24 +40,32 @@ impl SyncCompactDataStorage {
         let raw = postcard::to_allocvec(value)
             .with_context(|| format!("(postcard) encode data for key '{key}'"))?
             .to_vec();
+        let raw_compressed = lz4_flex::compress_prepend_size(&raw);
 
         let path = self.dir.join(format!("{key}.data"));
 
-        std::fs::write(&path, &raw)
+        std::fs::write(&path, &raw_compressed)
             .with_context(|| format!("set data for FS path '{}'", path.display()))
     }
 
     pub fn load<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, OpaqueError> {
         let path = self.dir.join(format!("{key}.data"));
 
-        let value: T = match std::fs::read(&path) {
-            Ok(raw) => postcard::from_bytes(&raw)
-                .with_context(|| format!("(postcard) decode RAW read data for key '{key}'")),
+        let raw_compressed = match std::fs::read(&path) {
+            Ok(v) => v,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(err) => {
-                Err(err.with_context(|| format!("get data for FS path '{}'", path.display())))
+                return Err(
+                    err.with_context(|| format!("get data for FS path '{}'", path.display()))
+                );
             }
-        }?;
+        };
+
+        let raw = lz4_flex::decompress_size_prepended(&raw_compressed)
+            .with_context(|| format!("(lz4-flex) decompress read data for key '{key}'"))?;
+
+        let value: T = postcard::from_bytes(&raw)
+            .with_context(|| format!("(postcard) decode RAW read data for key '{key}'"))?;
 
         Ok(Some(value))
     }

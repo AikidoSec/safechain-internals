@@ -5,14 +5,12 @@ use rama::{
     http::{
         Body, Request, Response, StatusCode,
         client::EasyHttpWebClient,
-        headers::{self, Accept, HeaderMapExt},
         layer::{
             decompression::DecompressionLayer,
             map_response_body::MapResponseBodyLayer,
             remove_header::{RemoveRequestHeaderLayer, RemoveResponseHeaderLayer},
         },
-        mime,
-        service::web::response::{Headers, Html, IntoResponse as _},
+        service::web::response::IntoResponse,
     },
     net::tls::{SecureTransport, client::ClientConfig},
     telemetry::tracing,
@@ -24,7 +22,6 @@ use crate::firewall::Firewall;
 #[derive(Debug, Clone)]
 pub(super) struct HttpClient<S> {
     inner: S,
-    firewall: Firewall,
 }
 
 pub(super) fn new_https_client(
@@ -33,6 +30,7 @@ pub(super) fn new_https_client(
 {
     let inner = (
         RemoveResponseHeaderLayer::hop_by_hop(),
+        firewall.into_evaluate_request_layer(),
         RemoveRequestHeaderLayer::hop_by_hop(),
         MapResponseBodyLayer::new(Body::new),
         DecompressionLayer::new(),
@@ -50,7 +48,7 @@ pub(super) fn new_https_client(
                 .build_client(),
         );
 
-    Ok(HttpClient { inner, firewall })
+    Ok(HttpClient { inner })
 }
 
 impl<S> Service<Request> for HttpClient<S>
@@ -64,31 +62,7 @@ where
         let uri = req.uri().clone();
         tracing::debug!(uri = %uri, "serving http(s) over proxy (egress) client");
 
-        let maybe_detected_ct = req.headers().typed_get().and_then(|Accept(qvs)| {
-            qvs.iter().find_map(|qv| {
-                let r#type = qv.value.subtype();
-                if r#type == mime::JSON {
-                    Some(ContentType::Json)
-                } else if r#type == mime::HTML {
-                    Some(ContentType::Html)
-                } else if r#type == mime::TEXT {
-                    Some(ContentType::Txt)
-                } else if r#type == mime::XML {
-                    Some(ContentType::Xml)
-                } else {
-                    None
-                }
-            })
-        });
-
         let mut mod_req = req;
-
-        match self.firewall.block_request(mod_req).await? {
-            Some(r) => mod_req = r,
-            None => {
-                return Ok(generate_blocked_response(maybe_detected_ct));
-            }
-        }
 
         if let Some(ch) = mod_req
             .extensions()
@@ -119,68 +93,5 @@ where
                 Ok(resp)
             }
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Content Type detected so we can return appropriate msg.
-enum ContentType {
-    Html,
-    Txt,
-    Json,
-    Xml,
-}
-
-fn generate_blocked_response(maybe_detected_ct: Option<ContentType>) -> Response {
-    match maybe_detected_ct {
-        Some(ContentType::Html) => (
-            StatusCode::FORBIDDEN,
-            Html(
-                r##"<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Blocked</title>
-</head>
-<body>
-    <h1>Request blocked</h1>
-    <p>The requested source was blocked due to your organization policy.</p>
-    <p>Contact your security administrator for more information.</p>
-</body>
-</html>
-"##,
-            ),
-        )
-            .into_response(),
-        Some(ContentType::Txt) => (
-            StatusCode::FORBIDDEN,
-            r##"The requested source was blocked due to your organization policy.
-Contact your security administrator for more information.
-"##,
-        )
-            .into_response(),
-        Some(ContentType::Json) => (
-            StatusCode::FORBIDDEN,
-            Headers::single(headers::ContentType::json()),
-            r##"{
-    "error": "blocked",
-    "message": "The requested source was blocked due to your organization policy.",
-    "action": "Contact your security administrator for more information."
-}"##,
-        )
-            .into_response(),
-        Some(ContentType::Xml) => (
-            StatusCode::FORBIDDEN,
-            Headers::single(headers::ContentType::json()),
-            r##"<?xml version="1.0" encoding="UTF-8"?>
-<response>
-    <error>blocked</error>
-    <message>The requested source was blocked due to your organization policy.</message>
-    <action>Contact your security administrator for more information.</action>
-</response>"##,
-        )
-            .into_response(),
-        None => StatusCode::FORBIDDEN.into_response(),
     }
 }
