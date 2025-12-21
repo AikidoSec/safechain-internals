@@ -188,7 +188,7 @@ fn new_key_ring_entry(store: &Store, key: &str) -> Result<keyring_core::Entry, O
 mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use crate::utils::test::unique_empty_temp_dir;
+    use crate::test::tmp_dir;
 
     use super::*;
 
@@ -198,7 +198,7 @@ mod tests {
     #[traced_test]
     #[test]
     fn test_secret_storage_fs_number_store_can_load() {
-        let dir = unique_empty_temp_dir("test_secret_storage_fs_number_store_can_load").unwrap();
+        let dir = tmp_dir::try_new("test_secret_storage_fs_number_store_can_load").unwrap();
         let data_storage = SyncSecrets::new_fs(dir);
 
         const NUMBER: usize = 42;

@@ -27,6 +27,9 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 #[global_allocator]
 static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+#[cfg(test)]
+pub mod test;
+
 /// CLI arguments for configuring proxy behavior.
 #[derive(Debug, Clone, Parser)]
 #[command(name = "safechain-proxy")]
@@ -85,14 +88,18 @@ pub struct Args {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), BoxError> {
     let args = Args::parse();
-    let base_shutdown_signal = graceful::default_signal();
 
+    self::utils::telemetry::init_tracing(&args)?;
+
+    let base_shutdown_signal = graceful::default_signal();
     if let Err(err) = run_with_args(base_shutdown_signal, args).await {
         eprintln!("🚩 exit with error: {err}");
         std::process::exit(1);
     }
+
+    Ok(())
 }
 
 /// Runs all the safechain-proxy services and blocks until
@@ -104,8 +111,6 @@ async fn run_with_args<F>(base_shutdown_signal: F, args: Args) -> Result<(), Box
 where
     F: Future<Output: Send + 'static> + Send + 'static,
 {
-    self::utils::telemetry::init_tracing(&args)?;
-
     tokio::fs::create_dir_all(&args.data)
         .await
         .with_context(|| format!("create data directory at path '{}'", args.data.display()))?;

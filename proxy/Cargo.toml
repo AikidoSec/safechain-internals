@@ -43,9 +43,12 @@ windows-native-keyring-store = "0.4"
 mimalloc = { version = "0.1", default-features = false }
 
 [dependencies.rama]
-git = "https://github.com/plabayo/rama"
-rev = "fc991e9e60911c2feb521b012f44d547eeb8fe00"
+workspace = true
 features = ["http-full", "proxy-full", "dns", "boring"]
 
 [dev-dependencies]
 tracing-test = "0.2"
+
+[dev-dependencies.rama]
+workspace = true
+features = ["cli"]

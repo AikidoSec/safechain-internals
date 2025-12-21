@@ -73,7 +73,7 @@ impl SyncCompactDataStorage {
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::test::unique_empty_temp_dir;
+    use crate::test::tmp_dir;
 
     use super::*;
 
@@ -83,7 +83,7 @@ mod tests {
     #[traced_test]
     #[test]
     fn test_data_storage_number_store_can_load() {
-        let dir = unique_empty_temp_dir("test_data_storage_number").unwrap();
+        let dir = tmp_dir::try_new("test_data_storage_number").unwrap();
         let data_storage = SyncCompactDataStorage::try_new(dir).unwrap();
 
         const NUMBER: usize = 42;
