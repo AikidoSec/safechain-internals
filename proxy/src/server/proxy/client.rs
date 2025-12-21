@@ -2,11 +2,10 @@ use std::borrow::Cow;
 
 use rama::{
     Layer as _, Service,
-    error::{ErrorContext as _, OpaqueError},
+    error::OpaqueError,
     extensions::{ExtensionsMut as _, ExtensionsRef as _},
     http::{
         Body, Request, Response, StatusCode,
-        client::EasyHttpWebClient,
         layer::{
             decompression::DecompressionLayer,
             map_response_body::MapResponseBodyLayer,
@@ -40,17 +39,7 @@ pub(super) fn new_https_client(
         MapResponseBodyLayer::new(Body::new),
         DecompressionLayer::new(),
     )
-        .into_layer(
-            EasyHttpWebClient::connector_builder()
-                .with_default_transport_connector()
-                .without_tls_proxy_support()
-                .without_proxy_support()
-                .with_tls_support_using_boringssl(None)
-                .with_default_http_connector()
-                .try_with_default_connection_pool()
-                .context("create connection pool for proxy web client")?
-                .build_client(),
-        );
+        .into_layer(crate::client::new_web_client()?);
 
     Ok(HttpClient { inner })
 }

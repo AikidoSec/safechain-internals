@@ -9,6 +9,7 @@ use rama::{
 
 use clap::Parser;
 
+pub mod client;
 pub mod diagnostics;
 pub mod firewall;
 pub mod server;
@@ -23,8 +24,6 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 #[cfg(target_os = "windows")]
 #[global_allocator]
 static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
-// TODO: support dns host maps overwrites (that are used next to normal DNS)
 
 /// CLI arguments for configuring proxy behavior.
 #[derive(Debug, Clone, Parser)]
@@ -84,9 +83,21 @@ pub struct Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), BoxError> {
+async fn main() {
     let args = Args::parse();
 
+    if let Err(err) = run_with_args(args).await {
+        eprintln!("🚩 exit with error: {err}");
+        std::process::exit(1);
+    }
+}
+
+/// Runs all the safechain-proxy services and blocks until
+/// a critical error occurs or the (graceful) shutdown has been initiated.
+///
+/// This entry point is used by both the (binary) `main` function as well as
+/// for the e2e test suite found in the test module.
+async fn run_with_args(args: Args) -> Result<(), BoxError> {
     self::utils::telemetry::init_tracing(&args)?;
 
     tokio::fs::create_dir_all(&args.data)

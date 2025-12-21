@@ -5,10 +5,10 @@ use rama::{
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
     http::{
-        HeaderValue, Request, Response,
-        client::EasyHttpWebClient,
+        Body, HeaderValue, Request, Response,
         header::CONTENT_TYPE,
         layer::{
+            map_request_body::MapRequestBodyLayer,
             retry::{ManagedPolicy, RetryLayer},
             timeout::TimeoutLayer,
         },
@@ -44,16 +44,7 @@ impl Firewall {
         guard: ShutdownGuard,
         data: SyncCompactDataStorage,
     ) -> Result<Self, OpaqueError> {
-        let inner_https_client = EasyHttpWebClient::connector_builder()
-            .with_default_transport_connector()
-            .without_tls_proxy_support()
-            .without_proxy_support()
-            .with_tls_support_using_boringssl(None)
-            .with_default_http_connector()
-            // connections are shared between remote fetchers
-            .try_with_default_connection_pool()
-            .context("create connection pool for proxy web client")?
-            .build_client();
+        let inner_https_client = crate::client::new_web_client()?;
 
         let shared_remote_malware_client = (
             MapErrLayer::new(OpaqueError::from_std),
@@ -66,9 +57,10 @@ impl Firewall {
                         0.01,
                         HasherRng::default,
                     )
-                    .unwrap(),
+                    .context("create exponential backoff impl")?,
                 ),
             ),
+            MapRequestBodyLayer::new(Body::new),
         )
             .into_layer(inner_https_client)
             .boxed();
