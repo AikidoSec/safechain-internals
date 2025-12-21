@@ -122,8 +122,8 @@ where
     let (tls_acceptor, root_ca) =
         self::tls::new_tls_acceptor_layer(&args, &data_storage).context("prepare TLS acceptor")?;
 
-    let (etx, erx) = tokio::sync::mpsc::channel::<OpaqueError>(1);
-    let graceful = graceful::Shutdown::new(new_shutdown_signal(erx, base_shutdown_signal));
+    let (error_tx, error_rx) = tokio::sync::mpsc::channel::<OpaqueError>(1);
+    let graceful = graceful::Shutdown::new(new_shutdown_signal(error_rx, base_shutdown_signal));
 
     #[cfg(feature = "har")]
     let (har_client, har_export_layer) =
@@ -150,7 +150,7 @@ where
 
     graceful.spawn_task_fn({
         let args = args.clone();
-        let etx = etx.clone();
+        let error_tx = error_tx.clone();
 
         let tls_acceptor = tls_acceptor.clone();
         let root_ca = root_ca.clone();
@@ -161,7 +161,7 @@ where
             run_meta_https_server(
                 args,
                 guard,
-                etx,
+                error_tx,
                 tls_acceptor,
                 root_ca,
                 proxy_addr_rx,
@@ -177,7 +177,7 @@ where
             run_proxy_server(
                 args,
                 guard,
-                etx,
+                error_tx,
                 tls_acceptor,
                 proxy_addr_tx,
                 firewall,
@@ -199,7 +199,7 @@ where
 async fn run_meta_https_server(
     args: Args,
     guard: ShutdownGuard,
-    etx: tokio::sync::mpsc::Sender<OpaqueError>,
+    error_tx: tokio::sync::mpsc::Sender<OpaqueError>,
     tls_acceptor: TlsAcceptorLayer,
     root_ca: self::tls::RootCA,
     proxy_addr_rx: tokio::sync::oneshot::Receiver<SocketAddress>,
@@ -226,14 +226,14 @@ async fn run_meta_https_server(
     .await
     {
         tracing::error!("meta server exited with an error: {err}");
-        let _ = etx.send(err).await;
+        let _ = error_tx.send(err).await;
     }
 }
 
 async fn run_proxy_server(
     args: Args,
     guard: ShutdownGuard,
-    etx: tokio::sync::mpsc::Sender<OpaqueError>,
+    error_tx: tokio::sync::mpsc::Sender<OpaqueError>,
     tls_acceptor: TlsAcceptorLayer,
     proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
     firewall: self::firewall::Firewall,
@@ -258,23 +258,23 @@ async fn run_proxy_server(
     .await
     {
         tracing::error!("proxy server exited with an error: {err}");
-        let _ = etx.send(err).await;
+        let _ = error_tx.send(err).await;
     }
 }
 
 fn new_shutdown_signal(
-    erx: tokio::sync::mpsc::Receiver<OpaqueError>,
+    error_rx: tokio::sync::mpsc::Receiver<OpaqueError>,
     base_shutdown_signal: impl Future<Output: Send + 'static> + Send + 'static,
 ) -> impl Future + Send + 'static {
     async move {
-        let mut mut_erx = erx;
+        let mut mut_error_rx = error_rx;
         let mut signal = Box::pin(base_shutdown_signal);
 
         tokio::select! {
             _ = signal.as_mut() => {
                 tracing::debug!("default signal triggered: init graceful shutdown");
             }
-            err = mut_erx.recv() => {
+            err = mut_error_rx.recv() => {
                 if let Some(err) = err {
                     tracing::error!("fatal err received: {err}; abort");
                 } else {
