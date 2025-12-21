@@ -2,9 +2,10 @@ use std::{path::PathBuf, time::Duration};
 
 use rama::{
     error::{BoxError, ErrorContext, OpaqueError},
-    graceful,
-    net::socket::Interface,
+    graceful::{self, ShutdownGuard},
+    net::{address::SocketAddress, socket::Interface},
     telemetry::tracing::{self, Instrument as _},
+    tls::boring::server::TlsAcceptorLayer,
 };
 
 use clap::Parser;
@@ -156,11 +157,11 @@ where
 
         let firewall = firewall.clone();
 
-        async move |guard| {
-            tracing::info!("spawning meta http(s) server...");
-            if let Err(err) = self::server::meta::run_meta_https_server(
+        |guard| {
+            run_meta_https_server(
                 args,
                 guard,
+                etx,
                 tls_acceptor,
                 root_ca,
                 proxy_addr_rx,
@@ -168,43 +169,21 @@ where
                 #[cfg(feature = "har")]
                 har_client,
             )
-            .instrument(tracing::debug_span!(
-                "meta server lifetime",
-                server.service.name = format!("{}-meta", self::utils::env::project_name()),
-                otel.kind = "server",
-                network.protocol.name = "http",
-            ))
-            .await
-            {
-                tracing::error!("meta server exited with an error: {err}");
-                let _ = etx.send(err).await;
-            }
         }
     });
 
     graceful.spawn_task_fn({
-        async move |guard| {
-            tracing::info!("spawning proxy server...");
-            if let Err(err) = self::server::proxy::run_proxy_server(
+        move |guard| {
+            run_proxy_server(
                 args,
                 guard,
+                etx,
                 tls_acceptor,
                 proxy_addr_tx,
                 firewall,
                 #[cfg(feature = "har")]
                 har_export_layer,
             )
-            .instrument(tracing::debug_span!(
-                "proxy server lifetime",
-                server.service.name = self::utils::env::project_name(),
-                otel.kind = "server",
-                network.protocol.name = "tcp",
-            ))
-            .await
-            {
-                tracing::error!("proxy server exited with an error: {err}");
-                let _ = etx.send(err).await;
-            }
         }
     });
 
@@ -217,19 +196,85 @@ where
     Ok(())
 }
 
+async fn run_meta_https_server(
+    args: Args,
+    guard: ShutdownGuard,
+    etx: tokio::sync::mpsc::Sender<OpaqueError>,
+    tls_acceptor: TlsAcceptorLayer,
+    root_ca: self::tls::RootCA,
+    proxy_addr_rx: tokio::sync::oneshot::Receiver<SocketAddress>,
+    firewall: self::firewall::Firewall,
+    #[cfg(feature = "har")] har_client: self::diagnostics::har::HarClient,
+) {
+    tracing::info!("spawning meta http(s) server...");
+    if let Err(err) = self::server::meta::run_meta_https_server(
+        args,
+        guard,
+        tls_acceptor,
+        root_ca,
+        proxy_addr_rx,
+        firewall,
+        #[cfg(feature = "har")]
+        har_client,
+    )
+    .instrument(tracing::debug_span!(
+        "meta server lifetime",
+        server.service.name = format!("{}-meta", self::utils::env::project_name()),
+        otel.kind = "server",
+        network.protocol.name = "http",
+    ))
+    .await
+    {
+        tracing::error!("meta server exited with an error: {err}");
+        let _ = etx.send(err).await;
+    }
+}
+
+async fn run_proxy_server(
+    args: Args,
+    guard: ShutdownGuard,
+    etx: tokio::sync::mpsc::Sender<OpaqueError>,
+    tls_acceptor: TlsAcceptorLayer,
+    proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
+    firewall: self::firewall::Firewall,
+    #[cfg(feature = "har")] har_export_layer: self::diagnostics::har::HARExportLayer,
+) {
+    tracing::info!("spawning proxy server...");
+    if let Err(err) = self::server::proxy::run_proxy_server(
+        args,
+        guard,
+        tls_acceptor,
+        proxy_addr_tx,
+        firewall,
+        #[cfg(feature = "har")]
+        har_export_layer,
+    )
+    .instrument(tracing::debug_span!(
+        "proxy server lifetime",
+        server.service.name = self::utils::env::project_name(),
+        otel.kind = "server",
+        network.protocol.name = "tcp",
+    ))
+    .await
+    {
+        tracing::error!("proxy server exited with an error: {err}");
+        let _ = etx.send(err).await;
+    }
+}
+
 fn new_shutdown_signal(
     erx: tokio::sync::mpsc::Receiver<OpaqueError>,
     base_shutdown_signal: impl Future<Output: Send + 'static> + Send + 'static,
 ) -> impl Future + Send + 'static {
     async move {
-        let mut erx = erx;
+        let mut mut_erx = erx;
         let mut signal = Box::pin(base_shutdown_signal);
 
         tokio::select! {
             _ = signal.as_mut() => {
                 tracing::debug!("default signal triggered: init graceful shutdown");
             }
-            err = erx.recv() => {
+            err = mut_erx.recv() => {
                 if let Some(err) = err {
                     tracing::error!("fatal err received: {err}; abort");
                 } else {
