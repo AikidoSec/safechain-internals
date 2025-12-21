@@ -85,8 +85,9 @@ pub struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+    let base_shutdown_signal = graceful::default_signal();
 
-    if let Err(err) = run_with_args(args).await {
+    if let Err(err) = run_with_args(base_shutdown_signal, args).await {
         eprintln!("🚩 exit with error: {err}");
         std::process::exit(1);
     }
@@ -97,7 +98,10 @@ async fn main() {
 ///
 /// This entry point is used by both the (binary) `main` function as well as
 /// for the e2e test suite found in the test module.
-async fn run_with_args(args: Args) -> Result<(), BoxError> {
+async fn run_with_args<F>(base_shutdown_signal: F, args: Args) -> Result<(), BoxError>
+where
+    F: Future<Output: Send + 'static> + Send + 'static,
+{
     self::utils::telemetry::init_tracing(&args)?;
 
     tokio::fs::create_dir_all(&args.data)
@@ -117,24 +121,8 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
     let (tls_acceptor, root_ca) =
         self::tls::new_tls_acceptor_layer(&args, &data_storage).context("prepare TLS acceptor")?;
 
-    let (etx, mut erx) = tokio::sync::mpsc::channel::<OpaqueError>(1);
-    let graceful = graceful::Shutdown::new(async move {
-        let mut signal = Box::pin(graceful::default_signal());
-        tokio::select! {
-            _ = signal.as_mut() => {
-                tracing::debug!("default signal triggered: init graceful shutdown");
-            }
-            err = erx.recv() => {
-                if let Some(err) = err {
-                    tracing::error!("fatal err received: {err}; abort");
-                } else {
-                    tracing::info!("wait for default signal, no error was received");
-                    signal.await;
-                    tracing::debug!("default signal triggered: init graceful shutdown");
-                }
-            }
-        }
-    });
+    let (etx, erx) = tokio::sync::mpsc::channel::<OpaqueError>(1);
+    let graceful = graceful::Shutdown::new(new_shutdown_signal(erx, base_shutdown_signal));
 
     #[cfg(feature = "har")]
     let (har_client, har_export_layer) =
@@ -227,4 +215,29 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
 
     tracing::info!("gracefully shutdown with a delay of: {delay:?}");
     Ok(())
+}
+
+fn new_shutdown_signal(
+    erx: tokio::sync::mpsc::Receiver<OpaqueError>,
+    base_shutdown_signal: impl Future<Output: Send + 'static> + Send + 'static,
+) -> impl Future + Send + 'static {
+    async move {
+        let mut erx = erx;
+        let mut signal = Box::pin(base_shutdown_signal);
+
+        tokio::select! {
+            _ = signal.as_mut() => {
+                tracing::debug!("default signal triggered: init graceful shutdown");
+            }
+            err = erx.recv() => {
+                if let Some(err) = err {
+                    tracing::error!("fatal err received: {err}; abort");
+                } else {
+                    tracing::info!("wait for default signal, no error was received");
+                    signal.await;
+                    tracing::debug!("default signal triggered: init graceful shutdown");
+                }
+            }
+        }
+    }
 }
