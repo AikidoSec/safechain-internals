@@ -9,11 +9,11 @@ use rama::{
             compression::CompressionLayer, map_response_body::MapResponseBodyLayer,
             proxy_auth::ProxyAuthLayer, trace::TraceLayer, upgrade::UpgradeLayer,
         },
-        matcher::MethodMatcher,
+        matcher::{HttpMatcher, MethodMatcher},
         server::HttpServer,
         service::web::response::IntoResponse,
     },
-    layer::ConsumeErrLayer,
+    layer::{ConsumeErrLayer, HijackLayer},
     net::{
         address::SocketAddress, http::RequestContext, proxy::ProxyTarget,
         stream::layer::http::BodyLimitLayer,
@@ -32,7 +32,7 @@ use rama::{
     utils::str::arcstr::arcstr,
 };
 
-use crate::{Args, firewall::Firewall};
+use crate::{Args, firewall::Firewall, server::connectivity::CONNECTIVITY_DOMAIN};
 
 #[cfg(feature = "har")]
 use crate::diagnostics::har::HARExportLayer;
@@ -97,6 +97,12 @@ pub async fn run_proxy_server(
     let http_service = HttpServer::auto(exec).service(
         (
             TraceLayer::new_for_http(),
+            HijackLayer::new(
+                HttpMatcher::method_connect()
+                    .negate()
+                    .and_domain(CONNECTIVITY_DOMAIN),
+                crate::server::connectivity::new_connectivity_http_svc(),
+            ),
             ConsumeErrLayer::trace(Level::DEBUG),
             #[cfg(feature = "har")]
             (

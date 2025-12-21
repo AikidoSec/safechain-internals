@@ -13,6 +13,7 @@ use clap::Parser;
 pub mod client;
 pub mod diagnostics;
 pub mod firewall;
+pub mod http;
 pub mod server;
 pub mod storage;
 pub mod tls;

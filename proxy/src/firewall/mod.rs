@@ -20,12 +20,10 @@ use rama::{
 };
 
 pub mod layer;
-pub mod make_response;
 pub mod malware_list;
 pub mod rule;
 
 mod pac;
-mod utils;
 
 use crate::storage::SyncCompactDataStorage;
 

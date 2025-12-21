@@ -6,7 +6,7 @@ use rama::{
     net::{address::Domain, http::RequestContext, proxy::ProxyTarget},
 };
 
-pub(super) fn try_get_domain_for_req(req: &Request) -> Option<Cow<'_, Domain>> {
+pub fn try_get_domain_for_req<Body>(req: &Request<Body>) -> Option<Cow<'_, Domain>> {
     match req.extensions().get() {
         Some(ProxyTarget(target)) => target.host.as_domain().map(Cow::Borrowed),
         None => RequestContext::try_from(req)

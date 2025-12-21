@@ -2654,6 +2654,7 @@ dependencies = [
  "secrecy",
  "semver",
  "serde",
+ "serde_json",
  "serde_test",
  "smallvec",
  "smol_str",

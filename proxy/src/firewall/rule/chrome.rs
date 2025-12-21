@@ -11,7 +11,7 @@ use rama::{
 use serde::Deserialize;
 
 use crate::{
-    firewall::{make_response, pac::PacScriptGenerator},
+    firewall::pac::PacScriptGenerator, http::response::generate_generic_blocked_response_for_req,
     storage::SyncCompactDataStorage,
 };
 
@@ -92,7 +92,7 @@ impl Rule for RuleChrome {
             // NOTE: in case you wish to customise the response,
             // you can do so by defining your own function / logic and using it here.
             return Ok(RequestAction::Block(
-                make_response::generate_blocked_response_for_req(req),
+                generate_generic_blocked_response_for_req(req),
             ));
         }
 
@@ -117,7 +117,7 @@ impl RuleChrome {
         &self,
         req: &'a Request,
     ) -> Option<ChromeExtensionRequestInfo<'a>> {
-        let Some(domain) = crate::firewall::utils::try_get_domain_for_req(req)
+        let Some(domain) = crate::http::try_get_domain_for_req(req)
             .and_then(|d| self.match_domain(&d).then_some(d))
         else {
             tracing::trace!(

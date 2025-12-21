@@ -12,7 +12,8 @@ use rama::{
 use smol_str::format_smolstr;
 
 use crate::{
-    firewall::{make_response, malware_list::RemoteMalwareList, pac::PacScriptGenerator},
+    firewall::{malware_list::RemoteMalwareList, pac::PacScriptGenerator},
+    http::response::generate_generic_blocked_response_for_req,
     storage::SyncCompactDataStorage,
 };
 
@@ -83,7 +84,7 @@ impl Rule for RuleVSCode {
     }
 
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
-        if !crate::firewall::utils::try_get_domain_for_req(&req)
+        if !crate::http::try_get_domain_for_req(&req)
             .map(|domain| self.match_domain(&domain))
             .unwrap_or_default()
         {
@@ -128,7 +129,7 @@ impl Rule for RuleVSCode {
 
             tracing::debug!("blocked VSCode plugin: {fq_package_name}");
             return Ok(RequestAction::Block(
-                make_response::generate_blocked_response_for_req(req),
+                generate_generic_blocked_response_for_req(req),
             ));
         }
 

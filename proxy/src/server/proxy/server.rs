@@ -11,9 +11,10 @@ use rama::{
             compression::CompressionLayer, map_response_body::MapResponseBodyLayer,
             trace::TraceLayer,
         },
+        matcher::HttpMatcher,
         server::HttpServer,
     },
-    layer::ConsumeErrLayer,
+    layer::{ConsumeErrLayer, HijackLayer},
     net::proxy::ProxyTarget,
     rt::Executor,
     stream::Stream,
@@ -31,7 +32,7 @@ use rama::{
     utils::str::arcstr::arcstr,
 };
 
-use crate::firewall::Firewall;
+use crate::{firewall::Firewall, server::connectivity::CONNECTIVITY_DOMAIN};
 
 #[derive(Debug, Clone)]
 pub(super) struct MitmServer<S> {
@@ -50,6 +51,10 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
 ) -> Result<MitmServer<impl Service<S, Output = (), Error = BoxError> + Clone>, OpaqueError> {
     let https_svc = (
         TraceLayer::new_for_http(),
+        HijackLayer::new(
+            HttpMatcher::domain(CONNECTIVITY_DOMAIN),
+            crate::server::connectivity::new_connectivity_http_svc(),
+        ),
         ConsumeErrLayer::trace(Level::DEBUG),
         #[cfg(feature = "har")]
         (
@@ -87,7 +92,7 @@ where
             && !maybe_proxy_target
                 .as_ref()
                 .and_then(|ProxyTarget(target)| target.host.as_domain())
-                .map(|domain| self.firewall.match_domain(domain))
+                .map(|domain| CONNECTIVITY_DOMAIN.eq(domain) || self.firewall.match_domain(domain))
                 .unwrap_or_default()
         {
             tracing::debug!("transport-forward incoming stream: target = {maybe_proxy_target:?}",);
