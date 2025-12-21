@@ -1,5 +1,6 @@
 use rama::{
     http::{BodyExtractExt, StatusCode, service::client::HttpClientExt as _},
+    telemetry::tracing,
     tls::boring::core::x509::X509,
 };
 
@@ -9,6 +10,7 @@ mod http {
     use super::*;
 
     #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_endpoint_root() {
         let runtime = e2e::runtime::get().await;
 
@@ -26,6 +28,7 @@ mod http {
     }
 
     #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_endpoint_ping() {
         let runtime = e2e::runtime::get().await;
 
@@ -45,6 +48,7 @@ mod http {
     }
 
     #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_endpoint_ca() {
         let runtime = e2e::runtime::get().await;
 
@@ -65,6 +69,7 @@ mod http {
     }
 
     #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_endpoint_pac() {
         let runtime = e2e::runtime::get().await;
 
@@ -85,6 +90,7 @@ mod https {
     use super::*;
 
     #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_endpoint_root_failure() {
         let runtime = e2e::runtime::get().await;
         let client = e2e::client::new_web_client(&runtime, false).await;
@@ -99,6 +105,7 @@ mod https {
     }
 
     #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_endpoint_root() {
         let runtime = e2e::runtime::get().await;
 
@@ -116,6 +123,7 @@ mod https {
     }
 
     #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_endpoint_ping_failure() {
         let runtime = e2e::runtime::get().await;
         let client = e2e::client::new_web_client(&runtime, false).await;
@@ -130,6 +138,7 @@ mod https {
     }
 
     #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_endpoint_ping() {
         let runtime = e2e::runtime::get().await;
 
@@ -149,6 +158,7 @@ mod https {
     }
 
     #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_endpoint_ca_failure() {
         let runtime = e2e::runtime::get().await;
         let client = e2e::client::new_web_client(&runtime, false).await;
@@ -163,6 +173,7 @@ mod https {
     }
 
     #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_endpoint_ca() {
         let runtime = e2e::runtime::get().await;
 
@@ -183,6 +194,7 @@ mod https {
     }
 
     #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_endpoint_pac_failure() {
         let runtime = e2e::runtime::get().await;
 
@@ -198,6 +210,7 @@ mod https {
     }
 
     #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_endpoint_pac() {
         let runtime = e2e::runtime::get().await;
 

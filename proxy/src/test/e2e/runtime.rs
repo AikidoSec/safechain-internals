@@ -109,13 +109,6 @@ fn spawn_safechain_proxy_app() -> PathBuf {
         "127.0.0.1:0",
         "--secrets",
         data_dir_str,
-        "--pretty",
-        "--output",
-        data_dir
-            .join("safechain_proxy_app_e2e.log.txt")
-            .display()
-            .to_string()
-            .leak(),
         "--data",
         data_dir_str,
         "--graceful",
@@ -123,12 +116,6 @@ fn spawn_safechain_proxy_app() -> PathBuf {
         "--all",
     ])
     .unwrap();
-
-    if let Err(err) = crate::utils::telemetry::init_tracing(&args) {
-        tracing::warn!(
-            "failed to init tracing (already created perhaps by other test?): err = {err}"
-        );
-    }
 
     tokio::spawn(async move {
         crate::run_with_args(std::future::pending::<()>(), args)

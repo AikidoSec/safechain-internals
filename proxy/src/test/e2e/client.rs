@@ -59,7 +59,7 @@ fn new_web_client_inner(
     let inner_https_client = EasyHttpWebClient::connector_builder()
         .with_default_transport_connector()
         .without_tls_proxy_support()
-        .without_proxy_support()
+        .with_proxy_support()
         .with_tls_support_using_boringssl(tls_config)
         .with_custom_connector(TimeoutLayer::new(Duration::from_secs(3)))
         .with_default_http_connector()

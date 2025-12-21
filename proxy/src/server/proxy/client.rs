@@ -11,8 +11,10 @@ use rama::{
             map_response_body::MapResponseBodyLayer,
             remove_header::{RemoveRequestHeaderLayer, RemoveResponseHeaderLayer},
         },
+        matcher::HttpMatcher,
         service::web::response::IntoResponse,
     },
+    layer::HijackLayer,
     net::{
         tls::{SecureTransport, client::ClientConfig},
         user::UserId,
@@ -21,7 +23,7 @@ use rama::{
     tls::boring::client::TlsConnectorDataBuilder,
 };
 
-use crate::firewall::Firewall;
+use crate::{firewall::Firewall, server::connectivity::CONNECTIVITY_DOMAIN};
 
 #[derive(Debug, Clone)]
 pub(super) struct HttpClient<S> {
@@ -38,6 +40,10 @@ pub(super) fn new_https_client(
         RemoveRequestHeaderLayer::hop_by_hop(),
         MapResponseBodyLayer::new(Body::new),
         DecompressionLayer::new(),
+        HijackLayer::new(
+            HttpMatcher::domain(CONNECTIVITY_DOMAIN),
+            crate::server::connectivity::new_connectivity_http_svc(),
+        ),
     )
         .into_layer(crate::client::new_web_client()?);
 

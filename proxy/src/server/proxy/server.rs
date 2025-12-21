@@ -11,11 +11,10 @@ use rama::{
             compression::CompressionLayer, map_response_body::MapResponseBodyLayer,
             trace::TraceLayer,
         },
-        matcher::HttpMatcher,
         server::HttpServer,
     },
-    layer::{ConsumeErrLayer, HijackLayer},
-    net::proxy::ProxyTarget,
+    layer::ConsumeErrLayer,
+    net::{proxy::ProxyTarget, tls::server::TlsPeekRouter},
     rt::Executor,
     stream::Stream,
     tcp::client::service::DefaultForwarder,
@@ -51,10 +50,6 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
 ) -> Result<MitmServer<impl Service<S, Output = (), Error = BoxError> + Clone>, OpaqueError> {
     let https_svc = (
         TraceLayer::new_for_http(),
-        HijackLayer::new(
-            HttpMatcher::domain(CONNECTIVITY_DOMAIN),
-            crate::server::connectivity::new_connectivity_http_svc(),
-        ),
         ConsumeErrLayer::trace(Level::DEBUG),
         #[cfg(feature = "har")]
         (
@@ -66,8 +61,10 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
     )
         .into_layer(super::client::new_https_client(firewall.clone())?);
 
-    let inner =
-        tls_acceptor.into_layer(HttpServer::auto(Executor::graceful(guard)).service(https_svc));
+    let http_server = HttpServer::auto(Executor::graceful(guard)).service(https_svc);
+
+    let inner = TlsPeekRouter::new((tls_acceptor).into_layer(http_server.clone()))
+        .with_fallback(http_server);
 
     Ok(MitmServer {
         inner,
