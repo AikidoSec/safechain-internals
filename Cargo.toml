@@ -1,0 +1,7 @@
+[workspace]
+members = ["proxy"]
+resolver = "3"
+
+[workspace.dependencies.rama]
+git = "https://github.com/plabayo/rama"
+rev = "fc991e9e60911c2feb521b012f44d547eeb8fe00"

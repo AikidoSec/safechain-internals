@@ -1,0 +1,44 @@
+name: CI Checks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request: {}
+
+jobs:
+  proxy-checks:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-15
+          - runner: macos-15-intel
+          - runner: windows-latest
+          # NOTE: windows-11-arm is not YET supported in private Github Action runners
+          # - runner: windows-11-arm
+          - runner: ubuntu-latest
+
+    runs-on: ${{ matrix.runner }}
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
+        with:
+          env-vars: "RUST_TOOLCHAIN=stable"
+      - name: check
+        run: |
+          cargo check --workspace
+      - name: clippy
+        run: |
+          cargo clippy --workspace
+      - name: test
+        run: |
+          cargo test --workspace
+      - name: integration test
+        run: |
+          cargo test --workspace -- --ignored

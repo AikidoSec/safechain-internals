@@ -34,3 +34,8 @@ go.work
 # GitHub Actions
 !.github/workflows/
 
+# Rust
+/target
+
+# bin data storage
+.aikido

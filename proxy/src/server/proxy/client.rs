@@ -1,0 +1,118 @@
+use std::borrow::Cow;
+
+use rama::{
+    Layer as _, Service,
+    error::OpaqueError,
+    extensions::{ExtensionsMut as _, ExtensionsRef as _},
+    http::{
+        Body, Request, Response, StatusCode,
+        layer::{
+            decompression::DecompressionLayer,
+            map_response_body::MapResponseBodyLayer,
+            remove_header::{RemoveRequestHeaderLayer, RemoveResponseHeaderLayer},
+        },
+        matcher::HttpMatcher,
+        service::web::response::IntoResponse,
+    },
+    layer::HijackLayer,
+    net::{
+        tls::{SecureTransport, client::ClientConfig},
+        user::UserId,
+    },
+    telemetry::tracing::{self, Instrument as _},
+    tls::boring::client::TlsConnectorDataBuilder,
+};
+
+use crate::{firewall::Firewall, server::connectivity::CONNECTIVITY_DOMAIN};
+
+#[derive(Debug, Clone)]
+pub(super) struct HttpClient<S> {
+    inner: S,
+}
+
+pub(super) fn new_https_client(
+    firewall: Firewall,
+) -> Result<HttpClient<impl Service<Request, Output = Response, Error = OpaqueError>>, OpaqueError>
+{
+    let inner = (
+        RemoveResponseHeaderLayer::hop_by_hop(),
+        firewall.into_evaluate_request_layer(),
+        RemoveRequestHeaderLayer::hop_by_hop(),
+        MapResponseBodyLayer::new(Body::new),
+        DecompressionLayer::new(),
+        HijackLayer::new(
+            HttpMatcher::domain(CONNECTIVITY_DOMAIN),
+            crate::server::connectivity::new_connectivity_http_svc(),
+        ),
+    )
+        .into_layer(crate::client::new_web_client()?);
+
+    Ok(HttpClient { inner })
+}
+
+impl<S> Service<Request> for HttpClient<S>
+where
+    S: Service<Request, Output = Response, Error = OpaqueError>,
+{
+    type Output = S::Output;
+    type Error = S::Error;
+
+    async fn serve(&self, req: Request) -> Result<Self::Output, Self::Error> {
+        let uri = req.uri().clone();
+        tracing::debug!(uri = %uri, "serving http(s) over proxy (egress) client");
+
+        let mut mod_req = req;
+
+        if let Some(tls_client_hello) = mod_req
+            .extensions()
+            .get::<SecureTransport>()
+            .and_then(|st| st.client_hello())
+            .cloned()
+        {
+            match TlsConnectorDataBuilder::try_from(&ClientConfig::from(tls_client_hello)) {
+                Ok(mirror_tls_cfg) => {
+                    tracing::trace!(
+                        "inject TLS Connector data builder based on input TLS ClientHello"
+                    );
+                    mod_req.extensions_mut().insert(mirror_tls_cfg);
+                }
+                Err(err) => {
+                    tracing::debug!(
+                        "failed to create TLS Connector data builder based on input TLS ClientHello: err = {err}; proceed anyway with default rama boring CH"
+                    );
+                }
+            }
+        }
+
+        let proxy_user: Cow<'static, str> = mod_req
+            .extensions()
+            .get::<UserId>()
+            .map(|id| match id {
+                UserId::Username(username) => Cow::Owned(username.clone()),
+                UserId::Token(_) => Cow::Borrowed("<TOKEN>"),
+                UserId::Anonymous => Cow::Borrowed("anonymous"),
+            })
+            .unwrap_or_else(|| Cow::Borrowed("anonymous"));
+
+        tracing::debug!("start MITM HTTP(S) web request for user = {proxy_user}");
+
+        match self
+            .inner
+            .serve(mod_req)
+            .instrument(tracing::debug_span!(
+                "MITM HTTP(S) web request",
+                proxy.user = %proxy_user,
+                otel.kind = "client",
+                network.protocol.name = "http",
+            ))
+            .await
+        {
+            Ok(resp) => Ok(resp),
+            Err(err) => {
+                tracing::error!(uri = %uri, "error forwarding request: {err:?}");
+                let resp = StatusCode::BAD_GATEWAY.into_response();
+                Ok(resp)
+            }
+        }
+    }
+}
