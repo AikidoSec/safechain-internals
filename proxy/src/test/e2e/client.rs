@@ -73,7 +73,7 @@ fn new_web_client_inner(
             ManagedPolicy::default().with_backoff(
                 ExponentialBackoff::new(
                     Duration::from_millis(100),
-                    Duration::from_secs(10),
+                    Duration::from_secs(30),
                     0.01,
                     HasherRng::default,
                 )

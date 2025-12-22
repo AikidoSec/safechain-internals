@@ -137,7 +137,7 @@ pub fn generate_connectivity_page_txt_response(
     let query = maybe_query.unwrap_or_default();
 
     (
-        Headers::single(headers::ContentType::xml()),
+        Headers::single(headers::ContentType::text_utf8()),
         format!(
             r#"{}
 
