@@ -73,7 +73,7 @@ func (s *Step) Uninstall(ctx context.Context) error {
 		return fmt.Errorf("failed to uninstall ca cert: %v", err)
 	}
 	if err := os.Remove(s.GetCaCertPath()); err != nil {
-		log.Println("failed to remove ca cert: %v", err)
+		log.Printf("failed to remove ca cert: %v\n", err)
 	}
 	log.Println("Uninstalled CA cert successfully")
 	return nil
