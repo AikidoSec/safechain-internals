@@ -51,10 +51,14 @@ impl RuleNpm {
 
         Ok(Self {
             // NOTE: should you ever make this list dynamic we would stop hardcoding these target domains here...
-            target_domains: ["registry.npmjs.org"]
-                .into_iter()
-                .map(|domain| (Domain::from_static(domain), ()))
-                .collect(),
+            target_domains: [
+                "registry.npmjs.org",
+                "registry.npmjs.com",
+                "registry.yarnpkg.com",
+            ]
+            .into_iter()
+            .map(|domain| (Domain::from_static(domain), ()))
+            .collect(),
             remote_malware_list,
         })
     }
