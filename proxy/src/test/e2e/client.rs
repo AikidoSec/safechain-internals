@@ -61,7 +61,7 @@ fn new_web_client_inner(
         .without_tls_proxy_support()
         .with_proxy_support()
         .with_tls_support_using_boringssl(tls_config)
-        .with_custom_connector(TimeoutLayer::new(Duration::from_secs(3)))
+        .with_custom_connector(TimeoutLayer::new(Duration::from_secs(15)))
         .with_default_http_connector()
         .try_with_default_connection_pool()
         .expect("create connection pool for proxy web client")
@@ -73,7 +73,7 @@ fn new_web_client_inner(
             ManagedPolicy::default().with_backoff(
                 ExponentialBackoff::new(
                     Duration::from_millis(100),
-                    Duration::from_secs(3),
+                    Duration::from_secs(20),
                     0.01,
                     HasherRng::default,
                 )

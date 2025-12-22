@@ -1,10 +1,12 @@
 #![allow(unused)]
 
 mod client;
+mod har;
 mod runtime;
 
 mod test_connectivity;
 mod test_meta;
+mod test_proxy_firewall_chrome;
 mod test_proxy_firewall_vscode;
 mod test_proxy_no_firewall;
 

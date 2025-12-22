@@ -157,7 +157,7 @@ impl RuleChrome {
             return None;
         };
 
-        let Some(product_id) = x.strip_prefix("id=").map(|s| s.trim().into()) else {
+        let Some(product_id) = x.strip_prefix("id=").map(|s| s.trim()) else {
             tracing::trace!(
                 http.url.full = %req.uri(),
                 http.host = %domain,
@@ -166,6 +166,12 @@ impl RuleChrome {
             );
             return None;
         };
+
+        let product_id = product_id
+            .split_once('&')
+            .map(|p| p.0)
+            .unwrap_or(product_id)
+            .into();
 
         Some(ChromeExtensionRequestInfo { domain, product_id })
     }
