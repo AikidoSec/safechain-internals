@@ -66,17 +66,25 @@ impl Firewall {
         Ok(Self {
             block_rules: Arc::new(vec![
                 self::rule::vscode::RuleVSCode::try_new(
-                    guard,
-                    shared_remote_malware_client,
+                    guard.clone(),
+                    shared_remote_malware_client.clone(),
                     data.clone(),
                 )
                 .await
                 .context("create block rule: vscode")?
                 .into_dyn(),
-                self::rule::chrome::RuleChrome::try_new(data)
+                self::rule::chrome::RuleChrome::try_new(data.clone())
                     .await
                     .context("create block rule: chrome")?
                     .into_dyn(),
+                self::rule::npm::RuleNpm::try_new(
+                    guard.clone(),
+                    shared_remote_malware_client.clone(),
+                    data.clone(),
+                )
+                .await
+                .context("create block rule: npm")?
+                .into_dyn(),
             ]),
         })
     }

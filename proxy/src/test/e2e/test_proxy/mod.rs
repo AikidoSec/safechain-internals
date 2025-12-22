@@ -1,6 +1,7 @@
 mod no_firewall;
 
 mod firewall_chrome;
+mod firewall_npm;
 mod firewall_vscode;
 
 use crate::test::e2e;
@@ -22,5 +23,10 @@ pub(super) async fn test_proxy(runtime: &e2e::runtime::Runtime) {
         self::firewall_vscode::test_vscode_http_plugin_ok(runtime, &client),
         self::firewall_vscode::test_vscode_https_plugin_malware_blocked(runtime, &client),
         self::firewall_vscode::test_vscode_https_plugin_ok(runtime, &client),
+    );
+
+    tokio::join!(
+        self::firewall_npm::test_npm_https_package_malware_blocked(runtime, &client),
+        self::firewall_npm::test_npm_https_package_ok(runtime, &client),
     );
 }
