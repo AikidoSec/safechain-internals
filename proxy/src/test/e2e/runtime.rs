@@ -40,18 +40,16 @@ pub(super) async fn get() -> Runtime {
 
     let app = APP.clone();
 
-    let meta_addr = tokio::time::timeout(
-        Duration::from_secs(10),
-        read_file_or_wait(app.data_dir.join("meta.addr.txt")),
+    let (meta_addr, proxy_addr) = tokio::try_join!(
+        tokio::time::timeout(
+            Duration::from_secs(30),
+            read_file_or_wait(app.data_dir.join("meta.addr.txt"))
+        ),
+        tokio::time::timeout(
+            Duration::from_secs(30),
+            read_file_or_wait(app.data_dir.join("proxy.addr.txt"))
+        ),
     )
-    .await
-    .unwrap();
-
-    let proxy_addr = tokio::time::timeout(
-        Duration::from_secs(10),
-        read_file_or_wait(app.data_dir.join("proxy.addr.txt")),
-    )
-    .await
     .unwrap();
 
     Runtime {
