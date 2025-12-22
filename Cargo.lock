@@ -2651,6 +2651,7 @@ dependencies = [
  "linux-keyutils-keyring-store",
  "lz4_flex",
  "mimalloc",
+ "percent-encoding",
  "postcard",
  "radix_trie",
  "rama",
