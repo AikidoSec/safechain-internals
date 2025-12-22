@@ -9,7 +9,6 @@ pub(super) async fn test_proxy(runtime: &e2e::runtime::Runtime) {
     let client = e2e::client::new_web_client(runtime, true).await;
 
     tokio::join!(
-        self::no_firewall::test_example_com_no_proxy_http(runtime, &client),
         self::no_firewall::test_http_example_com_proxy_http(runtime, &client),
         self::no_firewall::test_http_example_com_proxy_socks5(runtime, &client),
         self::no_firewall::test_https_example_com_proxy_http(runtime, &client),

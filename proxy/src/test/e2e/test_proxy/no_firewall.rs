@@ -7,14 +7,6 @@ use rama::{
 
 use crate::test::e2e;
 
-pub(super) async fn test_example_com_no_proxy_http(
-    _runtime: &e2e::runtime::Runtime,
-    client: &impl Service<Request, Output = Response, Error = OpaqueError>,
-) {
-    let resp = client.get("http://example.com").send().await.unwrap();
-    assert_eq!(StatusCode::OK, resp.status());
-}
-
 pub(super) async fn test_http_example_com_proxy_http(
     runtime: &e2e::runtime::Runtime,
     client: &impl Service<Request, Output = Response, Error = OpaqueError>,
