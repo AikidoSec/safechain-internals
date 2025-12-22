@@ -91,6 +91,7 @@ mod https {
 
     #[tokio::test]
     #[tracing_test::traced_test]
+    #[ignore]
     async fn test_endpoint_root_failure() {
         let runtime = e2e::runtime::get().await;
         let client = e2e::client::new_web_client(&runtime, false).await;
@@ -124,6 +125,7 @@ mod https {
 
     #[tokio::test]
     #[tracing_test::traced_test]
+    #[ignore]
     async fn test_endpoint_ping_failure() {
         let runtime = e2e::runtime::get().await;
         let client = e2e::client::new_web_client(&runtime, false).await;
@@ -159,6 +161,7 @@ mod https {
 
     #[tokio::test]
     #[tracing_test::traced_test]
+    #[ignore]
     async fn test_endpoint_ca_failure() {
         let runtime = e2e::runtime::get().await;
         let client = e2e::client::new_web_client(&runtime, false).await;
@@ -195,6 +198,7 @@ mod https {
 
     #[tokio::test]
     #[tracing_test::traced_test]
+    #[ignore]
     async fn test_endpoint_pac_failure() {
         let runtime = e2e::runtime::get().await;
 

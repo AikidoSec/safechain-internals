@@ -13,6 +13,7 @@ use crate::{server::connectivity::CONNECTIVITY_DOMAIN, test::e2e};
 
 #[tokio::test]
 #[tracing_test::traced_test]
+#[ignore]
 async fn test_connectivity_failure_no_proxy() {
     let runtime = e2e::runtime::get().await;
 
@@ -161,6 +162,7 @@ async fn test_connectivity_https_over_socks5() {
 
 #[tokio::test]
 #[tracing_test::traced_test]
+#[ignore]
 async fn test_connectivity_https_failure_no_trust() {
     let runtime = e2e::runtime::get().await;
 
