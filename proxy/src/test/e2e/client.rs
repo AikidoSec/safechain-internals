@@ -1,26 +1,16 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use rama::{
-    Layer as _, Service,
-    error::{ErrorContext as _, OpaqueError},
+    Service,
+    error::OpaqueError,
     http::{
-        Body, BodyExtractExt as _, Request, Response,
-        client::EasyHttpWebClient,
-        layer::{
-            map_request_body::MapRequestBodyLayer,
-            retry::{ManagedPolicy, RetryLayer},
-        },
+        BodyExtractExt as _, Request, Response, client::EasyHttpWebClient,
         service::client::HttpClientExt,
     },
-    layer::{MapErrLayer, TimeoutLayer},
     tls::boring::{
         client::TlsConnectorDataBuilder,
-        core::x509::{
-            X509,
-            store::{X509Store, X509StoreBuilder},
-        },
+        core::x509::{X509, store::X509StoreBuilder},
     },
-    utils::{backoff::ExponentialBackoff, rng::HasherRng},
 };
 
 use super::runtime::Runtime;
@@ -56,31 +46,11 @@ pub async fn new_web_client(
 fn new_web_client_inner(
     tls_config: Option<Arc<TlsConnectorDataBuilder>>,
 ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
-    let inner_https_client = EasyHttpWebClient::connector_builder()
+    EasyHttpWebClient::connector_builder()
         .with_default_transport_connector()
-        .with_custom_connector(TimeoutLayer::new(Duration::from_secs(1)))
         .without_tls_proxy_support()
         .with_proxy_support()
         .with_tls_support_using_boringssl(tls_config)
         .with_default_http_connector()
-        .try_with_default_connection_pool()
-        .expect("create connection pool for proxy web client")
-        .build_client();
-
-    (
-        MapErrLayer::new(OpaqueError::from_std),
-        RetryLayer::new(
-            ManagedPolicy::default().with_backoff(
-                ExponentialBackoff::new(
-                    Duration::from_millis(100),
-                    Duration::from_secs(30),
-                    0.01,
-                    HasherRng::default,
-                )
-                .expect("create exponential backoff impl"),
-            ),
-        ),
-        MapRequestBodyLayer::new(Body::new),
-    )
-        .into_layer(inner_https_client)
+        .build_client()
 }

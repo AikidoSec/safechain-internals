@@ -1,24 +1,13 @@
-use std::{
-    io::ErrorKind,
-    path::{Path, PathBuf},
-    sync::LazyLock,
-    time::Duration,
-};
+use std::{io::ErrorKind, path::PathBuf, sync::LazyLock, time::Duration};
 
 use clap::Parser;
-use rama::{
-    net::{
-        address::{DomainAddress, SocketAddress},
-        socket::core::Socket,
-    },
-    telemetry::tracing,
-};
+use rama::net::address::{DomainAddress, SocketAddress};
 
 use crate::Args;
 
 #[derive(Clone)]
 pub(super) struct Runtime {
-    app: App,
+    _app: App,
 
     meta_addr: SocketAddress,
     proxy_addr: SocketAddress,
@@ -66,7 +55,7 @@ pub(super) async fn get() -> Runtime {
     .unwrap();
 
     Runtime {
-        app,
+        _app: app,
         meta_addr,
         proxy_addr,
     }

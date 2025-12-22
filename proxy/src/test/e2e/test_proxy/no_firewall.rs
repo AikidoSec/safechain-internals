@@ -1,35 +1,24 @@
 use rama::{
-    http::{BodyExtractExt, StatusCode, service::client::HttpClientExt as _},
-    net::{
-        Protocol,
-        address::ProxyAddress,
-        user::{ProxyCredential, credentials::basic},
-    },
-    telemetry::tracing,
-    tls::boring::core::x509::X509,
+    Service,
+    error::OpaqueError,
+    http::{BodyExtractExt, Request, Response, StatusCode, service::client::HttpClientExt as _},
+    net::{Protocol, address::ProxyAddress},
 };
 
 use crate::test::e2e;
 
-#[tokio::test]
-#[tracing_test::traced_test]
-async fn test_example_com_no_proxy_http() {
-    let runtime = e2e::runtime::get().await;
-
-    let client = e2e::client::new_web_client(&runtime, false).await;
-
+pub(super) async fn test_example_com_no_proxy_http(
+    _runtime: &e2e::runtime::Runtime,
+    client: &impl Service<Request, Output = Response, Error = OpaqueError>,
+) {
     let resp = client.get("http://example.com").send().await.unwrap();
-
     assert_eq!(StatusCode::OK, resp.status());
 }
 
-#[tokio::test]
-#[tracing_test::traced_test]
-async fn test_http_example_com_proxy_http() {
-    let runtime = e2e::runtime::get().await;
-
-    let client = e2e::client::new_web_client(&runtime, false).await;
-
+pub(super) async fn test_http_example_com_proxy_http(
+    runtime: &e2e::runtime::Runtime,
+    client: &impl Service<Request, Output = Response, Error = OpaqueError>,
+) {
     let resp = client
         .get("http://example.com")
         .extension(ProxyAddress {
@@ -48,13 +37,10 @@ async fn test_http_example_com_proxy_http() {
     assert!(payload.contains("example.com"), "payload: {payload}");
 }
 
-#[tokio::test]
-#[tracing_test::traced_test]
-async fn test_http_example_com_proxy_socks5() {
-    let runtime = e2e::runtime::get().await;
-
-    let client = e2e::client::new_web_client(&runtime, false).await;
-
+pub(super) async fn test_http_example_com_proxy_socks5(
+    runtime: &e2e::runtime::Runtime,
+    client: &impl Service<Request, Output = Response, Error = OpaqueError>,
+) {
     let resp = client
         .get("http://example.com")
         .extension(ProxyAddress {
@@ -73,13 +59,10 @@ async fn test_http_example_com_proxy_socks5() {
     assert!(payload.contains("example.com"), "payload: {payload}");
 }
 
-#[tokio::test]
-#[tracing_test::traced_test]
-async fn test_https_example_com_proxy_http() {
-    let runtime = e2e::runtime::get().await;
-
-    let client = e2e::client::new_web_client(&runtime, true).await;
-
+pub(super) async fn test_https_example_com_proxy_http(
+    runtime: &e2e::runtime::Runtime,
+    client: &impl Service<Request, Output = Response, Error = OpaqueError>,
+) {
     let resp = client
         .get("https://example.com")
         .extension(ProxyAddress {
@@ -98,13 +81,10 @@ async fn test_https_example_com_proxy_http() {
     assert!(payload.contains("example.com"), "payload: {payload}");
 }
 
-#[tokio::test]
-#[tracing_test::traced_test]
-async fn test_https_example_com_proxy_socks5() {
-    let runtime = e2e::runtime::get().await;
-
-    let client = e2e::client::new_web_client(&runtime, true).await;
-
+pub(super) async fn test_https_example_com_proxy_socks5(
+    runtime: &e2e::runtime::Runtime,
+    client: &impl Service<Request, Output = Response, Error = OpaqueError>,
+) {
     let resp = client
         .get("https://example.com")
         .extension(ProxyAddress {
