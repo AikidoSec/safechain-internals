@@ -112,7 +112,7 @@ impl RulePyPI {
 
         // Package file download (e.g. .../foo-1.0.0.whl or .../bar-2.3.4.tar.gz)
         if let Some(filename) = segments.last() {
-            return parse_wheel_filename(filename).or_else(|| parse_sdist_filename(filename));
+            return parse_whl_filename(filename).or_else(|| parse_sdist_filename(filename));
         }
 
         None
@@ -193,7 +193,7 @@ fn percent_decode(input: &str) -> String {
 
 /// Parses a wheel filename (e.g., "foo_bar-2.0.0-py3-none-any.whl") to extract the
 /// package info. Also handles `.whl.metadata` files.
-fn parse_wheel_filename(filename: &str) -> Option<PackageInfo> {
+fn parse_whl_filename(filename: &str) -> Option<PackageInfo> {
     // Accept .whl or .whl.metadata suffixes
     let trimmed = filename
         .strip_suffix(".whl.metadata")
@@ -320,7 +320,7 @@ mod tests {
         ];
 
         for (input, expected) in test_cases {
-            let result = parse_wheel_filename(input);
+            let result = parse_whl_filename(input);
             match expected {
                 Some((expected_name, expected_version)) => {
                     let info = result.unwrap_or_else(|| panic!("Expected Some for: {}", input));
