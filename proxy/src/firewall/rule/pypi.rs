@@ -15,7 +15,7 @@ use crate::{
         malware_list::{MalwareEntry, PackageVersion, RemoteMalwareList},
         pac::PacScriptGenerator,
     },
-    http::response::generate_blocked_response_with_context,
+    http::response::generate_generic_blocked_response_for_req,
     storage::SyncCompactDataStorage,
 };
 
@@ -175,20 +175,8 @@ impl Rule for RulePyPI {
         if self.is_blocked(&package_info)? {
             tracing::debug!(package = %package_info.name, version = ?package_info.version, "blocked PyPI package download");
 
-            let version_str = match &package_info.version {
-                PackageVersion::Semver(v) => Some(v.to_string()),
-                PackageVersion::Unknown(v) => Some(v.to_string()),
-                _ => None,
-            };
-
             return Ok(RequestAction::Block(
-                generate_blocked_response_with_context(
-                    req,
-                    "PyPI",
-                    &package_info.name,
-                    version_str.as_deref(),
-                    "Listed as malware in Aikido Intel",
-                ),
+                generate_generic_blocked_response_for_req(req),
             ));
         }
 
@@ -343,14 +331,12 @@ mod tests {
                             );
                         }
                         PackageVersion::Unknown(v) => {
-                            assert_eq!(
-                                v.as_str(),
-                                expected_version,
-                                "Failed for input: {}",
-                                input
-                            );
+                            assert_eq!(v.as_str(), expected_version, "Failed for input: {}", input);
                         }
-                        _ => panic!("Expected Semver or Unknown version for: {}, got {:?}", input, info.version),
+                        _ => panic!(
+                            "Expected Semver or Unknown version for: {}, got {:?}",
+                            input, info.version
+                        ),
                     }
                 }
                 None => {
