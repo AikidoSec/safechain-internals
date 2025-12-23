@@ -21,6 +21,8 @@ use crate::{
 
 use super::{RequestAction, Rule};
 
+const TARGET_DOMAINS: &[&str] = &["pypi.org", "files.pythonhosted.org", "pypi.python.org"];
+
 struct PackageInfo {
     name: String,
     version: PackageVersion,
@@ -60,8 +62,8 @@ impl RulePyPI {
         .await
         .context("create remote malware list for pypi block rule")?;
 
-        let target_domains = ["pypi.org", "files.pythonhosted.org", "pypi.python.org"]
-            .into_iter()
+        let target_domains = TARGET_DOMAINS
+            .iter()
             .map(|d| (Domain::from_static(d), ()))
             .collect();
 
@@ -212,27 +214,16 @@ fn parse_source_dist_filename(filename: &str) -> Option<PackageInfo> {
     // Accept common sdist suffixes (with optional .metadata)
     const SDIST_SUFFIXES: &[&str] = &[".tar.gz", ".zip", ".tar.bz2", ".tar.xz"];
 
-    let (base, matched) = SDIST_SUFFIXES
-        .iter()
-        .find_map(|suffix| {
-            // Try stripping .metadata variant first
-            let metadata_suffix = format!("{suffix}.metadata");
-            if let Some(base) = filename.strip_suffix(&metadata_suffix) {
-                return Some((base, true));
-            }
-
-            // Fall back to regular suffix
-            if let Some(base) = filename.strip_suffix(*suffix) {
-                return Some((base, true));
-            }
-
-            None
-        })
+    // Check if filename ends with .metadata and strip it once
+    let (working_name, _has_metadata) = filename
+        .strip_suffix(".metadata")
+        .map(|base| (base, true))
         .unwrap_or((filename, false));
 
-    if !matched {
-        return None;
-    }
+    // Now check for actual archive suffixes
+    let base = SDIST_SUFFIXES
+        .iter()
+        .find_map(|suffix| working_name.strip_suffix(*suffix))?;
 
     let last_dash = base.rfind('-')?;
     if last_dash == 0 || last_dash >= base.len() - 1 {
@@ -253,8 +244,6 @@ fn parse_source_dist_filename(filename: &str) -> Option<PackageInfo> {
 
 /// Parses a raw version string into a `PackageVersion` enum.
 fn parse_package_version(raw: &str) -> PackageVersion {
-    use crate::firewall::malware_list::PackageVersion;
-
     let raw = raw.trim();
     if raw.is_empty() {
         return PackageVersion::None;
@@ -270,8 +259,6 @@ fn parse_package_version(raw: &str) -> PackageVersion {
 
 /// Checks if a requested version matches a version specified in the malware list.
 fn version_matches(entry_version: &PackageVersion, req_version: &PackageVersion) -> bool {
-    use crate::firewall::malware_list::PackageVersion;
-
     match (entry_version, req_version) {
         (PackageVersion::Any, _) => true,
         (PackageVersion::None, PackageVersion::None) => true,
