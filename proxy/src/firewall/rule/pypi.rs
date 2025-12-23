@@ -112,7 +112,7 @@ impl RulePyPI {
 
         // Package file download (e.g. .../foo-1.0.0.whl or .../bar-2.3.4.tar.gz)
         if let Some(filename) = segments.last() {
-            return parse_whl_filename(filename).or_else(|| parse_sdist_filename(filename));
+            return parse_wheel_filename(filename).or_else(|| parse_source_dist_filename(filename));
         }
 
         None
@@ -184,16 +184,13 @@ impl Rule for RulePyPI {
     }
 }
 
-/// Decodes a percent-encoded URL segment.
 fn percent_decode(input: &str) -> String {
     percent_encoding::percent_decode_str(input)
         .decode_utf8_lossy()
         .to_string()
 }
 
-/// Parses a wheel filename (e.g., "foo_bar-2.0.0-py3-none-any.whl") to extract the
-/// package info. Also handles `.whl.metadata` files.
-fn parse_whl_filename(filename: &str) -> Option<PackageInfo> {
+fn parse_wheel_filename(filename: &str) -> Option<PackageInfo> {
     // Accept .whl or .whl.metadata suffixes
     let trimmed = filename
         .strip_suffix(".whl.metadata")
@@ -211,19 +208,25 @@ fn parse_whl_filename(filename: &str) -> Option<PackageInfo> {
     })
 }
 
-/// Parses a source distribution filename (e.g., "requests-2.31.0.tar.gz") to extract
-/// the package info.
-fn parse_sdist_filename(filename: &str) -> Option<PackageInfo> {
+fn parse_source_dist_filename(filename: &str) -> Option<PackageInfo> {
     // Accept common sdist suffixes (with optional .metadata)
     const SDIST_SUFFIXES: &[&str] = &[".tar.gz", ".zip", ".tar.bz2", ".tar.xz"];
 
     let (base, matched) = SDIST_SUFFIXES
         .iter()
         .find_map(|suffix| {
-            filename
-                .strip_suffix(&format!("{suffix}.metadata"))
-                .map(|b| (b, true))
-                .or_else(|| filename.strip_suffix(*suffix).map(|b| (b, true)))
+            // Try stripping .metadata variant first
+            let metadata_suffix = format!("{suffix}.metadata");
+            if let Some(base) = filename.strip_suffix(&metadata_suffix) {
+                return Some((base, true));
+            }
+
+            // Fall back to regular suffix
+            if let Some(base) = filename.strip_suffix(*suffix) {
+                return Some((base, true));
+            }
+
+            None
         })
         .unwrap_or((filename, false));
 
@@ -320,7 +323,7 @@ mod tests {
         ];
 
         for (input, expected) in test_cases {
-            let result = parse_whl_filename(input);
+            let result = parse_wheel_filename(input);
             match expected {
                 Some((expected_name, expected_version)) => {
                     let info = result.unwrap_or_else(|| panic!("Expected Some for: {}", input));
@@ -386,7 +389,7 @@ mod tests {
         ];
 
         for (input, expected) in test_cases {
-            let result = parse_sdist_filename(input);
+            let result = parse_source_dist_filename(input);
             match expected {
                 Some((expected_name, expected_version)) => {
                     let info = result.unwrap_or_else(|| panic!("Expected Some for: {}", input));
