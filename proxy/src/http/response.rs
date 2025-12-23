@@ -80,7 +80,6 @@ pub fn generate_blocked_response_with_context(
     <meta charset=\"utf-8\">
     <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
     <title>Blocked by Safe Chain</title>
-    <style>body{{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;padding:2rem;line-height:1.6}}code{{background:#f3f4f6;padding:.2rem .4rem;border-radius:.25rem}}</style>
 </head>
 <body>
     <h1>Request blocked</h1>
@@ -91,7 +90,6 @@ pub fn generate_blocked_response_with_context(
         <li><strong>Reason:</strong> {reason}</li>
     </ul>
     <p>Installation was prevented to keep your environment secure.</p>
-    <p>If you believe this is a mistake, contact your security administrator.</p>
 </body>
 </html>
 "#

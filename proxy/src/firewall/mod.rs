@@ -70,18 +70,14 @@ impl Firewall {
                     shared_remote_malware_client.clone(),
                     data.clone(),
                 )
-                    .await
-                    .context("create block rule: vscode")?
-                    .into_dyn(),
+                .await
+                .context("create block rule: vscode")?
+                .into_dyn(),
                 self::rule::chrome::RuleChrome::try_new(data.clone())
                     .await
                     .context("create block rule: chrome")?
                     .into_dyn(),
-                self::rule::pypi::RulePyPI::try_new(
-                    guard,
-                    shared_remote_malware_client,
-                    data,
-                )
+                self::rule::pypi::RulePyPI::try_new(guard, shared_remote_malware_client, data)
                     .await
                     .context("create block rule: pypi")?
                     .into_dyn(),

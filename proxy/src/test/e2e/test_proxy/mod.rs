@@ -1,6 +1,7 @@
 mod no_firewall;
 
 mod firewall_chrome;
+mod firewall_pypi;
 mod firewall_vscode;
 
 use crate::test::e2e;
@@ -22,5 +23,16 @@ pub(super) async fn test_proxy(runtime: &e2e::runtime::Runtime) {
         self::firewall_vscode::test_vscode_http_plugin_ok(runtime, &client),
         self::firewall_vscode::test_vscode_https_plugin_malware_blocked(runtime, &client),
         self::firewall_vscode::test_vscode_https_plugin_ok(runtime, &client),
+    );
+
+    tokio::join!(
+        self::firewall_pypi::test_pypi_http_metadata_request_allowed(runtime, &client),
+        self::firewall_pypi::test_pypi_http_simple_metadata_allowed(runtime, &client),
+        self::firewall_pypi::test_pypi_http_malware_wheel_blocked(runtime, &client),
+        self::firewall_pypi::test_pypi_http_malware_sdist_blocked(runtime, &client),
+        self::firewall_pypi::test_pypi_http_safe_package_allowed(runtime, &client),
+        self::firewall_pypi::test_pypi_https_metadata_request_allowed(runtime, &client),
+        self::firewall_pypi::test_pypi_https_malware_wheel_blocked(runtime, &client),
+        self::firewall_pypi::test_pypi_https_safe_package_allowed(runtime, &client),
     );
 }

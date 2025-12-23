@@ -1,62 +1,59 @@
-use std::{str::FromStr, time::Duration};
+use std::{fmt, str::FromStr, time::Duration};
 
-use crate::firewall::{
-    malware_list::RemoteMalwareList,
-    rule::{PacScriptGenerator, RequestAction, Rule},
-};
 use percent_encoding;
 use rama::{
+    Service,
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
-    http::{Request, Uri},
+    http::{Request, Response, Uri},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
 };
 
 use crate::{
-    http::response::generate_blocked_response_with_context, storage::SyncCompactDataStorage,
+    firewall::{
+        malware_list::{MalwareEntry, PackageVersion, RemoteMalwareList},
+        pac::PacScriptGenerator,
+    },
+    http::response::generate_blocked_response_with_context,
+    storage::SyncCompactDataStorage,
 };
 
-/// Blocks malicious PyPI packages by inspecting download URLs against a remote malware list.
-///
-/// This rule intercepts requests to PyPI domains (`pypi.org`, `files.pythonhosted.org`, etc.)
-/// and performs the following logic:
-///
-/// 1.  **Domain Matching**: It first checks if the request is for a known PyPI domain.
-/// 2.  **Package Info Extraction**: It parses the request URL to extract a package name and version.
-///     This logic handles three main URL types:
-///     - PyPI JSON API (`/pypi/<pkg>/json`): Identifies the package name. These are considered
-///       metadata requests and are NOT blocked, to allow dependency resolution.
-///     - Simple API HTML pages (`/simple/<pkg>/`): Also treated as metadata and NOT blocked.
-///     - Package downloads (`.../pkg-1.0.0.whl` or `.../pkg-1.0.0.tar.gz`): Extracts both
-///       package and version. These are the primary targets for blocking.
-/// 3.  **Malware Check**: If a package file download is identified, it checks the package name
-///     and version against the Aikido Intel malware list. It handles name normalization
-///     (e.g., `_` vs. `-`).
-/// 4.  **Blocking**: If the package/version is found in the malware list, the download is
-///     blocked with a 403 Forbidden status and a clear JSON/HTML/text response body.
+use super::{RequestAction, Rule};
+
+struct PackageInfo {
+    name: String,
+    version: PackageVersion,
+}
+
+impl PackageInfo {
+    fn is_metadata_request(&self) -> bool {
+        matches!(self.version, PackageVersion::None)
+    }
+
+    fn matches(&self, entry: &MalwareEntry) -> bool {
+        version_matches(&entry.version, &self.version)
+    }
+}
+
 pub(in crate::firewall) struct RulePyPI {
     target_domains: DomainTrie<()>,
     remote_malware_list: RemoteMalwareList,
 }
 
 impl RulePyPI {
-    /// Creates a new PyPI firewall rule.
-    ///
-    /// This constructor is asynchronous because it needs to perform an initial fetch
-    /// (or load from cache) of the PyPI malware list.
     pub(in crate::firewall) async fn try_new<C>(
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
     ) -> Result<Self, OpaqueError>
     where
-        C: rama::Service<Request, Output = rama::http::Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = OpaqueError>,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_pypi.json"),
-            Duration::from_secs(60 * 10),
+            Duration::from_secs(60 * 10), // Refresh every 10 minutes
             sync_storage,
             remote_malware_list_https_client,
         )
@@ -74,31 +71,19 @@ impl RulePyPI {
         })
     }
 
-    fn match_domain(&self, domain: &Domain) -> bool {
-        self.target_domains.is_match_parent(domain)
-    }
-
-    fn is_blocked(&self, package_name: &str, version: Option<&str>) -> Result<bool, OpaqueError> {
-        let entries = self.remote_malware_list.find_entries(package_name);
+    fn is_blocked(&self, package_info: &PackageInfo) -> Result<bool, OpaqueError> {
+        let entries = self.remote_malware_list.find_entries(&package_info.name);
         let Some(entries) = entries.entries() else {
             return Ok(false);
         };
 
-        if let Some(version) = version {
-            let req_version = parse_package_version(version);
-            return Ok(entries
-                .iter()
-                .any(|entry| version_matches(&entry.version, &req_version)));
-        }
-
-        // No version provided: block if any entry exists for the package (conservative).
-        Ok(!entries.is_empty())
+        Ok(entries.iter().any(|entry| package_info.matches(entry)))
     }
 
     /// Extracts package name and version from a PyPI request.
     ///
-    /// Returns `(package_name, version)` where version is `None` for metadata requests.
-    fn extract_package_info(req: &Request) -> Option<(String, Option<String>)> {
+    /// Returns `PackageInfo` where version is `PackageVersion::None` for metadata requests.
+    fn extract_package_info(req: &Request) -> Option<PackageInfo> {
         let uri = req.uri();
         let path = uri.path();
 
@@ -111,23 +96,23 @@ impl RulePyPI {
 
         // JSON metadata endpoint: /pypi/<name>/json
         if segments.len() == 3 && segments[0] == "pypi" && segments[2] == "json" {
-            let name = normalize_package_name(&segments[1]);
-            return Some((name, None));
+            return Some(PackageInfo {
+                name: normalize_package_name(&segments[1]),
+                version: PackageVersion::None,
+            });
         }
 
         // Simple package listing: /simple/<name>/
         if segments.len() >= 2 && segments[0] == "simple" {
-            let name = normalize_package_name(&segments[1]);
-            return Some((name, None));
+            return Some(PackageInfo {
+                name: normalize_package_name(&segments[1]),
+                version: PackageVersion::None,
+            });
         }
 
         // Package file download (e.g. .../foo-1.0.0.whl or .../bar-2.3.4.tar.gz)
-        if let Some(filename) = segments.last()
-            && let Some((dist, version)) =
-                parse_wheel_filename(filename).or_else(|| parse_sdist_filename(filename))
-        {
-            let name = normalize_package_name(&dist);
-            return Some((name, Some(version)));
+        if let Some(filename) = segments.last() {
+            return parse_wheel_filename(filename).or_else(|| parse_sdist_filename(filename));
         }
 
         None
@@ -139,6 +124,12 @@ fn normalize_package_name(raw: &str) -> String {
     raw.to_lowercase().replace('_', "-")
 }
 
+impl fmt::Debug for RulePyPI {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RulePyPI").finish()
+    }
+}
+
 impl Rule for RulePyPI {
     #[inline(always)]
     fn product_name(&self) -> &'static str {
@@ -147,7 +138,7 @@ impl Rule for RulePyPI {
 
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
-        self.match_domain(domain)
+        self.target_domains.is_match_parent(domain)
     }
 
     #[inline(always)]
@@ -158,44 +149,44 @@ impl Rule for RulePyPI {
     }
 
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
-        let Some(domain) = crate::http::try_get_domain_for_req(&req) else {
+        if !crate::http::try_get_domain_for_req(&req)
+            .map(|domain| self.match_domain(&domain))
+            .unwrap_or_default()
+        {
+            tracing::trace!("PyPI rule did not match incoming request: passthrough");
+            return Ok(RequestAction::Allow(req));
+        }
+
+        let Some(package_info) = Self::extract_package_info(&req) else {
+            tracing::trace!("PyPI url: path not recognized: passthrough");
             return Ok(RequestAction::Allow(req));
         };
-        if !self.match_domain(&domain) {
+
+        // NOTE: metadata requests (version=None, e.g., /pypi/<pkg>/json or /simple/<pkg>/) are NOT blocked.
+        // Blocking metadata would break dependency resolution for legitimate packages that depend on
+        // a malicious package. We only block the actual package file downloads.
+        if package_info.is_metadata_request() {
+            tracing::trace!(package = %package_info.name, "allowing metadata request for PyPI package");
             return Ok(RequestAction::Allow(req));
         }
 
-        tracing::trace!(http.url.full = %req.uri(), http.host = %domain, "PyPI rule matched domain");
+        // Package names are already normalized by extract_package_info (underscores -> hyphens),
+        // so we can check directly against the malware list
+        if self.is_blocked(&package_info)? {
+            tracing::debug!(package = %package_info.name, version = ?package_info.version, "blocked PyPI package download");
 
-        let Some((package_name, version)) = Self::extract_package_info(&req) else {
-            // Not a URL pattern we inspect, so allow it.
-            return Ok(RequestAction::Allow(req));
-        };
+            let version_str = match &package_info.version {
+                PackageVersion::Semver(v) => Some(v.to_string()),
+                PackageVersion::Unknown(v) => Some(v.to_string()),
+                _ => None,
+            };
 
-        // If version is None, it's a metadata request (e.g., /pypi/<pkg>/json).
-        // We DO NOT block metadata requests, as this would break dependency resolution
-        // for legitimate packages that happen to have a malicious dependency.
-        // We only block the final package download.
-        if version.is_none() {
-            tracing::trace!(package = %package_name, "allowing metadata request for PyPI package");
-            return Ok(RequestAction::Allow(req));
-        }
-
-        let mut blocked = self.is_blocked(&package_name, version.as_deref())?;
-        if !blocked && package_name.contains('_') {
-            // Normalize underscores to hyphens (PyPI treats them as equivalent) and re-check.
-            let hyphen_name = package_name.replace('_', "-");
-            blocked = self.is_blocked(&hyphen_name, version.as_deref())?;
-        }
-
-        if blocked {
-            tracing::debug!(package = %package_name, version = ?version, "blocked PyPI package download");
             return Ok(RequestAction::Block(
                 generate_blocked_response_with_context(
                     req,
                     "PyPI",
-                    &package_name,
-                    version.as_deref(),
+                    &package_info.name,
+                    version_str.as_deref(),
                     "Listed as malware in Aikido Intel",
                 ),
             ));
@@ -213,8 +204,8 @@ fn percent_decode(input: &str) -> String {
 }
 
 /// Parses a wheel filename (e.g., "foo_bar-2.0.0-py3-none-any.whl") to extract the
-/// distribution name and version. Also handles `.whl.metadata` files.
-fn parse_wheel_filename(filename: &str) -> Option<(String, String)> {
+/// package info. Also handles `.whl.metadata` files.
+fn parse_wheel_filename(filename: &str) -> Option<PackageInfo> {
     // Accept .whl or .whl.metadata suffixes
     let trimmed = filename
         .strip_suffix(".whl.metadata")
@@ -226,12 +217,15 @@ fn parse_wheel_filename(filename: &str) -> Option<(String, String)> {
     if version.eq_ignore_ascii_case("latest") || dist.is_empty() || version.is_empty() {
         return None;
     }
-    Some((dist.to_string(), version.to_string()))
+    Some(PackageInfo {
+        name: normalize_package_name(dist),
+        version: parse_package_version(version),
+    })
 }
 
 /// Parses a source distribution filename (e.g., "requests-2.31.0.tar.gz") to extract
-/// the distribution name and version.
-fn parse_sdist_filename(filename: &str) -> Option<(String, String)> {
+/// the package info.
+fn parse_sdist_filename(filename: &str) -> Option<PackageInfo> {
     // Accept common sdist suffixes (with optional .metadata)
     const SDIST_SUFFIXES: &[&str] = &[".tar.gz", ".zip", ".tar.bz2", ".tar.xz"];
 
@@ -260,11 +254,14 @@ fn parse_sdist_filename(filename: &str) -> Option<(String, String)> {
         return None;
     }
 
-    Some((dist.to_string(), version.to_string()))
+    Some(PackageInfo {
+        name: normalize_package_name(dist),
+        version: parse_package_version(version),
+    })
 }
 
 /// Parses a raw version string into a `PackageVersion` enum.
-fn parse_package_version(raw: &str) -> crate::firewall::malware_list::PackageVersion {
+fn parse_package_version(raw: &str) -> PackageVersion {
     use crate::firewall::malware_list::PackageVersion;
 
     let raw = raw.trim();
@@ -281,10 +278,7 @@ fn parse_package_version(raw: &str) -> crate::firewall::malware_list::PackageVer
 }
 
 /// Checks if a requested version matches a version specified in the malware list.
-fn version_matches(
-    entry_version: &crate::firewall::malware_list::PackageVersion,
-    req_version: &crate::firewall::malware_list::PackageVersion,
-) -> bool {
+fn version_matches(entry_version: &PackageVersion, req_version: &PackageVersion) -> bool {
     use crate::firewall::malware_list::PackageVersion;
 
     match (entry_version, req_version) {
@@ -304,34 +298,269 @@ mod tests {
 
     #[test]
     fn test_parse_wheel_filename() {
-        assert_eq!(
-            parse_wheel_filename("requests-2.31.0-py3-none-any.whl"),
-            Some(("requests".to_string(), "2.31.0".to_string()))
-        );
-        assert_eq!(
-            parse_wheel_filename("foo_bar-1.0.0-py2.py3-none-any.whl"),
-            Some(("foo_bar".to_string(), "1.0.0".to_string()))
-        );
-        assert_eq!(parse_wheel_filename("pkg-latest-py3-none-any.whl"), None);
+        let test_cases = vec![
+            // (input, expected_name, expected_version)
+            (
+                "requests-2.31.0-py3-none-any.whl",
+                Some(("requests", "2.31.0")),
+            ),
+            (
+                "foo_bar-1.0.0-py2.py3-none-any.whl",
+                Some(("foo-bar", "1.0.0")), // Normalized
+            ),
+            ("pkg-latest-py3-none-any.whl", None),
+            // With metadata suffix
+            (
+                "Django-4.2.0-py3-none-any.whl.metadata",
+                Some(("django", "4.2.0")), // Normalized
+            ),
+            // Real-world: dots in name
+            (
+                "zope.interface-6.0-cp311-cp311-macosx_10_9_x86_64.whl",
+                Some(("zope.interface", "6.0")),
+            ),
+            // Real-world: numbers in name
+            ("boto3-1.28.85-py3-none-any.whl", Some(("boto3", "1.28.85"))),
+            // Invalid cases
+            ("notawheelfile.tar.gz", None),
+            ("package-latest-py3-none-any.whl", None),
+            ("package--py3-none-any.whl", None),
+        ];
+
+        for (input, expected) in test_cases {
+            let result = parse_wheel_filename(input);
+            match expected {
+                Some((expected_name, expected_version)) => {
+                    let info = result.unwrap_or_else(|| panic!("Expected Some for: {}", input));
+                    assert_eq!(info.name, expected_name, "Failed for input: {}", input);
+                    match &info.version {
+                        PackageVersion::Semver(v) => {
+                            assert_eq!(
+                                v.to_string(),
+                                expected_version,
+                                "Failed for input: {}",
+                                input
+                            );
+                        }
+                        PackageVersion::Unknown(v) => {
+                            assert_eq!(
+                                v.as_str(),
+                                expected_version,
+                                "Failed for input: {}",
+                                input
+                            );
+                        }
+                        _ => panic!("Expected Semver or Unknown version for: {}, got {:?}", input, info.version),
+                    }
+                }
+                None => {
+                    assert!(result.is_none(), "Expected None for input: {}", input);
+                }
+            }
+        }
     }
 
     #[test]
     fn test_parse_sdist_filename() {
-        assert_eq!(
-            parse_sdist_filename("requests-2.31.0.tar.gz"),
-            Some(("requests".to_string(), "2.31.0".to_string()))
-        );
-        assert_eq!(
-            parse_sdist_filename("foo_bar-1.0.0.zip"),
-            Some(("foo_bar".to_string(), "1.0.0".to_string()))
-        );
-        assert_eq!(parse_sdist_filename("pkg-latest.tar.gz"), None);
+        let test_cases = vec![
+            // (input, expected_name, expected_version)
+            ("requests-2.31.0.tar.gz", Some(("requests", "2.31.0"))),
+            ("foo_bar-1.0.0.zip", Some(("foo-bar", "1.0.0"))), // Normalized
+            ("pkg-latest.tar.gz", None),
+            // With metadata suffix
+            ("numpy-1.24.3.tar.gz.metadata", Some(("numpy", "1.24.3"))),
+            // Real-world: multiple hyphens
+            (
+                "django-rest-framework-3.14.0.tar.gz",
+                Some(("django-rest-framework", "3.14.0")),
+            ),
+            // Prerelease versions
+            ("package-1.0.0a1.tar.gz", Some(("package", "1.0.0a1"))),
+            ("package-2.0.0rc1.tar.gz", Some(("package", "2.0.0rc1"))),
+            (
+                "package-3.0.0.post1.tar.gz",
+                Some(("package", "3.0.0.post1")),
+            ),
+            // Alternative formats
+            ("package-1.0.0.zip", Some(("package", "1.0.0"))),
+            ("package-2.0.0.tar.bz2", Some(("package", "2.0.0"))),
+            ("package-3.0.0.tar.xz", Some(("package", "3.0.0"))),
+            // Invalid cases
+            ("no-extension-1.0.0", None),
+            ("package-latest.tar.gz", None),
+            ("-1.0.0.tar.gz", None),
+        ];
+
+        for (input, expected) in test_cases {
+            let result = parse_sdist_filename(input);
+            match expected {
+                Some((expected_name, expected_version)) => {
+                    let info = result.unwrap_or_else(|| panic!("Expected Some for: {}", input));
+                    assert_eq!(info.name, expected_name, "Failed for input: {}", input);
+                    match &info.version {
+                        PackageVersion::Semver(v) => {
+                            assert_eq!(
+                                v.to_string(),
+                                expected_version,
+                                "Failed for input: {}",
+                                input
+                            );
+                        }
+                        PackageVersion::Unknown(v) => {
+                            assert_eq!(v.as_str(), expected_version, "Failed for input: {}", input);
+                        }
+                        _ => panic!("Expected Semver or Unknown version for: {}", input),
+                    }
+                }
+                None => {
+                    assert!(result.is_none(), "Expected None for input: {}", input);
+                }
+            }
+        }
     }
 
     #[test]
     fn test_normalize_package_name() {
-        assert_eq!(normalize_package_name("Requests"), "requests");
-        assert_eq!(normalize_package_name("foo_bar"), "foo-bar");
-        assert_eq!(normalize_package_name("FOO_BAR_BAZ"), "foo-bar-baz");
+        let test_cases = vec![
+            ("Requests", "requests"),
+            ("foo_bar", "foo-bar"),
+            ("FOO_BAR_BAZ", "foo-bar-baz"),
+        ];
+
+        for (input, expected) in test_cases {
+            assert_eq!(
+                normalize_package_name(input),
+                expected,
+                "Failed for input: {}",
+                input
+            );
+        }
+    }
+
+    #[test]
+    fn test_package_info_is_metadata_request() {
+        let metadata_info = PackageInfo {
+            name: "requests".to_string(),
+            version: PackageVersion::None,
+        };
+        assert!(metadata_info.is_metadata_request());
+
+        let file_info = PackageInfo {
+            name: "requests".to_string(),
+            version: PackageVersion::Semver(semver::Version::new(2, 31, 0)),
+        };
+        assert!(!file_info.is_metadata_request());
+
+        let any_version_info = PackageInfo {
+            name: "requests".to_string(),
+            version: PackageVersion::Any,
+        };
+        assert!(!any_version_info.is_metadata_request());
+    }
+
+    #[test]
+    fn test_package_info_matches() {
+        use crate::firewall::malware_list::{MalwareEntry, Reason};
+
+        let package_info = PackageInfo {
+            name: "malicious-pkg".to_string(),
+            version: PackageVersion::Semver(semver::Version::new(1, 0, 0)),
+        };
+
+        // Exact match
+        let entry_exact = MalwareEntry {
+            version: PackageVersion::Semver(semver::Version::new(1, 0, 0)),
+            reason: Reason::Malware,
+        };
+        assert!(package_info.matches(&entry_exact));
+
+        // No match - different version
+        let entry_different = MalwareEntry {
+            version: PackageVersion::Semver(semver::Version::new(2, 0, 0)),
+            reason: Reason::Malware,
+        };
+        assert!(!package_info.matches(&entry_different));
+
+        // Match with Any
+        let entry_any = MalwareEntry {
+            version: PackageVersion::Any,
+            reason: Reason::Malware,
+        };
+        assert!(package_info.matches(&entry_any));
+    }
+
+    #[test]
+    fn test_extract_package_info() {
+        use rama::http::{Body, Request, Uri};
+
+        let test_cases = vec![
+            // (uri, expected_name, is_metadata, version_check)
+            (
+                "https://pypi.org/pypi/requests/json",
+                Some(("requests", true, None)),
+            ),
+            (
+                "https://pypi.org/simple/django/",
+                Some(("django", true, None)),
+            ),
+            (
+                "https://pypi.org/simple/my_package/",
+                Some(("my-package", true, None)), // Normalized
+            ),
+            (
+                "https://files.pythonhosted.org/packages/abc/def/requests-2.31.0-py3-none-any.whl",
+                Some(("requests", false, Some("2.31.0"))),
+            ),
+            (
+                "https://files.pythonhosted.org/packages/source/d/django/Django-4.2.0.tar.gz",
+                Some(("django", false, Some("4.2.0"))),
+            ),
+            (
+                "https://pypi.org/pypi/my%20package/json",
+                Some(("my package", true, None)), // Percent-encoded
+            ),
+            // Unrecognized URLs
+            ("https://pypi.org/", None),
+            ("https://pypi.org/help/", None),
+        ];
+
+        for (uri, expected) in test_cases {
+            let req = Request::builder()
+                .uri(Uri::from_static(uri))
+                .body(Body::empty())
+                .unwrap();
+
+            let result = RulePyPI::extract_package_info(&req);
+
+            match expected {
+                Some((expected_name, is_metadata, version_str)) => {
+                    let info = result.unwrap_or_else(|| panic!("Expected Some for URI: {}", uri));
+                    assert_eq!(info.name, expected_name, "Failed for URI: {}", uri);
+                    assert_eq!(
+                        info.is_metadata_request(),
+                        is_metadata,
+                        "Failed metadata check for URI: {}",
+                        uri
+                    );
+
+                    if let Some(v_str) = version_str {
+                        match &info.version {
+                            PackageVersion::Semver(v) => {
+                                assert_eq!(
+                                    v.to_string(),
+                                    v_str,
+                                    "Failed version check for URI: {}",
+                                    uri
+                                );
+                            }
+                            _ => panic!("Expected Semver version for URI: {}", uri),
+                        }
+                    }
+                }
+                None => {
+                    assert!(result.is_none(), "Expected None for URI: {}", uri);
+                }
+            }
+        }
     }
 }
