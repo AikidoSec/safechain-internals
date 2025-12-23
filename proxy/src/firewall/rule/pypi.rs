@@ -296,6 +296,10 @@ mod tests {
                 "foo_bar-1.0.0-py2.py3-none-any.whl",
                 Some(("foo-bar", "1.0.0")), // Normalized
             ),
+            (
+                "my_package_name-2.0.0-py3-none-any.whl",
+                Some(("my-package-name", "2.0.0")), // Multiple underscores normalized
+            ),
             ("pkg-latest-py3-none-any.whl", None),
             // With metadata suffix
             (
@@ -352,6 +356,10 @@ mod tests {
             // (input, expected_name, expected_version)
             ("requests-2.31.0.tar.gz", Some(("requests", "2.31.0"))),
             ("foo_bar-1.0.0.zip", Some(("foo-bar", "1.0.0"))), // Normalized
+            (
+                "test_package_with_underscores-3.2.1.tar.gz",
+                Some(("test-package-with-underscores", "3.2.1")), // Multiple underscores normalized
+            ),
             ("pkg-latest.tar.gz", None),
             // With metadata suffix
             ("numpy-1.24.3.tar.gz.metadata", Some(("numpy", "1.24.3"))),
