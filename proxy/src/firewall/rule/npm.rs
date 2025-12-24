@@ -344,11 +344,7 @@ mod tests {
                         expected_package.fully_qualified_name,
                         actual_package.fully_qualified_name
                     );
-                    assert_eq!(
-                        expected_package.version, actual_package.version,
-                        "{} != {}",
-                        expected_package.version, actual_package.version
-                    );
+                    assert_eq!(expected_package.version, actual_package.version);
                 }
                 (None, None) => {}
                 (Some(actual_package), None) => {
