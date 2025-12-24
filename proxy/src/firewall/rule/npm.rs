@@ -101,7 +101,7 @@ impl Rule for RuleNpm {
         if let Some(package) = package {
             if let Some(entries) = self
                 .remote_malware_list
-                .find_entries(&package.fully_qualified_name)
+                .find_entries(package.fully_qualified_name)
                 .entries()
                 && entries.iter().any(|entry| package.matches(entry))
             {
@@ -121,18 +121,18 @@ impl Rule for RuleNpm {
     }
 }
 
-struct NpmPackage {
-    fully_qualified_name: String,
+struct NpmPackage<'a> {
+    fully_qualified_name: &'a str,
     version: semver::Version,
 }
 
-impl NpmPackage {
+impl NpmPackage<'_> {
     fn matches(&self, malware_entry: &MalwareEntry) -> bool {
         malware_entry.version.eq(&self.version)
     }
 }
 
-fn parse_package_from_path(path: &str) -> Option<NpmPackage> {
+fn parse_package_from_path(path: &str) -> Option<NpmPackage<'_>> {
     let (package_name, file_name) = path.trim_start_matches("/").split_once("/-/")?;
 
     let filename_prefix = if package_name.starts_with("@")
@@ -155,7 +155,7 @@ fn parse_package_from_path(path: &str) -> Option<NpmPackage> {
     }).ok()?;
 
     Some(NpmPackage {
-        fully_qualified_name: package_name.to_owned(),
+        fully_qualified_name: package_name,
         version,
     })
 }
@@ -171,14 +171,14 @@ mod tests {
             (
                 "lodash/-/lodash-4.17.21.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "lodash".to_owned(),
+                    fully_qualified_name: "lodash",
                     version: semver::Version::new(4, 17, 21),
                 }),
             ),
             (
                 "/lodash/-/lodash-4.17.21.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "lodash".to_owned(),
+                    fully_qualified_name: "lodash",
                     version: semver::Version::new(4, 17, 21),
                 }),
             ),
@@ -187,28 +187,28 @@ mod tests {
             (
                 "express/-/express-4.18.2.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "express".to_owned(),
+                    fully_qualified_name: "express",
                     version: semver::Version::new(4, 18, 2),
                 }),
             ),
             (
                 "safe-chain-test/-/safe-chain-test-1.0.0.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "safe-chain-test".to_owned(),
+                    fully_qualified_name: "safe-chain-test",
                     version: semver::Version::new(1, 0, 0),
                 }),
             ),
             (
                 "web-vitals/-/web-vitals-3.5.0.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "web-vitals".to_owned(),
+                    fully_qualified_name: "web-vitals",
                     version: semver::Version::new(3, 5, 0),
                 }),
             ),
             (
                 "safe-chain-test/-/safe-chain-test-0.0.1-security.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "safe-chain-test".to_owned(),
+                    fully_qualified_name: "safe-chain-test",
                     version: semver::Version {
                         major: 0,
                         minor: 0,
@@ -221,7 +221,7 @@ mod tests {
             (
                 "lodash/-/lodash-5.0.0-beta.1.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "lodash".to_owned(),
+                    fully_qualified_name: "lodash",
                     version: semver::Version {
                         major: 5,
                         minor: 0,
@@ -234,7 +234,7 @@ mod tests {
             (
                 "react/-/react-18.3.0-canary-abc123.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "react".to_owned(),
+                    fully_qualified_name: "react",
                     version: semver::Version {
                         major: 18,
                         minor: 3,
@@ -247,7 +247,7 @@ mod tests {
             (
                 "@babel/core/-/core-7.21.4.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "@babel/core".to_owned(),
+                    fully_qualified_name: "@babel/core",
                     version: semver::Version {
                         major: 7,
                         minor: 21,
@@ -260,7 +260,7 @@ mod tests {
             (
                 "@types/node/-/node-20.10.5.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "@types/node".to_owned(),
+                    fully_qualified_name: "@types/node",
                     version: semver::Version {
                         major: 20,
                         minor: 10,
@@ -273,7 +273,7 @@ mod tests {
             (
                 "@angular/common/-/common-17.0.8.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "@angular/common".to_owned(),
+                    fully_qualified_name: "@angular/common",
                     version: semver::Version {
                         major: 17,
                         minor: 0,
@@ -286,7 +286,7 @@ mod tests {
             (
                 "@safe-chain/test-package/-/test-package-2.1.0.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "@safe-chain/test-package".to_owned(),
+                    fully_qualified_name: "@safe-chain/test-package",
                     version: semver::Version {
                         major: 2,
                         minor: 1,
@@ -299,7 +299,7 @@ mod tests {
             (
                 "@aws-sdk/client-s3/-/client-s3-3.465.0.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "@aws-sdk/client-s3".to_owned(),
+                    fully_qualified_name: "@aws-sdk/client-s3",
                     version: semver::Version {
                         major: 3,
                         minor: 465,
@@ -312,7 +312,7 @@ mod tests {
             (
                 "@babel/core/-/core-8.0.0-alpha.1.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "@babel/core".to_owned(),
+                    fully_qualified_name: "@babel/core",
                     version: semver::Version {
                         major: 8,
                         minor: 0,
@@ -325,7 +325,7 @@ mod tests {
             (
                 "@safe-chain/security-test/-/security-test-1.0.0-security.tgz",
                 Some(NpmPackage {
-                    fully_qualified_name: "@safe-chain/security-test".to_owned(),
+                    fully_qualified_name: "@safe-chain/security-test",
                     version: semver::Version {
                         major: 1,
                         minor: 0,
