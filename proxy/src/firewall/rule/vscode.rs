@@ -1,4 +1,4 @@
-use std::{fmt, time::Duration};
+use std::fmt;
 
 use rama::{
     Service,
@@ -40,8 +40,6 @@ impl RuleVSCode {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_vscode.json"),
-            // NOTE: if you ever wish to make it configurable you would need to pass it into this constructor
-            Duration::from_secs(60 * 10), // 10 mins
             sync_storage,
             remote_malware_list_https_client,
         )
