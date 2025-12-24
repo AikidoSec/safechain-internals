@@ -1,4 +1,4 @@
-use std::{fmt, time::Duration};
+use std::fmt;
 
 use rama::{
     Service,
@@ -11,7 +11,7 @@ use rama::{
 
 use crate::{
     firewall::{
-        malware_list::{MalwareEntry, PackageVersion, RemoteMalwareList},
+        malware_list::{MalwareEntry, RemoteMalwareList},
         pac::PacScriptGenerator,
     },
     http::response::generate_generic_blocked_response_for_req,
@@ -41,8 +41,6 @@ impl RuleNpm {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_predictions.json"),
-            // NOTE: if you ever wish to make it configurable you would need to pass it into this constructor
-            Duration::from_secs(60 * 10), // 10 mins
             sync_storage,
             remote_malware_list_https_client,
         )
@@ -123,225 +121,218 @@ impl Rule for RuleNpm {
     }
 }
 
-struct Package {
+struct NpmPackage {
     fully_qualified_name: String,
-    version: PackageVersion,
+    version: semver::Version,
 }
 
-impl Package {
+impl NpmPackage {
     fn matches(&self, malware_entry: &MalwareEntry) -> bool {
         malware_entry.version.eq(&self.version)
     }
 }
 
-fn parse_package_from_path(path: &str) -> Option<Package> {
-    let splitted_path: Vec<&str> = path.split("/-/").collect();
+fn parse_package_from_path(path: &str) -> Option<NpmPackage> {
+    let (package_name, file_name) = path.trim_start_matches("/").split_once("/-/")?;
 
-    if splitted_path.len() < 2 {
-        return None;
-    }
-
-    let package_name = splitted_path[0].trim_start_matches("/");
-
-    let mut filename_prefix = package_name;
-    if package_name.starts_with("@") && package_name.contains("/") {
+    let filename_prefix = if package_name.starts_with("@")
+        && let Some((_, name)) = package_name.rsplit_once("/")
+    {
         // Scoped packages are in the format @scope/package
         // The prefix however, doesn't have the scope
+        name
+    } else {
+        package_name
+    };
 
-        let (_, name) = package_name.rsplit_once("/")?;
+    let file_name_without_ext = file_name.strip_suffix(".tgz")?;
+    let version = file_name_without_ext
+        .strip_prefix(filename_prefix)?
+        .strip_prefix("-")?;
 
-        filename_prefix = name;
-    }
+    let version = semver::Version::parse(version).inspect_err(|err| {
+        tracing::debug!("failed to parse npm package ({package_name}) version (raw = {version}): err = {err}");
+    }).ok()?;
 
-    let filename_prefix = format!("{}-", filename_prefix);
-
-    let file_name_without_ext = splitted_path[1].strip_suffix(".tgz")?;
-    let version = file_name_without_ext.strip_prefix(&filename_prefix)?;
-
-    let version = semver::Version::parse(version);
-
-    match version {
-        Ok(version) => Some(Package {
-            fully_qualified_name: package_name.to_owned(),
-            version: PackageVersion::Semver(version),
-        }),
-        Err(_) => None,
-    }
+    Some(NpmPackage {
+        fully_qualified_name: package_name.to_owned(),
+        version,
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use semver::Prerelease;
 
     use super::*;
+
     #[tokio::test]
     async fn test_parse_npm_package_from_path() {
         for (path, expected) in [
             (
                 "lodash/-/lodash-4.17.21.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "lodash".to_owned(),
-                    version: PackageVersion::Semver(semver::Version::new(4, 17, 21)),
+                    version: semver::Version::new(4, 17, 21),
                 }),
             ),
             (
                 "/lodash/-/lodash-4.17.21.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "lodash".to_owned(),
-                    version: PackageVersion::Semver(semver::Version::new(4, 17, 21)),
+                    version: semver::Version::new(4, 17, 21),
                 }),
             ),
             ("lodash/-/lodash-4.17.21", None),
             ("lodash", None),
             (
                 "express/-/express-4.18.2.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "express".to_owned(),
-                    version: PackageVersion::Semver(semver::Version::new(4, 18, 2)),
+                    version: semver::Version::new(4, 18, 2),
                 }),
             ),
             (
                 "safe-chain-test/-/safe-chain-test-1.0.0.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "safe-chain-test".to_owned(),
-                    version: PackageVersion::Semver(semver::Version::new(1, 0, 0)),
+                    version: semver::Version::new(1, 0, 0),
                 }),
             ),
             (
                 "web-vitals/-/web-vitals-3.5.0.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "web-vitals".to_owned(),
-                    version: PackageVersion::Semver(semver::Version::new(3, 5, 0)),
+                    version: semver::Version::new(3, 5, 0),
                 }),
             ),
             (
                 "safe-chain-test/-/safe-chain-test-0.0.1-security.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "safe-chain-test".to_owned(),
-                    version: PackageVersion::Semver(semver::Version {
+                    version: semver::Version {
                         major: 0,
                         minor: 0,
                         patch: 1,
-                        pre: Prerelease::new("security").unwrap(),
+                        pre: semver::Prerelease::new("security").unwrap(),
                         build: Default::default(),
-                    }),
+                    },
                 }),
             ),
             (
                 "lodash/-/lodash-5.0.0-beta.1.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "lodash".to_owned(),
-                    version: PackageVersion::Semver(semver::Version {
+                    version: semver::Version {
                         major: 5,
                         minor: 0,
                         patch: 0,
-                        pre: Prerelease::new("beta.1").unwrap(),
+                        pre: semver::Prerelease::new("beta.1").unwrap(),
                         build: Default::default(),
-                    }),
+                    },
                 }),
             ),
             (
                 "react/-/react-18.3.0-canary-abc123.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "react".to_owned(),
-                    version: PackageVersion::Semver(semver::Version {
+                    version: semver::Version {
                         major: 18,
                         minor: 3,
                         patch: 0,
-                        pre: Prerelease::new("canary-abc123").unwrap(),
+                        pre: semver::Prerelease::new("canary-abc123").unwrap(),
                         build: Default::default(),
-                    }),
+                    },
                 }),
             ),
             (
                 "@babel/core/-/core-7.21.4.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "@babel/core".to_owned(),
-                    version: PackageVersion::Semver(semver::Version {
+                    version: semver::Version {
                         major: 7,
                         minor: 21,
                         patch: 4,
                         pre: Default::default(),
                         build: Default::default(),
-                    }),
+                    },
                 }),
             ),
             (
                 "@types/node/-/node-20.10.5.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "@types/node".to_owned(),
-                    version: PackageVersion::Semver(semver::Version {
+                    version: semver::Version {
                         major: 20,
                         minor: 10,
                         patch: 5,
                         pre: Default::default(),
                         build: Default::default(),
-                    }),
+                    },
                 }),
             ),
             (
                 "@angular/common/-/common-17.0.8.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "@angular/common".to_owned(),
-                    version: PackageVersion::Semver(semver::Version {
+                    version: semver::Version {
                         major: 17,
                         minor: 0,
                         patch: 8,
                         pre: Default::default(),
                         build: Default::default(),
-                    }),
+                    },
                 }),
             ),
             (
                 "@safe-chain/test-package/-/test-package-2.1.0.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "@safe-chain/test-package".to_owned(),
-                    version: PackageVersion::Semver(semver::Version {
+                    version: semver::Version {
                         major: 2,
                         minor: 1,
                         patch: 0,
                         pre: Default::default(),
                         build: Default::default(),
-                    }),
+                    },
                 }),
             ),
             (
                 "@aws-sdk/client-s3/-/client-s3-3.465.0.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "@aws-sdk/client-s3".to_owned(),
-                    version: PackageVersion::Semver(semver::Version {
+                    version: semver::Version {
                         major: 3,
                         minor: 465,
                         patch: 0,
                         pre: Default::default(),
                         build: Default::default(),
-                    }),
+                    },
                 }),
             ),
             (
                 "@babel/core/-/core-8.0.0-alpha.1.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "@babel/core".to_owned(),
-                    version: PackageVersion::Semver(semver::Version {
+                    version: semver::Version {
                         major: 8,
                         minor: 0,
                         patch: 0,
-                        pre: Prerelease::new("alpha.1").unwrap(),
+                        pre: semver::Prerelease::new("alpha.1").unwrap(),
                         build: Default::default(),
-                    }),
+                    },
                 }),
             ),
             (
                 "@safe-chain/security-test/-/security-test-1.0.0-security.tgz",
-                Some(Package {
+                Some(NpmPackage {
                     fully_qualified_name: "@safe-chain/security-test".to_owned(),
-                    version: PackageVersion::Semver(semver::Version {
+                    version: semver::Version {
                         major: 1,
                         minor: 0,
                         patch: 0,
-                        pre: Prerelease::new("security").unwrap(),
+                        pre: semver::Prerelease::new("security").unwrap(),
                         build: Default::default(),
-                    }),
+                    },
                 }),
             ),
         ] {
@@ -349,32 +340,28 @@ mod tests {
 
             match (result, expected) {
                 (Some(actual_package), Some(expected_package)) => {
-                    let actual_name = actual_package.fully_qualified_name;
-                    let expected_name = expected_package.fully_qualified_name;
-
-                    assert_eq!(expected_name, actual_name);
-
-                    match (expected_package.version, actual_package.version) {
-                        (
-                            PackageVersion::Semver(expected_version),
-                            PackageVersion::Semver(actual_version),
-                        ) => {
-                            assert!(
-                                expected_version == actual_version,
-                                "{expected_version} != {actual_version}"
-                            )
-                        }
-                        (_, _) => panic!("All versions in this test use semver!"),
-                    }
+                    assert_eq!(
+                        expected_package.fully_qualified_name,
+                        actual_package.fully_qualified_name
+                    );
+                    assert_eq!(
+                        expected_package.version, actual_package.version,
+                        "{} != {}",
+                        expected_package.version, actual_package.version
+                    );
                 }
                 (None, None) => {}
                 (Some(actual_package), None) => {
-                    let actual_name = actual_package.fully_qualified_name;
-                    panic!("No package expected, but got '{actual_name}'");
+                    unreachable!(
+                        "No package expected, but got '{}'",
+                        actual_package.fully_qualified_name
+                    );
                 }
                 (None, Some(expected_package)) => {
-                    let expected_name = expected_package.fully_qualified_name;
-                    panic!("Expected '{expected_name}', but got None");
+                    unreachable!(
+                        "Expected '{}', but got None",
+                        expected_package.fully_qualified_name
+                    );
                 }
             }
         }
