@@ -15,11 +15,10 @@ use rama::{
         layer::{
             map_request_body::MapRequestBodyLayer,
             retry::{ManagedPolicy, RetryLayer},
-            timeout::TimeoutLayer,
         },
         service::client::HttpClientExt as _,
     },
-    layer::{AddInputExtensionLayer, MapErrLayer},
+    layer::{AddInputExtensionLayer, MapErrLayer, TimeoutLayer},
     net::{
         Protocol,
         address::{DomainAddress, ProxyAddress, SocketAddress},
@@ -157,13 +156,14 @@ fn create_client_inner(
         .build_client();
 
     (
-        MapErrLayer::new(OpaqueError::from_std),
+        MapErrLayer::new(OpaqueError::from_boxed),
         TimeoutLayer::new(Duration::from_secs(30)),
+        MapErrLayer::new(Into::into),
         RetryLayer::new(
             ManagedPolicy::default().with_backoff(
                 ExponentialBackoff::new(
                     Duration::from_millis(100),
-                    Duration::from_secs(5),
+                    Duration::from_secs(30),
                     0.01,
                     HasherRng::default,
                 )
