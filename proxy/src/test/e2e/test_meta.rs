@@ -34,7 +34,7 @@ mod http {
         client: &impl Service<Request, Output = Response, Error = OpaqueError>,
     ) {
         let payload = client
-            .get(format!("http://{}", runtime.meta_addr()))
+            .get(format!("http://{}", runtime.meta_socket_addr()))
             .send()
             .await
             .unwrap()
@@ -50,7 +50,7 @@ mod http {
         client: &impl Service<Request, Output = Response, Error = OpaqueError>,
     ) {
         let resp = client
-            .get(format!("http://{}/ping", runtime.meta_addr()))
+            .get(format!("http://{}/ping", runtime.meta_socket_addr()))
             .send()
             .await
             .unwrap();
@@ -67,7 +67,7 @@ mod http {
         client: &impl Service<Request, Output = Response, Error = OpaqueError>,
     ) {
         let resp = client
-            .get(format!("http://{}/ca", runtime.meta_addr()))
+            .get(format!("http://{}/ca", runtime.meta_socket_addr()))
             .send()
             .await
             .unwrap();
@@ -85,7 +85,7 @@ mod http {
         client: &impl Service<Request, Output = Response, Error = OpaqueError>,
     ) {
         let resp = client
-            .get(format!("http://{}/pac", runtime.meta_addr()))
+            .get(format!("http://{}/pac", runtime.meta_socket_addr()))
             .send()
             .await
             .unwrap();
