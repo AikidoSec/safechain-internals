@@ -13,7 +13,7 @@
 use rama::{
     Service,
     error::{ErrorContext as _, OpaqueError},
-    http::{Request, Response, client::EasyHttpWebClient},
+    http::{Request, Response, Version, client::EasyHttpWebClient},
 };
 
 #[cfg(test)]
@@ -30,7 +30,9 @@ pub fn new_web_client()
         .with_default_transport_connector()
         .without_tls_proxy_support()
         .without_proxy_support()
-        .with_tls_support_using_boringssl(None)
+        // fallback to HTTP/1.1 as default HTTP version in case
+        // no protocol negotation happens on layers such as TLS (e.g. ALPN)
+        .with_tls_support_using_boringssl_and_default_http_version(None, Version::HTTP_11)
         .with_default_http_connector()
         .try_with_default_connection_pool()
         .context("create connection pool for proxy web client")?
