@@ -29,7 +29,7 @@ pub(super) async fn test_proxy(runtime: &e2e::runtime::Runtime) {
     );
 
     tokio::join!(
-        self::firewall_npm::test_npm_https_package_malware_blocked(runtime, &client),
-        self::firewall_npm::test_npm_https_package_ok(runtime, &client),
+        self::firewall_npm::test_npm_https_package_malware_blocked(&client),
+        self::firewall_npm::test_npm_https_package_ok(&client),
     );
 }
