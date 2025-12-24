@@ -10,7 +10,7 @@ use crate::{server::connectivity::CONNECTIVITY_DOMAIN, test::e2e};
 #[ignore]
 async fn test_connectivity_failure_no_proxy() {
     let runtime = e2e::runtime::get().await;
-    let client = runtime.client();
+    let client = runtime.client_fail_fast();
 
     assert!(
         client
@@ -26,7 +26,7 @@ async fn test_connectivity_failure_no_proxy() {
 #[ignore]
 async fn test_connectivity_https_failure_no_trust() {
     let runtime = e2e::runtime::get().await;
-    let client = runtime.client();
+    let client = runtime.client_fail_fast();
 
     assert!(
         client

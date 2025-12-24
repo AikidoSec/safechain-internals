@@ -91,7 +91,7 @@ mod https {
     #[ignore]
     async fn test_endpoint_root_failure() {
         let runtime = e2e::runtime::get().await;
-        let client = runtime.client();
+        let client = runtime.client_fail_fast();
 
         assert!(
             client
@@ -107,7 +107,7 @@ mod https {
     #[ignore]
     async fn test_endpoint_ping_failure() {
         let runtime = e2e::runtime::get().await;
-        let client = runtime.client();
+        let client = runtime.client_fail_fast();
 
         assert!(
             client
@@ -123,7 +123,7 @@ mod https {
     #[ignore]
     async fn test_endpoint_ca_failure() {
         let runtime = e2e::runtime::get().await;
-        let client = runtime.client();
+        let client = runtime.client_fail_fast();
 
         assert!(
             client
@@ -139,7 +139,7 @@ mod https {
     #[ignore]
     async fn test_endpoint_pac_failure() {
         let runtime = e2e::runtime::get().await;
-        let client = runtime.client();
+        let client = runtime.client_fail_fast();
 
         assert!(
             client

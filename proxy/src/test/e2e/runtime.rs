@@ -71,6 +71,18 @@ impl Runtime {
         create_client_inner(None)
     }
 
+    #[inline(always)]
+    pub fn client_fail_fast(
+        &self,
+    ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+        (
+            MapErrLayer::new(OpaqueError::from_boxed),
+            TimeoutLayer::new(Duration::from_secs(30)),
+            MapErrLayer::new(Into::into),
+        )
+            .into_layer(self.client())
+    }
+
     pub async fn client_with_ca_trust(
         &self,
     ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
@@ -157,13 +169,13 @@ fn create_client_inner(
 
     (
         MapErrLayer::new(OpaqueError::from_boxed),
-        TimeoutLayer::new(Duration::from_secs(30)),
+        TimeoutLayer::new(Duration::from_secs(60)),
         MapErrLayer::new(Into::into),
         RetryLayer::new(
             ManagedPolicy::default().with_backoff(
                 ExponentialBackoff::new(
                     Duration::from_millis(100),
-                    Duration::from_secs(30),
+                    Duration::from_secs(60),
                     0.01,
                     HasherRng::default,
                 )
