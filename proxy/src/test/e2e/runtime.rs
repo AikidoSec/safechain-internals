@@ -1,7 +1,14 @@
 use std::{io::ErrorKind, path::PathBuf, sync::LazyLock, time::Duration};
 
 use clap::Parser;
-use rama::net::address::{DomainAddress, SocketAddress};
+use rama::{
+    net::{
+        Protocol,
+        address::{DomainAddress, ProxyAddress, SocketAddress},
+        user::{Basic, ProxyCredential},
+    },
+    utils::str::NonEmptyStr,
+};
 
 use crate::Args;
 
@@ -15,7 +22,7 @@ pub(super) struct Runtime {
 
 impl Runtime {
     #[inline(always)]
-    pub fn meta_addr(&self) -> SocketAddress {
+    pub fn meta_socket_addr(&self) -> SocketAddress {
         self.meta_addr
     }
 
@@ -25,8 +32,38 @@ impl Runtime {
     }
 
     #[inline(always)]
-    pub fn proxy_addr(&self) -> SocketAddress {
+    pub fn proxy_socket_addr(&self) -> SocketAddress {
         self.proxy_addr
+    }
+
+    #[inline(always)]
+    pub fn http_proxy_addr(&self) -> ProxyAddress {
+        ProxyAddress {
+            protocol: Some(Protocol::HTTP),
+            address: self.proxy_socket_addr().into(),
+            credential: None,
+        }
+    }
+
+    #[inline(always)]
+    #[expect(unused)] // NOTE: remove the unused exception first time you need it
+    pub fn http_proxy_addr_with_username(&self, username: &'static str) -> ProxyAddress {
+        ProxyAddress {
+            protocol: Some(Protocol::HTTP),
+            address: self.proxy_socket_addr().into(),
+            credential: Some(ProxyCredential::Basic(Basic::new_insecure(
+                NonEmptyStr::try_from(username).unwrap(),
+            ))),
+        }
+    }
+
+    #[inline(always)]
+    pub fn socks5_proxy_addr(&self) -> ProxyAddress {
+        ProxyAddress {
+            protocol: Some(Protocol::SOCKS5),
+            address: self.proxy_socket_addr().into(),
+            credential: None,
+        }
     }
 }
 

@@ -25,7 +25,7 @@ pub async fn new_web_client(
     }
 
     let resp = default_client
-        .get(format!("http://{}/ca", runtime.meta_addr()))
+        .get(format!("http://{}/ca", runtime.meta_socket_addr()))
         .send()
         .await
         .unwrap();

@@ -45,7 +45,7 @@ async fn test_connectivity_https_failure_no_trust(
             .get(format!("https://{CONNECTIVITY_DOMAIN}"))
             .extension(ProxyAddress {
                 protocol: Some(Protocol::HTTP),
-                address: runtime.proxy_addr().into(),
+                address: runtime.proxy_socket_addr().into(),
                 credential: None,
             })
             .send()
@@ -74,7 +74,7 @@ async fn test_connectivity_http(
         .get(format!("http://{CONNECTIVITY_DOMAIN}"))
         .extension(ProxyAddress {
             protocol: Some(Protocol::HTTP),
-            address: runtime.proxy_addr().into(),
+            address: runtime.proxy_socket_addr().into(),
             credential: None,
         })
         .send()
@@ -97,7 +97,7 @@ async fn test_connectivity_http_over_sock5(
         .get(format!("http://{CONNECTIVITY_DOMAIN}"))
         .extension(ProxyAddress {
             protocol: Some(Protocol::SOCKS5),
-            address: runtime.proxy_addr().into(),
+            address: runtime.proxy_socket_addr().into(),
             credential: None,
         })
         .send()
@@ -120,7 +120,7 @@ async fn test_connectivity_http_with_username_labels(
         .get(format!("http://{CONNECTIVITY_DOMAIN}"))
         .extension(ProxyAddress {
             protocol: Some(Protocol::HTTP),
-            address: runtime.proxy_addr().into(),
+            address: runtime.proxy_socket_addr().into(),
             credential: Some(ProxyCredential::Basic(basic!(
                 "test-foo-min_pkg_age-1h_30m"
             ))),
@@ -145,7 +145,7 @@ async fn test_connectivity_https(
         .get(format!("https://{CONNECTIVITY_DOMAIN}"))
         .extension(ProxyAddress {
             protocol: Some(Protocol::HTTP),
-            address: runtime.proxy_addr().into(),
+            address: runtime.proxy_socket_addr().into(),
             credential: None,
         })
         .send()
@@ -168,7 +168,7 @@ async fn test_connectivity_https_over_socks5(
         .get(format!("https://{CONNECTIVITY_DOMAIN}"))
         .extension(ProxyAddress {
             protocol: Some(Protocol::SOCKS5),
-            address: runtime.proxy_addr().into(),
+            address: runtime.proxy_socket_addr().into(),
             credential: None,
         })
         .send()
