@@ -50,7 +50,11 @@ pub struct Args {
     pub meta_bind: Interface,
 
     /// secrets storage to use (e.g. for root CA)
-    #[arg(long, value_name = "keyring | <dir>", default_value = "keyring")]
+    #[arg(
+        long,
+        value_name = "keyring | memory | <dir>",
+        default_value = "keyring"
+    )]
     pub secrets: self::storage::SyncSecrets,
 
     /// debug logging as default instead of Info; use RUST_LOG env for more options
