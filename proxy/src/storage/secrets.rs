@@ -1,10 +1,12 @@
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::{path::PathBuf, str::FromStr};
 
 use keyring_core::api::CredentialStoreApi;
+use secrecy::{ExposeSecret, SecretBox};
 
 #[cfg(target_os = "macos")]
-use ::{apple_native_keyring_store::keychain::Store, std::collections::HashMap};
+use apple_native_keyring_store::keychain::Store;
 #[cfg(target_os = "linux")]
 use linux_keyutils_keyring_store::Store;
 #[cfg(target_os = "windows")]
@@ -30,8 +32,15 @@ pub struct SyncSecrets(Backend);
 
 #[derive(Debug, Clone)]
 enum Backend {
-    Fs { dir: PathBuf },
-    KeyRing { store: Arc<Store> },
+    Fs {
+        dir: PathBuf,
+    },
+    KeyRing {
+        store: Arc<Store>,
+    },
+    InMemory {
+        secrets: Arc<Mutex<HashMap<String, SecretBox<Vec<u8>>>>>,
+    },
 }
 
 const AIKIDO_SECRET_SVC: &str = crate::utils::env::project_name();
@@ -60,6 +69,12 @@ impl FromStr for SyncSecrets {
         if s.eq_ignore_ascii_case("keyring") {
             let store = try_new_keychain_store()?;
             return Ok(Self(Backend::KeyRing { store }));
+        }
+
+        if s.eq_ignore_ascii_case("memory") {
+            return Ok(Self(Backend::InMemory {
+                secrets: Arc::new(Mutex::new(HashMap::new())),
+            }));
         }
 
         let dir = PathBuf::from(s);
@@ -107,6 +122,19 @@ impl SyncSecrets {
                     .set_secret(&raw)
                     .with_context(|| format!("set secret for key '{key}'"))
             }
+            Backend::InMemory { secrets } => {
+                tracing::warn!(
+                    "using in-memory secrets storage; CA keypairs and other secrets will be regenerated on each restart"
+                );
+
+                match secrets.lock() {
+                    Ok(mut map) => {
+                        map.insert(key.to_string(), SecretBox::new(Box::new(raw)));
+                        Ok(())
+                    }
+                    Err(_) => Err(OpaqueError::from_display("failed to lock secrets mutex")),
+                }
+            }
         }
     }
 
@@ -140,6 +168,13 @@ impl SyncSecrets {
                     }
                 }
             }
+            Backend::InMemory { secrets } => match secrets.lock() {
+                Ok(map) => match map.get(key) {
+                    Some(secret) => secret.expose_secret().clone(),
+                    None => return Ok(None),
+                },
+                Err(_) => return Err(OpaqueError::from_display("failed to lock secrets mutex")),
+            },
         };
 
         let value: T = postcard::from_bytes(&raw)
@@ -257,6 +292,37 @@ mod tests {
         assert_eq!(
             NUMBER,
             data_storage.load_secret::<usize>(&name).unwrap().unwrap()
+        );
+    }
+
+    #[traced_test]
+    #[test]
+    fn test_secret_storage_inmemory_number_store_can_load() {
+        let data_storage = SyncSecrets::from_str("memory").unwrap();
+
+        const NUMBER: usize = 42;
+
+        assert!(
+            data_storage
+                .load_secret::<usize>("number")
+                .unwrap()
+                .is_none()
+        );
+
+        data_storage.store_secret("number", &NUMBER).unwrap();
+
+        assert!(
+            data_storage
+                .load_secret::<usize>("string")
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            NUMBER,
+            data_storage
+                .load_secret::<usize>("number")
+                .unwrap()
+                .unwrap()
         );
     }
 }
