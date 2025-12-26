@@ -9,6 +9,7 @@ use rama::{
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
 };
+use smallvec::SmallVec;
 use smol_str::{SmolStr, StrExt};
 
 use crate::{
@@ -87,14 +88,12 @@ impl RulePyPI {
         let uri = req.uri();
         let path = uri.path();
 
-        // Path segments, e.g. "/packages/abc/foo.whl" -> ["packages", "abc", "foo.whl"]
-        let segments = path
+        let segments: SmallVec<[_; 3]> = path
             .split('/')
             .filter(|s| !s.is_empty())
             .map(percent_decode)
-            .collect::<Vec<_>>();
+            .collect();
 
-        // JSON metadata endpoint: /pypi/<name>/json
         if segments.len() == 3 && segments[0] == "pypi" && segments[2] == "json" {
             return Some(PackageInfo {
                 name: normalize_package_name(&segments[1]),
@@ -102,7 +101,6 @@ impl RulePyPI {
             });
         }
 
-        // Simple package listing: /simple/<name>/
         if segments.len() >= 2 && segments[0] == "simple" {
             return Some(PackageInfo {
                 name: normalize_package_name(&segments[1]),
@@ -110,7 +108,6 @@ impl RulePyPI {
             });
         }
 
-        // Package file download (e.g. .../foo-1.0.0.whl or .../bar-2.3.4.tar.gz)
         if let Some(filename) = segments.last() {
             return parse_wheel_filename(filename).or_else(|| parse_source_dist_filename(filename));
         }
