@@ -168,13 +168,17 @@ impl SyncSecrets {
                     }
                 }
             }
-            Backend::InMemory { secrets } => match secrets.lock() {
-                Ok(map) => match map.get(key) {
-                    Some(secret) => secret.expose_secret().clone(),
-                    None => return Ok(None),
-                },
-                Err(_) => return Err(OpaqueError::from_display("failed to lock secrets mutex")),
-            },
+            Backend::InMemory { secrets } => {
+                let Ok(map) = secrets.lock() else {
+                    return Err(OpaqueError::from_display("failed to lock secrets mutex"));
+                };
+
+                if let Some(secret) = map.get(key) {
+                    secret.expose_secret().clone()
+                } else {
+                    return Ok(None);
+                }
+            }
         };
 
         let value: T = postcard::from_bytes(&raw)
