@@ -2,7 +2,7 @@ use std::{borrow::Cow, fmt};
 
 use rama::{
     error::OpaqueError,
-    http::{Request, service::web::extract::Query},
+    http::{Request, Response, service::web::extract::Query},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
     utils::str::{arcstr::ArcStr, starts_with_ignore_ascii_case},
@@ -63,6 +63,11 @@ impl Rule for RuleChrome {
         for (domain, _) in self.target_domains.iter() {
             generator.write_domain(&domain);
         }
+    }
+
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+        // Pass through for now - response modification can be added in future PR
+        Ok(resp)
     }
 
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {

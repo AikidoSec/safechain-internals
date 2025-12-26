@@ -86,6 +86,11 @@ impl Rule for RuleNpm {
         }
     }
 
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+        // Pass through for now - response modification can be added in future PR
+        Ok(resp)
+    }
+
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
         if !crate::http::try_get_domain_for_req(&req)
             .map(|domain| self.match_domain(&domain))

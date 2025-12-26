@@ -134,4 +134,9 @@ impl Rule for RuleVSCode {
         tracing::debug!("VSCode url: plugin {fq_package_name}: not blocked; let it go...");
         Ok(RequestAction::Allow(req))
     }
+
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+        // Pass through for now - response modification can be added in future PR
+        Ok(resp)
+    }
 }
