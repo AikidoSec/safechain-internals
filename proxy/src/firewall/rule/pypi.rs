@@ -119,7 +119,6 @@ impl RulePyPI {
     }
 }
 
-/// Normalizes a PyPI package name: lowercase and replace underscores with hyphens.
 fn normalize_package_name(raw: &str) -> SmolStr {
     raw.to_lowercase().replace_smolstr("_", "-")
 }
