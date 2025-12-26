@@ -1,8 +1,4 @@
-use rama::http::{
-    headers::{Accept, specifier},
-    mime,
-};
-use smallvec::SmallVec;
+use rama::http::{headers::Accept, mime};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Content Type requested in Accept header from incoming Request.
@@ -14,15 +10,12 @@ pub enum RequestedContentType {
 }
 
 impl RequestedContentType {
-    pub fn detect_from_accept_header(Accept(qvs): Accept) -> Option<Self> {
-        let mut sorted_qvs: SmallVec<[(mime::Mime, specifier::Quality); 8]> = qvs
-            .into_iter()
-            .map(|qvs| (qvs.value, qvs.quality))
-            .collect();
-        sorted_qvs.sort_by_cached_key(|a| u16::MAX - a.1.as_u16());
+    pub fn detect_from_accept_header(accept: Accept) -> Option<Self> {
+        let mut sorted_accept = accept;
+        sorted_accept.sort_quality_values();
 
-        sorted_qvs.iter().find_map(|(value, _)| {
-            let r#type = value.subtype();
+        sorted_accept.0.iter().find_map(|qv| {
+            let r#type = qv.value.subtype();
             if r#type == mime::JSON {
                 Some(Self::Json)
             } else if r#type == mime::HTML {
