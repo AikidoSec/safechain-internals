@@ -1,4 +1,4 @@
-use std::{fmt, str::FromStr, time::Duration};
+use std::{borrow::Cow, fmt, str::FromStr};
 
 use percent_encoding;
 use rama::{
@@ -9,6 +9,7 @@ use rama::{
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
 };
+use smol_str::{SmolStr, StrExt};
 
 use crate::{
     firewall::{
@@ -21,10 +22,8 @@ use crate::{
 
 use super::{RequestAction, Rule};
 
-const TARGET_DOMAINS: &[&str] = &["pypi.org", "files.pythonhosted.org", "pypi.python.org"];
-
 struct PackageInfo {
-    name: String,
+    name: SmolStr,
     version: PackageVersion,
 }
 
@@ -34,7 +33,7 @@ impl PackageInfo {
     }
 
     fn matches(&self, entry: &MalwareEntry) -> bool {
-        version_matches(&entry.version, &self.version)
+        pypi_version_matches(&entry.version, &self.version)
     }
 }
 
@@ -55,15 +54,14 @@ impl RulePyPI {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_pypi.json"),
-            Duration::from_secs(60 * 10), // Refresh every 10 minutes
             sync_storage,
             remote_malware_list_https_client,
         )
         .await
         .context("create remote malware list for pypi block rule")?;
 
-        let target_domains = TARGET_DOMAINS
-            .iter()
+        let target_domains = ["pypi.org", "files.pythonhosted.org", "pypi.python.org"]
+            .into_iter()
             .map(|d| (Domain::from_static(d), ()))
             .collect();
 
@@ -122,8 +120,8 @@ impl RulePyPI {
 }
 
 /// Normalizes a PyPI package name: lowercase and replace underscores with hyphens.
-fn normalize_package_name(raw: &str) -> String {
-    raw.to_lowercase().replace('_', "-")
+fn normalize_package_name(raw: &str) -> SmolStr {
+    raw.to_lowercase().replace_smolstr("_", "-")
 }
 
 impl fmt::Debug for RulePyPI {
@@ -186,86 +184,80 @@ impl Rule for RulePyPI {
     }
 }
 
-fn percent_decode(input: &str) -> String {
-    percent_encoding::percent_decode_str(input)
-        .decode_utf8_lossy()
-        .to_string()
+fn percent_decode(input: &str) -> Cow<'_, str> {
+    percent_encoding::percent_decode_str(input).decode_utf8_lossy()
 }
 
+/// Parse wheel filename.
+///
+/// Wheel format: {distribution}-{version}(-...tags).whl
+/// Examples:
+///   foo_bar-2.0.0-py3-none-any.whl
+///   foo_bar-2.0.0-py3-none-any.whl.metadata
 fn parse_wheel_filename(filename: &str) -> Option<PackageInfo> {
-    // Accept .whl or .whl.metadata suffixes
-    let trimmed = filename
+    // Strip .whl or .whl.metadata suffix
+    let base = filename
         .strip_suffix(".whl.metadata")
         .or_else(|| filename.strip_suffix(".whl"))?;
 
-    let (dist, rest) = trimmed.split_once('-')?;
-    let mut rest_parts = rest.splitn(2, '-');
-    let version = rest_parts.next()?;
+    // Split on first dash to get distribution name
+    let (dist, rest) = base.split_once('-')?;
+
+    // Split rest on second dash to get version
+    let version = rest.split('-').next()?;
+
     if version.eq_ignore_ascii_case("latest") || dist.is_empty() || version.is_empty() {
         return None;
     }
+
     Some(PackageInfo {
         name: normalize_package_name(dist),
-        version: parse_package_version(version),
+        version: PackageVersion::from_str(version).unwrap(),
     })
 }
 
+/// Parse source distribution filename.
+///
+/// Sdist format: {name}-{version}.{ext}
+/// Extensions: .tar.gz, .zip, .tar.bz2, .tar.xz (with optional .metadata suffix)
+/// Examples:
+///   requests-2.28.1.tar.gz
+///   requests-2.28.1.tar.gz.metadata
 fn parse_source_dist_filename(filename: &str) -> Option<PackageInfo> {
-    // Accept common sdist suffixes (with optional .metadata)
-    const SDIST_SUFFIXES: &[&str] = &[".tar.gz", ".zip", ".tar.bz2", ".tar.xz"];
+    const SDIST_EXTS: &[&str] = &[".tar.gz", ".zip", ".tar.bz2", ".tar.xz"];
 
-    // Check if filename ends with .metadata and strip it once
-    let (working_name, _has_metadata) = filename
-        .strip_suffix(".metadata")
-        .map(|base| (base, true))
-        .unwrap_or((filename, false));
+    // Strip .metadata suffix if present
+    let working = filename.strip_suffix(".metadata").unwrap_or(filename);
 
-    // Now check for actual archive suffixes
-    let base = SDIST_SUFFIXES
+    // Find and strip archive extension
+    let base = SDIST_EXTS
         .iter()
-        .find_map(|suffix| working_name.strip_suffix(*suffix))?;
+        .find_map(|ext| working.strip_suffix(ext))?;
 
-    let last_dash = base.rfind('-')?;
-    if last_dash == 0 || last_dash >= base.len() - 1 {
-        return None;
-    }
-
-    let dist = &base[..last_dash];
-    let version = &base[last_dash + 1..];
+    // Split on last dash to get name and version
+    let (dist, version) = base.rsplit_once('-')?;
     if version.eq_ignore_ascii_case("latest") || dist.is_empty() || version.is_empty() {
         return None;
     }
 
     Some(PackageInfo {
         name: normalize_package_name(dist),
-        version: parse_package_version(version),
+        version: PackageVersion::from_str(version).unwrap(),
     })
-}
-
-/// Parses a raw version string into a `PackageVersion` enum.
-fn parse_package_version(raw: &str) -> PackageVersion {
-    let raw = raw.trim();
-    if raw.is_empty() {
-        return PackageVersion::None;
-    }
-    if raw == "*" {
-        return PackageVersion::Any;
-    }
-    match semver::Version::from_str(raw) {
-        Ok(v) => PackageVersion::Semver(v),
-        Err(_) => PackageVersion::Unknown(raw.into()),
-    }
 }
 
 /// Checks if a requested version matches a version specified in the malware list.
-fn version_matches(entry_version: &PackageVersion, req_version: &PackageVersion) -> bool {
+///
+/// This function has different semantics than `PackageVersion::PartialEq`:
+/// - `Any` matching is unidirectional: only malware list entries can be `Any'
+/// - `Unknown` versions are compared case-insensitively
+/// - No special `Unknown` vs `None` equivalence handling
+fn pypi_version_matches(entry_version: &PackageVersion, req_version: &PackageVersion) -> bool {
     match (entry_version, req_version) {
         (PackageVersion::Any, _) => true,
         (PackageVersion::None, PackageVersion::None) => true,
         (PackageVersion::Semver(a), PackageVersion::Semver(b)) => a == b,
         (PackageVersion::Unknown(a), PackageVersion::Unknown(b)) => a.eq_ignore_ascii_case(b),
-        // Treat entry Unknown as match for exact (case-insensitive) unknown; otherwise no match
-        (PackageVersion::Unknown(a), PackageVersion::Semver(b)) => a.as_ref() == b.to_string(),
         _ => false,
     }
 }
@@ -278,31 +270,71 @@ mod tests {
     fn test_parse_wheel_filename() {
         let test_cases = vec![
             // (input, expected_name, expected_version)
+            // Basic cases
             (
                 "requests-2.31.0-py3-none-any.whl",
                 Some(("requests", "2.31.0")),
             ),
+            ("Django-4.2.0-py3-none-any.whl", Some(("django", "4.2.0"))),
+            ("boto3-1.28.85-py3-none-any.whl", Some(("boto3", "1.28.85"))),
+            // Package names with hyphens (wheels use underscores per PEP 427)
+            (
+                "safe_chain_pi_test-0.1.0-py3-none-any.whl",
+                Some(("safe-chain-pi-test", "0.1.0")),
+            ),
+            (
+                "pip_tools-6.12.0-py3-none-any.whl",
+                Some(("pip-tools", "6.12.0")),
+            ),
+            // Package names with underscores (normalized to hyphens)
             (
                 "foo_bar-1.0.0-py2.py3-none-any.whl",
-                Some(("foo-bar", "1.0.0")), // Normalized
+                Some(("foo-bar", "1.0.0")),
             ),
             (
                 "my_package_name-2.0.0-py3-none-any.whl",
-                Some(("my-package-name", "2.0.0")), // Multiple underscores normalized
+                Some(("my-package-name", "2.0.0")),
             ),
-            ("pkg-latest-py3-none-any.whl", None),
-            // With metadata suffix
             (
-                "Django-4.2.0-py3-none-any.whl.metadata",
-                Some(("django", "4.2.0")), // Normalized
+                "safe_chain_pi_test-0.1.0-py3-none-any.whl",
+                Some(("safe-chain-pi-test", "0.1.0")),
             ),
-            // Real-world: dots in name
+            // Package names with dots
             (
                 "zope.interface-6.0-cp311-cp311-macosx_10_9_x86_64.whl",
                 Some(("zope.interface", "6.0")),
             ),
-            // Real-world: numbers in name
-            ("boto3-1.28.85-py3-none-any.whl", Some(("boto3", "1.28.85"))),
+            (
+                "backports.zoneinfo-0.2.1-cp36-cp36m-win_amd64.whl",
+                Some(("backports.zoneinfo", "0.2.1")),
+            ),
+            // WITH BUILD TAG (per PEP 427/491)
+            (
+                "distribution-1.0-1-py27-none-any.whl",
+                Some(("distribution", "1.0")),
+            ),
+            ("package-2.0-123-py3-none-any.whl", Some(("package", "2.0"))),
+            // Platform-specific wheels
+            (
+                "numpy-1.24.0-cp311-cp311-macosx_10_9_x86_64.whl",
+                Some(("numpy", "1.24.0")),
+            ),
+            (
+                "Pillow-10.0.0-cp311-cp311-win_amd64.whl",
+                Some(("pillow", "10.0.0")),
+            ),
+            // With metadata suffix
+            (
+                "Django-4.2.0-py3-none-any.whl.metadata",
+                Some(("django", "4.2.0")),
+            ),
+            // Multiple python versions
+            ("six-1.16.0-py2.py3-none-any.whl", Some(("six", "1.16.0"))),
+            // ABI3 stable ABI
+            (
+                "cryptography-41.0.0-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+                Some(("cryptography", "41.0.0")),
+            ),
             // Invalid cases
             ("notawheelfile.tar.gz", None),
             ("package-latest-py3-none-any.whl", None),
@@ -344,19 +376,39 @@ mod tests {
     fn test_parse_sdist_filename() {
         let test_cases = vec![
             // (input, expected_name, expected_version)
+            // Basic tar.gz (most common)
             ("requests-2.31.0.tar.gz", Some(("requests", "2.31.0"))),
-            ("foo_bar-1.0.0.zip", Some(("foo-bar", "1.0.0"))), // Normalized
+            ("Django-4.2.0.tar.gz", Some(("django", "4.2.0"))),
+            ("numpy-1.24.0.tar.gz", Some(("numpy", "1.24.0"))),
+            // Other compression formats
+            ("package-1.0.0.zip", Some(("package", "1.0.0"))),
+            ("package-2.0.0.tar.bz2", Some(("package", "2.0.0"))),
+            ("package-3.0.0.tar.xz", Some(("package", "3.0.0"))),
+            // Package names with hyphens
+            ("pip-tools-6.12.0.tar.gz", Some(("pip-tools", "6.12.0"))),
             (
-                "test_package_with_underscores-3.2.1.tar.gz",
-                Some(("test-package-with-underscores", "3.2.1")), // Multiple underscores normalized
+                "safe-chain-pi-test-0.1.0.tar.gz",
+                Some(("safe-chain-pi-test", "0.1.0")),
             ),
-            ("pkg-latest.tar.gz", None),
-            // With metadata suffix
-            ("numpy-1.24.3.tar.gz.metadata", Some(("numpy", "1.24.3"))),
-            // Real-world: multiple hyphens
             (
                 "django-rest-framework-3.14.0.tar.gz",
                 Some(("django-rest-framework", "3.14.0")),
+            ),
+            // Package names with underscores (normalized to hyphens)
+            ("foo_bar-1.0.0.zip", Some(("foo-bar", "1.0.0"))),
+            (
+                "safe_chain_pi_test-0.1.0.tar.gz",
+                Some(("safe-chain-pi-test", "0.1.0")),
+            ),
+            (
+                "test_package_with_underscores-3.2.1.tar.gz",
+                Some(("test-package-with-underscores", "3.2.1")),
+            ),
+            // Package names with dots
+            ("zope.interface-6.0.tar.gz", Some(("zope.interface", "6.0"))),
+            (
+                "backports.zoneinfo-0.2.1.tar.gz",
+                Some(("backports.zoneinfo", "0.2.1")),
             ),
             // Prerelease versions
             ("package-1.0.0a1.tar.gz", Some(("package", "1.0.0a1"))),
@@ -365,14 +417,18 @@ mod tests {
                 "package-3.0.0.post1.tar.gz",
                 Some(("package", "3.0.0.post1")),
             ),
-            // Alternative formats
-            ("package-1.0.0.zip", Some(("package", "1.0.0"))),
-            ("package-2.0.0.tar.bz2", Some(("package", "2.0.0"))),
-            ("package-3.0.0.tar.xz", Some(("package", "3.0.0"))),
+            // With metadata suffix
+            ("numpy-1.24.3.tar.gz.metadata", Some(("numpy", "1.24.3"))),
             // Invalid cases
-            ("no-extension-1.0.0", None),
+            ("pkg-latest.tar.gz", None),
             ("package-latest.tar.gz", None),
+            ("no-extension-1.0.0", None),
             ("-1.0.0.tar.gz", None),
+            ("notasdist.whl", None),
+            ("package-1.0.0.txt", None),
+            // Unsupported formats (should return None)
+            ("package-4.0.0.tar.zst", None),
+            ("setuptools-68.0.0.egg", None),
         ];
 
         for (input, expected) in test_cases {
@@ -424,19 +480,19 @@ mod tests {
     #[test]
     fn test_package_info_is_metadata_request() {
         let metadata_info = PackageInfo {
-            name: "requests".to_string(),
+            name: SmolStr::from("requests"),
             version: PackageVersion::None,
         };
         assert!(metadata_info.is_metadata_request());
 
         let file_info = PackageInfo {
-            name: "requests".to_string(),
+            name: SmolStr::from("requests"),
             version: PackageVersion::Semver(semver::Version::new(2, 31, 0)),
         };
         assert!(!file_info.is_metadata_request());
 
         let any_version_info = PackageInfo {
-            name: "requests".to_string(),
+            name: SmolStr::from("requests"),
             version: PackageVersion::Any,
         };
         assert!(!any_version_info.is_metadata_request());
@@ -447,7 +503,7 @@ mod tests {
         use crate::firewall::malware_list::{MalwareEntry, Reason};
 
         let package_info = PackageInfo {
-            name: "malicious-pkg".to_string(),
+            name: SmolStr::from("malicious-pkg"),
             version: PackageVersion::Semver(semver::Version::new(1, 0, 0)),
         };
 
