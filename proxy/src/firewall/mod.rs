@@ -77,9 +77,17 @@ impl Firewall {
                     .await
                     .context("create block rule: chrome")?
                     .into_dyn(),
-                self::rule::npm::RuleNpm::try_new(guard, shared_remote_malware_client, data)
+                self::rule::npm::RuleNpm::try_new(
+                    guard.clone(),
+                    shared_remote_malware_client.clone(),
+                    data.clone(),
+                )
+                .await
+                .context("create block rule: npm")?
+                .into_dyn(),
+                self::rule::pypi::RulePyPI::try_new(guard, shared_remote_malware_client, data)
                     .await
-                    .context("create block rule: npm")?
+                    .context("create block rule: pypi")?
                     .into_dyn(),
             ]),
         })
