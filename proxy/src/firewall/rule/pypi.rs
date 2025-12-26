@@ -191,15 +191,12 @@ fn percent_decode(input: &str) -> Cow<'_, str> {
 ///   foo_bar-2.0.0-py3-none-any.whl
 ///   foo_bar-2.0.0-py3-none-any.whl.metadata
 fn parse_wheel_filename(filename: &str) -> Option<PackageInfo> {
-    // Strip .whl or .whl.metadata suffix
     let base = filename
         .strip_suffix(".whl.metadata")
         .or_else(|| filename.strip_suffix(".whl"))?;
 
-    // Split on first dash to get distribution name
     let (dist, rest) = base.split_once('-')?;
 
-    // Split rest on second dash to get version
     let version = rest.split('-').next()?;
 
     if version.eq_ignore_ascii_case("latest") || dist.is_empty() || version.is_empty() {
@@ -222,15 +219,12 @@ fn parse_wheel_filename(filename: &str) -> Option<PackageInfo> {
 fn parse_source_dist_filename(filename: &str) -> Option<PackageInfo> {
     const SDIST_EXTS: &[&str] = &[".tar.gz", ".zip", ".tar.bz2", ".tar.xz"];
 
-    // Strip .metadata suffix if present
     let working = filename.strip_suffix(".metadata").unwrap_or(filename);
 
-    // Find and strip archive extension
     let base = SDIST_EXTS
         .iter()
         .find_map(|ext| working.strip_suffix(ext))?;
 
-    // Split on last dash to get name and version
     let (dist, version) = base.rsplit_once('-')?;
     if version.eq_ignore_ascii_case("latest") || dist.is_empty() || version.is_empty() {
         return None;
