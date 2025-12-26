@@ -2665,7 +2665,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_test",
- "smallvec",
  "smol_str",
  "sudo",
  "tikv-jemallocator",

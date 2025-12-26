@@ -8,8 +8,8 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
+    utils::collections::smallvec::SmallVec,
 };
-use smallvec::SmallVec;
 use smol_str::{SmolStr, StrExt};
 
 use crate::{
@@ -117,7 +117,7 @@ impl RulePyPI {
 }
 
 fn normalize_package_name(raw: &str) -> SmolStr {
-    raw.to_lowercase().replace_smolstr("_", "-")
+    raw.to_lowercase_smolstr().replace_smolstr("_", "-")
 }
 
 impl fmt::Debug for RulePyPI {
