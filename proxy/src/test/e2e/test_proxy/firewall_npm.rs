@@ -1,12 +1,16 @@
 use rama::{
-    Service,
-    error::OpaqueError,
-    http::{Request, Response, StatusCode, service::client::HttpClientExt as _},
+    http::{StatusCode, service::client::HttpClientExt as _},
+    telemetry::tracing,
 };
 
-pub(super) async fn test_npm_https_package_malware_blocked(
-    client: &impl Service<Request, Output = Response, Error = OpaqueError>,
-) {
+use crate::test::e2e;
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_npm_https_package_malware_blocked() {
+    let runtime = e2e::runtime::get().await;
+    let client = runtime.client_with_http_proxy().await;
+
     let resp = client
         .get("https://registry.npmjs.org/safe-chain-test/-/safe-chain-test-0.0.1-security.tgz?a=b")
         .send()
@@ -16,9 +20,12 @@ pub(super) async fn test_npm_https_package_malware_blocked(
     assert_eq!(StatusCode::FORBIDDEN, resp.status());
 }
 
-pub(super) async fn test_npm_https_package_ok(
-    client: &impl Service<Request, Output = Response, Error = OpaqueError>,
-) {
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_npm_https_package_ok() {
+    let runtime = e2e::runtime::get().await;
+    let client = runtime.client_with_http_proxy().await;
+
     let resp = client
         .get("https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz")
         .send()

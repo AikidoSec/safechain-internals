@@ -1,32 +1,6 @@
-mod client;
 mod har;
 mod runtime;
 
 mod test_connectivity;
 mod test_meta;
 mod test_proxy;
-
-use rama::telemetry::tracing;
-
-#[tokio::test(flavor = "multi_thread")]
-#[tracing_test::traced_test]
-async fn test_all() {
-    // simple test to ensure that creating and getting runtime works,
-    // outside out of any other things that might otherwise go wrong
-
-    let runtime = self::runtime::get().await;
-
-    assert!(runtime.meta_socket_addr().ip_addr.is_loopback());
-    assert!(runtime.proxy_socket_addr().ip_addr.is_loopback());
-    assert_ne!(runtime.meta_socket_addr(), runtime.proxy_socket_addr());
-
-    tokio::join!(
-        self::test_connectivity::test_connectivity(&runtime),
-        self::test_meta::test_endpoint(&runtime),
-    );
-
-    // keep proxy as a last separate step as it is the largest one,
-    // we just need to make sure that internally we make it sufficiently conurrent.
-
-    self::test_proxy::test_proxy(&runtime).await;
-}
