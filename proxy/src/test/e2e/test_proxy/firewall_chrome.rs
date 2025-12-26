@@ -1,14 +1,13 @@
-use rama::{
-    Service,
-    error::OpaqueError,
-    http::{Request, Response, StatusCode},
-};
+use rama::{Service, http::StatusCode, telemetry::tracing};
 
 use crate::test::e2e;
 
-pub(super) async fn test_google_har_replay_blocked_plugin(
-    client: &impl Service<Request, Output = Response, Error = OpaqueError>,
-) {
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_google_har_replay_blocked_plugin() {
+    let runtime = e2e::runtime::get().await;
+    let client = runtime.client_with_http_proxy().await;
+
     let req = e2e::har::parse_har_request(
         r##"{
     "method": "GET",
