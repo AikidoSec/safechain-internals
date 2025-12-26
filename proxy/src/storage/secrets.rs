@@ -1,5 +1,6 @@
+use parking_lot::RwLock;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::{path::PathBuf, str::FromStr};
 
 use keyring_core::api::CredentialStoreApi;
@@ -39,7 +40,7 @@ enum Backend {
         store: Arc<Store>,
     },
     InMemory {
-        secrets: Arc<Mutex<HashMap<String, SecretBox<Vec<u8>>>>>,
+        secrets: Arc<RwLock<HashMap<String, SecretBox<Vec<u8>>>>>,
     },
 }
 
@@ -73,7 +74,7 @@ impl FromStr for SyncSecrets {
 
         if s.eq_ignore_ascii_case("memory") {
             return Ok(Self(Backend::InMemory {
-                secrets: Arc::new(Mutex::new(HashMap::new())),
+                secrets: Arc::new(RwLock::new(HashMap::new())),
             }));
         }
 
@@ -127,19 +128,16 @@ impl SyncSecrets {
                     "using in-memory secrets storage; CA keypairs and other secrets will be regenerated on each restart"
                 );
 
-                match secrets.lock() {
-                    Ok(mut map) => {
-                        map.insert(key.to_string(), SecretBox::new(Box::new(raw)));
-                        Ok(())
-                    }
-                    Err(_) => Err(OpaqueError::from_display("failed to lock secrets mutex")),
-                }
+                secrets
+                    .write()
+                    .insert(key.to_string(), SecretBox::new(Box::new(raw)));
+                Ok(())
             }
         }
     }
 
     pub fn load_secret<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, OpaqueError> {
-        let raw = match &self.0 {
+        match &self.0 {
             Backend::Fs { dir } => {
                 tracing::warn!(
                     "secrets storage (load) is using FS @ '{}' (key = '{key}'), ensure to use 'keyring' in production!!!",
@@ -149,42 +147,41 @@ impl SyncSecrets {
                 let path = dir.join(format!("{key}.secret"));
                 tracing::debug!("secrets FS storage (load): {}", path.display());
                 match std::fs::read(&path) {
-                    Ok(v) => v,
-                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                    Ok(raw) => deserialize_secret(&raw, key),
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
                     Err(err) => {
-                        return Err(err.with_context(|| {
+                        Err(err.with_context(|| {
                             format!("get secret for FS path '{}'", path.display())
-                        }));
+                        }))
                     }
                 }
             }
             Backend::KeyRing { store } => {
                 let entry = new_key_ring_entry(store, key)?;
                 match entry.get_secret() {
-                    Ok(v) => v,
-                    Err(keyring_core::Error::NoEntry) => return Ok(None),
-                    Err(err) => {
-                        return Err(err.with_context(|| format!("get secret for key '{key}'")));
-                    }
+                    Ok(raw) => deserialize_secret(&raw, key),
+                    Err(keyring_core::Error::NoEntry) => Ok(None),
+                    Err(err) => Err(err.with_context(|| format!("get secret for key '{key}'"))),
                 }
             }
             Backend::InMemory { secrets } => {
-                let Ok(map) = secrets.lock() else {
-                    return Err(OpaqueError::from_display("failed to lock secrets mutex"));
-                };
-
-                if let Some(secret) = map.get(key) {
-                    secret.expose_secret().clone()
+                if let Some(secret) = secrets.read().get(key) {
+                    deserialize_secret(secret.expose_secret(), key)
                 } else {
-                    return Ok(None);
+                    Ok(None)
                 }
             }
-        };
-
-        let value: T = postcard::from_bytes(&raw)
-            .with_context(|| format!("(postcard) decode RAW read secret for key '{key}'"))?;
-        Ok(Some(value))
+        }
     }
+}
+
+fn deserialize_secret<T: DeserializeOwned>(
+    raw: &[u8],
+    key: &str,
+) -> Result<Option<T>, OpaqueError> {
+    let value: T = postcard::from_bytes(raw)
+        .with_context(|| format!("(postcard) decode RAW read secret for key '{key}'"))?;
+    Ok(Some(value))
 }
 
 #[cfg(target_os = "macos")]
