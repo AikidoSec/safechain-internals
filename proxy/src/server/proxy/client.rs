@@ -36,6 +36,7 @@ pub(super) fn new_https_client(
 {
     let inner = (
         RemoveResponseHeaderLayer::hop_by_hop(),
+        firewall.clone().into_evaluate_response_layer(),
         firewall.into_evaluate_request_layer(),
         RemoveRequestHeaderLayer::hop_by_hop(),
         MapResponseBodyLayer::new(Body::new),

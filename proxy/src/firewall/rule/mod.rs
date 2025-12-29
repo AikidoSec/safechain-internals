@@ -37,6 +37,11 @@ pub trait Rule: Sized + Send + Sync + 'static {
         req: Request,
     ) -> impl Future<Output = Result<RequestAction, OpaqueError>> + Send + '_;
 
+    fn evaluate_response(
+        &self,
+        resp: Response,
+    ) -> impl Future<Output = Result<Response, OpaqueError>> + Send + '_;
+
     fn into_dyn(self) -> DynRule {
         DynRule {
             inner: Arc::new(self),
@@ -57,6 +62,11 @@ trait DynRuleInner {
         req: Request,
     ) -> Pin<Box<dyn Future<Output = Result<RequestAction, OpaqueError>> + Send + '_>>;
 
+    fn dyn_evaluate_response(
+        &self,
+        resp: Response,
+    ) -> Pin<Box<dyn Future<Output = Result<Response, OpaqueError>> + Send + '_>>;
+
     fn dyn_match_domain(&self, domain: &Domain) -> bool;
 
     fn dyn_collect_pac_domains(&self, generator: &mut PacScriptGenerator);
@@ -74,6 +84,14 @@ impl<R: Rule> DynRuleInner for R {
         req: Request,
     ) -> Pin<Box<dyn Future<Output = Result<RequestAction, OpaqueError>> + Send + '_>> {
         Box::pin(self.evaluate_request(req))
+    }
+
+    #[inline(always)]
+    fn dyn_evaluate_response(
+        &self,
+        resp: Response,
+    ) -> Pin<Box<dyn Future<Output = Result<Response, OpaqueError>> + Send + '_>> {
+        Box::pin(self.evaluate_response(resp))
     }
 
     #[inline(always)]
@@ -118,6 +136,14 @@ impl Rule for DynRule {
         req: Request,
     ) -> impl Future<Output = Result<RequestAction, OpaqueError>> + Send + '_ {
         self.inner.dyn_evaluate_request(req)
+    }
+
+    #[inline(always)]
+    fn evaluate_response(
+        &self,
+        resp: Response,
+    ) -> impl Future<Output = Result<Response, OpaqueError>> + Send + '_ {
+        self.inner.dyn_evaluate_response(resp)
     }
 
     #[inline(always)]

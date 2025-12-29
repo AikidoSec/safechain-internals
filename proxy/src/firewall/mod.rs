@@ -103,6 +103,10 @@ impl Firewall {
         self::layer::evaluate_req::EvaluateRequestLayer(self)
     }
 
+    pub fn into_evaluate_response_layer(self) -> self::layer::evaluate_resp::EvaluateResponseLayer {
+        self::layer::evaluate_resp::EvaluateResponseLayer(self)
+    }
+
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
         let mut mod_req = req;
 
@@ -116,6 +120,17 @@ impl Firewall {
         }
 
         Ok(RequestAction::Allow(mod_req))
+    }
+
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+        let mut mod_resp = resp;
+
+        // Iterate rules in reverse order for symmetry with request evaluation
+        for rule in self.block_rules.iter().rev() {
+            mod_resp = rule.evaluate_response(mod_resp).await?;
+        }
+
+        Ok(mod_resp)
     }
 
     pub fn generate_pac_script_response(
