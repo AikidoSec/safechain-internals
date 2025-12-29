@@ -103,9 +103,7 @@ impl Firewall {
         self::layer::evaluate_req::EvaluateRequestLayer(self)
     }
 
-    pub fn into_evaluate_response_layer(
-        self,
-    ) -> self::layer::evaluate_resp::EvaluateResponseLayer {
+    pub fn into_evaluate_response_layer(self) -> self::layer::evaluate_resp::EvaluateResponseLayer {
         self::layer::evaluate_resp::EvaluateResponseLayer(self)
     }
 
