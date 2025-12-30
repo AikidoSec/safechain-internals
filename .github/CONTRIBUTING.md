@@ -23,8 +23,6 @@ cargo build # Download rust packages
 
 ## Running Tests
 
-This will run all the tests in the Go packages.
-
 ### Rust Tests
 To run Rust tests, navigate to the `proxy` directory and run:
 
