@@ -61,9 +61,12 @@ impl Authorizer<Basic> for ZeroAuthority {
         let mut result_extensions = Extensions::new();
         let mut parser_ext = Extensions::new();
 
+        // The use of proxy authentication is a common practice for
+        // proxy users to pass configs via a concept called username labels.
+        // See `docs/proxy/auth-flow.md` for more informtion.
         let username_parser = (
             FirewallUserConfigParser::default(),
-            (), // use the void trailer parser to ensure we drop any ignored label
+            (), // We make use use the void trailer parser to ensure we drop any ignored label.
         );
 
         let parsed_username = match parse_username(&mut parser_ext, username_parser, basic_username)

@@ -6,11 +6,8 @@ use rama::{
     http::{
         Body, Request, Response, StatusCode,
         layer::{
-            compression::CompressionLayer,
-            header_config::{HeaderConfigLayer, extract_header_config},
-            map_response_body::MapResponseBodyLayer,
-            proxy_auth::ProxyAuthLayer,
-            trace::TraceLayer,
+            compression::CompressionLayer, header_config::extract_header_config,
+            map_response_body::MapResponseBodyLayer, proxy_auth::ProxyAuthLayer, trace::TraceLayer,
             upgrade::UpgradeLayer,
         },
         matcher::MethodMatcher,
@@ -112,7 +109,11 @@ pub async fn run_proxy_server(
             ),
             ProxyAuthLayer::new(self::auth::ZeroAuthority::new())
                 .with_allow_anonymous(true)
-                // use the void trailer parser to ensure we drop any ignored label
+                // The use of proxy authentication is a common practice for
+                // proxy users to pass configs via a concept called username labels.
+                // See `docs/proxy/auth-flow.md` for more informtion.
+                //
+                // We make use use the void trailer parser to ensure we drop any ignored label.
                 .with_labels::<((), self::auth::FirewallUserConfigParser)>(),
             UpgradeLayer::new(
                 MethodMatcher::CONNECT,
@@ -121,9 +122,6 @@ pub async fn run_proxy_server(
             ),
             // =============================================
             // HTTP (plain-text) (proxy) connections
-            HeaderConfigLayer::<FirewallUserConfig>::optional(
-                HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG,
-            ),
             MapResponseBodyLayer::new(Body::new),
             CompressionLayer::new(),
             // =============================================
@@ -170,6 +168,11 @@ async fn http_connect_accept(mut req: Request) -> Result<(Response, Request), Re
         }
     }
 
+    // next to (proxy (basic) username labels) we also allow for secure
+    // targets that a custom proxy connect (http) request header is used to
+    // pass the config (html form encoded) as an alternative way as well
+    //
+    // See `docs/proxy/auth-flow.md` for more informtion.
     match extract_header_config(&req, &HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG) {
         Ok(cfg @ FirewallUserConfig { .. }) => {
             tracing::debug!(
