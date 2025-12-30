@@ -41,6 +41,8 @@ Using `make`:
 make build
 ```
 
+The resulting binaries are available in `bin/`.
+
 ## Additional Commands
 
 ### Formatting Code
