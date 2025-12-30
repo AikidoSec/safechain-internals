@@ -16,6 +16,7 @@ use rama::{
 };
 
 mod malware_list;
+mod vscode_marketplace;
 
 pub fn new_mock_client()
 -> Result<impl Service<Request, Output = Response, Error = OpaqueError> + Clone, OpaqueError> {
@@ -30,6 +31,10 @@ pub fn new_mock_client()
         .with_matcher(
             HttpMatcher::domain(Domain::from_static("malware-list.aikido.dev")),
             self::malware_list::web_svc(),
+        )
+        .with_matcher(
+            HttpMatcher::domain(Domain::from_static("marketplace.visualstudio.com")),
+            self::vscode_marketplace::web_svc(),
         )
         // echo all non-blocked requests back
         .with_not_found(not_found_svc);
