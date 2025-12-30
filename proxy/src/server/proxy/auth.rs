@@ -1,8 +1,8 @@
-use std::{convert::Infallible, time::Duration};
+use std::{borrow::Cow, convert::Infallible, time::Duration};
 
 use rama::{
     extensions::Extensions,
-    http::headers::authorization::AuthoritySync,
+    http::{HeaderName, headers::authorization::AuthoritySync},
     net::user::{
         Basic, UserId,
         authority::{AuthorizeResult, Authorizer},
@@ -11,6 +11,8 @@ use rama::{
     username::{UsernameLabelParser, UsernameLabelState, parse_username},
     utils::str::smol_str::StrExt as _,
 };
+
+use serde::{Deserialize, de::Error};
 
 #[derive(Debug, Clone, Default)]
 #[non_exhaustive]
@@ -23,10 +25,13 @@ impl ZeroAuthority {
     }
 }
 
+pub const HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG: HeaderName =
+    HeaderName::from_static("x-aikido-safe-chain-config");
+
 impl<T: UsernameLabelParser> AuthoritySync<Basic, T> for ZeroAuthority {
     fn authorized(&self, ext: &mut Extensions, credentials: &Basic) -> bool {
         let basic_username = credentials.username();
-        tracing::trace!("ZeroAuthority trusts all, it also trusts: {basic_username}");
+        tracing::trace!("ZeroAuthority (http proxy) trusts all, it also trusts: {basic_username}");
 
         let mut parser_ext = Extensions::new();
         let parsed_username = match parse_username(&mut parser_ext, T::default(), basic_username) {
@@ -49,16 +54,20 @@ impl Authorizer<Basic> for ZeroAuthority {
 
     async fn authorize(&self, credentials: Basic) -> AuthorizeResult<Basic, Self::Error> {
         let basic_username = credentials.username();
-        tracing::trace!("ZeroAuthority trusts all, it also trusts: {basic_username}");
+        tracing::trace!(
+            "ZeroAuthority (socks5 proxy) trusts all, it also trusts: {basic_username}"
+        );
 
         let mut result_extensions = Extensions::new();
         let mut parser_ext = Extensions::new();
 
-        let parsed_username = match parse_username(
-            &mut parser_ext,
+        let username_parser = (
             FirewallUserConfigParser::default(),
-            basic_username,
-        ) {
+            (), // use the void trailer parser to ensure we drop any ignored label
+        );
+
+        let parsed_username = match parse_username(&mut parser_ext, username_parser, basic_username)
+        {
             Ok(t) => {
                 result_extensions.extend(parser_ext);
                 t
@@ -84,7 +93,59 @@ impl Authorizer<Basic> for ZeroAuthority {
 /// by means of (proxy basic auth) username labels to adapt
 /// some configuration for its connection(s).
 pub struct FirewallUserConfig {
-    min_package_age: Option<Duration>,
+    pub min_package_age: Option<Duration>,
+}
+
+fn parse_humantime_str(s: &str) -> Result<Duration, humantime::DurationError> {
+    let s = s.trim();
+    if s.contains('_') {
+        humantime::parse_duration(&s.replace_smolstr("_", " "))
+    } else {
+        humantime::parse_duration(s)
+    }
+}
+
+impl<'de> Deserialize<'de> for FirewallUserConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Debug, Deserialize)]
+        struct T<'a> {
+            min_pkg_age: Option<Cow<'a, str>>,
+        }
+
+        let t = T::deserialize(deserializer)?;
+
+        Ok(Self {
+            min_package_age: t
+                .min_pkg_age
+                .as_deref()
+                .map(parse_humantime_str)
+                .transpose()
+                .map_err(D::Error::custom)?,
+        })
+    }
+}
+
+#[cfg(test)]
+impl serde::Serialize for FirewallUserConfig {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        #[derive(Debug, serde::Serialize)]
+        struct T {
+            min_pkg_age: Option<String>,
+        }
+
+        T {
+            min_pkg_age: self
+                .min_package_age
+                .map(|d| humantime::format_duration(d).to_string()),
+        }
+        .serialize(serializer)
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -115,24 +176,22 @@ impl UsernameLabelParser for FirewallUserConfigParser {
 
                 UsernameLabelState::Ignored
             }
-            FirewallUserConfigParserState::ValueMinPackageAge => {
-                match humantime::parse_duration(&label.trim().replace_smolstr("_", " ")) {
-                    Ok(d) => {
-                        tracing::trace!(
-                            "firewall cfg min package age '{d:?}' (raw = '{label}') found in username label(s)"
-                        );
-                        self.cfg.get_or_insert_default().min_package_age = Some(d);
-                        self.state = FirewallUserConfigParserState::Key;
-                        UsernameLabelState::Used
-                    }
-                    Err(err) => {
-                        tracing::debug!(
-                            "firewall cfg invalid min package age value ('{label}') found in username label(s): {err}; abort username label parsing"
-                        );
-                        UsernameLabelState::Abort
-                    }
+            FirewallUserConfigParserState::ValueMinPackageAge => match parse_humantime_str(label) {
+                Ok(d) => {
+                    tracing::trace!(
+                        "firewall cfg min package age '{d:?}' (raw = '{label}') found in username label(s)"
+                    );
+                    self.cfg.get_or_insert_default().min_package_age = Some(d);
+                    self.state = FirewallUserConfigParserState::Key;
+                    UsernameLabelState::Used
                 }
-            }
+                Err(err) => {
+                    tracing::debug!(
+                        "firewall cfg invalid min package age value ('{label}') found in username label(s): {err}; abort username label parsing"
+                    );
+                    UsernameLabelState::Abort
+                }
+            },
         }
     }
 
@@ -151,6 +210,37 @@ impl UsernameLabelParser for FirewallUserConfigParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[tracing_test::traced_test]
+    fn test_parse_humantime_str() {
+        for (input, expected_output) in [
+            ("", None),
+            ("5h", Some(Duration::from_hours(5))),
+            ("3m", Some(Duration::from_mins(3))),
+            (
+                "5h_30m",
+                Some(Duration::from_hours(5) + Duration::from_mins(30)),
+            ),
+            (
+                "5h 30m",
+                Some(Duration::from_hours(5) + Duration::from_mins(30)),
+            ),
+            ("5h-30m", None),
+            ("foo", None),
+        ] {
+            match (parse_humantime_str(input), expected_output) {
+                (Ok(output), Some(expected_output)) => {
+                    assert_eq!(expected_output, output, "input: '{input}'")
+                }
+                (Err(_), None) => (),
+                (Ok(output), None) => panic!("unexpected output '{output:?}' (input: '{input}'"),
+                (Err(err), Some(expected_output)) => panic!(
+                    "unexpected error '{err:?}', expected output: {expected_output:?} (input: '{input}')"
+                ),
+            }
+        }
+    }
 
     #[test]
     #[tracing_test::traced_test]

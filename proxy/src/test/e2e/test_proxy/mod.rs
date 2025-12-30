@@ -1,3 +1,5 @@
+mod user_config;
+
 mod no_firewall;
 
 mod firewall_chrome;
