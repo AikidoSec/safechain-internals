@@ -86,10 +86,10 @@ pub async fn run_proxy_server(
         har_export_layer.clone(),
     )?;
 
-    // NOTE: no username labels are (yet) supported in rama-socks5
-    // request the feature if you require that also to work for socks5.
     let socks5_proxy_router = Socks5PeekRouter::new(
         Socks5Acceptor::new()
+            .with_auth_optional(true)
+            .with_authorizer(self::auth::ZeroAuthority::new())
             .with_connector(socks5::server::LazyConnector::new(socks5_proxy_mitm_server)),
     );
 

@@ -3,12 +3,14 @@ use std::{convert::Infallible, time::Duration};
 use rama::{
     extensions::Extensions,
     http::headers::authorization::AuthoritySync,
-    net::user::{Basic, UserId},
+    net::user::{
+        Basic, UserId,
+        authority::{AuthorizeResult, Authorizer},
+    },
     telemetry::tracing,
     username::{UsernameLabelParser, UsernameLabelState, parse_username},
+    utils::str::smol_str::StrExt as _,
 };
-
-use smol_str::StrExt;
 
 #[derive(Debug, Clone, Default)]
 #[non_exhaustive]
@@ -39,6 +41,40 @@ impl<T: UsernameLabelParser> AuthoritySync<Basic, T> for ZeroAuthority {
         };
         ext.insert(UserId::Username(parsed_username));
         true
+    }
+}
+
+impl Authorizer<Basic> for ZeroAuthority {
+    type Error = Infallible;
+
+    async fn authorize(&self, credentials: Basic) -> AuthorizeResult<Basic, Self::Error> {
+        let basic_username = credentials.username();
+        tracing::trace!("ZeroAuthority trusts all, it also trusts: {basic_username}");
+
+        let mut result_extensions = Extensions::new();
+        let mut parser_ext = Extensions::new();
+
+        let parsed_username = match parse_username(
+            &mut parser_ext,
+            FirewallUserConfigParser::default(),
+            basic_username,
+        ) {
+            Ok(t) => {
+                result_extensions.extend(parser_ext);
+                t
+            }
+            Err(err) => {
+                tracing::trace!("failed to parse username: {:?}", err);
+                basic_username.to_owned()
+            }
+        };
+
+        result_extensions.insert(UserId::Username(parsed_username));
+
+        AuthorizeResult {
+            credentials,
+            result: Ok(Some(result_extensions)),
+        }
     }
 }
 
