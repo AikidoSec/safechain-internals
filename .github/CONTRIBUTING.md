@@ -62,12 +62,6 @@ cargo fmt
 
 ### Linting Code
 
-To lint the Go code, run:
-
-```sh
-golangci-lint run
-```
-
 To lint the Rust code, navigate to the `proxy` directory and run:
 
 ```sh
