@@ -9,31 +9,28 @@ Before you begin, ensure you have the following installed:
 - **Go**: Version 1.25 or higher. You can download it from [golang.org](https://golang.org/).
 - **Rust**: Version 1.91 or higher. You can install it using [rustup](https://rustup.rs/).
 - **Make**: Typically pre-installed on Unix-like systems, used for building.
+- **Just**: You can install it via a package manager of choice: <https://just.systems/man/en/packages.html>
+
+Requirementsd to build the (Rust) proxy:
+
 - **CMake**: Required for certain builds and dependencies. You can install it via your package manager or download it from the [CMake website](https://cmake.org/download/).
+- Unix-only dependencies:
+  - **Clang**: Already installed on MacOS, for Linux you might still need to install it.
+    - This is not used for Windows, there we use the default MVSC (2015) tooling
+      which most likely is already installed on a developer machine.
 
-## Installing Dependencies
+These (Rust) proxy dependencies are used to compile and link `rama-boring`, a `boringssl` fork.
 
+## Instructions
 
-To install the dependencies, run:
+The rest of the instructions are split in Agent vs Proxy for now,
+as these are two different projects within the same monorepo.
 
-```sh
-go mod download # We currently don't have any go dependencies
-cargo build # Download rust packages
-```
+### Instructions: Agent
 
-## Running Tests
+The agent is written in Go.
 
-### Rust Tests
-To run Rust tests, navigate to the `proxy` directory and run:
-
-```sh
-cd proxy
-cargo test
-```
-
-This will run all the tests in the Rust packages.
-
-## Building the Project
+#### Agent: build
 
 Using `make`:
 
@@ -43,9 +40,7 @@ make build
 
 The resulting binaries are available in `bin/`.
 
-## Additional Commands
-
-### Formatting Code
+#### Agent: format Code
 
 To format the Go code, run:
 
@@ -53,18 +48,59 @@ To format the Go code, run:
 gofmt -w .
 ```
 
-To format the Rust code, navigate to the `proxy` directory and run:
+### Instructions: Proxy
+
+The proxy is written in Rust.
+
+Learn more about the Proxy, what it is and how to use it,
+in the Proxy README: [../proxy/README.md](../proxy/README.md).
+
+Using `just` you can using a single command: format code,
+sort `Cargo.toml` dependencies, lint (`clippy`), check code can compile
+and run all tests as follows:
 
 ```sh
-cd proxy
-cargo fmt
+just rust-qa
 ```
 
-### Linting Code
+It's recommended to run the `rust-qa` target locally prior to comitting to github,
+as it will catch 99% of the reasons why your CI might fail otherwise.
 
-To lint the Rust code, navigate to the `proxy` directory and run:
+If you also wish to _also_ run the ignored tests (which include slower tests,
+or tests which on platforms such as MacOS might require you to unlock keychain):
 
 ```sh
-cd proxy
-cargo clippy
+just rust-qa-full
+```
+
+These ignored tests are on top of all other `rust-qa` checks all run
+in the Github CI as well.
+
+#### Proxy: run
+
+Using `just`:
+
+```sh
+just run-proxy
+```
+
+You can using the same `justfile` also toggle the [HAR](https://en.wikipedia.org/wiki/HAR_(file_format))
+recording on and off:
+
+```sh
+just proxy-har-toggle
+```
+
+#### Proxy: dependency management
+
+Update all dependencies (or get error in case there is a breaking update available):
+
+```sh
+just rust-update-deps
+```
+
+Detect unused dependencies (that can be removed from `Cargo.toml` manually):
+
+```sh
+just rust-detect-unused-deps
 ```
