@@ -21,3 +21,6 @@ Invoke-WebRequest -Uri "https://github.com/AikidoSec/safechain-agent/releases/la
 msiexec /i SafeChainAgent.msi /qn /norestart
 SafeChainSetup.exe
 ```
+
+## Contributing
+See our [Contribution docs](.github/CONTRIBUTING.md).
