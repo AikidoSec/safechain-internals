@@ -17,7 +17,7 @@ use serde_json::{Map, Value};
 
 use crate::{
     firewall::{malware_list::RemoteMalwareList, pac::PacScriptGenerator},
-    http::response::generate_generic_blocked_response_for_req,
+    http::response::generate_malware_blocked_response_for_req,
     storage::SyncCompactDataStorage,
 };
 
@@ -51,7 +51,11 @@ impl RuleVSCode {
         .context("create remote malware list for vscode block rule")?;
 
         Ok(Self {
-            // NOTE: should you ever make this list dynamic we would stop hardcoding these target domains here...
+            // NOTE: These are the primary hosts used by VS Code extension gallery flows.
+            // Upstream reference: microsoft/vscode uses Marketplace “extensionquery” + download asset URIs
+            // (see `src/vs/platform/extensionManagement/common/extensionGalleryService.ts`, asset types like
+            // `Microsoft.VisualStudio.Services.VSIXPackage`, `Microsoft.VisualStudio.Services.VsixSignature`,
+            // `Microsoft.VisualStudio.Code.Manifest`).
             target_domains: [
                 "gallery.vsassets.io",
                 "gallerycdn.vsassets.io",
@@ -133,7 +137,7 @@ impl Rule for RuleVSCode {
                 "blocked VSCode extension install asset download"
             );
             return Ok(RequestAction::Block(
-                generate_generic_blocked_response_for_req(req),
+                generate_malware_blocked_response_for_req(req),
             ));
         }
 
