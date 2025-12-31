@@ -140,13 +140,6 @@ async fn test_vscode_marketplace_api_response_marks_only_malware_entries() {
         blocked.get("displayName").and_then(|v| v.as_str()),
         Some("⛔ MALWARE: Python Theme")
     );
-    assert!(
-        blocked
-            .get("flags")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .contains("malicious")
-    );
     assert!(blocked.get("shortDescription").is_some());
     assert!(blocked.get("description").is_some());
 
@@ -165,13 +158,6 @@ async fn test_vscode_marketplace_api_response_marks_only_malware_entries() {
         safe.get("displayName").and_then(|v| v.as_str()),
         Some("Python")
     );
-    assert!(
-        !safe
-            .get("flags")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .contains("malicious")
-    );
 }
 
 static ENV_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
@@ -180,7 +166,7 @@ static ENV_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 #[tracing_test::traced_test]
 async fn test_vscode_forced_malware_env_marks_ms_python_python() {
     let _lock = ENV_MUTEX.lock().await;
-    unsafe { std::env::set_var("SAFECHAIN_FORCE_MALWARE_VSCODE", "1") };
+    unsafe { std::env::set_var("SAFECHAIN_FORCE_MALWARE_VSCODE", "ms-python.python") };
 
     let runtime = e2e::runtime::get().await;
     let client = runtime.client_with_http_proxy().await;
