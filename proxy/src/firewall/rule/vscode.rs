@@ -214,10 +214,8 @@ impl RuleVSCode {
 
     /// Get the extension ID(s) to force-treat as malware for testing.
     ///
-    /// This allows local testing of the block UX without needing to:
-    /// - Publish actual malicious extensions to the VS Code marketplace
-    /// - Wait for external malware list updates
-    /// - Risk affecting real users
+    /// This allows local testing of the block UX without needing to publish 
+    ///  actual malicious extensions to the VS Code marketplace
     ///
     /// Usage:
     /// ```sh
@@ -282,8 +280,7 @@ impl RuleVSCode {
         }
 
         // Pattern: /_apis/public/gallery/publisher/<publisher>/<extension>/<version>/...
-        // Pattern (seen in your logs for marketplace CDN assets):
-        // /extensions/<publisher>/<extension>/<version>/<...>/Microsoft.VisualStudio.Services.VSIXPackage
+        // Pattern: /extensions/<publisher>/<extension>/<version>/<...>/Microsoft.VisualStudio.Services.VSIXPackage
         for prefix in ["_apis/public/gallery/publisher/", "extensions/"] {
             if let Some(rest) = path.strip_prefix(prefix) {
                 let (publisher, extension) = parse_first_two_path_segments(rest)?;
@@ -291,8 +288,7 @@ impl RuleVSCode {
             }
         }
 
-        // Pattern (common in marketplace downloads):
-        // /_apis/public/gallery/publishers/<publisher>/vsextensions/<extension>/<version>/...
+        // Pattern: /_apis/public/gallery/publishers/<publisher>/vsextensions/<extension>/<version>/...
         if let Some(rest) = path.strip_prefix("_apis/public/gallery/publishers/") {
             let mut parts = rest.split('/');
             let publisher = parts.next()?;
