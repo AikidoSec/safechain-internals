@@ -53,7 +53,7 @@ gofmt -w .
 The proxy is written in Rust.
 
 Learn more about the Proxy, what it is and how to use it,
-in the Proxy README: [../proxy/README.md](../proxy/README.md).
+in the Proxy README: [../docs/proxy.md](../docs/proxy.md).
 
 Using `just` you can using a single command: format code,
 sort `Cargo.toml` dependencies, lint (`clippy`), check code can compile
