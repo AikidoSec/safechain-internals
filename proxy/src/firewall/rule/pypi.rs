@@ -1,16 +1,20 @@
 use std::{borrow::Cow, fmt, str::FromStr};
 
-use percent_encoding;
 use rama::{
     Service,
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
-    net::address::{Domain, DomainTrie},
+    net::{
+        address::{Domain, DomainTrie},
+        uri::util::percent_encoding,
+    },
     telemetry::tracing,
-    utils::collections::smallvec::SmallVec,
+    utils::{
+        collections::smallvec::SmallVec,
+        str::smol_str::{SmolStr, StrExt},
+    },
 };
-use smol_str::{SmolStr, StrExt};
 
 use crate::{
     firewall::{

@@ -7,9 +7,8 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
-    utils::str::starts_with_ignore_ascii_case,
+    utils::str::{smol_str::format_smolstr, starts_with_ignore_ascii_case},
 };
-use smol_str::format_smolstr;
 
 use crate::{
     firewall::{malware_list::RemoteMalwareList, pac::PacScriptGenerator},

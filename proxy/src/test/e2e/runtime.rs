@@ -10,8 +10,11 @@ use rama::{
     Layer as _, Service,
     error::OpaqueError,
     http::{
-        Body, BodyExtractExt as _, Request, Response,
-        client::EasyHttpWebClient,
+        Body, BodyExtractExt as _, HeaderMap, HeaderValue, Request, Response,
+        client::{
+            EasyHttpWebClient, ProxyConnectorLayer,
+            proxy::layer::{HttpProxyConnectorLayer, SetProxyAuthHttpHeaderLayer},
+        },
         layer::{
             map_request_body::MapRequestBodyLayer,
             retry::{ManagedPolicy, RetryLayer},
@@ -24,6 +27,7 @@ use rama::{
         address::{DomainAddress, ProxyAddress, SocketAddress},
         user::{Basic, ProxyCredential},
     },
+    proxy::socks5::Socks5ProxyConnectorLayer,
     tls::boring::{
         client::TlsConnectorDataBuilder,
         core::x509::{X509, store::X509StoreBuilder},
@@ -31,7 +35,10 @@ use rama::{
     utils::{backoff::ExponentialBackoff, rng::HasherRng, str::NonEmptyStr},
 };
 
-use crate::Args;
+use crate::{
+    Args,
+    server::proxy::{FirewallUserConfig, HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG},
+};
 
 #[derive(Clone)]
 pub(super) struct Runtime {
@@ -68,7 +75,7 @@ impl Runtime {
 
     #[inline(always)]
     pub fn client(&self) -> impl Service<Request, Output = Response, Error = OpaqueError> {
-        create_client_inner(None)
+        create_client_inner(None, None)
     }
 
     #[inline(always)]
@@ -85,6 +92,13 @@ impl Runtime {
 
     pub async fn client_with_ca_trust(
         &self,
+    ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+        self.client_with_ca_trust_inner(None).await
+    }
+
+    async fn client_with_ca_trust_inner(
+        &self,
+        custom_http_proxy_headers: Option<HeaderMap>,
     ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
         let default_client = self.client();
 
@@ -104,7 +118,7 @@ impl Runtime {
         let tls_config =
             Arc::new(TlsConnectorDataBuilder::new_http_auto().with_server_verify_cert_store(store));
 
-        create_client_inner(Some(tls_config))
+        create_client_inner(Some(tls_config), custom_http_proxy_headers)
     }
 
     #[inline(always)]
@@ -112,6 +126,23 @@ impl Runtime {
         &self,
     ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
         let web_client = self.client_with_ca_trust().await;
+        (
+            AddInputExtensionLayer::new(self.http_proxy_addr()),
+            SetProxyAuthHttpHeaderLayer::new(),
+        )
+            .into_layer(web_client)
+    }
+
+    #[inline(always)]
+    pub async fn client_with_http_proxy_and_user_config_header(
+        &self,
+        cfg: FirewallUserConfig,
+    ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+        let mut headers = HeaderMap::new();
+        let cfg_header_value_str = serde_html_form::to_string(cfg).unwrap();
+        let cfg_header_value = HeaderValue::from_str(&cfg_header_value_str).unwrap();
+        headers.insert(HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG, cfg_header_value);
+        let web_client = self.client_with_ca_trust_inner(Some(headers)).await;
         AddInputExtensionLayer::new(self.http_proxy_addr()).into_layer(web_client)
     }
 
@@ -121,7 +152,10 @@ impl Runtime {
         username: &str,
     ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
         let web_client = self.client_with_ca_trust().await;
-        AddInputExtensionLayer::new(self.http_proxy_addr_with_username(username))
+        (
+            AddInputExtensionLayer::new(self.http_proxy_addr_with_username(username)),
+            SetProxyAuthHttpHeaderLayer::new(),
+        )
             .into_layer(web_client)
     }
 
@@ -145,6 +179,16 @@ impl Runtime {
     }
 
     #[inline(always)]
+    pub async fn client_with_socks5_proxy_and_username(
+        &self,
+        username: &str,
+    ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+        let web_client = self.client_with_ca_trust().await;
+        AddInputExtensionLayer::new(self.socks5_proxy_addr_with_username(username))
+            .into_layer(web_client)
+    }
+
+    #[inline(always)]
     pub fn socks5_proxy_addr(&self) -> ProxyAddress {
         ProxyAddress {
             protocol: Some(Protocol::SOCKS5),
@@ -152,15 +196,46 @@ impl Runtime {
             credential: None,
         }
     }
+
+    #[inline(always)]
+    pub fn socks5_proxy_addr_with_username(&self, username: &str) -> ProxyAddress {
+        ProxyAddress {
+            protocol: Some(Protocol::SOCKS5),
+            address: self.proxy_socket_addr().into(),
+            credential: Some(ProxyCredential::Basic(Basic::new_insecure(
+                NonEmptyStr::try_from(username).unwrap(),
+            ))),
+        }
+    }
 }
 
 fn create_client_inner(
     tls_config: Option<Arc<TlsConnectorDataBuilder>>,
+    custom_http_proxy_headers: Option<HeaderMap>,
 ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+    let mut http_proxy_layer = HttpProxyConnectorLayer::required();
+    if let Some(custom_headers) = custom_http_proxy_headers {
+        let mut previous_name = None;
+        for (maybe_name, value) in custom_headers.into_iter() {
+            match maybe_name {
+                Some(name) => {
+                    previous_name = Some(name.clone());
+                    http_proxy_layer.set_custom_header(name, value);
+                }
+                None => {
+                    http_proxy_layer.set_custom_header(previous_name.clone().unwrap(), value);
+                }
+            }
+        }
+    }
+
     let inner_https_client = EasyHttpWebClient::connector_builder()
         .with_default_transport_connector()
         .without_tls_proxy_support()
-        .with_proxy_support()
+        .with_custom_proxy_connector(ProxyConnectorLayer::optional(
+            Socks5ProxyConnectorLayer::required(),
+            http_proxy_layer,
+        ))
         .with_tls_support_using_boringssl(tls_config)
         .with_default_http_connector()
         .try_with_default_connection_pool()
@@ -169,13 +244,15 @@ fn create_client_inner(
 
     (
         MapErrLayer::new(OpaqueError::from_boxed),
-        TimeoutLayer::new(Duration::from_secs(60)),
+        // timeout needs to be high enough for this e2e test setup
+        // ... windows machines in CI... can be ... slow
+        TimeoutLayer::new(Duration::from_secs(180)),
         MapErrLayer::new(Into::into),
         RetryLayer::new(
             ManagedPolicy::default().with_backoff(
                 ExponentialBackoff::new(
                     Duration::from_millis(100),
-                    Duration::from_secs(60),
+                    Duration::from_secs(180),
                     0.01,
                     HasherRng::default,
                 )
@@ -197,13 +274,14 @@ pub(super) async fn get() -> Runtime {
 
     let app = APP.clone();
 
+    // make timeouts large enough... windows CI tests... zzz
     let (meta_addr, proxy_addr) = tokio::try_join!(
         tokio::time::timeout(
-            Duration::from_secs(30),
+            Duration::from_secs(180),
             read_file_or_wait(app.data_dir.join("meta.addr.txt"))
         ),
         tokio::time::timeout(
-            Duration::from_secs(30),
+            Duration::from_secs(180),
             read_file_or_wait(app.data_dir.join("proxy.addr.txt"))
         ),
     )
