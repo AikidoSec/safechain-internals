@@ -51,11 +51,6 @@ impl RuleVSCode {
         .context("create remote malware list for vscode block rule")?;
 
         Ok(Self {
-            // NOTE: These are the primary hosts used by VS Code extension gallery flows.
-            // Upstream reference: microsoft/vscode uses Marketplace “extensionquery” + download asset URIs
-            // (see `src/vs/platform/extensionManagement/common/extensionGalleryService.ts`, asset types like
-            // `Microsoft.VisualStudio.Services.VSIXPackage`, `Microsoft.VisualStudio.Services.VsixSignature`,
-            // `Microsoft.VisualStudio.Code.Manifest`).
             target_domains: [
                 "gallery.vsassets.io",
                 "gallerycdn.vsassets.io",
@@ -108,7 +103,7 @@ impl Rule for RuleVSCode {
         // VS Code can install extensions via:
         // 1. Gallery API (handled in evaluate_response) - queries extension metadata
         // 2. Direct .vsix downloads - can skip the API query entirely
-        // We need to block both paths
+        // Safe-chain handles both paths
         if !Self::is_extension_install_asset_path(path) {
             // For non-install-asset requests (like gallery API queries), pass through to
             // evaluate_response where we'll inspect the JSON response for malware.
