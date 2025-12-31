@@ -1,4 +1,6 @@
-use std::sync::{LazyLock, Mutex};
+use std::sync::LazyLock;
+
+use tokio::sync::Mutex;
 
 use rama::{
     http::{BodyExtractExt as _, StatusCode, service::client::HttpClientExt as _},
@@ -177,7 +179,7 @@ static ENV_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 #[tokio::test]
 #[tracing_test::traced_test]
 async fn test_vscode_forced_malware_env_marks_ms_python_python() {
-    let _lock = ENV_MUTEX.lock().unwrap();
+    let _lock = ENV_MUTEX.lock().await;
     unsafe { std::env::set_var("SAFECHAIN_FORCE_MALWARE_VSCODE", "1") };
 
     let runtime = e2e::runtime::get().await;

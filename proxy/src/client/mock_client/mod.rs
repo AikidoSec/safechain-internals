@@ -34,6 +34,10 @@ pub fn new_mock_client()
             self::malware_list::web_svc(),
         )
         .with_matcher(
+            HttpMatcher::domain(Domain::from_static("marketplace.visualstudio.com")),
+            self::vscode_marketplace::web_svc(),
+        )
+        .with_matcher(
             HttpMatcher::domain(Domain::from_static("assert-test.internal")),
             self::assert_endpoint::web_svc(),
         )

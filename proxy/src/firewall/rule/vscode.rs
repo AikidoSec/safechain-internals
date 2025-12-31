@@ -9,11 +9,10 @@ use rama::{
     http::{Body, Request, Response, Uri},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
-    utils::str::{smol_str::format_smolstr, starts_with_ignore_ascii_case},
+    utils::str::smol_str::format_smolstr,
 };
 
 use serde_json::Value;
-use smol_str::format_smolstr;
 
 use crate::{
     firewall::{malware_list::RemoteMalwareList, pac::PacScriptGenerator},
@@ -392,7 +391,7 @@ fn is_vscode_extension_install_asset_path(path: &str) -> bool {
 /// - /files/publisher/extensionname/version/extension.vsix
 /// - /_apis/public/gallery/publisher/publisher/extension/version/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage
 ///   Returns publisher.extensionname format
-fn parse_extension_id_from_vsix_path(path: &str) -> Option<smol_str::SmolStr> {
+fn parse_extension_id_from_vsix_path(path: &str) -> Option<rama::utils::str::smol_str::SmolStr> {
     let path = path.trim_start_matches('/');
 
     // Pattern: /files/<publisher>/<extension>/<version>/...
