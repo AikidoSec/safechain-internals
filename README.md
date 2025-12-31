@@ -28,7 +28,7 @@ A security-focused SOCKS5/HTTP(S) system proxy
 built with <https://ramaproxy.org/>.
 
 Read more in the proxy readme:
-[./proxy/README.md](./proxy/README.md).
+[./docs/proxy.md](./docs/proxy.md).
 
 ## Contributing
 
