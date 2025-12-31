@@ -6,6 +6,11 @@ built with <https://ramaproxy.org/>.
 > Edge Rama Rust docs:
 > <https://ramaproxy.org/docs/rama/>
 
+Other proxy docs:
+
+- [./proxy/auth-flow.md](./proxy/auth-flow.md): learn more about the proxy auto flow,
+  and specifically how to pass a user config when connecting to the safechain proxy.
+
 ## Quick Start
 
 ### Running the Proxy
@@ -121,9 +126,7 @@ The username labels allow one to configure the firewall behaviour,
 such as in the example above where the minimum package is 48 hours,
 instead of whatever the global default is.
 
-| label | example values |
-|-------|----------------|
-| `min-pkg-age` | `2d`, `48h`, `12h_30m`, `2y` |
+Read more about this in [./proxy/auth-flow.md](./proxy/auth-flow.md).
 
 ### Environment Variables (any tool)
 

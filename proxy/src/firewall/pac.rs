@@ -1,9 +1,10 @@
+use std::fmt::Write as _;
+
 use rama::{
     bytes::Bytes,
     net::address::{Domain, SocketAddress},
+    utils::str::smol_str::ToSmolStr,
 };
-use smol_str::ToSmolStr;
-use std::fmt::Write as _;
 
 use crate::server::connectivity::CONNECTIVITY_DOMAIN;
 

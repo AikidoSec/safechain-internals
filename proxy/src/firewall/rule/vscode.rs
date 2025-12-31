@@ -9,7 +9,9 @@ use rama::{
     http::{Body, Request, Response, Uri},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
+    utils::str::{smol_str::format_smolstr, starts_with_ignore_ascii_case},
 };
+
 use serde_json::Value;
 use smol_str::format_smolstr;
 

@@ -6,12 +6,14 @@ use rama::{
     http::{
         Body, Request, Response, StatusCode,
         layer::{
-            compression::CompressionLayer, map_response_body::MapResponseBodyLayer,
-            proxy_auth::ProxyAuthLayer, trace::TraceLayer, upgrade::UpgradeLayer,
+            compression::CompressionLayer, header_config::extract_header_config,
+            map_response_body::MapResponseBodyLayer, proxy_auth::ProxyAuthLayer, trace::TraceLayer,
+            upgrade::UpgradeLayer,
         },
         matcher::MethodMatcher,
         server::HttpServer,
         service::web::response::IntoResponse,
+        utils::HeaderValueErr,
     },
     layer::ConsumeErrLayer,
     net::{
@@ -41,6 +43,8 @@ mod client;
 mod server;
 
 mod auth;
+
+pub use self::auth::{FirewallUserConfig, HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG};
 
 /// Maximum allowed body size for proxied requests and responses.
 /// Protects against memory exhaustion from excessively large payloads.
@@ -86,10 +90,10 @@ pub async fn run_proxy_server(
         har_export_layer.clone(),
     )?;
 
-    // NOTE: no username labels are (yet) supported in rama-socks5
-    // request the feature if you require that also to work for socks5.
     let socks5_proxy_router = Socks5PeekRouter::new(
         Socks5Acceptor::new()
+            .with_auth_optional(true)
+            .with_authorizer(self::auth::ZeroAuthority::new())
             .with_connector(socks5::server::LazyConnector::new(socks5_proxy_mitm_server)),
     );
 
@@ -105,14 +109,19 @@ pub async fn run_proxy_server(
             ),
             ProxyAuthLayer::new(self::auth::ZeroAuthority::new())
                 .with_allow_anonymous(true)
-                .with_labels::<self::auth::FirewallUserConfigParser>(),
+                // The use of proxy authentication is a common practice for
+                // proxy users to pass configs via a concept called username labels.
+                // See `docs/proxy/auth-flow.md` for more informtion.
+                //
+                // We make use use the void trailer parser to ensure we drop any ignored label.
+                .with_labels::<((), self::auth::FirewallUserConfigParser)>(),
             UpgradeLayer::new(
                 MethodMatcher::CONNECT,
                 service_fn(http_connect_accept),
                 http_proxy_mitm_server,
             ),
             // =============================================
-            // HTTP (plain-text) connections
+            // HTTP (plain-text) (proxy) connections
             MapResponseBodyLayer::new(Body::new),
             CompressionLayer::new(),
             // =============================================
@@ -156,6 +165,26 @@ async fn http_connect_accept(mut req: Request) -> Result<(Response, Request), Re
         Err(err) => {
             tracing::error!(uri = %req.uri(), "error extracting authority: {err:?}");
             return Err(StatusCode::BAD_REQUEST.into_response());
+        }
+    }
+
+    // next to (proxy (basic) username labels) we also allow for secure
+    // targets that a custom proxy connect (http) request header is used to
+    // pass the config (html form encoded) as an alternative way as well
+    //
+    // See `docs/proxy/auth-flow.md` for more informtion.
+    match extract_header_config(&req, &HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG) {
+        Ok(cfg @ FirewallUserConfig { .. }) => {
+            tracing::debug!(
+                "aikido safechain cfg header ({HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG:?}) parsed: {cfg:?}",
+            );
+            req.extensions_mut().insert(cfg);
+        }
+        Err(HeaderValueErr::HeaderMissing(name)) => {
+            tracing::trace!("aikido safechain cfg header ({name}): ignore");
+        }
+        Err(HeaderValueErr::HeaderInvalid(name)) => {
+            tracing::debug!("aikido safechain cfg header ({name}) failed to parse: ignore");
         }
     }
 
