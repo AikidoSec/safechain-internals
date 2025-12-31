@@ -218,7 +218,7 @@ impl RuleVSCode {
 
     /// Get the extension ID(s) to force-treat as malware for testing.
     ///
-    /// This allows local testing of the block UX without needing to publish 
+    /// This allows local testing of the block UX without needing to publish
     ///  actual malicious extensions to the VS Code marketplace
     ///
     /// Usage:
