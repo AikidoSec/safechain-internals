@@ -192,19 +192,19 @@ impl Rule for RuleVSCode {
             // If we keep it, HTTP/2 clients can fail with PROTOCOL_ERROR.
             parts.headers.remove(rama::http::header::CONTENT_LENGTH);
 
-            let mut resp = modified_body.into_response();
-            *resp.status_mut() = parts.status;
-            *resp.headers_mut() = parts.headers;
-            *resp.extensions_mut() = parts.extensions;
-            return Ok(resp);
+            let mut rebuilt_resp = modified_body.into_response();
+            *rebuilt_resp.status_mut() = parts.status;
+            *rebuilt_resp.headers_mut() = parts.headers;
+            *rebuilt_resp.extensions_mut() = parts.extensions;
+            return Ok(rebuilt_resp);
         }
 
         tracing::trace!("VSCode response does not contain blocked extensions: passthrough");
-        let mut resp = body_bytes.into_response();
-        *resp.status_mut() = parts.status;
-        *resp.headers_mut() = parts.headers;
-        *resp.extensions_mut() = parts.extensions;
-        Ok(resp)
+        let mut rebuilt_resp = body_bytes.into_response();
+        *rebuilt_resp.status_mut() = parts.status;
+        *rebuilt_resp.headers_mut() = parts.headers;
+        *rebuilt_resp.extensions_mut() = parts.extensions;
+        Ok(rebuilt_resp)
     }
 }
 
@@ -377,9 +377,27 @@ fn mark_any_extensions_if_malware(
     value: &mut Value,
     is_malware: &mut impl FnMut(&str) -> bool,
 ) -> bool {
+    mark_any_extensions_if_malware_with_depth(value, is_malware, 0)
+}
+
+const MAX_MARKETPLACE_JSON_TRAVERSAL_DEPTH: usize = 32;
+
+fn mark_any_extensions_if_malware_with_depth(
+    value: &mut Value,
+    is_malware: &mut impl FnMut(&str) -> bool,
+    depth: usize,
+) -> bool {
+    if depth >= MAX_MARKETPLACE_JSON_TRAVERSAL_DEPTH {
+        tracing::trace!(
+            max_depth = MAX_MARKETPLACE_JSON_TRAVERSAL_DEPTH,
+            "VSCode response JSON traversal depth limit reached; stopping traversal"
+        );
+        return false;
+    }
+
     match value {
         Value::Array(values) => values.iter_mut().fold(false, |acc, child| {
-            mark_any_extensions_if_malware(child, is_malware) || acc
+            mark_any_extensions_if_malware_with_depth(child, is_malware, depth + 1) || acc
         }),
         Value::Object(_) => {
             let mut modified = mark_extension_object_if_malware(value, is_malware);
@@ -389,7 +407,7 @@ fn mark_any_extensions_if_malware(
             };
 
             for child in obj.values_mut() {
-                modified |= mark_any_extensions_if_malware(child, is_malware);
+                modified |= mark_any_extensions_if_malware_with_depth(child, is_malware, depth + 1);
             }
 
             modified
@@ -977,5 +995,39 @@ mod tests {
             .and_then(|v| v.as_str())
             .unwrap();
         assert_eq!(description, short_description);
+    }
+
+    #[test]
+    fn test_rewrite_marketplace_json_depth_limit_stops_traversal() {
+        // Build a deeply nested JSON object, deeper than the traversal limit.
+        // This ensures we do not recurse unboundedly and that we intentionally
+        // stop searching past a reasonable depth.
+        let mut root = serde_json::json!({});
+
+        let mut current = &mut root;
+        for _ in 0..(MAX_MARKETPLACE_JSON_TRAVERSAL_DEPTH + 10) {
+            current
+                .as_object_mut()
+                .unwrap()
+                .insert("n".to_string(), serde_json::json!({}));
+            current = current.get_mut("n").unwrap();
+        }
+
+        // Place an extension-like object beyond the depth limit.
+        current.as_object_mut().unwrap().insert(
+            "extension".to_string(),
+            serde_json::json!({
+                "publisher": { "publisherName": "ms-python" },
+                "extensionName": "python",
+                "displayName": "Python"
+            }),
+        );
+
+        let body = Bytes::from(serde_json::to_vec(&root).unwrap());
+
+        // Even if we treat every ID as malware, we should not rewrite because the traversal
+        // never reaches the nested extension object.
+        let modified = rewrite_marketplace_json_response_body(&body, |_id| true);
+        assert!(modified.is_none());
     }
 }
