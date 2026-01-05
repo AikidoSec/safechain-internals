@@ -30,6 +30,24 @@ fn rewrite_marketplace_json_response_body_with_predicate(
     body_bytes: &[u8],
     mut is_malware: impl FnMut(&str) -> bool,
 ) -> Option<Bytes> {
+    // If the payload doesn't contain the minimum set of markers required
+    // for an extension-like object we would rewrite, skip parsing entirely.
+    let body_str = std::str::from_utf8(body_bytes).ok()?;
+
+    // We only rewrite objects that have a display name, plus enough metadata to build
+    // an extension id (publisher + name). If these markers are absent, no rewrite is possible.
+    if !body_str.contains("\"displayName\"") {
+        return None;
+    }
+
+    if !(body_str.contains("\"publisherName\"") || body_str.contains("\"publisher\"")) {
+        return None;
+    }
+
+    if !(body_str.contains("\"extensionName\"") || body_str.contains("\"name\"")) {
+        return None;
+    }
+
     let mut value: Value = match serde_json::from_slice(body_bytes) {
         Ok(val) => val,
         Err(err) => {
@@ -152,7 +170,7 @@ fn mark_extension_object_if_malware(
         return false;
     }
 
-    tracing::warn!(
+    tracing::info!(
         package = %extension_id,
         "marked malware VSCode extension as blocked in API response"
     );
@@ -350,11 +368,11 @@ mod tests {
             ]
         }"#;
 
-        let modified = rewrite_marketplace_json_response_body_with_predicate(
-            body.as_bytes(),
-            |id| id == "pythoner.pythontheme",
-        )
-        .expect("should rewrite");
+        let modified =
+            rewrite_marketplace_json_response_body_with_predicate(body.as_bytes(), |id| {
+                id == "pythoner.pythontheme"
+            })
+            .expect("should rewrite");
 
         let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
         let ext = &val["results"][0]["extensions"][0];
@@ -372,8 +390,7 @@ mod tests {
     fn test_rewrite_marketplace_json_noop_when_no_match() {
         let body = br#"{"results":[{"extensions":[{"publisher":{"publisherName":"python"},"extensionName":"python","displayName":"Python"}]}]}"#;
 
-        let modified =
-            rewrite_marketplace_json_response_body_with_predicate(body, |_id| false);
+        let modified = rewrite_marketplace_json_response_body_with_predicate(body, |_id| false);
         assert!(modified.is_none());
     }
 
@@ -381,21 +398,15 @@ mod tests {
     fn test_rewrite_marketplace_json_handles_invalid_responses() {
         // Invalid JSON
         let body = b"not valid json";
-        assert!(
-            rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none()
-        );
+        assert!(rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none());
 
         // Empty body
         let body = b"";
-        assert!(
-            rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none()
-        );
+        assert!(rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none());
 
         // Missing expected structure
         let body = br#"{"results": []}"#;
-        assert!(
-            rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none()
-        );
+        assert!(rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none());
     }
 
     #[test]
@@ -422,11 +433,11 @@ mod tests {
             }]
         }"#;
 
-        let modified = rewrite_marketplace_json_response_body_with_predicate(
-            body.as_bytes(),
-            |id| id == "malware1.bad1" || id == "malware2.bad2",
-        )
-        .expect("should rewrite");
+        let modified =
+            rewrite_marketplace_json_response_body_with_predicate(body.as_bytes(), |id| {
+                id == "malware1.bad1" || id == "malware2.bad2"
+            })
+            .expect("should rewrite");
 
         let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
         let extensions = val["results"][0]["extensions"].as_array().unwrap();
@@ -491,11 +502,11 @@ mod tests {
             ]
         }"#;
 
-        let modified = rewrite_marketplace_json_response_body_with_predicate(
-            body.as_bytes(),
-            |id| id == "malware.bad",
-        )
-        .expect("should rewrite");
+        let modified =
+            rewrite_marketplace_json_response_body_with_predicate(body.as_bytes(), |id| {
+                id == "malware.bad"
+            })
+            .expect("should rewrite");
 
         let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
         let results = val["results"].as_array().unwrap();
@@ -528,11 +539,11 @@ mod tests {
             }]
         }"#;
 
-        let modified = rewrite_marketplace_json_response_body_with_predicate(
-            body.as_bytes(),
-            |id| id == "test.test",
-        )
-        .expect("should rewrite");
+        let modified =
+            rewrite_marketplace_json_response_body_with_predicate(body.as_bytes(), |id| {
+                id == "test.test"
+            })
+            .expect("should rewrite");
 
         let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
         let ext = &val["results"][0]["extensions"][0];

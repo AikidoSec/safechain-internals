@@ -3,7 +3,12 @@ use std::sync::LazyLock;
 use tokio::sync::Mutex;
 
 use rama::{
-    http::{BodyExtractExt as _, StatusCode, service::client::HttpClientExt as _},
+    http::{
+        BodyExtractExt as _, HeaderValue, StatusCode,
+        header::ACCEPT,
+        headers::{Accept, HeaderEncode as _},
+        service::client::HttpClientExt as _,
+    },
     telemetry::tracing,
 };
 use serde_json::Value;
@@ -18,7 +23,7 @@ async fn test_vscode_https_install_asset_vsixpackage_malware_blocked() {
 
     let resp = client
         .get("https://gallerycdn.vsassets.io/_apis/public/gallery/publishers/pythoner/vsextensions/pythontheme/2.7.5/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage")
-        .header("accept", "plain/text")
+        .header(ACCEPT, accept_json_header_value())
         .send()
         .await
         .unwrap();
@@ -40,7 +45,7 @@ async fn test_vscode_https_install_asset_manifest_malware_blocked() {
 
     let resp = client
         .get("https://gallerycdn.vsassets.io/_apis/public/gallery/publishers/pythoner/vsextensions/pythontheme/2.7.5/assetbyname/Microsoft.VisualStudio.Code.Manifest")
-        .header("accept", "plain/text")
+        .header(ACCEPT, accept_json_header_value())
         .send()
         .await
         .unwrap();
@@ -62,7 +67,7 @@ async fn test_vscode_https_install_asset_signature_malware_blocked() {
 
     let resp = client
         .get("https://gallerycdn.vsassets.io/extensions/pythoner/pythontheme/2.7.5/Microsoft.VisualStudio.Services.VsixSignature")
-        .header("accept", "plain/text")
+        .header(ACCEPT, accept_json_header_value())
         .send()
         .await
         .unwrap();
@@ -84,7 +89,7 @@ async fn test_vscode_https_install_asset_vsix_file_malware_blocked() {
 
     let resp = client
         .get("https://gallerycdn.vsassets.io/files/pythoner/pythontheme/2.7.5/pythoner.pythontheme-2.7.5.vsix")
-        .header("accept", "plain/text")
+        .header(ACCEPT, accept_json_header_value())
         .send()
         .await
         .unwrap();
@@ -189,6 +194,16 @@ async fn test_vscode_marketplace_api_response_marks_only_malware_entries() {
 }
 
 static ENV_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+fn accept_json_header_value() -> HeaderValue {
+    let accept = Accept::json();
+    let mut values = Vec::new();
+    accept.encode(&mut values);
+    values
+        .into_iter()
+        .next()
+        .expect("Accept::json should encode at least one value")
+}
 
 #[tokio::test]
 #[tracing_test::traced_test]

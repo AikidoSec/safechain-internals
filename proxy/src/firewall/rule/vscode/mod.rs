@@ -3,9 +3,11 @@ use std::{env, fmt};
 use rama::{
     Service,
     error::{ErrorContext as _, OpaqueError},
-    extensions::ExtensionsMut,
     graceful::ShutdownGuard,
-    http::{Body, Request, Response, Uri, service::web::response::IntoResponse},
+    http::{
+        Body, Request, Response, StatusCode, Uri,
+        headers::{ContentLength, HeaderMapExt as _},
+    },
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
     utils::str::smol_str::{SmolStr, format_smolstr},
@@ -124,7 +126,7 @@ impl Rule for RuleVSCode {
         );
 
         if self.is_extension_id_malware(extension_id.as_str()) {
-            tracing::warn!(
+            tracing::info!(
                 http.url.path = %path,
                 package = %extension_id,
                 "blocked VSCode extension install asset download"
@@ -164,9 +166,12 @@ impl Rule for RuleVSCode {
         let body_bytes = match body.collect().await {
             Ok(collected) => collected.to_bytes(),
             Err(err) => {
-                tracing::debug!(error = %err, "VSCode response: failed to collect body bytes; returning empty body");
+                tracing::debug!(
+                    error = %err,
+                    "VSCode response: failed to collect body bytes; returning 502"
+                );
 
-                // Ensure no stale Content-Length is sent for an empty body.
+                parts.status = StatusCode::BAD_GATEWAY;
                 parts.headers.remove(rama::http::header::CONTENT_LENGTH);
 
                 return Ok(Response::from_parts(parts, Body::empty()));
@@ -174,28 +179,25 @@ impl Rule for RuleVSCode {
         };
 
         // Attempt to rewrite Marketplace JSON to mark malware extensions.
-        if let Some(modified_body) = self
-            .rewrite_marketplace_json_response_body(body_bytes.as_ref())
+        if let Some(modified_body) =
+            self.rewrite_marketplace_json_response_body(body_bytes.as_ref())
         {
             tracing::debug!("VSCode response modified to mark blocked extensions");
 
-            // The response body has been rewritten, so any upstream Content-Length is invalid.
-            // If we keep it, HTTP/2 clients can fail with PROTOCOL_ERROR.
-            parts.headers.remove(rama::http::header::CONTENT_LENGTH);
+            parts
+                .headers
+                .typed_insert(ContentLength(modified_body.len() as u64));
 
-            let mut rebuilt_resp = modified_body.into_response();
-            *rebuilt_resp.status_mut() = parts.status;
-            *rebuilt_resp.headers_mut() = parts.headers;
-            *rebuilt_resp.extensions_mut() = parts.extensions;
-            return Ok(rebuilt_resp);
+            return Ok(Response::from_parts(parts, Body::from(modified_body)));
         }
 
         tracing::trace!("VSCode response does not contain blocked extensions: passthrough");
-        let mut rebuilt_resp = body_bytes.into_response();
-        *rebuilt_resp.status_mut() = parts.status;
-        *rebuilt_resp.headers_mut() = parts.headers;
-        *rebuilt_resp.extensions_mut() = parts.extensions;
-        Ok(rebuilt_resp)
+
+        parts
+            .headers
+            .typed_insert(ContentLength(body_bytes.len() as u64));
+
+        Ok(Response::from_parts(parts, Body::from(body_bytes)))
     }
 }
 
