@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use rama::bytes::Bytes;
 use rama::telemetry::tracing;
 use serde::Deserialize;
@@ -64,7 +66,7 @@ fn rewrite_marketplace_json_response_body_with_predicate(
     match serde_json::to_vec(&value) {
         Ok(modified_bytes) => Some(Bytes::from(modified_bytes)),
         Err(err) => {
-            tracing::warn!(
+            tracing::debug!(
                 error = %err,
                 "Failed to serialize modified VSCode response; passing original through"
             );
@@ -181,30 +183,30 @@ fn mark_extension_object_if_malware(
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
-struct PublisherLike {
+struct PublisherLike<'a> {
     #[serde(rename = "publisherName")]
-    publisher_name: Option<String>,
-    name: Option<String>,
+    publisher_name: Option<Cow<'a, str>>,
+    name: Option<Cow<'a, str>>,
 }
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
-struct ExtensionLike {
-    publisher: Option<PublisherLike>,
+struct ExtensionLike<'a> {
+    publisher: Option<PublisherLike<'a>>,
 
     #[serde(rename = "publisherName")]
-    publisher_name: Option<String>,
+    publisher_name: Option<Cow<'a, str>>,
 
     #[serde(rename = "extensionName")]
-    extension_name: Option<String>,
+    extension_name: Option<Cow<'a, str>>,
 
-    name: Option<String>,
+    name: Option<Cow<'a, str>>,
 
     #[serde(rename = "displayName")]
-    display_name: Option<String>,
+    display_name: Option<Cow<'a, str>>,
 }
 
-fn extension_id(ext: &ExtensionLike) -> Option<String> {
+fn extension_id(ext: &ExtensionLike<'_>) -> Option<String> {
     let publisher = ext
         .publisher
         .as_ref()
@@ -223,7 +225,7 @@ fn extension_id(ext: &ExtensionLike) -> Option<String> {
     Some(format!("{publisher}.{name}"))
 }
 
-fn rewrite_extension_object(obj: &mut Map<String, Value>, ext: &ExtensionLike) {
+fn rewrite_extension_object(obj: &mut Map<String, Value>, ext: &ExtensionLike<'_>) {
     let original_name = obj
         .get("displayName")
         .and_then(|v| v.as_str())
@@ -239,11 +241,11 @@ fn rewrite_extension_object(obj: &mut Map<String, Value>, ext: &ExtensionLike) {
 
     obj.insert(
         "shortDescription".to_string(),
-        Value::String(BLOCK_MSG.to_string()),
+        Value::String(BLOCK_MSG.to_owned()),
     );
     obj.insert(
         "description".to_string(),
-        Value::String(BLOCK_MSG.to_string()),
+        Value::String(BLOCK_MSG.to_owned()),
     );
 }
 
@@ -255,13 +257,13 @@ mod tests {
     fn test_extension_id_from_nested_publisher() {
         let ext = ExtensionLike {
             publisher: Some(PublisherLike {
-                publisher_name: Some("microsoft".to_string()),
+                publisher_name: Some("microsoft".into()),
                 name: None,
             }),
             publisher_name: None,
-            extension_name: Some("vscode".to_string()),
+            extension_name: Some("vscode".into()),
             name: None,
-            display_name: Some("Visual Studio Code".to_string()),
+            display_name: Some("Visual Studio Code".into()),
         };
 
         assert_eq!(extension_id(&ext), Some("microsoft.vscode".to_string()));
@@ -271,10 +273,10 @@ mod tests {
     fn test_extension_id_from_flat_publisher() {
         let ext = ExtensionLike {
             publisher: None,
-            publisher_name: Some("github".to_string()),
+            publisher_name: Some("github".into()),
             extension_name: None,
-            name: Some("copilot".to_string()),
-            display_name: Some("GitHub Copilot".to_string()),
+            name: Some("copilot".into()),
+            display_name: Some("GitHub Copilot".into()),
         };
 
         assert_eq!(extension_id(&ext), Some("github.copilot".to_string()));
@@ -284,10 +286,10 @@ mod tests {
     fn test_extension_id_handles_whitespace() {
         let ext = ExtensionLike {
             publisher: None,
-            publisher_name: Some("  publisher  ".to_string()),
-            extension_name: Some("  extension  ".to_string()),
+            publisher_name: Some("  publisher  ".into()),
+            extension_name: Some("  extension  ".into()),
             name: None,
-            display_name: Some("Test".to_string()),
+            display_name: Some("Test".into()),
         };
 
         assert_eq!(extension_id(&ext), Some("publisher.extension".to_string()));
@@ -303,10 +305,10 @@ mod tests {
 
         let ext = ExtensionLike {
             publisher: None,
-            publisher_name: Some("test".to_string()),
-            extension_name: Some("test".to_string()),
+            publisher_name: Some("test".into()),
+            extension_name: Some("test".into()),
             name: None,
-            display_name: Some("Original Extension".to_string()),
+            display_name: Some("Original Extension".into()),
         };
 
         rewrite_extension_object(&mut obj, &ext);
@@ -327,10 +329,10 @@ mod tests {
 
         let ext = ExtensionLike {
             publisher: None,
-            publisher_name: Some("test".to_string()),
-            extension_name: Some("test".to_string()),
+            publisher_name: Some("test".into()),
+            extension_name: Some("test".into()),
             name: None,
-            display_name: Some("Test Extension".to_string()),
+            display_name: Some("Test Extension".into()),
         };
 
         rewrite_extension_object(&mut obj, &ext);
@@ -406,6 +408,27 @@ mod tests {
 
         // Missing expected structure
         let body = br#"{"results": []}"#;
+        assert!(rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none());
+    }
+
+    #[test]
+    fn test_rewrite_marketplace_json_early_return_missing_display_name_marker() {
+        // Has publisher + extension name markers, but no displayName.
+        let body = br#"{"results":[{"extensions":[{"publisher":{"publisherName":"pythoner"},"extensionName":"pythontheme"}]}]}"#;
+        assert!(rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none());
+    }
+
+    #[test]
+    fn test_rewrite_marketplace_json_early_return_missing_publisher_marker() {
+        // Has displayName + extensionName markers, but no publisher/publisherName.
+        let body = br#"{"results":[{"extensions":[{"extensionName":"pythontheme","displayName":"Python Theme"}]}]}"#;
+        assert!(rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none());
+    }
+
+    #[test]
+    fn test_rewrite_marketplace_json_early_return_missing_extension_name_marker() {
+        // Has displayName + publisherName markers, but no name/extensionName.
+        let body = br#"{"results":[{"extensions":[{"publisher":{"publisherName":"pythoner"},"displayName":"Python Theme"}]}]}"#;
         assert!(rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none());
     }
 

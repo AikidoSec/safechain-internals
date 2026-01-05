@@ -146,13 +146,10 @@ impl Rule for RuleVSCode {
 
     async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
         // Check content type; JSON responses from gallery API will be inspected for blocked extensions.
-        let content_type = resp
+        let is_json = resp
             .headers()
-            .get(rama::http::header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok());
-
-        let is_json = content_type
-            .map(|ct| ct.contains("application/json"))
+            .typed_get::<rama::http::headers::ContentType>()
+            .map(|ct| ct == rama::http::headers::ContentType::json())
             .unwrap_or_default();
 
         if !is_json {
@@ -182,6 +179,11 @@ impl Rule for RuleVSCode {
             self.rewrite_marketplace_json_response_body(body_bytes.as_ref())
         {
             tracing::debug!("VSCode response modified to mark blocked extensions");
+
+            // Remove stale cache headers that no longer match the modified content
+            parts.headers.remove(rama::http::header::ETAG);
+            parts.headers.remove(rama::http::header::LAST_MODIFIED);
+            parts.headers.remove(rama::http::header::CACHE_CONTROL);
 
             parts
                 .headers

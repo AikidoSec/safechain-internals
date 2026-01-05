@@ -7,7 +7,7 @@ use rama::{
     },
     telemetry::tracing,
 };
-use serde_json::Value;
+use serde::Deserialize;
 
 use crate::test::e2e;
 
@@ -144,49 +144,58 @@ async fn test_vscode_marketplace_api_response_marks_only_malware_entries() {
 
     assert_eq!(StatusCode::OK, resp.status());
 
-    let payload = resp.try_into_string().await.unwrap();
-    let json: Value = serde_json::from_str(&payload).unwrap();
-
-    let extensions = json
-        .get("results")
-        .and_then(|v| v.get(0))
-        .and_then(|v| v.get("extensions"))
-        .and_then(|v| v.as_array())
-        .unwrap();
+    let payload: MarketplaceResponse = resp.try_into_json().await.unwrap();
+    let extensions = &payload.results[0].extensions;
 
     let blocked = extensions
         .iter()
         .find(|ext| {
-            ext.get("publisher")
-                .and_then(|p| p.get("publisherName"))
-                .and_then(|v| v.as_str())
-                == Some("pythoner")
-                && ext.get("extensionName").and_then(|v| v.as_str()) == Some("pythontheme")
+            ext.publisher.publisher_name == "pythoner" && ext.extension_name == "pythontheme"
         })
         .unwrap();
 
-    assert_eq!(
-        blocked.get("displayName").and_then(|v| v.as_str()),
-        Some("⛔ MALWARE: Python Theme")
-    );
-    assert!(blocked.get("shortDescription").is_some());
-    assert!(blocked.get("description").is_some());
+    assert_eq!(blocked.display_name, "⛔ MALWARE: Python Theme");
+    assert!(blocked.short_description.is_some());
+    assert!(blocked.description.is_some());
 
     let safe = extensions
         .iter()
-        .find(|ext| {
-            ext.get("publisher")
-                .and_then(|p| p.get("publisherName"))
-                .and_then(|v| v.as_str())
-                == Some("python")
-                && ext.get("extensionName").and_then(|v| v.as_str()) == Some("python")
-        })
+        .find(|ext| ext.publisher.publisher_name == "python" && ext.extension_name == "python")
         .unwrap();
 
-    assert_eq!(
-        safe.get("displayName").and_then(|v| v.as_str()),
-        Some("Python")
-    );
+    assert_eq!(safe.display_name, "Python");
+}
+
+#[derive(Debug, Deserialize)]
+struct MarketplaceResponse {
+    results: Vec<MarketplaceResult>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MarketplaceResult {
+    extensions: Vec<MarketplaceExtension>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MarketplaceExtension {
+    publisher: MarketplacePublisher,
+
+    #[serde(rename = "extensionName")]
+    extension_name: String,
+
+    #[serde(rename = "displayName")]
+    display_name: String,
+
+    #[serde(rename = "shortDescription")]
+    short_description: Option<String>,
+
+    description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MarketplacePublisher {
+    #[serde(rename = "publisherName")]
+    publisher_name: String,
 }
 
 fn accept_json_header_value() -> HeaderValue {
