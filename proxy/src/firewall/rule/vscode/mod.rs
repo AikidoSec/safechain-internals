@@ -203,8 +203,19 @@ impl Rule for RuleVSCode {
 
 impl RuleVSCode {
     fn is_extension_id_malware(&self, extension_id: &str) -> bool {
-        self.remote_malware_list
+        // Try exact match first (in case malware list has mixed case)
+        if self.remote_malware_list
             .find_entries(extension_id)
+            .entries()
+            .is_some()
+        {
+            return true;
+        }
+
+        // Also try lowercase for case-insensitive matching
+        let normalized_id = extension_id.to_lowercase();
+        self.remote_malware_list
+            .find_entries(&normalized_id)
             .entries()
             .is_some()
     }
@@ -330,6 +341,39 @@ mod tests {
         for (input, expected) in test_cases {
             let parsed = RuleVSCode::parse_extension_id_from_path(input);
             assert_eq!(parsed.as_deref(), expected);
+        }
+    }
+
+    #[test]
+    fn test_parse_extension_id_from_path_preserves_case() {
+        // Extension IDs preserve original case; case-insensitive matching happens at lookup
+        let test_cases = vec![
+            (
+                "/files/AddictedGuys/VSCode-HAR-Explorer/1.0.0/extension.vsix",
+                Some("AddictedGuys.VSCode-HAR-Explorer"),
+            ),
+            (
+                "/extensions/MS-Python/Python/2024.22.0/Microsoft.VisualStudio.Services.VSIXPackage",
+                Some("MS-Python.Python"),
+            ),
+            (
+                "/_apis/public/gallery/publisher/Microsoft/VSCode/1.0.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage",
+                Some("Microsoft.VSCode"),
+            ),
+            (
+                "/_apis/public/gallery/publishers/GitHub/vsextensions/Copilot/1.0.0/assetbyname/Microsoft.VisualStudio.Code.Manifest",
+                Some("GitHub.Copilot"),
+            ),
+        ];
+
+        for (input, expected) in test_cases {
+            let parsed = RuleVSCode::parse_extension_id_from_path(input);
+            assert_eq!(
+                parsed.as_deref(),
+                expected,
+                "Failed to parse path: {}",
+                input
+            );
         }
     }
 }

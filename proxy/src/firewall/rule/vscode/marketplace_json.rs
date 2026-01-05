@@ -433,6 +433,42 @@ mod tests {
     }
 
     #[test]
+    fn test_rewrite_marketplace_json_case_insensitive_matching() {
+        // Marketplace JSON uses mixed case (AddictedGuys.vscode-har-explorer)
+        // Case-insensitive matching happens in is_extension_id_malware() method
+        let body = r#"{
+            "results": [
+                {
+                    "extensions": [
+                        {
+                            "publisher": { "publisherName": "AddictedGuys" },
+                            "extensionName": "vscode-har-explorer",
+                            "displayName": "HAR Explorer"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+
+        // Malware predicate uses original case from JSON (case-insensitive matching in is_extension_id_malware)
+        let modified =
+            rewrite_marketplace_json_response_body_with_predicate(body.as_bytes(), |id| {
+                id.eq_ignore_ascii_case("addictedguys.vscode-har-explorer")
+            })
+            .expect("should rewrite");
+
+        let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
+        let ext = &val["results"][0]["extensions"][0];
+        assert!(
+            ext["displayName"]
+                .as_str()
+                .unwrap()
+                .starts_with("⛔ MALWARE:"),
+            "Extension with mixed case should be matched against lowercase malware list"
+        );
+    }
+
+    #[test]
     fn test_rewrite_marketplace_json_marks_multiple_malware_extensions() {
         let body = r#"{
             "results": [{
