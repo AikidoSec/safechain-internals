@@ -1,7 +1,3 @@
-use std::sync::LazyLock;
-
-use tokio::sync::Mutex;
-
 use rama::{
     http::{
         BodyExtractExt as _, HeaderValue, StatusCode,
@@ -193,8 +189,6 @@ async fn test_vscode_marketplace_api_response_marks_only_malware_entries() {
     );
 }
 
-static ENV_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-
 fn accept_json_header_value() -> HeaderValue {
     let accept = Accept::json();
     let mut values = Vec::new();
@@ -203,53 +197,4 @@ fn accept_json_header_value() -> HeaderValue {
         .into_iter()
         .next()
         .expect("Accept::json should encode at least one value")
-}
-
-#[tokio::test]
-#[tracing_test::traced_test]
-async fn test_vscode_forced_malware_env_marks_ms_python_python() {
-    let _lock = ENV_MUTEX.lock().await;
-    unsafe { std::env::set_var("SAFECHAIN_FORCE_MALWARE_VSCODE", "ms-python.python") };
-
-    let runtime = e2e::runtime::get().await;
-    let client = runtime.client_with_http_proxy().await;
-
-    let resp = client
-        .get("https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery_force_malware")
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(StatusCode::OK, resp.status());
-
-    let payload = resp.try_into_string().await.unwrap();
-    let json: Value = serde_json::from_str(&payload).unwrap();
-
-    let extensions = json
-        .get("results")
-        .and_then(|v| v.get(0))
-        .and_then(|v| v.get("extensions"))
-        .and_then(|v| v.as_array())
-        .unwrap();
-
-    let blocked = extensions
-        .iter()
-        .find(|ext| {
-            ext.get("publisher")
-                .and_then(|p| p.get("publisherName"))
-                .and_then(|v| v.as_str())
-                == Some("ms-python")
-                && ext.get("extensionName").and_then(|v| v.as_str()) == Some("python")
-        })
-        .unwrap();
-
-    assert!(
-        blocked
-            .get("displayName")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .starts_with("⛔ MALWARE:")
-    );
-
-    unsafe { std::env::remove_var("SAFECHAIN_FORCE_MALWARE_VSCODE") };
 }

@@ -1,4 +1,4 @@
-use std::{env, fmt};
+use std::fmt;
 
 use rama::{
     Service,
@@ -121,7 +121,6 @@ impl Rule for RuleVSCode {
         tracing::debug!(
             http.url.path = %path,
             package = %extension_id,
-            forced_test = %Self::is_forced_test_malware(extension_id.as_str()),
             "VSCode install asset request"
         );
 
@@ -202,43 +201,11 @@ impl Rule for RuleVSCode {
 }
 
 impl RuleVSCode {
-    const FORCE_TEST_MALWARE_ENV: &str = "SAFECHAIN_FORCE_MALWARE_VSCODE";
-
-    /// Get the extension ID(s) to force-treat as malware for testing.
-    ///
-    /// This allows local testing of the block UX without needing to publish
-    ///  actual malicious extensions to the VS Code marketplace
-    ///
-    /// Usage:
-    /// ```sh
-    /// # Force-treat a single extension as malware:
-    /// export SAFECHAIN_FORCE_MALWARE_VSCODE=ms-python.python
-    ///
-    /// # Force-treat multiple extensions:
-    /// export SAFECHAIN_FORCE_MALWARE_VSCODE=ms-python.python,github.copilot
-    /// ```
-    fn get_forced_test_malware_ids() -> Option<Vec<String>> {
-        env::var(Self::FORCE_TEST_MALWARE_ENV).ok().map(|val| {
-            val.split(',')
-                .map(|s| s.trim().to_lowercase())
-                .filter(|s| !s.is_empty())
-                .collect()
-        })
-    }
-
-    fn is_forced_test_malware(extension_id: &str) -> bool {
-        Self::get_forced_test_malware_ids()
-            .map(|ids| ids.iter().any(|id| id.eq_ignore_ascii_case(extension_id)))
-            .unwrap_or(false)
-    }
-
     fn is_extension_id_malware(&self, extension_id: &str) -> bool {
-        Self::is_forced_test_malware(extension_id)
-            || self
-                .remote_malware_list
-                .find_entries(extension_id)
-                .entries()
-                .is_some()
+        self.remote_malware_list
+            .find_entries(extension_id)
+            .entries()
+            .is_some()
     }
 
     fn is_extension_install_asset_path(path: &str) -> bool {
