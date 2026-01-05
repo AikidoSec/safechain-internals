@@ -149,7 +149,10 @@ impl Rule for RuleVSCode {
         let is_json = resp
             .headers()
             .typed_get::<rama::http::headers::ContentType>()
-            .map(|ct| ct == rama::http::headers::ContentType::json())
+            .map(|ct| {
+                let ct_str = ct.to_string();
+                ct_str.starts_with("application/json")
+            })
             .unwrap_or_default();
 
         if !is_json {
@@ -193,10 +196,6 @@ impl Rule for RuleVSCode {
         }
 
         tracing::trace!("VSCode response does not contain blocked extensions: passthrough");
-
-        parts
-            .headers
-            .typed_insert(ContentLength(body_bytes.len() as u64));
 
         Ok(Response::from_parts(parts, Body::from(body_bytes)))
     }
