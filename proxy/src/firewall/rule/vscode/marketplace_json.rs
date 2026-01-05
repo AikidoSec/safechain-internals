@@ -3,6 +3,19 @@ use rama::telemetry::tracing;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
+use super::RuleVSCode;
+
+impl RuleVSCode {
+    pub(super) fn rewrite_marketplace_json_response_body(
+        &self,
+        body_bytes: &[u8],
+    ) -> Option<Bytes> {
+        rewrite_marketplace_json_response_body_with_predicate(body_bytes, |extension_id| {
+            self.is_extension_id_malware(extension_id)
+        })
+    }
+}
+
 /// Attempts to parse a VS Code Marketplace JSON response body and rewrites it in-place
 /// to mark extensions as malware when `is_malware(extension_id)` returns true.
 ///
@@ -13,8 +26,8 @@ use serde_json::{Map, Value};
 /// # Returns
 /// - `Some(Bytes)` with the rewritten JSON if any changes were made.
 /// - `None` if parsing failed or no rewrite was needed.
-pub(super) fn rewrite_marketplace_json_response_body(
-    body_bytes: &Bytes,
+fn rewrite_marketplace_json_response_body_with_predicate(
+    body_bytes: &[u8],
     mut is_malware: impl FnMut(&str) -> bool,
 ) -> Option<Bytes> {
     let mut value: Value = match serde_json::from_slice(body_bytes) {
@@ -319,5 +332,306 @@ mod tests {
             .and_then(|v| v.as_str())
             .unwrap();
         assert_eq!(description, short_description);
+    }
+
+    #[test]
+    fn test_rewrite_marketplace_json_marks_matching_extension() {
+        let body = r#"{
+            "results": [
+                {
+                    "extensions": [
+                        {
+                            "publisher": { "publisherName": "pythoner" },
+                            "extensionName": "pythontheme",
+                            "displayName": "Python Theme"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+
+        let modified = rewrite_marketplace_json_response_body_with_predicate(
+            body.as_bytes(),
+            |id| id == "pythoner.pythontheme",
+        )
+        .expect("should rewrite");
+
+        let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
+        let ext = &val["results"][0]["extensions"][0];
+        assert!(
+            ext["displayName"]
+                .as_str()
+                .unwrap()
+                .starts_with("⛔ MALWARE:"),
+        );
+        assert!(ext.get("shortDescription").is_some());
+        assert!(ext.get("description").is_some());
+    }
+
+    #[test]
+    fn test_rewrite_marketplace_json_noop_when_no_match() {
+        let body = br#"{"results":[{"extensions":[{"publisher":{"publisherName":"python"},"extensionName":"python","displayName":"Python"}]}]}"#;
+
+        let modified =
+            rewrite_marketplace_json_response_body_with_predicate(body, |_id| false);
+        assert!(modified.is_none());
+    }
+
+    #[test]
+    fn test_rewrite_marketplace_json_handles_invalid_responses() {
+        // Invalid JSON
+        let body = b"not valid json";
+        assert!(
+            rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none()
+        );
+
+        // Empty body
+        let body = b"";
+        assert!(
+            rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none()
+        );
+
+        // Missing expected structure
+        let body = br#"{"results": []}"#;
+        assert!(
+            rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none()
+        );
+    }
+
+    #[test]
+    fn test_rewrite_marketplace_json_marks_multiple_malware_extensions() {
+        let body = r#"{
+            "results": [{
+                "extensions": [
+                    {
+                        "publisher": { "publisherName": "malware1" },
+                        "extensionName": "bad1",
+                        "displayName": "Bad Extension 1"
+                    },
+                    {
+                        "publisher": { "publisherName": "safe" },
+                        "extensionName": "good",
+                        "displayName": "Good Extension"
+                    },
+                    {
+                        "publisher": { "publisherName": "malware2" },
+                        "extensionName": "bad2",
+                        "displayName": "Bad Extension 2"
+                    }
+                ]
+            }]
+        }"#;
+
+        let modified = rewrite_marketplace_json_response_body_with_predicate(
+            body.as_bytes(),
+            |id| id == "malware1.bad1" || id == "malware2.bad2",
+        )
+        .expect("should rewrite");
+
+        let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
+        let extensions = val["results"][0]["extensions"].as_array().unwrap();
+
+        assert_eq!(extensions.len(), 3);
+
+        let malware1 = extensions
+            .iter()
+            .find(|e| e["extensionName"].as_str() == Some("bad1"))
+            .expect("malware1.bad1 should exist");
+        assert!(
+            malware1["displayName"]
+                .as_str()
+                .unwrap()
+                .starts_with("⛔ MALWARE:"),
+            "malware1 displayName should start with malware marker, got: {}",
+            malware1["displayName"].as_str().unwrap(),
+        );
+
+        let safe = extensions
+            .iter()
+            .find(|e| e["extensionName"].as_str() == Some("good"))
+            .expect("safe.good should exist");
+        assert_eq!(safe["displayName"].as_str().unwrap(), "Good Extension");
+
+        let malware2 = extensions
+            .iter()
+            .find(|e| e["extensionName"].as_str() == Some("bad2"))
+            .expect("malware2.bad2 should exist");
+        assert!(
+            malware2["displayName"]
+                .as_str()
+                .unwrap()
+                .starts_with("⛔ MALWARE:"),
+            "malware2 displayName should start with malware marker, got: {}",
+            malware2["displayName"].as_str().unwrap(),
+        );
+    }
+
+    #[test]
+    fn test_rewrite_marketplace_json_handles_nested_results() {
+        let body = r#"{
+            "results": [
+                {
+                    "extensions": [
+                        {
+                            "publisher": { "publisherName": "test1" },
+                            "extensionName": "ext1",
+                            "displayName": "Extension 1"
+                        }
+                    ]
+                },
+                {
+                    "extensions": [
+                        {
+                            "publisher": { "publisherName": "malware" },
+                            "extensionName": "bad",
+                            "displayName": "Bad Extension"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+
+        let modified = rewrite_marketplace_json_response_body_with_predicate(
+            body.as_bytes(),
+            |id| id == "malware.bad",
+        )
+        .expect("should rewrite");
+
+        let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
+        let results = val["results"].as_array().unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(
+            results[0]["extensions"][0]["displayName"].as_str().unwrap(),
+            "Extension 1"
+        );
+        assert!(
+            results[1]["extensions"][0]["displayName"]
+                .as_str()
+                .unwrap()
+                .starts_with("⛔ MALWARE:")
+        );
+    }
+
+    #[test]
+    fn test_rewrite_marketplace_json_preserves_other_fields() {
+        let body = r#"{
+            "results": [{
+                "extensions": [{
+                    "publisher": { "publisherName": "test", "url": "https://example.com" },
+                    "extensionName": "test",
+                    "displayName": "Test",
+                    "version": "1.0.0",
+                    "lastUpdated": "2024-01-01",
+                    "downloadCount": 1000
+                }]
+            }]
+        }"#;
+
+        let modified = rewrite_marketplace_json_response_body_with_predicate(
+            body.as_bytes(),
+            |id| id == "test.test",
+        )
+        .expect("should rewrite");
+
+        let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
+        let ext = &val["results"][0]["extensions"][0];
+
+        // Modified fields
+        assert!(
+            ext["displayName"]
+                .as_str()
+                .unwrap()
+                .starts_with("⛔ MALWARE:")
+        );
+        assert!(ext.get("shortDescription").is_some());
+        assert!(ext.get("description").is_some());
+
+        // Preserved fields
+        assert_eq!(ext["version"].as_str().unwrap(), "1.0.0");
+        assert_eq!(ext["lastUpdated"].as_str().unwrap(), "2024-01-01");
+        assert_eq!(ext["downloadCount"].as_i64().unwrap(), 1000);
+        assert_eq!(
+            ext["publisher"]["url"].as_str().unwrap(),
+            "https://example.com"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_marketplace_json_handles_large_response() {
+        // Create a response with many extensions
+        let mut extensions = Vec::new();
+        for i in 0..100 {
+            extensions.push(serde_json::json!({
+                "publisher": { "publisherName": format!("publisher{}", i) },
+                "extensionName": format!("ext{}", i),
+                "displayName": format!("Extension {}", i)
+            }));
+        }
+
+        let body_json = serde_json::json!({
+            "results": [{
+                "extensions": extensions
+            }]
+        });
+
+        let body = serde_json::to_vec(&body_json).unwrap();
+
+        // Mark the 50th extension as malware
+        let modified = rewrite_marketplace_json_response_body_with_predicate(&body, |id| {
+            id == "publisher50.ext50"
+        })
+        .expect("should rewrite");
+
+        let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
+        let result_extensions = val["results"][0]["extensions"].as_array().unwrap();
+
+        assert_eq!(result_extensions.len(), 100);
+        assert!(
+            result_extensions[50]["displayName"]
+                .as_str()
+                .unwrap()
+                .starts_with("⛔ MALWARE:")
+        );
+        assert_eq!(
+            result_extensions[0]["displayName"].as_str().unwrap(),
+            "Extension 0"
+        );
+        assert_eq!(
+            result_extensions[99]["displayName"].as_str().unwrap(),
+            "Extension 99"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_marketplace_json_depth_limit_stops_traversal() {
+        // Build a deeply nested JSON object, deeper than the traversal limit.
+        let mut root = serde_json::json!({});
+
+        let mut current = &mut root;
+        for _ in 0..(MAX_MARKETPLACE_JSON_TRAVERSAL_DEPTH + 10) {
+            current
+                .as_object_mut()
+                .unwrap()
+                .insert("n".to_string(), serde_json::json!({}));
+            current = current.get_mut("n").unwrap();
+        }
+
+        // Place an extension-like object beyond the depth limit.
+        current.as_object_mut().unwrap().insert(
+            "extension".to_string(),
+            serde_json::json!({
+                "publisher": { "publisherName": "ms-python" },
+                "extensionName": "python",
+                "displayName": "Python"
+            }),
+        );
+
+        let body = serde_json::to_vec(&root).unwrap();
+
+        // Even if we treat every ID as malware, we should not rewrite because the traversal
+        // never reaches the nested extension object.
+        let modified = rewrite_marketplace_json_response_body_with_predicate(&body, |_id| true);
+        assert!(modified.is_none());
     }
 }
