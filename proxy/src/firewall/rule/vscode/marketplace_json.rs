@@ -1,4 +1,4 @@
-use bytes::Bytes;
+use rama::bytes::Bytes;
 use rama::telemetry::tracing;
 use serde::Deserialize;
 use serde_json::{Map, Value};

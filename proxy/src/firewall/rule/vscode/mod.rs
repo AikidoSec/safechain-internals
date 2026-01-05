@@ -1,7 +1,5 @@
 use std::{env, fmt};
 
-use bytes::Bytes;
-use http_body_util::{BodyExt, Full};
 use rama::{
     Service,
     error::{ErrorContext as _, OpaqueError},
@@ -13,6 +11,8 @@ use rama::{
     utils::str::smol_str::{SmolStr, format_smolstr},
 };
 
+use rama::http::body::util::BodyExt;
+
 use crate::{
     firewall::{malware_list::RemoteMalwareList, pac::PacScriptGenerator},
     http::response::generate_malware_blocked_response_for_req,
@@ -21,7 +21,6 @@ use crate::{
 
 use super::{RequestAction, Rule};
 
-#[path = "vscode/marketplace_json.rs"]
 mod marketplace_json;
 
 pub(in crate::firewall) struct RuleVSCode {
@@ -172,10 +171,7 @@ impl Rule for RuleVSCode {
                 // Ensure no stale Content-Length is sent for an empty body.
                 parts.headers.remove(rama::http::header::CONTENT_LENGTH);
 
-                return Ok(Response::from_parts(
-                    parts,
-                    Body::new(Full::new(Bytes::new())),
-                ));
+                return Ok(Response::from_parts(parts, Body::empty()));
             }
         };
 
@@ -313,6 +309,7 @@ fn parse_first_two_path_segments(path: &str) -> Option<(&str, &str)> {
 mod tests {
     use super::*;
 
+    use rama::bytes::Bytes;
     use serde_json::Value;
 
     #[test]
