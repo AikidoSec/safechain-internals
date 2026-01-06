@@ -133,24 +133,20 @@ impl RuleVSCode {
     /// Extracts the extension ID from a JSON object by looking up publisher and name fields.
     /// Returns None if required fields are missing or invalid.
     fn extract_extension_id(obj: &sonic_rs::Object) -> Option<SmolStr> {
+        fn get_trimmed<'a>(obj: &'a sonic_rs::Object, key: &str) -> Option<&'a str> {
+            obj.get(&key)
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+        }
+
         let publisher = obj
             .get(&"publisher")
             .and_then(|p| p.as_object())
-            .and_then(|p| {
-                p.get(&"publisherName")
-                    .and_then(|v| v.as_str())
-                    .or_else(|| p.get(&"name").and_then(|v| v.as_str()))
-            })
-            .or_else(|| obj.get(&"publisherName").and_then(|v| v.as_str()))
-            .map(str::trim)
-            .filter(|s| !s.is_empty())?;
+            .and_then(|p| get_trimmed(p, "publisherName").or_else(|| get_trimmed(p, "name")))
+            .or_else(|| get_trimmed(obj, "publisherName"))?;
 
-        let name = obj
-            .get(&"extensionName")
-            .and_then(|v| v.as_str())
-            .or_else(|| obj.get(&"name").and_then(|v| v.as_str()))
-            .map(str::trim)
-            .filter(|s| !s.is_empty())?;
+        let name = get_trimmed(obj, "extensionName").or_else(|| get_trimmed(obj, "name"))?;
 
         Some(format_smolstr!("{publisher}.{name}"))
     }
