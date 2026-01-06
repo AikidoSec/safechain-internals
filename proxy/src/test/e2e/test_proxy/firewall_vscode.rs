@@ -152,7 +152,7 @@ async fn test_vscode_marketplace_api_response_marks_only_malware_entries() {
     let value: Value = sonic_rs::from_slice(payload.as_bytes()).unwrap();
 
     let results = value
-        .get(&"results")
+        .get("results")
         .expect("marketplace response should have results");
     let results = results
         .as_array()
