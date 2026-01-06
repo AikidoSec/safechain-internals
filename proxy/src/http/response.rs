@@ -4,16 +4,16 @@ use rama::http::{
     service::web::response::{Headers, IntoResponse},
 };
 
-use super::RequestedContentType;
+use super::KnownContentType;
 
 pub fn generate_generic_blocked_response_for_req(req: Request) -> Response {
     let maybe_detected_ct = req
         .headers()
         .typed_get()
-        .and_then(RequestedContentType::detect_from_accept_header);
+        .and_then(KnownContentType::detect_from_accept_header);
 
     match maybe_detected_ct {
-        Some(RequestedContentType::Html) => generate_blocked_response_for_payload(
+        Some(KnownContentType::Html) => generate_blocked_response_for_payload(
             headers::ContentType::html_utf8(),
             r##"<!doctype html>
 <html lang="en">
@@ -30,13 +30,13 @@ pub fn generate_generic_blocked_response_for_req(req: Request) -> Response {
 </html>
 "##,
         ),
-        Some(RequestedContentType::Txt) => generate_blocked_response_for_payload(
+        Some(KnownContentType::Txt) => generate_blocked_response_for_payload(
             headers::ContentType::text_utf8(),
             r##"The requested source was blocked due to your organization policy.
 Contact your security administrator for more information.
 "##,
         ),
-        Some(RequestedContentType::Json) => generate_blocked_response_for_payload(
+        Some(KnownContentType::Json) => generate_blocked_response_for_payload(
             headers::ContentType::json(),
             r##"{
     "error": "blocked",
@@ -44,7 +44,7 @@ Contact your security administrator for more information.
     "action": "Contact your security administrator for more information."
 }"##,
         ),
-        Some(RequestedContentType::Xml) => generate_blocked_response_for_payload(
+        Some(KnownContentType::Xml) => generate_blocked_response_for_payload(
             headers::ContentType::xml(),
             r##"<?xml version="1.0" encoding="UTF-8"?>
 <response>
@@ -61,10 +61,10 @@ pub fn generate_malware_blocked_response_for_req(req: Request) -> Response {
     let maybe_detected_ct = req
         .headers()
         .typed_get()
-        .and_then(RequestedContentType::detect_from_accept_header);
+        .and_then(KnownContentType::detect_from_accept_header);
 
     match maybe_detected_ct {
-        Some(RequestedContentType::Html) => generate_blocked_response_for_payload(
+        Some(KnownContentType::Html) => generate_blocked_response_for_payload(
             headers::ContentType::html_utf8(),
             r##"<!doctype html>
 <html lang="en">
@@ -81,13 +81,13 @@ pub fn generate_malware_blocked_response_for_req(req: Request) -> Response {
 </html>
 "##,
         ),
-        Some(RequestedContentType::Txt) => generate_blocked_response_for_payload(
+        Some(KnownContentType::Txt) => generate_blocked_response_for_payload(
             headers::ContentType::text_utf8(),
             r##"This download was blocked because it was identified as malware.
 Contact your security administrator for more information.
 "##,
         ),
-        Some(RequestedContentType::Json) => generate_blocked_response_for_payload(
+        Some(KnownContentType::Json) => generate_blocked_response_for_payload(
             headers::ContentType::json(),
             r##"{
     "error": "blocked",
@@ -96,7 +96,7 @@ Contact your security administrator for more information.
     "action": "Contact your security administrator for more information."
 }"##,
         ),
-        Some(RequestedContentType::Xml) => generate_blocked_response_for_payload(
+        Some(KnownContentType::Xml) => generate_blocked_response_for_payload(
             headers::ContentType::xml(),
             r##"<?xml version="1.0" encoding="UTF-8"?>
 <response>
@@ -106,7 +106,13 @@ Contact your security administrator for more information.
     <action>Contact your security administrator for more information.</action>
 </response>"##,
         ),
-        None => generate_blocked_response_without_payload(),
+        // Default to plain text when content type is unknown
+        None => generate_blocked_response_for_payload(
+            headers::ContentType::text_utf8(),
+            r##"This download was blocked because it was identified as malware.
+Contact your security administrator for more information.
+"##,
+        ),
     }
 }
 

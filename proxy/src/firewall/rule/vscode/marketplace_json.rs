@@ -10,14 +10,6 @@ const MAX_MARKETPLACE_JSON_TRAVERSAL_DEPTH: usize = 32;
 impl RuleVSCode {
     /// Attempts to parse a VS Code Marketplace JSON response body and rewrites it in-place
     /// to mark extensions as malware when they match the malware list.
-    ///
-    /// This is intentionally tolerant:
-    /// - It can handle the common `extensionquery` response shape (`results -> [ { extensions: [...] } ]`).
-    /// - It also scans nested JSON objects and only rewrites objects that *look like* extension entries.
-    ///
-    /// # Returns
-    /// - `Some(Bytes)` with the rewritten JSON if any changes were made.
-    /// - `None` if parsing failed or no rewrite was needed.
     pub(super) fn rewrite_marketplace_json_response_body(
         &self,
         body_bytes: &[u8],
@@ -136,7 +128,6 @@ impl RuleVSCode {
     /// Extracts the extension ID from a JSON object by looking up publisher and name fields.
     /// Returns None if required fields are missing or invalid.
     fn extract_extension_id(obj: &sonic_rs::Object) -> Option<String> {
-        // Try to get publisher name from nested publisher object or flat publisherName field
         let publisher = obj
             .get(&"publisher")
             .and_then(|p| p.as_object())
@@ -149,7 +140,6 @@ impl RuleVSCode {
             .map(str::trim)
             .filter(|s| !s.is_empty())?;
 
-        // Try to get extension name from extensionName or name field
         let name = obj
             .get(&"extensionName")
             .and_then(|v| v.as_str())
@@ -167,7 +157,6 @@ impl RuleVSCode {
         const BLOCK_MSG: &str = "This extension has been marked as malware by Aikido safe-chain. Installation will be blocked.";
 
         obj.insert("shortDescription", Value::from(BLOCK_MSG));
-        obj.insert("description", Value::from(BLOCK_MSG));
     }
 }
 
@@ -251,16 +240,16 @@ mod tests {
             Some("⛔ MALWARE: Test Extension")
         );
 
-        let description = obj.get(&"description").and_then(|v| v.as_str()).unwrap();
-        assert!(description.contains("Aikido safe-chain"));
-        assert!(description.contains("malware"));
-        assert!(description.contains("blocked"));
-
         let short_description = obj
             .get(&"shortDescription")
             .and_then(|v| v.as_str())
             .unwrap();
-        assert_eq!(description, short_description);
+        assert!(short_description.contains("Aikido safe-chain"));
+        assert!(short_description.contains("malware"));
+        assert!(short_description.contains("blocked"));
+
+        // Description should not be modified (VS Code API often returns null here)
+        assert!(obj.get(&"description").is_none());
     }
 
     #[test]
@@ -293,7 +282,6 @@ mod tests {
                 .starts_with("⛔ MALWARE:"),
         );
         assert!(ext.get("shortDescription").is_some());
-        assert!(ext.get("description").is_some());
     }
 
     #[test]
@@ -529,7 +517,6 @@ mod tests {
                 .starts_with("⛔ MALWARE:")
         );
         assert!(ext.get("shortDescription").is_some());
-        assert!(ext.get("description").is_some());
 
         // Preserved fields
         assert_eq!(ext["version"].as_str().unwrap(), "1.0.0");

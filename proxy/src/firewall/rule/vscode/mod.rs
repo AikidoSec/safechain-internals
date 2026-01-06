@@ -17,7 +17,9 @@ use rama::http::body::util::BodyExt;
 
 use crate::{
     firewall::{malware_list::RemoteMalwareList, pac::PacScriptGenerator},
-    http::{remove_cache_headers, response::generate_malware_blocked_response_for_req},
+    http::{
+        KnownContentType, remove_cache_headers, response::generate_malware_blocked_response_for_req,
+    },
     storage::SyncCompactDataStorage,
 };
 
@@ -57,6 +59,8 @@ impl RuleVSCode {
                 "gallery.vsassets.io",
                 "gallerycdn.vsassets.io",
                 "marketplace.visualstudio.com",
+                "*.gallery.vsassets.io",
+                "*.gallerycdn.vsassets.io",
             ]
             .into_iter()
             .map(|domain| (Domain::from_static(domain), ()))
@@ -107,6 +111,10 @@ impl Rule for RuleVSCode {
         // 2. Direct .vsix downloads - can skip the API query entirely
         // Safe-chain handles both paths
         if !Self::is_extension_install_asset_path(path) {
+            tracing::trace!(
+                http.url.path = %path,
+                "VSCode path is not an install asset (e.g., manifest/signature): passthrough"
+            );
             return Ok(RequestAction::Allow(req));
         }
 
@@ -148,12 +156,9 @@ impl Rule for RuleVSCode {
         // Check content type; JSON responses from gallery API will be inspected for blocked extensions.
         let is_json = resp
             .headers()
-            .typed_get::<rama::http::headers::ContentType>()
-            .map(|ct| {
-                let ct_str = ct.to_string();
-                ct_str.starts_with("application/json")
-            })
-            .unwrap_or_default();
+            .typed_get()
+            .and_then(KnownContentType::detect_from_content_type_header)
+            == Some(KnownContentType::Json);
 
         if !is_json {
             tracing::trace!("VSCode response is not JSON: passthrough");
@@ -217,66 +222,75 @@ impl RuleVSCode {
             .is_some()
     }
 
+    fn ends_with_ignore_ascii_case(path: &str, suffix: &str) -> bool {
+        if path.len() < suffix.len() {
+            return false;
+        }
+
+        let start = path.len() - suffix.len();
+        path.get(start..)
+            .is_some_and(|tail| tail.eq_ignore_ascii_case(suffix))
+    }
+
     fn is_extension_install_asset_path(path: &str) -> bool {
-        // VS Code install flow fetches multiple assets (manifest, signature, and eventually the VSIX).
-        // If we only block the VSIX file itself, installs can still succeed depending on how the client
-        // stages downloads. So treat these as install-related downloads as well.
-        path.ends_with(".vsix")
-            || path.ends_with("/Microsoft.VisualStudio.Services.VSIXPackage")
-            || path.contains("/Microsoft.VisualStudio.Code.Manifest")
-            || path.contains("/Microsoft.VisualStudio.Services.VsixSignature")
+        let path_without_query = path.split('?').next().unwrap_or(path);
+        let path_without_query = path_without_query.trim_end_matches('/');
+
+        Self::ends_with_ignore_ascii_case(path_without_query, ".vsix")
+            || Self::ends_with_ignore_ascii_case(
+                path_without_query,
+                "/Microsoft.VisualStudio.Services.VSIXPackage",
+            )
+            || Self::ends_with_ignore_ascii_case(path_without_query, "/vspackage")
     }
 
     /// Parse extension ID (publisher.name) from .vsix download URL path.
-    ///
-    /// CDN paths typically follow patterns like:
-    /// - /files/publisher/extensionname/version/extension.vsix
-    /// - /_apis/public/gallery/publisher/publisher/extension/version/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage
-    ///
-    /// Returns `publisher.extensionname` format.
     fn parse_extension_id_from_path(path: &str) -> Option<SmolStr> {
         let path = path.trim_start_matches('/');
+        let parts: Vec<&str> = path.split('/').collect();
 
-        // Pattern: /files/<publisher>/<extension>/<version>/...
-        // The `files/` form is used for versioned artifacts, so require a version segment.
-        if let Some(rest) = path.strip_prefix("files/") {
-            let mut parts = rest.split('/');
-            let publisher = parts.next()?;
-            let extension = parts.next()?;
-            let _version = parts.next()?;
-            return Some(format_smolstr!("{}.{}", publisher, extension));
+        // Pattern: files/<publisher>/<extension>/<version>/...
+        if parts.first() == Some(&"files") && parts.len() >= 4 {
+            return Some(format_smolstr!("{}.{}", parts[1], parts[2]));
         }
 
-        // Pattern: /_apis/public/gallery/publisher/<publisher>/<extension>/<version>/...
-        // Pattern: /extensions/<publisher>/<extension>/<version>/<...>/Microsoft.VisualStudio.Services.VSIXPackage
-        for prefix in ["_apis/public/gallery/publisher/", "extensions/"] {
-            if let Some(rest) = path.strip_prefix(prefix) {
-                let (publisher, extension) = parse_first_two_path_segments(rest)?;
-                return Some(format_smolstr!("{}.{}", publisher, extension));
-            }
+        // Pattern: extensions/<publisher>/<extension>/...
+        if parts.first() == Some(&"extensions") && parts.len() >= 3 {
+            return Some(format_smolstr!("{}.{}", parts[1], parts[2]));
         }
 
-        // Pattern: /_apis/public/gallery/publishers/<publisher>/vsextensions/<extension>/<version>/...
-        if let Some(rest) = path.strip_prefix("_apis/public/gallery/publishers/") {
-            let mut parts = rest.split('/');
-            let publisher = parts.next()?;
-            let segment = parts.next()?;
-            let extension = parts.next()?;
-            let _version = parts.next()?;
+        // Pattern: _apis/public/gallery/publishers/<publisher>/vsextensions/<extension>/...
+        if parts.len() >= 7
+            && parts[0] == "_apis"
+            && parts[1] == "public"
+            && parts[2] == "gallery"
+            && parts[3] == "publishers"
+            && (parts[5].eq_ignore_ascii_case("vsextensions")
+                || parts[5].eq_ignore_ascii_case("extensions"))
+        {
+            return Some(format_smolstr!("{}.{}", parts[4], parts[6]));
+        }
 
-            if segment.eq_ignore_ascii_case("vsextensions") {
-                return Some(format_smolstr!("{}.{}", publisher, extension));
+        // Pattern: _apis/public/gallery/publisher/<publisher>/<extension>/...
+        // Pattern: _apis/public/gallery/publisher/<publisher>/extension/<extension>/...
+        if parts.len() >= 6
+            && parts[0] == "_apis"
+            && parts[1] == "public"
+            && parts[2] == "gallery"
+            && parts[3] == "publisher"
+        {
+            let publisher = parts[4];
+
+            // Check if there's a literal "extension" segment
+            if parts[5].eq_ignore_ascii_case("extension") && parts.len() >= 7 {
+                return Some(format_smolstr!("{}.{}", publisher, parts[6]));
+            } else {
+                return Some(format_smolstr!("{}.{}", publisher, parts[5]));
             }
         }
 
         None
     }
-}
-
-/// Extract first two path segments from a slash-separated path.
-fn parse_first_two_path_segments(path: &str) -> Option<(&str, &str)> {
-    let mut parts = path.split('/');
-    Some((parts.next()?, parts.next()?))
 }
 
 #[cfg(test)]
@@ -314,6 +328,7 @@ mod tests {
 
     #[test]
     fn test_is_extension_install_asset_path() {
+        // .vsix files should be blocked
         assert!(RuleVSCode::is_extension_install_asset_path(
             "/files/ms-python/python/1.0.0/whatever.vsix"
         ));
@@ -321,9 +336,20 @@ mod tests {
             "/_apis/public/gallery/publishers/ms-python/vsextensions/python/1.0.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage"
         ));
         assert!(RuleVSCode::is_extension_install_asset_path(
-            "/_apis/public/gallery/publishers/ms-python/vsextensions/python/1.0.0/assetbyname/Microsoft.VisualStudio.Code.Manifest"
+            "/_apis/public/gallery/publishers/ms-python/vsextensions/python/1.0.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage/"
         ));
         assert!(RuleVSCode::is_extension_install_asset_path(
+            "/_apis/public/gallery/publishers/ms-python/vsextensions/python/1.0.0/vspackage"
+        ));
+        assert!(RuleVSCode::is_extension_install_asset_path(
+            "/_apis/public/gallery/publishers/ms-python/vsextensions/python/1.0.0/vspackage/"
+        ));
+
+        // Manifest and signature files should NOT be blocked (they're just metadata)
+        assert!(!RuleVSCode::is_extension_install_asset_path(
+            "/_apis/public/gallery/publishers/ms-python/vsextensions/python/1.0.0/assetbyname/Microsoft.VisualStudio.Code.Manifest"
+        ));
+        assert!(!RuleVSCode::is_extension_install_asset_path(
             "/extensions/ms-python/python/1.0.0/Microsoft.VisualStudio.Services.VsixSignature"
         ));
 
@@ -348,8 +374,16 @@ mod tests {
                 Some("ms-python.python"),
             ),
             (
+                "/_apis/public/gallery/publisher/AddictedGuys/extension/vscode-har-explorer/1.0.0/assetbyname/Microsoft.VisualStudio.Code.Manifest",
+                Some("AddictedGuys.vscode-har-explorer"),
+            ),
+            (
                 "/_apis/public/gallery/publishers/ms-python/vsextensions/python/2024.22.0/assetbyname/Microsoft.VisualStudio.Code.Manifest",
                 Some("ms-python.python"),
+            ),
+            (
+                "/_apis/public/gallery/publishers/MattFoulks/extensions/har-analyzer/0.0.11/vspackage",
+                Some("MattFoulks.har-analyzer"),
             ),
             (
                 "/extensions/ms-python/python/2024.22.0/Microsoft.VisualStudio.Services.VsixSignature",

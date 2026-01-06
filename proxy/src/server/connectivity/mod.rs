@@ -10,7 +10,7 @@ use rama::{
     service::service_fn,
 };
 
-use crate::http::RequestedContentType;
+use crate::http::KnownContentType;
 
 pub const CONNECTIVITY_DOMAIN: Domain = Domain::from_static("proxy.safechain.internal");
 
@@ -37,20 +37,20 @@ fn generate_connectivity_page<Body>(req: &Request<Body>) -> Response {
     let ct = req
         .headers()
         .typed_get()
-        .and_then(RequestedContentType::detect_from_accept_header)
-        .unwrap_or(RequestedContentType::Html);
+        .and_then(KnownContentType::detect_from_accept_header)
+        .unwrap_or(KnownContentType::Html);
 
     match ct {
-        RequestedContentType::Json => {
+        KnownContentType::Json => {
             generate_connectivity_page_json_response(method, domain_str, path, query)
         }
-        RequestedContentType::Html => {
+        KnownContentType::Html => {
             generate_connectivity_page_html_response(method, domain_str, path, query)
         }
-        RequestedContentType::Txt => {
+        KnownContentType::Txt => {
             generate_connectivity_page_txt_response(method, domain_str, path, query)
         }
-        RequestedContentType::Xml => {
+        KnownContentType::Xml => {
             generate_connectivity_page_xml_response(method, domain_str, path, query)
         }
     }

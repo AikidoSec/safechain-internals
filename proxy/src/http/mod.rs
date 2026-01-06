@@ -1,7 +1,7 @@
 pub mod response;
 
 mod content_type;
-pub use content_type::RequestedContentType;
+pub use content_type::KnownContentType;
 
 mod headers;
 pub use headers::remove_cache_headers;
