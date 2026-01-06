@@ -282,6 +282,35 @@ fn parse_first_two_path_segments(path: &str) -> Option<(&str, &str)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::firewall::malware_list::{MalwareEntry, PackageVersion, Reason};
+    use arc_swap::ArcSwap;
+    use radix_trie::Trie;
+    use std::sync::Arc;
+
+    impl RuleVSCode {
+        /// Create a test instance with custom malware extension IDs
+        pub(crate) fn new_test<I, S>(malware_extension_ids: I) -> Self
+        where
+            I: IntoIterator<Item = S>,
+            S: Into<String>,
+        {
+            let mut trie = Trie::new();
+            for id in malware_extension_ids {
+                let entry = MalwareEntry {
+                    version: PackageVersion::Any,
+                    reason: Reason::Malware,
+                };
+                trie.insert(id.into(), vec![entry]);
+            }
+
+            Self {
+                target_domains: Default::default(),
+                remote_malware_list: crate::firewall::malware_list::RemoteMalwareList {
+                    trie: Arc::new(ArcSwap::new(Arc::new(trie))),
+                },
+            }
+        }
+    }
 
     #[test]
     fn test_is_extension_install_asset_path() {

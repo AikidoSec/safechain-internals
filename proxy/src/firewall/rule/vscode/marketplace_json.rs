@@ -1,245 +1,174 @@
-use std::borrow::Cow;
-
+use memchr::memmem;
 use rama::bytes::Bytes;
 use rama::telemetry::tracing;
-use serde::Deserialize;
-use serde_json::{Map, Value};
+use sonic_rs::{JsonContainerTrait, JsonValueMutTrait, JsonValueTrait, Value};
 
 use super::RuleVSCode;
 
+const MAX_MARKETPLACE_JSON_TRAVERSAL_DEPTH: usize = 32;
+
 impl RuleVSCode {
+    /// Attempts to parse a VS Code Marketplace JSON response body and rewrites it in-place
+    /// to mark extensions as malware when they match the malware list.
+    ///
+    /// This is intentionally tolerant:
+    /// - It can handle the common `extensionquery` response shape (`results -> [ { extensions: [...] } ]`).
+    /// - It also scans nested JSON objects and only rewrites objects that *look like* extension entries.
+    ///
+    /// # Returns
+    /// - `Some(Bytes)` with the rewritten JSON if any changes were made.
+    /// - `None` if parsing failed or no rewrite was needed.
     pub(super) fn rewrite_marketplace_json_response_body(
         &self,
         body_bytes: &[u8],
     ) -> Option<Bytes> {
-        rewrite_marketplace_json_response_body_with_predicate(body_bytes, |extension_id| {
-            self.is_extension_id_malware(extension_id)
-        })
-    }
-}
+        memmem::find(body_bytes, br#""displayName""#)?;
 
-/// Attempts to parse a VS Code Marketplace JSON response body and rewrites it in-place
-/// to mark extensions as malware when `is_malware(extension_id)` returns true.
-///
-/// This is intentionally tolerant:
-/// - It can handle the common `extensionquery` response shape (`results -> [ { extensions: [...] } ]`).
-/// - It also scans nested JSON objects and only rewrites objects that *look like* extension entries.
-///
-/// # Returns
-/// - `Some(Bytes)` with the rewritten JSON if any changes were made.
-/// - `None` if parsing failed or no rewrite was needed.
-fn rewrite_marketplace_json_response_body_with_predicate(
-    body_bytes: &[u8],
-    mut is_malware: impl FnMut(&str) -> bool,
-) -> Option<Bytes> {
-    // If the payload doesn't contain the minimum set of markers required
-    // for an extension-like object we would rewrite, skip parsing entirely.
-    let body_str = std::str::from_utf8(body_bytes).ok()?;
-
-    // We only rewrite objects that have a display name, plus enough metadata to build
-    // an extension id (publisher + name). If these markers are absent, no rewrite is possible.
-    if !body_str.contains("\"displayName\"") {
-        return None;
-    }
-
-    if !(body_str.contains("\"publisherName\"") || body_str.contains("\"publisher\"")) {
-        return None;
-    }
-
-    if !(body_str.contains("\"extensionName\"") || body_str.contains("\"name\"")) {
-        return None;
-    }
-
-    let mut value: Value = match serde_json::from_slice(body_bytes) {
-        Ok(val) => val,
-        Err(err) => {
-            tracing::trace!(error = %err, "VSCode response: failed to parse JSON; passthrough");
+        if memmem::find(body_bytes, br#""publisherName""#).is_none()
+            && memmem::find(body_bytes, br#""publisher""#).is_none()
+        {
             return None;
         }
-    };
 
-    let modified = mark_any_extensions_if_malware(&mut value, &mut is_malware);
-    if !modified {
-        return None;
-    }
+        if memmem::find(body_bytes, br#""extensionName""#).is_none()
+            && memmem::find(body_bytes, br#""name""#).is_none()
+        {
+            return None;
+        }
 
-    match serde_json::to_vec(&value) {
-        Ok(modified_bytes) => Some(Bytes::from(modified_bytes)),
-        Err(err) => {
-            tracing::debug!(
-                error = %err,
-                "Failed to serialize modified VSCode response; passing original through"
-            );
-            None
+        let mut value: Value = match sonic_rs::from_slice(body_bytes) {
+            Ok(val) => val,
+            Err(err) => {
+                tracing::trace!(error = %err, "VSCode response: failed to parse JSON; passthrough");
+                return None;
+            }
+        };
+
+        let modified = self.mark_extensions_recursive(&mut value, 0);
+        if !modified {
+            return None;
+        }
+
+        match sonic_rs::to_vec(&value) {
+            Ok(modified_bytes) => Some(Bytes::from(modified_bytes)),
+            Err(err) => {
+                tracing::debug!(
+                    error = %err,
+                    "Failed to serialize modified VSCode response; passing original through"
+                );
+                None
+            }
         }
     }
-}
 
-/// Recursively walks a JSON value and rewrites any objects that *look like* VS Code
-/// Marketplace extension entries. This is deliberately schema-tolerant.
-fn mark_any_extensions_if_malware(
-    value: &mut Value,
-    is_malware: &mut impl FnMut(&str) -> bool,
-) -> bool {
-    mark_any_extensions_if_malware_with_depth(value, is_malware, 0)
-}
+    /// Recursively walks a JSON value and rewrites any objects that *look like* VS Code
+    /// Marketplace extension entries. This is deliberately schema-tolerant.
+    fn mark_extensions_recursive(&self, value: &mut Value, depth: usize) -> bool {
+        if depth >= MAX_MARKETPLACE_JSON_TRAVERSAL_DEPTH {
+            tracing::trace!(
+                max_depth = MAX_MARKETPLACE_JSON_TRAVERSAL_DEPTH,
+                "VSCode response JSON traversal depth limit reached; stopping traversal"
+            );
+            return false;
+        }
 
-pub(super) const MAX_MARKETPLACE_JSON_TRAVERSAL_DEPTH: usize = 32;
+        if let Some(arr) = value.as_array_mut() {
+            return arr.iter_mut().fold(false, |acc, child| {
+                self.mark_extensions_recursive(child, depth + 1) || acc
+            });
+        }
 
-fn mark_any_extensions_if_malware_with_depth(
-    value: &mut Value,
-    is_malware: &mut impl FnMut(&str) -> bool,
-    depth: usize,
-) -> bool {
-    if depth >= MAX_MARKETPLACE_JSON_TRAVERSAL_DEPTH {
-        tracing::trace!(
-            max_depth = MAX_MARKETPLACE_JSON_TRAVERSAL_DEPTH,
-            "VSCode response JSON traversal depth limit reached; stopping traversal"
-        );
-        return false;
-    }
-
-    match value {
-        Value::Array(values) => values.iter_mut().fold(false, |acc, child| {
-            mark_any_extensions_if_malware_with_depth(child, is_malware, depth + 1) || acc
-        }),
-        Value::Object(_) => {
-            let keys: Vec<String> = value
-                .as_object()
-                .expect("Value::Object implies as_object is Some")
-                .keys()
-                .cloned()
-                .collect();
-
+        if let Some(obj) = value.as_object_mut() {
             let mut modified = false;
-            let obj = value
-                .as_object_mut()
-                .expect("Value::Object implies as_object_mut is Some");
 
-            for key in keys {
-                if let Some(child) = obj.get_mut(&key) {
-                    modified |=
-                        mark_any_extensions_if_malware_with_depth(child, is_malware, depth + 1);
-                }
+            for (_, child) in obj.iter_mut() {
+                modified |= self.mark_extensions_recursive(child, depth + 1);
             }
 
-            modified |= mark_extension_object_if_malware(value, is_malware);
-            modified
+            modified |= self.mark_extension_if_malware(value);
+            return modified;
         }
-        _ => false,
-    }
-}
 
-/// If `value` is a JSON object that looks like a VS Code Marketplace extension entry,
-/// rewrite it in-place when it matches the malware predicate.
-///
-/// - The object must contain enough fields to build an extension id (`publisher.name`).
-/// - And it must also contain an "extension-ish" field (`displayName`).
-///
-/// Returns `true` if the object was rewritten.
-fn mark_extension_object_if_malware(
-    value: &mut Value,
-    is_malware: &mut impl FnMut(&str) -> bool,
-) -> bool {
-    let Value::Object(obj) = value else {
-        return false;
-    };
-
-    // Deserialize only the fields we care about (ignores unknown fields).
-    let obj_clone = obj.clone();
-    let extension_like: ExtensionLike = match serde_json::from_value(Value::Object(obj_clone)) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-
-    // Require a display name to reduce accidental matches in unrelated JSON objects.
-    if extension_like.display_name.is_none() {
-        return false;
+        false
     }
 
-    let Some(extension_id) = extension_id(&extension_like) else {
-        return false;
-    };
+    /// If `value` is a JSON object that looks like a VS Code Marketplace extension entry,
+    /// rewrite it in-place when it matches the malware predicate.
+    ///
+    /// - The object must contain enough fields to build an extension id (`publisher.name`).
+    /// - And it must also contain an "extension-ish" field (`displayName`).
+    ///
+    /// Returns `true` if the object was rewritten.
+    fn mark_extension_if_malware(&self, value: &mut Value) -> bool {
+        let (display_name_str, extension_id) = {
+            let Some(obj) = value.as_object() else {
+                return false;
+            };
 
-    if !is_malware(&extension_id) {
-        return false;
+            let display_name = match obj.get(&"displayName").and_then(|v| v.as_str()) {
+                Some(name) => name,
+                None => return false,
+            };
+
+            let extension_id = match Self::extract_extension_id(obj) {
+                Some(id) => id,
+                None => return false,
+            };
+
+            (display_name.to_string(), extension_id)
+        };
+
+        if !self.is_extension_id_malware(&extension_id) {
+            return false;
+        }
+
+        tracing::info!(
+            package = %extension_id,
+            "marked malware VSCode extension as blocked in API response"
+        );
+
+        if let Some(obj_mut) = value.as_object_mut() {
+            Self::rewrite_extension_object(obj_mut, &display_name_str);
+        }
+        true
     }
 
-    tracing::info!(
-        package = %extension_id,
-        "marked malware VSCode extension as blocked in API response"
-    );
+    /// Extracts the extension ID from a JSON object by looking up publisher and name fields.
+    /// Returns None if required fields are missing or invalid.
+    fn extract_extension_id(obj: &sonic_rs::Object) -> Option<String> {
+        // Try to get publisher name from nested publisher object or flat publisherName field
+        let publisher = obj
+            .get(&"publisher")
+            .and_then(|p| p.as_object())
+            .and_then(|p| {
+                p.get(&"publisherName")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| p.get(&"name").and_then(|v| v.as_str()))
+            })
+            .or_else(|| obj.get(&"publisherName").and_then(|v| v.as_str()))
+            .map(str::trim)
+            .filter(|s| !s.is_empty())?;
 
-    rewrite_extension_object(obj, &extension_like);
-    true
-}
+        // Try to get extension name from extensionName or name field
+        let name = obj
+            .get(&"extensionName")
+            .and_then(|v| v.as_str())
+            .or_else(|| obj.get(&"name").and_then(|v| v.as_str()))
+            .map(str::trim)
+            .filter(|s| !s.is_empty())?;
 
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-struct PublisherLike<'a> {
-    #[serde(rename = "publisherName")]
-    publisher_name: Option<Cow<'a, str>>,
-    name: Option<Cow<'a, str>>,
-}
+        Some(format!("{publisher}.{name}"))
+    }
 
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-struct ExtensionLike<'a> {
-    publisher: Option<PublisherLike<'a>>,
+    fn rewrite_extension_object(obj: &mut sonic_rs::Object, original_name: &str) {
+        let malware_display = format!("⛔ MALWARE: {original_name}");
+        obj.insert("displayName", Value::from(malware_display.as_str()));
 
-    #[serde(rename = "publisherName")]
-    publisher_name: Option<Cow<'a, str>>,
+        const BLOCK_MSG: &str = "This extension has been marked as malware by Aikido safe-chain. Installation will be blocked.";
 
-    #[serde(rename = "extensionName")]
-    extension_name: Option<Cow<'a, str>>,
-
-    name: Option<Cow<'a, str>>,
-
-    #[serde(rename = "displayName")]
-    display_name: Option<Cow<'a, str>>,
-}
-
-fn extension_id(ext: &ExtensionLike<'_>) -> Option<String> {
-    let publisher = ext
-        .publisher
-        .as_ref()
-        .and_then(|p| p.publisher_name.as_deref().or(p.name.as_deref()))
-        .or(ext.publisher_name.as_deref())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())?;
-
-    let name = ext
-        .extension_name
-        .as_deref()
-        .or(ext.name.as_deref())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())?;
-
-    Some(format!("{publisher}.{name}"))
-}
-
-fn rewrite_extension_object(obj: &mut Map<String, Value>, ext: &ExtensionLike<'_>) {
-    let original_name = obj
-        .get("displayName")
-        .and_then(|v| v.as_str())
-        .or(ext.extension_name.as_deref().or(ext.name.as_deref()))
-        .unwrap_or("<unknown>");
-
-    obj.insert(
-        "displayName".to_string(),
-        Value::String(format!("⛔ MALWARE: {original_name}")),
-    );
-
-    const BLOCK_MSG: &str = "This extension has been marked as malware by Aikido safe-chain. Installation will be blocked.";
-
-    obj.insert(
-        "shortDescription".to_string(),
-        Value::String(BLOCK_MSG.to_owned()),
-    );
-    obj.insert(
-        "description".to_string(),
-        Value::String(BLOCK_MSG.to_owned()),
-    );
+        obj.insert("shortDescription", Value::from(BLOCK_MSG));
+        obj.insert("description", Value::from(BLOCK_MSG));
+    }
 }
 
 #[cfg(test)]
@@ -247,101 +176,88 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_extension_id_from_nested_publisher() {
-        let ext = ExtensionLike {
-            publisher: Some(PublisherLike {
-                publisher_name: Some("microsoft".into()),
-                name: None,
-            }),
-            publisher_name: None,
-            extension_name: Some("vscode".into()),
-            name: None,
-            display_name: Some("Visual Studio Code".into()),
-        };
+    fn test_extract_extension_id_from_nested_publisher() {
+        let json = sonic_rs::json!({
+            "publisher": {
+                "publisherName": "microsoft"
+            },
+            "extensionName": "vscode",
+            "displayName": "Visual Studio Code"
+        });
+        let obj = json.as_object().unwrap();
 
-        assert_eq!(extension_id(&ext), Some("microsoft.vscode".to_string()));
+        assert_eq!(
+            RuleVSCode::extract_extension_id(obj),
+            Some("microsoft.vscode".to_string())
+        );
     }
 
     #[test]
-    fn test_extension_id_from_flat_publisher() {
-        let ext = ExtensionLike {
-            publisher: None,
-            publisher_name: Some("github".into()),
-            extension_name: None,
-            name: Some("copilot".into()),
-            display_name: Some("GitHub Copilot".into()),
-        };
+    fn test_extract_extension_id_from_flat_publisher() {
+        let json = sonic_rs::json!({
+            "publisherName": "github",
+            "name": "copilot",
+            "displayName": "GitHub Copilot"
+        });
+        let obj = json.as_object().unwrap();
 
-        assert_eq!(extension_id(&ext), Some("github.copilot".to_string()));
+        assert_eq!(
+            RuleVSCode::extract_extension_id(obj),
+            Some("github.copilot".to_string())
+        );
     }
 
     #[test]
-    fn test_extension_id_handles_whitespace() {
-        let ext = ExtensionLike {
-            publisher: None,
-            publisher_name: Some("  publisher  ".into()),
-            extension_name: Some("  extension  ".into()),
-            name: None,
-            display_name: Some("Test".into()),
-        };
+    fn test_extract_extension_id_handles_whitespace() {
+        let json = sonic_rs::json!({
+            "publisherName": "  publisher  ",
+            "extensionName": "  extension  ",
+            "displayName": "Test"
+        });
+        let obj = json.as_object().unwrap();
 
-        assert_eq!(extension_id(&ext), Some("publisher.extension".to_string()));
+        assert_eq!(
+            RuleVSCode::extract_extension_id(obj),
+            Some("publisher.extension".to_string())
+        );
     }
 
     #[test]
     fn test_rewrite_extension_object_preserves_original_name() {
-        let mut obj = serde_json::Map::new();
-        obj.insert(
-            "displayName".to_string(),
-            Value::String("Original Extension".to_string()),
-        );
+        let mut json = sonic_rs::json!({
+            "displayName": "Original Extension"
+        });
+        let obj = json.as_object_mut().unwrap();
 
-        let ext = ExtensionLike {
-            publisher: None,
-            publisher_name: Some("test".into()),
-            extension_name: Some("test".into()),
-            name: None,
-            display_name: Some("Original Extension".into()),
-        };
-
-        rewrite_extension_object(&mut obj, &ext);
+        RuleVSCode::rewrite_extension_object(obj, "Original Extension");
 
         assert_eq!(
-            obj.get("displayName").and_then(|v| v.as_str()),
+            obj.get(&"displayName").and_then(|v| v.as_str()),
             Some("⛔ MALWARE: Original Extension")
         );
     }
 
     #[test]
     fn test_rewrite_extension_object_block_message_format() {
-        let mut obj = serde_json::Map::new();
-        obj.insert(
-            "displayName".to_string(),
-            Value::String("Test Extension".to_string()),
-        );
+        let mut json = sonic_rs::json!({
+            "displayName": "Test Extension"
+        });
+        let obj = json.as_object_mut().unwrap();
 
-        let ext = ExtensionLike {
-            publisher: None,
-            publisher_name: Some("test".into()),
-            extension_name: Some("test".into()),
-            name: None,
-            display_name: Some("Test Extension".into()),
-        };
-
-        rewrite_extension_object(&mut obj, &ext);
+        RuleVSCode::rewrite_extension_object(obj, "Test Extension");
 
         assert_eq!(
-            obj.get("displayName").and_then(|v| v.as_str()),
+            obj.get(&"displayName").and_then(|v| v.as_str()),
             Some("⛔ MALWARE: Test Extension")
         );
 
-        let description = obj.get("description").and_then(|v| v.as_str()).unwrap();
+        let description = obj.get(&"description").and_then(|v| v.as_str()).unwrap();
         assert!(description.contains("Aikido safe-chain"));
         assert!(description.contains("malware"));
         assert!(description.contains("blocked"));
 
         let short_description = obj
-            .get("shortDescription")
+            .get(&"shortDescription")
             .and_then(|v| v.as_str())
             .unwrap();
         assert_eq!(description, short_description);
@@ -363,13 +279,12 @@ mod tests {
             ]
         }"#;
 
-        let modified =
-            rewrite_marketplace_json_response_body_with_predicate(body.as_bytes(), |id| {
-                id == "pythoner.pythontheme"
-            })
+        let rule = RuleVSCode::new_test(["pythoner.pythontheme"]);
+        let modified = rule
+            .rewrite_marketplace_json_response_body(body.as_bytes())
             .expect("should rewrite");
 
-        let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
+        let val: Value = sonic_rs::from_slice(modified.as_ref()).unwrap();
         let ext = &val["results"][0]["extensions"][0];
         assert!(
             ext["displayName"]
@@ -385,44 +300,54 @@ mod tests {
     fn test_rewrite_marketplace_json_noop_when_no_match() {
         let body = br#"{"results":[{"extensions":[{"publisher":{"publisherName":"python"},"extensionName":"python","displayName":"Python"}]}]}"#;
 
-        let modified = rewrite_marketplace_json_response_body_with_predicate(body, |_id| false);
+        let rule = RuleVSCode::new_test::<[&str; 0], _>([]);
+        let modified = rule.rewrite_marketplace_json_response_body(body);
         assert!(modified.is_none());
     }
 
     #[test]
     fn test_rewrite_marketplace_json_handles_invalid_responses() {
+        // Use a malware list that would match everything if JSON was valid
+        let rule = RuleVSCode::new_test(["any.extension"]);
+
         // Invalid JSON
         let body = b"not valid json";
-        assert!(rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none());
+        assert!(rule.rewrite_marketplace_json_response_body(body).is_none());
 
         // Empty body
         let body = b"";
-        assert!(rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none());
+        assert!(rule.rewrite_marketplace_json_response_body(body).is_none());
 
         // Missing expected structure
         let body = br#"{"results": []}"#;
-        assert!(rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none());
+        assert!(rule.rewrite_marketplace_json_response_body(body).is_none());
     }
 
     #[test]
     fn test_rewrite_marketplace_json_early_return_missing_display_name_marker() {
+        let rule = RuleVSCode::new_test(["pythoner.pythontheme"]);
+
         // Has publisher + extension name markers, but no displayName.
         let body = br#"{"results":[{"extensions":[{"publisher":{"publisherName":"pythoner"},"extensionName":"pythontheme"}]}]}"#;
-        assert!(rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none());
+        assert!(rule.rewrite_marketplace_json_response_body(body).is_none());
     }
 
     #[test]
     fn test_rewrite_marketplace_json_early_return_missing_publisher_marker() {
+        let rule = RuleVSCode::new_test(["pythoner.pythontheme"]);
+
         // Has displayName + extensionName markers, but no publisher/publisherName.
         let body = br#"{"results":[{"extensions":[{"extensionName":"pythontheme","displayName":"Python Theme"}]}]}"#;
-        assert!(rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none());
+        assert!(rule.rewrite_marketplace_json_response_body(body).is_none());
     }
 
     #[test]
     fn test_rewrite_marketplace_json_early_return_missing_extension_name_marker() {
+        let rule = RuleVSCode::new_test(["pythoner.pythontheme"]);
+
         // Has displayName + publisherName markers, but no name/extensionName.
         let body = br#"{"results":[{"extensions":[{"publisher":{"publisherName":"pythoner"},"displayName":"Python Theme"}]}]}"#;
-        assert!(rewrite_marketplace_json_response_body_with_predicate(body, |_| true).is_none());
+        assert!(rule.rewrite_marketplace_json_response_body(body).is_none());
     }
 
     #[test]
@@ -443,14 +368,13 @@ mod tests {
             ]
         }"#;
 
-        // Malware predicate uses original case from JSON (case-insensitive matching in is_extension_id_malware)
-        let modified =
-            rewrite_marketplace_json_response_body_with_predicate(body.as_bytes(), |id| {
-                id.eq_ignore_ascii_case("addictedguys.vscode-har-explorer")
-            })
+        // Store lowercase in malware list; is_extension_id_malware() does case-insensitive matching
+        let rule = RuleVSCode::new_test(["addictedguys.vscode-har-explorer"]);
+        let modified = rule
+            .rewrite_marketplace_json_response_body(body.as_bytes())
             .expect("should rewrite");
 
-        let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
+        let val: Value = sonic_rs::from_slice(modified.as_ref()).unwrap();
         let ext = &val["results"][0]["extensions"][0];
         assert!(
             ext["displayName"]
@@ -485,13 +409,12 @@ mod tests {
             }]
         }"#;
 
-        let modified =
-            rewrite_marketplace_json_response_body_with_predicate(body.as_bytes(), |id| {
-                id == "malware1.bad1" || id == "malware2.bad2"
-            })
+        let rule = RuleVSCode::new_test(["malware1.bad1", "malware2.bad2"]);
+        let modified = rule
+            .rewrite_marketplace_json_response_body(body.as_bytes())
             .expect("should rewrite");
 
-        let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
+        let val: Value = sonic_rs::from_slice(modified.as_ref()).unwrap();
         let extensions = val["results"][0]["extensions"].as_array().unwrap();
 
         assert_eq!(extensions.len(), 3);
@@ -554,13 +477,12 @@ mod tests {
             ]
         }"#;
 
-        let modified =
-            rewrite_marketplace_json_response_body_with_predicate(body.as_bytes(), |id| {
-                id == "malware.bad"
-            })
+        let rule = RuleVSCode::new_test(["malware.bad"]);
+        let modified = rule
+            .rewrite_marketplace_json_response_body(body.as_bytes())
             .expect("should rewrite");
 
-        let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
+        let val: Value = sonic_rs::from_slice(modified.as_ref()).unwrap();
         let results = val["results"].as_array().unwrap();
 
         assert_eq!(results.len(), 2);
@@ -591,13 +513,12 @@ mod tests {
             }]
         }"#;
 
-        let modified =
-            rewrite_marketplace_json_response_body_with_predicate(body.as_bytes(), |id| {
-                id == "test.test"
-            })
+        let rule = RuleVSCode::new_test(["test.test"]);
+        let modified = rule
+            .rewrite_marketplace_json_response_body(body.as_bytes())
             .expect("should rewrite");
 
-        let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
+        let val: Value = sonic_rs::from_slice(modified.as_ref()).unwrap();
         let ext = &val["results"][0]["extensions"][0];
 
         // Modified fields
@@ -625,28 +546,28 @@ mod tests {
         // Create a response with many extensions
         let mut extensions = Vec::new();
         for i in 0..100 {
-            extensions.push(serde_json::json!({
+            extensions.push(sonic_rs::json!({
                 "publisher": { "publisherName": format!("publisher{}", i) },
                 "extensionName": format!("ext{}", i),
                 "displayName": format!("Extension {}", i)
             }));
         }
 
-        let body_json = serde_json::json!({
+        let body_json = sonic_rs::json!({
             "results": [{
                 "extensions": extensions
             }]
         });
 
-        let body = serde_json::to_vec(&body_json).unwrap();
+        let body = sonic_rs::to_vec(&body_json).unwrap();
 
         // Mark the 50th extension as malware
-        let modified = rewrite_marketplace_json_response_body_with_predicate(&body, |id| {
-            id == "publisher50.ext50"
-        })
-        .expect("should rewrite");
+        let rule = RuleVSCode::new_test(["publisher50.ext50"]);
+        let modified = rule
+            .rewrite_marketplace_json_response_body(&body)
+            .expect("should rewrite");
 
-        let val: Value = serde_json::from_slice(modified.as_ref()).unwrap();
+        let val: Value = sonic_rs::from_slice(modified.as_ref()).unwrap();
         let result_extensions = val["results"][0]["extensions"].as_array().unwrap();
 
         assert_eq!(result_extensions.len(), 100);
@@ -669,32 +590,33 @@ mod tests {
     #[test]
     fn test_rewrite_marketplace_json_depth_limit_stops_traversal() {
         // Build a deeply nested JSON object, deeper than the traversal limit.
-        let mut root = serde_json::json!({});
+        let mut root = sonic_rs::json!({});
 
         let mut current = &mut root;
         for _ in 0..(MAX_MARKETPLACE_JSON_TRAVERSAL_DEPTH + 10) {
             current
                 .as_object_mut()
                 .unwrap()
-                .insert("n".to_string(), serde_json::json!({}));
+                .insert("n", sonic_rs::json!({}));
             current = current.get_mut("n").unwrap();
         }
 
         // Place an extension-like object beyond the depth limit.
         current.as_object_mut().unwrap().insert(
-            "extension".to_string(),
-            serde_json::json!({
+            "extension",
+            sonic_rs::json!({
                 "publisher": { "publisherName": "ms-python" },
                 "extensionName": "python",
                 "displayName": "Python"
             }),
         );
 
-        let body = serde_json::to_vec(&root).unwrap();
+        let body = sonic_rs::to_vec(&root).unwrap();
 
-        // Even if we treat every ID as malware, we should not rewrite because the traversal
+        // Even if we have malware in the list, we should not rewrite because the traversal
         // never reaches the nested extension object.
-        let modified = rewrite_marketplace_json_response_body_with_predicate(&body, |_id| true);
+        let rule = RuleVSCode::new_test(["ms-python.python"]);
+        let modified = rule.rewrite_marketplace_json_response_body(&body);
         assert!(modified.is_none());
     }
 }
