@@ -214,8 +214,12 @@ impl RuleVSCode {
             return true;
         }
 
-        // Also try lowercase for case-insensitive matching
-        let normalized_id = extension_id.to_lowercase();
+        // If the id is already ASCII-lowercase, a second lookup would be identical.
+        if !extension_id.as_bytes().iter().any(u8::is_ascii_uppercase) {
+            return false;
+        }
+
+        let normalized_id = extension_id.to_ascii_lowercase();
         self.remote_malware_list
             .find_entries(&normalized_id)
             .entries()

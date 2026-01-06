@@ -1,6 +1,7 @@
 use memchr::memmem;
 use rama::bytes::Bytes;
 use rama::telemetry::tracing;
+use rama::utils::str::smol_str::{SmolStr, format_smolstr};
 use sonic_rs::{JsonContainerTrait, JsonValueMutTrait, JsonValueTrait, Value};
 
 use super::RuleVSCode;
@@ -65,9 +66,13 @@ impl RuleVSCode {
         }
 
         if let Some(arr) = value.as_array_mut() {
-            return arr.iter_mut().fold(false, |acc, child| {
-                self.mark_extensions_recursive(child, depth + 1) || acc
-            });
+            let mut modified = false;
+
+            for child in arr.iter_mut() {
+                modified |= self.mark_extensions_recursive(child, depth + 1);
+            }
+
+            return modified;
         }
 
         if let Some(obj) = value.as_object_mut() {
@@ -107,12 +112,12 @@ impl RuleVSCode {
                 None => return false,
             };
 
+            if !self.is_extension_id_malware(extension_id.as_str()) {
+                return false;
+            }
+
             (display_name.to_string(), extension_id)
         };
-
-        if !self.is_extension_id_malware(&extension_id) {
-            return false;
-        }
 
         tracing::info!(
             package = %extension_id,
@@ -127,7 +132,7 @@ impl RuleVSCode {
 
     /// Extracts the extension ID from a JSON object by looking up publisher and name fields.
     /// Returns None if required fields are missing or invalid.
-    fn extract_extension_id(obj: &sonic_rs::Object) -> Option<String> {
+    fn extract_extension_id(obj: &sonic_rs::Object) -> Option<SmolStr> {
         let publisher = obj
             .get(&"publisher")
             .and_then(|p| p.as_object())
@@ -147,7 +152,7 @@ impl RuleVSCode {
             .map(str::trim)
             .filter(|s| !s.is_empty())?;
 
-        Some(format!("{publisher}.{name}"))
+        Some(format_smolstr!("{publisher}.{name}"))
     }
 
     fn rewrite_extension_object(obj: &mut sonic_rs::Object, original_name: &str) {
@@ -177,7 +182,7 @@ mod tests {
 
         assert_eq!(
             RuleVSCode::extract_extension_id(obj),
-            Some("microsoft.vscode".to_string())
+            Some(SmolStr::new("microsoft.vscode"))
         );
     }
 
@@ -192,7 +197,7 @@ mod tests {
 
         assert_eq!(
             RuleVSCode::extract_extension_id(obj),
-            Some("github.copilot".to_string())
+            Some(SmolStr::new("github.copilot"))
         );
     }
 
@@ -207,7 +212,7 @@ mod tests {
 
         assert_eq!(
             RuleVSCode::extract_extension_id(obj),
-            Some("publisher.extension".to_string())
+            Some(SmolStr::new("publisher.extension"))
         );
     }
 
