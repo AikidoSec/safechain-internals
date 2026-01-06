@@ -116,7 +116,7 @@ func (d *Daemon) Stop(ctx context.Context) error {
 func (d *Daemon) run(ctx context.Context) error {
 	defer d.wg.Done()
 
-	ticker := time.NewTicker(constants.HeartbeatInterval)
+	ticker := time.NewTicker(constants.DaemonHeartbeatInterval)
 	defer ticker.Stop()
 
 	log.Println("Daemon is running...")
