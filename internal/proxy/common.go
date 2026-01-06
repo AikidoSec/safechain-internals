@@ -69,14 +69,14 @@ func Ping(url string) error {
 	return nil
 }
 
-func IsProxyRunning() error {
+func IsProxyRunning() bool {
 	metaUrls := []string{MetaHttpUrl, MetaHttpsUrl}
 	for _, url := range metaUrls {
 		if err := Ping(url); err != nil {
-			return fmt.Errorf("failed to ping proxy meta: %v", err)
+			return false
 		}
 	}
-	return nil
+	return true
 }
 
 func LoadProxyConfig() error {

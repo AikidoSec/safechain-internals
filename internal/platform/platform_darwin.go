@@ -135,16 +135,16 @@ func installProxyCA(ctx context.Context, certPath string) error {
 	return nil
 }
 
-func isProxyCAInstalled(ctx context.Context) error {
+func isProxyCAInstalled(ctx context.Context) bool {
 	cmd := exec.CommandContext(ctx, "security", "find-certificate",
 		"-c", "aikido.dev",
 		"/Library/Keychains/System.keychain")
 
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("failed to check certificate installation: %v", err)
+		return false
 	}
-	return nil
+	return true
 }
 
 func uninstallProxyCA(ctx context.Context) error {

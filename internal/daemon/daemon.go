@@ -151,12 +151,12 @@ func (d *Daemon) run(ctx context.Context) error {
 }
 
 func (d *Daemon) heartbeat() error {
-	if err := setup.DidSetupFinish(); err != nil {
-		log.Println("Setup not ran yet, skipping heartbeat checks...")
+	if !setup.DidSetupFinish() {
+		log.Println("Setup not finished yet, skipping heartbeat checks...")
 		return nil
 	}
-	if err := d.proxy.IsProxyRunning(); err != nil {
-		log.Printf("Failed to check proxy: %v", err)
+	if !d.proxy.IsProxyRunning() {
+		log.Println("Proxy is not running, starting it...")
 	} else {
 		log.Println("Proxy is running")
 	}
