@@ -19,9 +19,6 @@ func NewRegistry() *Registry {
 	}
 
 	registry.Register(safechain.New())
-	//registry.Register(githook.New())
-	//registry.Register(vscode.New())
-
 	return registry
 }
 

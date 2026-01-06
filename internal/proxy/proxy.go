@@ -14,7 +14,7 @@ import (
 const (
 	ProxyBind          = "127.0.0.1:7654"
 	ProxyMeta          = "127.0.0.1:7655"
-	ProxyReadyTimeout  = 10 * time.Second
+	ProxyReadyTimeout  = 60 * time.Second
 	ProxyReadyInterval = 1 * time.Second
 )
 
@@ -54,7 +54,7 @@ func (p *Proxy) Start(ctx context.Context) error {
 		"--bind", ProxyBind,
 		"--meta", ProxyMeta,
 		"--data", platform.GetProxyRunDir(),
-		// "--output", filepath.Join(config.LogDir, "safechain-proxy.log"),
+		"--output", filepath.Join(config.LogDir, "safechain-proxy.log"),
 		"--secrets", platform.GetProxyRunDir(),
 	)
 
