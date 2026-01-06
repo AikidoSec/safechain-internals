@@ -39,6 +39,9 @@ func main() {
 	}
 
 	sigChan := make(chan os.Signal, 1)
+
+	// Subscribes to SIGINT, SIGTERM, and SIGQUIT signals
+	// These signals are received via sigChan and are used to trigger a graceful shutdown of the daemon
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
 	errChan := make(chan error, 1)
