@@ -42,7 +42,6 @@ jobs:
       - name: Rename binaries for packaging
         run: |
           mv bin/safechain-agent-windows-${{ matrix.arch }}.exe bin/SafeChainAgent.exe
-          mv bin/safechain-setup-windows-${{ matrix.arch }}.exe bin/SafeChainSetup.exe
         shell: bash
 
       - name: Install WiX Toolset
