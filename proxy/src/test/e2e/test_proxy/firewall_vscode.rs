@@ -1,10 +1,5 @@
 use rama::{
-    http::{
-        BodyExtractExt as _, HeaderValue, StatusCode,
-        header::ACCEPT,
-        headers::{Accept, HeaderEncode as _},
-        service::client::HttpClientExt as _,
-    },
+    http::{BodyExtractExt as _, StatusCode, headers::Accept, service::client::HttpClientExt as _},
     telemetry::tracing,
 };
 use serde::Deserialize;
@@ -19,7 +14,7 @@ async fn test_vscode_https_install_asset_vsixpackage_malware_blocked() {
 
     let resp = client
         .get("https://gallerycdn.vsassets.io/_apis/public/gallery/publishers/pythoner/vsextensions/pythontheme/2.7.5/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage")
-        .header(ACCEPT, accept_json_header_value())
+        .typed_header(Accept::json())
         .send()
         .await
         .unwrap();
@@ -41,7 +36,7 @@ async fn test_vscode_https_install_asset_manifest_malware_blocked() {
 
     let resp = client
         .get("https://gallerycdn.vsassets.io/_apis/public/gallery/publishers/pythoner/vsextensions/pythontheme/2.7.5/assetbyname/Microsoft.VisualStudio.Code.Manifest")
-        .header(ACCEPT, accept_json_header_value())
+        .typed_header(Accept::json())
         .send()
         .await
         .unwrap();
@@ -63,7 +58,7 @@ async fn test_vscode_https_install_asset_signature_malware_blocked() {
 
     let resp = client
         .get("https://gallerycdn.vsassets.io/extensions/pythoner/pythontheme/2.7.5/Microsoft.VisualStudio.Services.VsixSignature")
-        .header(ACCEPT, accept_json_header_value())
+        .typed_header(Accept::json())
         .send()
         .await
         .unwrap();
@@ -85,7 +80,7 @@ async fn test_vscode_https_install_asset_vsix_file_malware_blocked() {
 
     let resp = client
         .get("https://gallerycdn.vsassets.io/files/pythoner/pythontheme/2.7.5/pythoner.pythontheme-2.7.5.vsix")
-        .header(ACCEPT, accept_json_header_value())
+        .typed_header(Accept::json())
         .send()
         .await
         .unwrap();
@@ -196,14 +191,4 @@ struct MarketplaceExtension {
 struct MarketplacePublisher {
     #[serde(rename = "publisherName")]
     publisher_name: String,
-}
-
-fn accept_json_header_value() -> HeaderValue {
-    let accept = Accept::json();
-    let mut values = Vec::new();
-    accept.encode(&mut values);
-    values
-        .into_iter()
-        .next()
-        .expect("Accept::json should encode at least one value")
 }

@@ -17,7 +17,7 @@ use rama::http::body::util::BodyExt;
 
 use crate::{
     firewall::{malware_list::RemoteMalwareList, pac::PacScriptGenerator},
-    http::response::generate_malware_blocked_response_for_req,
+    http::{remove_cache_headers, response::generate_malware_blocked_response_for_req},
     storage::SyncCompactDataStorage,
 };
 
@@ -169,11 +169,10 @@ impl Rule for RuleVSCode {
                     error = %err,
                     "VSCode response: failed to collect body bytes; returning 502"
                 );
-
-                parts.status = StatusCode::BAD_GATEWAY;
-                parts.headers.remove(rama::http::header::CONTENT_LENGTH);
-
-                return Ok(Response::from_parts(parts, Body::empty()));
+                return Ok(Response::builder()
+                    .status(StatusCode::BAD_GATEWAY)
+                    .body(Body::empty())
+                    .expect("BAD_GATEWAY response should be valid"));
             }
         };
 
@@ -183,10 +182,7 @@ impl Rule for RuleVSCode {
         {
             tracing::debug!("VSCode response modified to mark blocked extensions");
 
-            // Remove stale cache headers that no longer match the modified content
-            parts.headers.remove(rama::http::header::ETAG);
-            parts.headers.remove(rama::http::header::LAST_MODIFIED);
-            parts.headers.remove(rama::http::header::CACHE_CONTROL);
+            remove_cache_headers(&mut parts.headers);
 
             parts
                 .headers
