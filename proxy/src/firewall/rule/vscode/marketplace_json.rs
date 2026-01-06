@@ -77,10 +77,6 @@ fn rewrite_marketplace_json_response_body_with_predicate(
 
 /// Recursively walks a JSON value and rewrites any objects that *look like* VS Code
 /// Marketplace extension entries. This is deliberately schema-tolerant.
-///
-/// Notes:
-/// - This will traverse the entire JSON response
-/// - It is recursive
 fn mark_any_extensions_if_malware(
     value: &mut Value,
     is_malware: &mut impl FnMut(&str) -> bool,
@@ -108,8 +104,6 @@ fn mark_any_extensions_if_malware_with_depth(
             mark_any_extensions_if_malware_with_depth(child, is_malware, depth + 1) || acc
         }),
         Value::Object(_) => {
-            // Traverse children first using a stable snapshot of keys.
-            // This avoids mutating the same map while iterating its entries.
             let keys: Vec<String> = value
                 .as_object()
                 .expect("Value::Object implies as_object is Some")
