@@ -7,6 +7,7 @@ use rama::{
     http::{
         Body, Request, Response, StatusCode, Uri,
         headers::{ContentLength, HeaderMapExt as _},
+        service::web::response::IntoResponse,
     },
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
@@ -174,10 +175,7 @@ impl Rule for RuleVSCode {
                     error = %err,
                     "VSCode response: failed to collect body bytes; returning 502"
                 );
-                return Ok(Response::builder()
-                    .status(StatusCode::BAD_GATEWAY)
-                    .body(Body::empty())
-                    .expect("BAD_GATEWAY response should be valid"));
+                return Ok(StatusCode::BAD_GATEWAY.into_response());
             }
         };
 

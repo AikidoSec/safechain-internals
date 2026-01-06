@@ -289,36 +289,30 @@ mod tests {
     fn test_rewrite_marketplace_json_robustness_noop_cases() {
         let rule = RuleVSCode::new_test(["any.extension"]);
 
-        // Invalid JSON
         assert!(
             rule.rewrite_marketplace_json_response_body(b"not valid json")
                 .is_none()
         );
 
-        // Empty body
         assert!(rule.rewrite_marketplace_json_response_body(b"").is_none());
 
-        // Missing expected structure
         assert!(
             rule.rewrite_marketplace_json_response_body(br#"{\"results\": []}"#)
                 .is_none()
         );
 
-        // Has publisher + extension name markers, but no displayName.
         assert!(rule
             .rewrite_marketplace_json_response_body(
                 br#"{\"results\":[{\"extensions\":[{\"publisher\":{\"publisherName\":\"pythoner\"},\"extensionName\":\"pythontheme\"}]}]}"#
             )
             .is_none());
 
-        // Has displayName + extensionName markers, but no publisher/publisherName.
         assert!(rule
             .rewrite_marketplace_json_response_body(
                 br#"{\"results\":[{\"extensions\":[{\"extensionName\":\"pythontheme\",\"displayName\":\"Python Theme\"}]}]}"#
             )
             .is_none());
 
-        // Has displayName + publisherName markers, but no name/extensionName.
         assert!(rule
             .rewrite_marketplace_json_response_body(
                 br#"{\"results\":[{\"extensions\":[{\"publisher\":{\"publisherName\":\"pythoner\"},\"displayName\":\"Python Theme\"}]}]}"#
@@ -328,7 +322,6 @@ mod tests {
 
     #[test]
     fn test_rewrite_marketplace_json_depth_limit_stops_traversal() {
-        // Build a deeply nested JSON object, deeper than the traversal limit.
         let mut root = sonic_rs::json!({});
 
         let mut current = &mut root;
@@ -340,7 +333,6 @@ mod tests {
             current = current.get_mut("n").unwrap();
         }
 
-        // Place an extension-like object beyond the depth limit.
         current.as_object_mut().unwrap().insert(
             "extension",
             sonic_rs::json!({
