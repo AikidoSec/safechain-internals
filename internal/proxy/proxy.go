@@ -75,8 +75,8 @@ func (p *Proxy) Start(ctx context.Context) error {
 	return nil
 }
 
-func (p *Proxy) CheckProxy() error {
-	if err := CheckProxy(); err != nil {
+func (p *Proxy) IsProxyRunning() error {
+	if err := IsProxyRunning(); err != nil {
 		return fmt.Errorf("failed to check proxy: %v", err)
 	}
 	return nil

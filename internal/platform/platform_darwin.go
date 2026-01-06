@@ -135,7 +135,7 @@ func installProxyCA(ctx context.Context, certPath string) error {
 	return nil
 }
 
-func checkProxyCA(ctx context.Context) error {
+func isProxyCAInstalled(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "security", "find-certificate",
 		"-c", "aikido.dev",
 		"/Library/Keychains/System.keychain")

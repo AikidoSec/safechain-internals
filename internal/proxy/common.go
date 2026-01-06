@@ -69,7 +69,7 @@ func Ping(url string) error {
 	return nil
 }
 
-func CheckProxy() error {
+func IsProxyRunning() error {
 	metaUrls := []string{MetaHttpUrl, MetaHttpsUrl}
 	for _, url := range metaUrls {
 		if err := Ping(url); err != nil {

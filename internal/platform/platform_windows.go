@@ -58,7 +58,7 @@ func installProxyCA(ctx context.Context, caCertPath string) error {
 	return nil
 }
 
-func checkProxyCA(ctx context.Context) error {
+func isProxyCAInstalled(ctx context.Context) error {
 	return nil
 }
 

@@ -21,7 +21,7 @@ func RemoveSetupFinishedMarker() error {
 	return nil
 }
 
-func CheckSetupFinished() error {
+func DidSetupFinish() error {
 	if _, err := os.Stat(platform.GetProxySetupFinishedMarker()); os.IsNotExist(err) {
 		return fmt.Errorf("setup not finished")
 	}
