@@ -123,7 +123,6 @@ fn mark_any_extensions_if_malware_with_depth(
                 }
             }
 
-            // Now that traversal is complete, it's safe to rewrite the current object.
             modified |= mark_extension_object_if_malware(value, is_malware);
             modified
         }
@@ -201,22 +200,45 @@ struct ExtensionLike<'a> {
 }
 
 fn extension_id(ext: &ExtensionLike<'_>) -> Option<String> {
-    let publisher = ext
+    let publisher = extract_publisher_name(ext)?;
+    let name = extract_extension_name(ext)?;
+    Some(format!("{publisher}.{name}"))
+}
+
+/// Extract and validate publisher name from extension metadata.
+fn extract_publisher_name(ext: &ExtensionLike<'_>) -> Option<&str> {
+    // Try nested publisher object first
+    let from_nested = ext
         .publisher
         .as_ref()
-        .and_then(|p| p.publisher_name.as_deref().or(p.name.as_deref()))
-        .or(ext.publisher_name.as_deref())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())?;
+        .and_then(|p| p.publisher_name.as_deref().or(p.name.as_deref()));
+    
+    // Fall back to flat publisher_name field
+    let raw_publisher = from_nested.or(ext.publisher_name.as_deref())?;
+    
+    // Trim and validate non-empty
+    let trimmed = raw_publisher.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
 
-    let name = ext
+/// Extract and validate extension name from extension metadata.
+fn extract_extension_name(ext: &ExtensionLike<'_>) -> Option<&str> {
+    let raw_name = ext
         .extension_name
         .as_deref()
-        .or(ext.name.as_deref())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())?;
-
-    Some(format!("{publisher}.{name}"))
+        .or(ext.name.as_deref())?;
+    
+    // Trim and validate non-empty
+    let trimmed = raw_name.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
 }
 
 fn rewrite_extension_object(obj: &mut Map<String, Value>, ext: &ExtensionLike<'_>) {
