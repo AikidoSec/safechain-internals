@@ -204,7 +204,8 @@ impl Rule for RuleVSCode {
 impl RuleVSCode {
     fn is_extension_id_malware(&self, extension_id: &str) -> bool {
         // Try exact match first (in case malware list has mixed case)
-        if self.remote_malware_list
+        if self
+            .remote_malware_list
             .find_entries(extension_id)
             .entries()
             .is_some()
