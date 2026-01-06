@@ -24,6 +24,7 @@ run-proxy *ARGS:
         --bind '127.0.0.1:8080' \
         --meta '127.0.0.1:8088' \
         --secrets .aikido/safechain-proxy \
+        --pretty \
         {{ARGS}}
 
 proxy-har-toggle:

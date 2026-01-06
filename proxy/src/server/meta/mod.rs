@@ -70,7 +70,7 @@ pub async fn run_meta_https_server(
             let har_client = har_client.clone();
             async move {
                 har_client
-                    .switch()
+                    .toggle()
                     .await
                     .map(|previous| (!previous).to_string())
                     .into_response()

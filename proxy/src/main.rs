@@ -2,15 +2,18 @@ use std::{path::PathBuf, time::Duration};
 
 use rama::{
     error::{BoxError, ErrorContext, OpaqueError},
-    graceful,
-    net::socket::Interface,
+    graceful::{self, ShutdownGuard},
+    net::{address::SocketAddress, socket::Interface},
     telemetry::tracing::{self, Instrument as _},
+    tls::boring::server::TlsAcceptorLayer,
 };
 
 use clap::Parser;
 
+pub mod client;
 pub mod diagnostics;
 pub mod firewall;
+pub mod http;
 pub mod server;
 pub mod storage;
 pub mod tls;
@@ -23,6 +26,9 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 #[cfg(target_os = "windows")]
 #[global_allocator]
 static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+#[cfg(test)]
+pub mod test;
 
 /// CLI arguments for configuring proxy behavior.
 #[derive(Debug, Clone, Parser)]
@@ -44,7 +50,11 @@ pub struct Args {
     pub meta_bind: Interface,
 
     /// secrets storage to use (e.g. for root CA)
-    #[arg(long, value_name = "keyring | <dir>", default_value = "keyring")]
+    #[arg(
+        long,
+        value_name = "keyring | memory | <dir>",
+        default_value = "keyring"
+    )]
     pub secrets: self::storage::SyncSecrets,
 
     /// debug logging as default instead of Info; use RUST_LOG env for more options
@@ -87,6 +97,24 @@ async fn main() -> Result<(), BoxError> {
 
     self::utils::telemetry::init_tracing(&args)?;
 
+    let base_shutdown_signal = graceful::default_signal();
+    if let Err(err) = run_with_args(base_shutdown_signal, args).await {
+        eprintln!("🚩 exit with error: {err}");
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+/// Runs all the safechain-proxy services and blocks until
+/// a critical error occurs or the (graceful) shutdown has been initiated.
+///
+/// This entry point is used by both the (binary) `main` function as well as
+/// for the e2e test suite found in the test module.
+async fn run_with_args<F>(base_shutdown_signal: F, args: Args) -> Result<(), BoxError>
+where
+    F: Future<Output: Send + 'static> + Send + 'static,
+{
     tokio::fs::create_dir_all(&args.data)
         .await
         .with_context(|| format!("create data directory at path '{}'", args.data.display()))?;
@@ -104,30 +132,27 @@ async fn main() -> Result<(), BoxError> {
     let (tls_acceptor, root_ca) =
         self::tls::new_tls_acceptor_layer(&args, &data_storage).context("prepare TLS acceptor")?;
 
-    let (etx, mut erx) = tokio::sync::mpsc::channel::<OpaqueError>(1);
-    let graceful = graceful::Shutdown::new(async move {
-        let mut signal = Box::pin(graceful::default_signal());
-        tokio::select! {
-            _ = signal.as_mut() => {
-                tracing::debug!("default signal triggered: init graceful shutdown");
-            }
-            err = erx.recv() => {
-                if let Some(err) = err {
-                    tracing::error!("fatal err received: {err}; abort");
-                } else {
-                    tracing::info!("wait for default signal, no error was received");
-                    signal.await;
-                    tracing::debug!("default signal triggered: init graceful shutdown");
-                }
-            }
-        }
-    });
+    let (error_tx, error_rx) = tokio::sync::mpsc::channel::<OpaqueError>(1);
+    let graceful = graceful::Shutdown::new(new_shutdown_signal(error_rx, base_shutdown_signal));
 
     #[cfg(feature = "har")]
     let (har_client, har_export_layer) =
         { self::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
 
-    let firewall = self::firewall::Firewall::try_new(graceful.guard(), data_storage).await?;
+    // ensure to not wait for firewall creation in case shutdown was initiated,
+    // this can happen for example in case remote lists need to be fetched and the
+    // something on the network on either side is not working
+    let firewall = tokio::select! {
+        result = self::firewall::Firewall::try_new(graceful.guard(), data_storage) => {
+            result?
+        }
+
+        _ = graceful.guard_weak().into_cancelled() => {
+            return Err(OpaqueError::from_display(
+                "shutdown initiated prior to firewall created; exit process immediately",
+            ).into());
+        }
+    };
 
     // used to provide actual bind (socket) address of proxy interface
     // to the meta server for purposes such as PAC (file) generation
@@ -135,18 +160,18 @@ async fn main() -> Result<(), BoxError> {
 
     graceful.spawn_task_fn({
         let args = args.clone();
-        let etx = etx.clone();
+        let error_tx = error_tx.clone();
 
         let tls_acceptor = tls_acceptor.clone();
         let root_ca = root_ca.clone();
 
         let firewall = firewall.clone();
 
-        async move |guard| {
-            tracing::info!("spawning meta http(s) server...");
-            if let Err(err) = self::server::meta::run_meta_https_server(
+        |guard| {
+            run_meta_https_server(
                 args,
                 guard,
+                error_tx,
                 tls_acceptor,
                 root_ca,
                 proxy_addr_rx,
@@ -154,43 +179,21 @@ async fn main() -> Result<(), BoxError> {
                 #[cfg(feature = "har")]
                 har_client,
             )
-            .instrument(tracing::debug_span!(
-                "meta server lifetime",
-                server.service.name = format!("{}-meta", self::utils::env::project_name()),
-                otel.kind = "server",
-                network.protocol.name = "http",
-            ))
-            .await
-            {
-                tracing::error!("meta server exited with an error: {err}");
-                let _ = etx.send(err).await;
-            }
         }
     });
 
     graceful.spawn_task_fn({
-        async move |guard| {
-            tracing::info!("spawning proxy server...");
-            if let Err(err) = self::server::proxy::run_proxy_server(
+        move |guard| {
+            run_proxy_server(
                 args,
                 guard,
+                error_tx,
                 tls_acceptor,
                 proxy_addr_tx,
                 firewall,
                 #[cfg(feature = "har")]
                 har_export_layer,
             )
-            .instrument(tracing::debug_span!(
-                "proxy server lifetime",
-                server.service.name = self::utils::env::project_name(),
-                otel.kind = "server",
-                network.protocol.name = "tcp",
-            ))
-            .await
-            {
-                tracing::error!("proxy server exited with an error: {err}");
-                let _ = etx.send(err).await;
-            }
         }
     });
 
@@ -201,4 +204,95 @@ async fn main() -> Result<(), BoxError> {
 
     tracing::info!("gracefully shutdown with a delay of: {delay:?}");
     Ok(())
+}
+
+async fn run_meta_https_server(
+    args: Args,
+    guard: ShutdownGuard,
+    error_tx: tokio::sync::mpsc::Sender<OpaqueError>,
+    tls_acceptor: TlsAcceptorLayer,
+    root_ca: self::tls::RootCA,
+    proxy_addr_rx: tokio::sync::oneshot::Receiver<SocketAddress>,
+    firewall: self::firewall::Firewall,
+    #[cfg(feature = "har")] har_client: self::diagnostics::har::HarClient,
+) {
+    tracing::info!("spawning meta http(s) server...");
+    if let Err(err) = self::server::meta::run_meta_https_server(
+        args,
+        guard,
+        tls_acceptor,
+        root_ca,
+        proxy_addr_rx,
+        firewall,
+        #[cfg(feature = "har")]
+        har_client,
+    )
+    .instrument(tracing::debug_span!(
+        "meta server lifetime",
+        server.service.name = format!("{}-meta", self::utils::env::project_name()),
+        otel.kind = "server",
+        network.protocol.name = "http",
+    ))
+    .await
+    {
+        tracing::error!("meta server exited with an error: {err}");
+        let _ = error_tx.send(err).await;
+    }
+}
+
+async fn run_proxy_server(
+    args: Args,
+    guard: ShutdownGuard,
+    error_tx: tokio::sync::mpsc::Sender<OpaqueError>,
+    tls_acceptor: TlsAcceptorLayer,
+    proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
+    firewall: self::firewall::Firewall,
+    #[cfg(feature = "har")] har_export_layer: self::diagnostics::har::HARExportLayer,
+) {
+    tracing::info!("spawning proxy server...");
+    if let Err(err) = self::server::proxy::run_proxy_server(
+        args,
+        guard,
+        tls_acceptor,
+        proxy_addr_tx,
+        firewall,
+        #[cfg(feature = "har")]
+        har_export_layer,
+    )
+    .instrument(tracing::debug_span!(
+        "proxy server lifetime",
+        server.service.name = self::utils::env::project_name(),
+        otel.kind = "server",
+        network.protocol.name = "tcp",
+    ))
+    .await
+    {
+        tracing::error!("proxy server exited with an error: {err}");
+        let _ = error_tx.send(err).await;
+    }
+}
+
+fn new_shutdown_signal(
+    error_rx: tokio::sync::mpsc::Receiver<OpaqueError>,
+    base_shutdown_signal: impl Future<Output: Send + 'static> + Send + 'static,
+) -> impl Future + Send + 'static {
+    async move {
+        let mut mut_error_rx = error_rx;
+        let mut signal = Box::pin(base_shutdown_signal);
+
+        tokio::select! {
+            _ = signal.as_mut() => {
+                tracing::debug!("default signal triggered: init graceful shutdown");
+            }
+            err = mut_error_rx.recv() => {
+                if let Some(err) = err {
+                    tracing::error!("fatal err received: {err}; abort");
+                } else {
+                    tracing::info!("wait for default signal, no error was received");
+                    signal.await;
+                    tracing::debug!("default signal triggered: init graceful shutdown");
+                }
+            }
+        }
+    }
 }

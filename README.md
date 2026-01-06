@@ -20,3 +20,15 @@ Invoke-WebRequest -Uri "https://github.com/AikidoSec/safechain-agent/releases/la
 msiexec /i SafeChainAgent.msi /qn /norestart
 SafeChainSetup.exe
 ```
+
+## Proxy
+
+A security-focused SOCKS5/HTTP(S) system proxy
+built with <https://ramaproxy.org/>.
+
+Read more in the proxy readme:
+[./docs/proxy.md](./docs/proxy.md).
+
+## Contributing
+
+See our [Contribution docs](.github/CONTRIBUTING.md).

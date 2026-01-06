@@ -1,6 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub fn unique_empty_temp_dir(prefix: &str) -> std::io::Result<std::path::PathBuf> {
+pub fn try_new(prefix: &str) -> std::io::Result<std::path::PathBuf> {
     let base = std::env::temp_dir();
     let pid = std::process::id();
 

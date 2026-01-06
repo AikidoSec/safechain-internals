@@ -1,9 +1,12 @@
+use std::fmt::Write as _;
+
 use rama::{
     bytes::Bytes,
     net::address::{Domain, SocketAddress},
+    utils::str::smol_str::ToSmolStr,
 };
-use smol_str::ToSmolStr;
-use std::fmt::Write as _;
+
+use crate::server::connectivity::CONNECTIVITY_DOMAIN;
 
 #[derive(Debug)]
 pub struct PacScriptGenerator {
@@ -42,8 +45,10 @@ impl PacScriptGenerator {
         let _ = write!(&mut out, "{proxy_addr}");
         out.push_str(
             r#"; DIRECT";
-    var ds = ["#,
+    var ds = [""#,
         );
+        out.push_str(CONNECTIVITY_DOMAIN.as_str());
+        out.push('"');
 
         Self {
             buffer: out,
@@ -59,11 +64,8 @@ impl PacScriptGenerator {
         self.domains
             .sort_unstable_by_key(|b| std::cmp::Reverse(b.len()));
 
-        for (i, d) in self.domains.iter().enumerate() {
-            if i != 0 {
-                self.buffer.push(',');
-            }
-            self.buffer.push('"');
+        for d in self.domains.iter() {
+            self.buffer.push_str(r##",""##);
             self.buffer.push_str(d);
             self.buffer.push('"');
         }

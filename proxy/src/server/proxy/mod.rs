@@ -6,12 +6,14 @@ use rama::{
     http::{
         Body, Request, Response, StatusCode,
         layer::{
-            compression::CompressionLayer, map_response_body::MapResponseBodyLayer,
-            trace::TraceLayer, upgrade::UpgradeLayer,
+            compression::CompressionLayer, header_config::extract_header_config,
+            map_response_body::MapResponseBodyLayer, proxy_auth::ProxyAuthLayer, trace::TraceLayer,
+            upgrade::UpgradeLayer,
         },
         matcher::MethodMatcher,
         server::HttpServer,
         service::web::response::IntoResponse,
+        utils::HeaderValueErr,
     },
     layer::ConsumeErrLayer,
     net::{
@@ -32,17 +34,25 @@ use rama::{
     utils::str::arcstr::arcstr,
 };
 
+use crate::{Args, firewall::Firewall};
+
 #[cfg(feature = "har")]
 use crate::diagnostics::har::HARExportLayer;
-use crate::{Args, firewall::Firewall};
 
 mod client;
 mod server;
+
+mod auth;
+
+pub use self::auth::{FirewallUserConfig, HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG};
 
 /// Maximum allowed body size for proxied requests and responses.
 /// Protects against memory exhaustion from excessively large payloads.
 const MAX_BODY_SIZE: usize = 500 * 1024 * 1024; // 500 MB
 
+/// Runs the MITM HTTP(S)/SOCKS(5) Proxy server,
+/// including the firewall for blocking relevant requests
+/// and modifying responses.
 pub async fn run_proxy_server(
     args: Args,
     guard: ShutdownGuard,
@@ -63,9 +73,6 @@ pub async fn run_proxy_server(
 
     let https_client = self::client::new_https_client(firewall.clone())?;
 
-    // TODO: Support (basic auth) username labels for
-    // preferences, e.g. --proxy-user 'safechain-min_package_age-48h:'
-
     let http_proxy_mitm_server = self::server::new_mitm_server(
         guard.clone(),
         args.mitm_all,
@@ -85,6 +92,8 @@ pub async fn run_proxy_server(
 
     let socks5_proxy_router = Socks5PeekRouter::new(
         Socks5Acceptor::new()
+            .with_auth_optional(true)
+            .with_authorizer(self::auth::ZeroAuthority::new())
             .with_connector(socks5::server::LazyConnector::new(socks5_proxy_mitm_server)),
     );
 
@@ -98,13 +107,21 @@ pub async fn run_proxy_server(
                 AddInputExtensionLayer::new(RequestComment(arcstr!("http(s) proxy connect"))),
                 har_export_layer,
             ),
+            ProxyAuthLayer::new(self::auth::ZeroAuthority::new())
+                .with_allow_anonymous(true)
+                // The use of proxy authentication is a common practice for
+                // proxy users to pass configs via a concept called username labels.
+                // See `docs/proxy/auth-flow.md` for more informtion.
+                //
+                // We make use use the void trailer parser to ensure we drop any ignored label.
+                .with_labels::<((), self::auth::FirewallUserConfigParser)>(),
             UpgradeLayer::new(
                 MethodMatcher::CONNECT,
                 service_fn(http_connect_accept),
                 http_proxy_mitm_server,
             ),
             // =============================================
-            // HTTP (plain-text) connections
+            // HTTP (plain-text) (proxy) connections
             MapResponseBodyLayer::new(Body::new),
             CompressionLayer::new(),
             // =============================================
@@ -148,6 +165,26 @@ async fn http_connect_accept(mut req: Request) -> Result<(Response, Request), Re
         Err(err) => {
             tracing::error!(uri = %req.uri(), "error extracting authority: {err:?}");
             return Err(StatusCode::BAD_REQUEST.into_response());
+        }
+    }
+
+    // next to (proxy (basic) username labels) we also allow for secure
+    // targets that a custom proxy connect (http) request header is used to
+    // pass the config (html form encoded) as an alternative way as well
+    //
+    // See `docs/proxy/auth-flow.md` for more informtion.
+    match extract_header_config(&req, &HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG) {
+        Ok(cfg @ FirewallUserConfig { .. }) => {
+            tracing::debug!(
+                "aikido safechain cfg header ({HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG:?}) parsed: {cfg:?}",
+            );
+            req.extensions_mut().insert(cfg);
+        }
+        Err(HeaderValueErr::HeaderMissing(name)) => {
+            tracing::trace!("aikido safechain cfg header ({name}): ignore");
+        }
+        Err(HeaderValueErr::HeaderInvalid(name)) => {
+            tracing::debug!("aikido safechain cfg header ({name}) failed to parse: ignore");
         }
     }
 

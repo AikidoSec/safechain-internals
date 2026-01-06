@@ -14,7 +14,7 @@ use rama::{
         server::HttpServer,
     },
     layer::ConsumeErrLayer,
-    net::proxy::ProxyTarget,
+    net::{proxy::ProxyTarget, tls::server::TlsPeekRouter},
     rt::Executor,
     stream::Stream,
     tcp::client::service::DefaultForwarder,
@@ -31,7 +31,7 @@ use rama::{
     utils::str::arcstr::arcstr,
 };
 
-use crate::firewall::Firewall;
+use crate::{firewall::Firewall, server::connectivity::CONNECTIVITY_DOMAIN};
 
 #[derive(Debug, Clone)]
 pub(super) struct MitmServer<S> {
@@ -61,8 +61,10 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
     )
         .into_layer(super::client::new_https_client(firewall.clone())?);
 
-    let inner =
-        tls_acceptor.into_layer(HttpServer::auto(Executor::graceful(guard)).service(https_svc));
+    let http_server = HttpServer::auto(Executor::graceful(guard)).service(https_svc);
+
+    let inner = TlsPeekRouter::new((tls_acceptor).into_layer(http_server.clone()))
+        .with_fallback(http_server);
 
     Ok(MitmServer {
         inner,
@@ -87,7 +89,7 @@ where
             && !maybe_proxy_target
                 .as_ref()
                 .and_then(|ProxyTarget(target)| target.host.as_domain())
-                .map(|domain| self.firewall.match_domain(domain))
+                .map(|domain| CONNECTIVITY_DOMAIN.eq(domain) || self.firewall.match_domain(domain))
                 .unwrap_or_default()
         {
             tracing::debug!("transport-forward incoming stream: target = {maybe_proxy_target:?}",);

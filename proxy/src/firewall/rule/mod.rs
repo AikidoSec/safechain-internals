@@ -1,11 +1,22 @@
 use std::{pin::Pin, sync::Arc};
 
-use rama::{error::OpaqueError, http::Request, net::address::Domain};
+use rama::{
+    error::OpaqueError,
+    http::{Request, Response},
+    net::address::Domain,
+};
 
 pub use super::pac::PacScriptGenerator;
 
 pub mod chrome;
+pub mod npm;
+pub mod pypi;
 pub mod vscode;
+
+pub enum RequestAction {
+    Allow(Request),
+    Block(Response),
+}
 
 // NOTE: anything can implement this rule,
 // including if we wish in future a dynamic Scriptable version,
@@ -14,20 +25,25 @@ pub mod vscode;
 //
 // For now all implementations are in Rust, to keep it easy.
 
-pub trait BlockRule: Sized + Send + Sync + 'static {
+pub trait Rule: Sized + Send + Sync + 'static {
     fn product_name(&self) -> &'static str;
 
     fn match_domain(&self, domain: &Domain) -> bool;
 
     fn collect_pac_domains(&self, generator: &mut PacScriptGenerator);
 
-    fn block_request(
+    fn evaluate_request(
         &self,
         req: Request,
-    ) -> impl Future<Output = Result<Option<Request>, OpaqueError>> + Send + '_;
+    ) -> impl Future<Output = Result<RequestAction, OpaqueError>> + Send + '_;
 
-    fn into_dyn(self) -> DynBlockRule {
-        DynBlockRule {
+    fn evaluate_response(
+        &self,
+        resp: Response,
+    ) -> impl Future<Output = Result<Response, OpaqueError>> + Send + '_;
+
+    fn into_dyn(self) -> DynRule {
+        DynRule {
             inner: Arc::new(self),
         }
     }
@@ -38,31 +54,44 @@ pub trait BlockRule: Sized + Send + Sync + 'static {
 /// found at <https://rust-lang.github.io/async-fundamentals-initiative/evaluation/case-studies/builder-provider-api.html#dynamic-dispatch-behind-the-api>
 /// and widely published at <https://blog.rust-lang.org/inside-rust/2023/05/03/stabilizing-async-fn-in-trait.html>.
 #[allow(clippy::type_complexity)]
-trait DynBlockRuleInner {
+trait DynRuleInner {
     fn dyn_product_name(&self) -> &'static str;
 
-    fn dyn_block_request(
+    fn dyn_evaluate_request(
         &self,
         req: Request,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<Request>, OpaqueError>> + Send + '_>>;
+    ) -> Pin<Box<dyn Future<Output = Result<RequestAction, OpaqueError>> + Send + '_>>;
+
+    fn dyn_evaluate_response(
+        &self,
+        resp: Response,
+    ) -> Pin<Box<dyn Future<Output = Result<Response, OpaqueError>> + Send + '_>>;
 
     fn dyn_match_domain(&self, domain: &Domain) -> bool;
 
     fn dyn_collect_pac_domains(&self, generator: &mut PacScriptGenerator);
 }
 
-impl<R: BlockRule> DynBlockRuleInner for R {
+impl<R: Rule> DynRuleInner for R {
     #[inline(always)]
     fn dyn_product_name(&self) -> &'static str {
         self.product_name()
     }
 
     #[inline(always)]
-    fn dyn_block_request(
+    fn dyn_evaluate_request(
         &self,
         req: Request,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<Request>, OpaqueError>> + Send + '_>> {
-        Box::pin(self.block_request(req))
+    ) -> Pin<Box<dyn Future<Output = Result<RequestAction, OpaqueError>> + Send + '_>> {
+        Box::pin(self.evaluate_request(req))
+    }
+
+    #[inline(always)]
+    fn dyn_evaluate_response(
+        &self,
+        resp: Response,
+    ) -> Pin<Box<dyn Future<Output = Result<Response, OpaqueError>> + Send + '_>> {
+        Box::pin(self.evaluate_response(resp))
     }
 
     #[inline(always)]
@@ -76,12 +105,12 @@ impl<R: BlockRule> DynBlockRuleInner for R {
     }
 }
 
-/// A dyn-patched [`BlockRule`].
-pub struct DynBlockRule {
-    inner: Arc<dyn DynBlockRuleInner + Send + Sync + 'static>,
+/// A dyn-patched [`Rule`].
+pub struct DynRule {
+    inner: Arc<dyn DynRuleInner + Send + Sync + 'static>,
 }
 
-impl Clone for DynBlockRule {
+impl Clone for DynRule {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -89,24 +118,32 @@ impl Clone for DynBlockRule {
     }
 }
 
-impl std::fmt::Debug for DynBlockRule {
+impl std::fmt::Debug for DynRule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DynBlockRule").finish()
+        f.debug_struct("DynRule").finish()
     }
 }
 
-impl BlockRule for DynBlockRule {
+impl Rule for DynRule {
     #[inline(always)]
     fn product_name(&self) -> &'static str {
         self.inner.dyn_product_name()
     }
 
     #[inline(always)]
-    fn block_request(
+    fn evaluate_request(
         &self,
         req: Request,
-    ) -> impl Future<Output = Result<Option<Request>, OpaqueError>> + Send + '_ {
-        self.inner.dyn_block_request(req)
+    ) -> impl Future<Output = Result<RequestAction, OpaqueError>> + Send + '_ {
+        self.inner.dyn_evaluate_request(req)
+    }
+
+    #[inline(always)]
+    fn evaluate_response(
+        &self,
+        resp: Response,
+    ) -> impl Future<Output = Result<Response, OpaqueError>> + Send + '_ {
+        self.inner.dyn_evaluate_response(resp)
     }
 
     #[inline(always)]

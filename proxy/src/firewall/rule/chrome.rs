@@ -2,21 +2,26 @@ use std::{borrow::Cow, fmt};
 
 use rama::{
     error::OpaqueError,
-    http::{Request, service::web::extract::Query},
+    http::{Request, Response, service::web::extract::Query},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
+    utils::str::{arcstr::ArcStr, starts_with_ignore_ascii_case},
 };
+
 use serde::Deserialize;
 
-use crate::{firewall::pac::PacScriptGenerator, storage::SyncCompactDataStorage};
+use crate::{
+    firewall::pac::PacScriptGenerator, http::response::generate_generic_blocked_response_for_req,
+    storage::SyncCompactDataStorage,
+};
 
-use super::BlockRule;
+use super::{RequestAction, Rule};
 
-pub(in crate::firewall) struct BlockRuleChrome {
+pub(in crate::firewall) struct RuleChrome {
     target_domains: DomainTrie<()>,
 }
 
-impl BlockRuleChrome {
+impl RuleChrome {
     pub(in crate::firewall) async fn try_new(
         _data: SyncCompactDataStorage, // NOTE data will be used to backup malware list once you use a remote list here
     ) -> Result<Self, OpaqueError> {
@@ -29,9 +34,9 @@ impl BlockRuleChrome {
     }
 }
 
-impl fmt::Debug for BlockRuleChrome {
+impl fmt::Debug for RuleChrome {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("BlockRuleChrome").finish()
+        f.debug_struct("RuleChrome").finish()
     }
 }
 
@@ -42,12 +47,7 @@ impl fmt::Debug for BlockRuleChrome {
 
 const CHROME_BLOCKED_EXT_LIST: &[&str] = &["lajondecmobodlejlcjllhojikagldgd"];
 
-#[derive(Deserialize)]
-struct ChromeExtInfo<'a> {
-    x: Cow<'a, str>,
-}
-
-impl BlockRule for BlockRuleChrome {
+impl Rule for RuleChrome {
     #[inline(always)]
     fn product_name(&self) -> &'static str {
         "Chrome"
@@ -65,23 +65,119 @@ impl BlockRule for BlockRuleChrome {
         }
     }
 
-    async fn block_request(&self, req: Request) -> Result<Option<Request>, OpaqueError> {
-        if let Some(domain) = crate::firewall::utils::try_get_domain_for_req(&req)
-            && self.match_domain(&domain)
-            && let Some(query) = req.uri().query()
-            && let Ok(Query(ChromeExtInfo { x })) = Query::parse_query_str(query)
-            && let Some(product_id) = x.strip_prefix("id=").map(|s| s.trim())
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+        // Pass through for now - response modification can be added in future PR
+        Ok(resp)
+    }
+
+    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
+        let Some(ChromeExtensionRequestInfo { domain, product_id }) =
+            self.extract_chrome_ext_info_from_req(&req)
+        else {
+            return Ok(RequestAction::Allow(req));
+        };
+
+        tracing::trace!(
+            http.url.full = %req.uri(),
+            http.host = %domain,
+            http.request.method = %req.method(),
+            "inspect chrome extension product id: {product_id}",
+        );
+
+        if CHROME_BLOCKED_EXT_LIST
+            .iter()
+            .any(|c| c.eq_ignore_ascii_case(&product_id))
         {
-            tracing::trace!("inspect chrome extension product id: {product_id}");
-            if CHROME_BLOCKED_EXT_LIST
-                .iter()
-                .any(|c| c.eq_ignore_ascii_case(product_id))
-            {
-                tracing::debug!("blocked Chrome extension: {product_id}");
-                return Ok(None);
-            }
+            tracing::debug!(
+                http.url.full = %req.uri(),
+                http.host = %domain,
+                http.request.method = %req.method(),
+                "blocked Chrome extension: {product_id}",
+            );
+            // NOTE: in case you wish to customise the response,
+            // you can do so by defining your own function / logic and using it here.
+            return Ok(RequestAction::Block(
+                generate_generic_blocked_response_for_req(req),
+            ));
         }
 
-        Ok(Some(req))
+        tracing::trace!(
+            http.url.full = %req.uri(),
+            http.host = %domain,
+            http.request.method = %req.method(),
+            "chrome rule: extension can pass through: {product_id}",
+        );
+
+        Ok(RequestAction::Allow(req))
+    }
+}
+
+struct ChromeExtensionRequestInfo<'a> {
+    domain: Cow<'a, Domain>,
+    product_id: ArcStr,
+}
+
+impl RuleChrome {
+    fn extract_chrome_ext_info_from_req<'a>(
+        &self,
+        req: &'a Request,
+    ) -> Option<ChromeExtensionRequestInfo<'a>> {
+        let Some(domain) = crate::http::try_get_domain_for_req(req)
+            .and_then(|d| self.match_domain(&d).then_some(d))
+        else {
+            tracing::trace!(
+                http.url.full = %req.uri(),
+                http.request.method = %req.method(),
+                "chrome rule: no matching domain found; req can passthrough",
+            );
+            return None;
+        };
+
+        if !starts_with_ignore_ascii_case(req.uri().path(), "/service/update2/crx") {
+            tracing::trace!(
+                http.url.full = %req.uri(),
+                http.host = %domain,
+                http.request.method = %req.method(),
+                "chrome rule: no matching path found; req can passthrough",
+            );
+            return None;
+        }
+
+        #[derive(Deserialize)]
+        struct QueryParameters<'a> {
+            /// cryptic single letter name chosen by Google... Don't blame me.
+            ///
+            /// It contains for the requests we care about the product id in the format
+            /// `x=id=<product_id>`.
+            x: Cow<'a, str>,
+        }
+
+        let Ok(Query(QueryParameters { x })) = Query::parse_query_str(req.uri().query()?) else {
+            tracing::trace!(
+                http.url.full = %req.uri(),
+                http.host = %domain,
+                http.request.method = %req.method(),
+                "chrome rule: query empty or failed to parse into a known value; req can passthrough",
+            );
+            return None;
+        };
+
+        let Some(product_id) = x.strip_prefix("id=").map(|s| s.trim()) else {
+            tracing::trace!(
+                http.url.full = %req.uri(),
+                http.host = %domain,
+                http.request.method = %req.method(),
+                "chrome rule: failed to extract product id from parsed query, req can passthrough",
+            );
+            return None;
+        };
+
+        let product_id = product_id
+            .split_once('&')
+            .map(|p| p.0)
+            .unwrap_or(product_id)
+            .into();
+
+        Some(ChromeExtensionRequestInfo { domain, product_id })
     }
 }

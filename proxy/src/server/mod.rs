@@ -5,8 +5,17 @@ use rama::{
     net::address::SocketAddress,
 };
 
+// Real servers
+//
+// These have their own (ingress) socket(s).
 pub mod meta;
 pub mod proxy;
+
+// Pseudo servers
+//
+// These are reachable but do not have a socket,
+// but instead operate from within inside the proxy.
+pub mod connectivity;
 
 async fn write_server_socket_address_as_file(
     dir: &Path,

@@ -1,4 +1,4 @@
-use std::{fmt, time::Duration};
+use std::fmt;
 
 use rama::{
     Service,
@@ -7,23 +7,23 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
-    utils::str::starts_with_ignore_ascii_case,
+    utils::str::{smol_str::format_smolstr, starts_with_ignore_ascii_case},
 };
-use smol_str::format_smolstr;
 
 use crate::{
     firewall::{malware_list::RemoteMalwareList, pac::PacScriptGenerator},
+    http::response::generate_generic_blocked_response_for_req,
     storage::SyncCompactDataStorage,
 };
 
-use super::BlockRule;
+use super::{RequestAction, Rule};
 
-pub(in crate::firewall) struct BlockRuleVSCode {
+pub(in crate::firewall) struct RuleVSCode {
     target_domains: DomainTrie<()>,
     remote_malware_list: RemoteMalwareList,
 }
 
-impl BlockRuleVSCode {
+impl RuleVSCode {
     pub(in crate::firewall) async fn try_new<C>(
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
@@ -39,8 +39,6 @@ impl BlockRuleVSCode {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_vscode.json"),
-            // NOTE: if you ever wish to make it configurable you would need to pass it into this constructor
-            Duration::from_secs(60 * 10), // 10 mins
             sync_storage,
             remote_malware_list_https_client,
         )
@@ -58,13 +56,13 @@ impl BlockRuleVSCode {
     }
 }
 
-impl fmt::Debug for BlockRuleVSCode {
+impl fmt::Debug for RuleVSCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("BlockRuleVSCode").finish()
+        f.debug_struct("RuleVSCode").finish()
     }
 }
 
-impl BlockRule for BlockRuleVSCode {
+impl Rule for RuleVSCode {
     #[inline(always)]
     fn product_name(&self) -> &'static str {
         "VSCode"
@@ -82,19 +80,19 @@ impl BlockRule for BlockRuleVSCode {
         }
     }
 
-    async fn block_request(&self, req: Request) -> Result<Option<Request>, OpaqueError> {
-        if !crate::firewall::utils::try_get_domain_for_req(&req)
+    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
+        if !crate::http::try_get_domain_for_req(&req)
             .map(|domain| self.match_domain(&domain))
             .unwrap_or_default()
         {
             tracing::trace!("VSCode rule did not match incoming request: passthrough");
-            return Ok(Some(req));
+            return Ok(RequestAction::Allow(req));
         }
 
         let path = req.uri().path().trim_start_matches('/');
         if !starts_with_ignore_ascii_case(path, "extensions/") {
             tracing::debug!("VSCode url: path no match: {path}; passthrough");
-            return Ok(Some(req));
+            return Ok(RequestAction::Allow(req));
         }
 
         let mut path_iter = path.split('/').skip(1); // skip extensions
@@ -103,13 +101,13 @@ impl BlockRule for BlockRuleVSCode {
             tracing::debug!(
                 "VSCode url: publisher name not found in uri path: {path}; passthrough"
             );
-            return Ok(Some(req));
+            return Ok(RequestAction::Allow(req));
         };
         let Some(package_name) = path_iter.next() else {
             tracing::debug!(
                 "VSCode url: publisher name not found in uri path: {path}; passthrough"
             );
-            return Ok(Some(req));
+            return Ok(RequestAction::Allow(req));
         };
 
         // format defined by remote malware list,
@@ -127,10 +125,17 @@ impl BlockRule for BlockRuleVSCode {
             // version requested in the request :)
 
             tracing::debug!("blocked VSCode plugin: {fq_package_name}");
-            return Ok(None);
+            return Ok(RequestAction::Block(
+                generate_generic_blocked_response_for_req(req),
+            ));
         }
 
         tracing::debug!("VSCode url: plugin {fq_package_name}: not blocked; let it go...");
-        Ok(Some(req))
+        Ok(RequestAction::Allow(req))
+    }
+
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+        // Pass through for now - response modification can be added in future PR
+        Ok(resp)
     }
 }

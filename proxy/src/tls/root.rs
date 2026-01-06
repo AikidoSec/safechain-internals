@@ -194,7 +194,7 @@ pub(super) fn new_root_tls_crt_key_pair(
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::test::unique_empty_temp_dir;
+    use crate::test::tmp_dir;
 
     use super::*;
 
@@ -204,7 +204,7 @@ mod tests {
     #[traced_test]
     #[test]
     fn test_new_root_tls_crt_key_pair_fs() {
-        let dir = unique_empty_temp_dir("test_new_root_tls_crt_key_pair_fs").unwrap();
+        let dir = tmp_dir::try_new("test_new_root_tls_crt_key_pair_fs").unwrap();
         let secrets = SyncSecrets::new_fs(dir.clone());
         let data_storage = SyncCompactDataStorage::try_new(dir).unwrap();
         for _ in 0..2 {

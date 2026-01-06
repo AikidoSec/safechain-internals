@@ -1,10 +1,13 @@
+use parking_lot::RwLock;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::{path::PathBuf, str::FromStr};
 
 use keyring_core::api::CredentialStoreApi;
+use secrecy::{ExposeSecret, SecretBox};
 
 #[cfg(target_os = "macos")]
-use ::{apple_native_keyring_store::keychain::Store, std::collections::HashMap};
+use apple_native_keyring_store::keychain::Store;
 #[cfg(target_os = "linux")]
 use linux_keyutils_keyring_store::Store;
 #[cfg(target_os = "windows")]
@@ -30,8 +33,15 @@ pub struct SyncSecrets(Backend);
 
 #[derive(Debug, Clone)]
 enum Backend {
-    Fs { dir: PathBuf },
-    KeyRing { store: Arc<Store> },
+    Fs {
+        dir: PathBuf,
+    },
+    KeyRing {
+        store: Arc<Store>,
+    },
+    InMemory {
+        secrets: Arc<RwLock<HashMap<String, SecretBox<Vec<u8>>>>>,
+    },
 }
 
 const AIKIDO_SECRET_SVC: &str = crate::utils::env::project_name();
@@ -60,6 +70,12 @@ impl FromStr for SyncSecrets {
         if s.eq_ignore_ascii_case("keyring") {
             let store = try_new_keychain_store()?;
             return Ok(Self(Backend::KeyRing { store }));
+        }
+
+        if s.eq_ignore_ascii_case("memory") {
+            return Ok(Self(Backend::InMemory {
+                secrets: Arc::new(RwLock::new(HashMap::new())),
+            }));
         }
 
         let dir = PathBuf::from(s);
@@ -107,11 +123,21 @@ impl SyncSecrets {
                     .set_secret(&raw)
                     .with_context(|| format!("set secret for key '{key}'"))
             }
+            Backend::InMemory { secrets } => {
+                tracing::warn!(
+                    "using in-memory secrets storage; CA keypairs and other secrets will be regenerated on each restart"
+                );
+
+                secrets
+                    .write()
+                    .insert(key.to_string(), SecretBox::new(Box::new(raw)));
+                Ok(())
+            }
         }
     }
 
     pub fn load_secret<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, OpaqueError> {
-        let raw = match &self.0 {
+        match &self.0 {
             Backend::Fs { dir } => {
                 tracing::warn!(
                     "secrets storage (load) is using FS @ '{}' (key = '{key}'), ensure to use 'keyring' in production!!!",
@@ -121,31 +147,41 @@ impl SyncSecrets {
                 let path = dir.join(format!("{key}.secret"));
                 tracing::debug!("secrets FS storage (load): {}", path.display());
                 match std::fs::read(&path) {
-                    Ok(v) => v,
-                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                    Ok(raw) => deserialize_secret(&raw, key),
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
                     Err(err) => {
-                        return Err(err.with_context(|| {
+                        Err(err.with_context(|| {
                             format!("get secret for FS path '{}'", path.display())
-                        }));
+                        }))
                     }
                 }
             }
             Backend::KeyRing { store } => {
                 let entry = new_key_ring_entry(store, key)?;
                 match entry.get_secret() {
-                    Ok(v) => v,
-                    Err(keyring_core::Error::NoEntry) => return Ok(None),
-                    Err(err) => {
-                        return Err(err.with_context(|| format!("get secret for key '{key}'")));
-                    }
+                    Ok(raw) => deserialize_secret(&raw, key),
+                    Err(keyring_core::Error::NoEntry) => Ok(None),
+                    Err(err) => Err(err.with_context(|| format!("get secret for key '{key}'"))),
                 }
             }
-        };
-
-        let value: T = postcard::from_bytes(&raw)
-            .with_context(|| format!("(postcard) decode RAW read secret for key '{key}'"))?;
-        Ok(Some(value))
+            Backend::InMemory { secrets } => {
+                if let Some(secret) = secrets.read().get(key) {
+                    deserialize_secret(secret.expose_secret(), key)
+                } else {
+                    Ok(None)
+                }
+            }
+        }
     }
+}
+
+fn deserialize_secret<T: DeserializeOwned>(
+    raw: &[u8],
+    key: &str,
+) -> Result<Option<T>, OpaqueError> {
+    let value: T = postcard::from_bytes(raw)
+        .with_context(|| format!("(postcard) decode RAW read secret for key '{key}'"))?;
+    Ok(Some(value))
 }
 
 #[cfg(target_os = "macos")]
@@ -188,7 +224,7 @@ fn new_key_ring_entry(store: &Store, key: &str) -> Result<keyring_core::Entry, O
 mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use crate::utils::test::unique_empty_temp_dir;
+    use crate::test::tmp_dir;
 
     use super::*;
 
@@ -198,7 +234,7 @@ mod tests {
     #[traced_test]
     #[test]
     fn test_secret_storage_fs_number_store_can_load() {
-        let dir = unique_empty_temp_dir("test_secret_storage_fs_number_store_can_load").unwrap();
+        let dir = tmp_dir::try_new("test_secret_storage_fs_number_store_can_load").unwrap();
         let data_storage = SyncSecrets::new_fs(dir);
 
         const NUMBER: usize = 42;
@@ -257,6 +293,37 @@ mod tests {
         assert_eq!(
             NUMBER,
             data_storage.load_secret::<usize>(&name).unwrap().unwrap()
+        );
+    }
+
+    #[traced_test]
+    #[test]
+    fn test_secret_storage_inmemory_number_store_can_load() {
+        let data_storage = SyncSecrets::from_str("memory").unwrap();
+
+        const NUMBER: usize = 42;
+
+        assert!(
+            data_storage
+                .load_secret::<usize>("number")
+                .unwrap()
+                .is_none()
+        );
+
+        data_storage.store_secret("number", &NUMBER).unwrap();
+
+        assert!(
+            data_storage
+                .load_secret::<usize>("string")
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            NUMBER,
+            data_storage
+                .load_secret::<usize>("number")
+                .unwrap()
+                .unwrap()
         );
     }
 }

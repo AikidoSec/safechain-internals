@@ -5,10 +5,10 @@ use rama::{
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
     http::{
-        HeaderValue, Request, Response,
-        client::EasyHttpWebClient,
+        Body, HeaderValue, Request, Response,
         header::CONTENT_TYPE,
         layer::{
+            map_request_body::MapRequestBodyLayer,
             retry::{ManagedPolicy, RetryLayer},
             timeout::TimeoutLayer,
         },
@@ -19,22 +19,22 @@ use rama::{
     utils::{backoff::ExponentialBackoff, rng::HasherRng},
 };
 
+pub mod layer;
 pub mod malware_list;
 pub mod rule;
 
 mod pac;
-mod utils;
 
 use crate::storage::SyncCompactDataStorage;
 
-use self::rule::BlockRule;
+use self::rule::{RequestAction, Rule};
 
 #[derive(Debug, Clone)]
 pub struct Firewall {
     // NOTE: if we ever want to update these rules on the fly,
     // e.g. removing/adding them, we can ArcSwap these and have
     // a background task update these when needed..
-    block_rules: Arc<Vec<self::rule::DynBlockRule>>,
+    block_rules: Arc<Vec<self::rule::DynRule>>,
 }
 
 impl Firewall {
@@ -42,6 +42,8 @@ impl Firewall {
         guard: ShutdownGuard,
         data: SyncCompactDataStorage,
     ) -> Result<Self, OpaqueError> {
+        let inner_https_client = crate::client::new_web_client()?;
+
         let shared_remote_malware_client = (
             MapErrLayer::new(OpaqueError::from_std),
             TimeoutLayer::new(Duration::from_secs(60)), // NOTE: if you have slow servers this might need to be more
@@ -53,37 +55,39 @@ impl Firewall {
                         0.01,
                         HasherRng::default,
                     )
-                    .unwrap(),
+                    .context("create exponential backoff impl")?,
                 ),
             ),
+            MapRequestBodyLayer::new(Body::new),
         )
-            .into_layer(
-                EasyHttpWebClient::connector_builder()
-                    .with_default_transport_connector()
-                    .without_tls_proxy_support()
-                    .without_proxy_support()
-                    .with_tls_support_using_boringssl(None)
-                    .with_default_http_connector()
-                    // connections are shared between remote fetchers
-                    .try_with_default_connection_pool()
-                    .context("create connection pool for proxy web client")?
-                    .build_client(),
-            )
+            .into_layer(inner_https_client)
             .boxed();
 
         Ok(Self {
             block_rules: Arc::new(vec![
-                self::rule::vscode::BlockRuleVSCode::try_new(
-                    guard,
-                    shared_remote_malware_client,
+                self::rule::vscode::RuleVSCode::try_new(
+                    guard.clone(),
+                    shared_remote_malware_client.clone(),
                     data.clone(),
                 )
                 .await
                 .context("create block rule: vscode")?
                 .into_dyn(),
-                self::rule::chrome::BlockRuleChrome::try_new(data)
+                self::rule::chrome::RuleChrome::try_new(data.clone())
                     .await
                     .context("create block rule: chrome")?
+                    .into_dyn(),
+                self::rule::npm::RuleNpm::try_new(
+                    guard.clone(),
+                    shared_remote_malware_client.clone(),
+                    data.clone(),
+                )
+                .await
+                .context("create block rule: npm")?
+                .into_dyn(),
+                self::rule::pypi::RulePyPI::try_new(guard, shared_remote_malware_client, data)
+                    .await
+                    .context("create block rule: pypi")?
                     .into_dyn(),
             ]),
         })
@@ -95,16 +99,38 @@ impl Firewall {
             .any(|rule| rule.match_domain(domain))
     }
 
-    pub async fn block_request(&self, mut req: Request) -> Result<Option<Request>, OpaqueError> {
+    pub fn into_evaluate_request_layer(self) -> self::layer::evaluate_req::EvaluateRequestLayer {
+        self::layer::evaluate_req::EvaluateRequestLayer(self)
+    }
+
+    pub fn into_evaluate_response_layer(self) -> self::layer::evaluate_resp::EvaluateResponseLayer {
+        self::layer::evaluate_resp::EvaluateResponseLayer(self)
+    }
+
+    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
+        let mut mod_req = req;
+
         for rule in self.block_rules.iter() {
-            match rule.block_request(req).await? {
-                Some(r) => req = r,
-                None => {
-                    return Ok(None);
+            match rule.evaluate_request(mod_req).await? {
+                RequestAction::Allow(new_mod_req) => mod_req = new_mod_req,
+                RequestAction::Block(resp) => {
+                    return Ok(RequestAction::Block(resp));
                 }
             }
         }
-        Ok(Some(req))
+
+        Ok(RequestAction::Allow(mod_req))
+    }
+
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+        let mut mod_resp = resp;
+
+        // Iterate rules in reverse order for symmetry with request evaluation
+        for rule in self.block_rules.iter().rev() {
+            mod_resp = rule.evaluate_response(mod_resp).await?;
+        }
+
+        Ok(mod_resp)
     }
 
     pub fn generate_pac_script_response(
