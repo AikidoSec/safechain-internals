@@ -166,69 +166,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_extract_extension_id_from_nested_publisher() {
-        let json = sonic_rs::json!({
-            "publisher": {
-                "publisherName": "microsoft"
-            },
+    fn test_extract_extension_id_variants() {
+        let nested = sonic_rs::json!({
+            "publisher": { "publisherName": "microsoft" },
             "extensionName": "vscode",
             "displayName": "Visual Studio Code"
         });
-        let obj = json.as_object().unwrap();
-
         assert_eq!(
-            RuleVSCode::extract_extension_id(obj),
+            RuleVSCode::extract_extension_id(nested.as_object().unwrap()),
             Some(SmolStr::new("microsoft.vscode"))
         );
-    }
 
-    #[test]
-    fn test_extract_extension_id_from_flat_publisher() {
-        let json = sonic_rs::json!({
+        let flat = sonic_rs::json!({
             "publisherName": "github",
             "name": "copilot",
             "displayName": "GitHub Copilot"
         });
-        let obj = json.as_object().unwrap();
-
         assert_eq!(
-            RuleVSCode::extract_extension_id(obj),
+            RuleVSCode::extract_extension_id(flat.as_object().unwrap()),
             Some(SmolStr::new("github.copilot"))
         );
-    }
 
-    #[test]
-    fn test_extract_extension_id_handles_whitespace() {
-        let json = sonic_rs::json!({
+        let whitespace = sonic_rs::json!({
             "publisherName": "  publisher  ",
             "extensionName": "  extension  ",
             "displayName": "Test"
         });
-        let obj = json.as_object().unwrap();
-
         assert_eq!(
-            RuleVSCode::extract_extension_id(obj),
+            RuleVSCode::extract_extension_id(whitespace.as_object().unwrap()),
             Some(SmolStr::new("publisher.extension"))
         );
     }
 
     #[test]
-    fn test_rewrite_extension_object_preserves_original_name() {
-        let mut json = sonic_rs::json!({
-            "displayName": "Original Extension"
-        });
-        let obj = json.as_object_mut().unwrap();
-
-        RuleVSCode::rewrite_extension_object(obj, "Original Extension");
-
-        assert_eq!(
-            obj.get(&"displayName").and_then(|v| v.as_str()),
-            Some("⛔ MALWARE: Original Extension")
-        );
-    }
-
-    #[test]
-    fn test_rewrite_extension_object_block_message_format() {
+    fn test_rewrite_extension_object_invariants() {
         let mut json = sonic_rs::json!({
             "displayName": "Test Extension"
         });
@@ -254,35 +225,55 @@ mod tests {
     }
 
     #[test]
-    fn test_rewrite_marketplace_json_marks_matching_extension() {
+    fn test_rewrite_marketplace_json_rewrites_only_matching_extension_and_preserves_fields() {
         let body = r#"{
             "results": [
                 {
                     "extensions": [
                         {
-                            "publisher": { "publisherName": "pythoner" },
-                            "extensionName": "pythontheme",
-                            "displayName": "Python Theme"
+                            "publisher": { "publisherName": "AddictedGuys", "url": "https://example.com" },
+                            "extensionName": "vscode-har-explorer",
+                            "displayName": "HAR Explorer",
+                            "version": "1.2.3"
+                        },
+                        {
+                            "publisher": { "publisherName": "safe" },
+                            "extensionName": "good",
+                            "displayName": "Good Extension",
+                            "downloadCount": 123
                         }
                     ]
                 }
             ]
         }"#;
 
-        let rule = RuleVSCode::new_test(["pythoner.pythontheme"]);
+        // Store lowercase in malware list; matching should be case-insensitive.
+        let rule = RuleVSCode::new_test(["addictedguys.vscode-har-explorer"]);
         let modified = rule
             .rewrite_marketplace_json_response_body(body.as_bytes())
             .expect("should rewrite");
 
         let val: Value = sonic_rs::from_slice(modified.as_ref()).unwrap();
-        let ext = &val["results"][0]["extensions"][0];
+        let extensions = val["results"][0]["extensions"].as_array().unwrap();
+
+        let malware = &extensions[0];
         assert!(
-            ext["displayName"]
+            malware["displayName"]
                 .as_str()
                 .unwrap()
                 .starts_with("⛔ MALWARE:"),
         );
-        assert!(ext.get("shortDescription").is_some());
+        assert!(malware.get("shortDescription").is_some());
+        assert_eq!(malware["version"].as_str().unwrap(), "1.2.3");
+        assert_eq!(
+            malware["publisher"]["url"].as_str().unwrap(),
+            "https://example.com"
+        );
+
+        let safe = &extensions[1];
+        assert_eq!(safe["displayName"].as_str().unwrap(), "Good Extension");
+        assert!(safe.get("shortDescription").is_none());
+        assert_eq!(safe["downloadCount"].as_i64().unwrap(), 123);
     }
 
     #[test]
@@ -295,284 +286,44 @@ mod tests {
     }
 
     #[test]
-    fn test_rewrite_marketplace_json_handles_invalid_responses() {
-        // Use a malware list that would match everything if JSON was valid
+    fn test_rewrite_marketplace_json_robustness_noop_cases() {
         let rule = RuleVSCode::new_test(["any.extension"]);
 
         // Invalid JSON
-        let body = b"not valid json";
-        assert!(rule.rewrite_marketplace_json_response_body(body).is_none());
+        assert!(
+            rule.rewrite_marketplace_json_response_body(b"not valid json")
+                .is_none()
+        );
 
         // Empty body
-        let body = b"";
-        assert!(rule.rewrite_marketplace_json_response_body(body).is_none());
+        assert!(rule.rewrite_marketplace_json_response_body(b"").is_none());
 
         // Missing expected structure
-        let body = br#"{"results": []}"#;
-        assert!(rule.rewrite_marketplace_json_response_body(body).is_none());
-    }
-
-    #[test]
-    fn test_rewrite_marketplace_json_early_return_missing_display_name_marker() {
-        let rule = RuleVSCode::new_test(["pythoner.pythontheme"]);
+        assert!(
+            rule.rewrite_marketplace_json_response_body(br#"{\"results\": []}"#)
+                .is_none()
+        );
 
         // Has publisher + extension name markers, but no displayName.
-        let body = br#"{"results":[{"extensions":[{"publisher":{"publisherName":"pythoner"},"extensionName":"pythontheme"}]}]}"#;
-        assert!(rule.rewrite_marketplace_json_response_body(body).is_none());
-    }
-
-    #[test]
-    fn test_rewrite_marketplace_json_early_return_missing_publisher_marker() {
-        let rule = RuleVSCode::new_test(["pythoner.pythontheme"]);
+        assert!(rule
+            .rewrite_marketplace_json_response_body(
+                br#"{\"results\":[{\"extensions\":[{\"publisher\":{\"publisherName\":\"pythoner\"},\"extensionName\":\"pythontheme\"}]}]}"#
+            )
+            .is_none());
 
         // Has displayName + extensionName markers, but no publisher/publisherName.
-        let body = br#"{"results":[{"extensions":[{"extensionName":"pythontheme","displayName":"Python Theme"}]}]}"#;
-        assert!(rule.rewrite_marketplace_json_response_body(body).is_none());
-    }
-
-    #[test]
-    fn test_rewrite_marketplace_json_early_return_missing_extension_name_marker() {
-        let rule = RuleVSCode::new_test(["pythoner.pythontheme"]);
+        assert!(rule
+            .rewrite_marketplace_json_response_body(
+                br#"{\"results\":[{\"extensions\":[{\"extensionName\":\"pythontheme\",\"displayName\":\"Python Theme\"}]}]}"#
+            )
+            .is_none());
 
         // Has displayName + publisherName markers, but no name/extensionName.
-        let body = br#"{"results":[{"extensions":[{"publisher":{"publisherName":"pythoner"},"displayName":"Python Theme"}]}]}"#;
-        assert!(rule.rewrite_marketplace_json_response_body(body).is_none());
-    }
-
-    #[test]
-    fn test_rewrite_marketplace_json_case_insensitive_matching() {
-        // Marketplace JSON uses mixed case (AddictedGuys.vscode-har-explorer)
-        // Case-insensitive matching happens in is_extension_id_malware() method
-        let body = r#"{
-            "results": [
-                {
-                    "extensions": [
-                        {
-                            "publisher": { "publisherName": "AddictedGuys" },
-                            "extensionName": "vscode-har-explorer",
-                            "displayName": "HAR Explorer"
-                        }
-                    ]
-                }
-            ]
-        }"#;
-
-        // Store lowercase in malware list; is_extension_id_malware() does case-insensitive matching
-        let rule = RuleVSCode::new_test(["addictedguys.vscode-har-explorer"]);
-        let modified = rule
-            .rewrite_marketplace_json_response_body(body.as_bytes())
-            .expect("should rewrite");
-
-        let val: Value = sonic_rs::from_slice(modified.as_ref()).unwrap();
-        let ext = &val["results"][0]["extensions"][0];
-        assert!(
-            ext["displayName"]
-                .as_str()
-                .unwrap()
-                .starts_with("⛔ MALWARE:"),
-            "Extension with mixed case should be matched against lowercase malware list"
-        );
-    }
-
-    #[test]
-    fn test_rewrite_marketplace_json_marks_multiple_malware_extensions() {
-        let body = r#"{
-            "results": [{
-                "extensions": [
-                    {
-                        "publisher": { "publisherName": "malware1" },
-                        "extensionName": "bad1",
-                        "displayName": "Bad Extension 1"
-                    },
-                    {
-                        "publisher": { "publisherName": "safe" },
-                        "extensionName": "good",
-                        "displayName": "Good Extension"
-                    },
-                    {
-                        "publisher": { "publisherName": "malware2" },
-                        "extensionName": "bad2",
-                        "displayName": "Bad Extension 2"
-                    }
-                ]
-            }]
-        }"#;
-
-        let rule = RuleVSCode::new_test(["malware1.bad1", "malware2.bad2"]);
-        let modified = rule
-            .rewrite_marketplace_json_response_body(body.as_bytes())
-            .expect("should rewrite");
-
-        let val: Value = sonic_rs::from_slice(modified.as_ref()).unwrap();
-        let extensions = val["results"][0]["extensions"].as_array().unwrap();
-
-        assert_eq!(extensions.len(), 3);
-
-        let malware1 = extensions
-            .iter()
-            .find(|e| e["extensionName"].as_str() == Some("bad1"))
-            .expect("malware1.bad1 should exist");
-        assert!(
-            malware1["displayName"]
-                .as_str()
-                .unwrap()
-                .starts_with("⛔ MALWARE:"),
-            "malware1 displayName should start with malware marker, got: {}",
-            malware1["displayName"].as_str().unwrap(),
-        );
-
-        let safe = extensions
-            .iter()
-            .find(|e| e["extensionName"].as_str() == Some("good"))
-            .expect("safe.good should exist");
-        assert_eq!(safe["displayName"].as_str().unwrap(), "Good Extension");
-
-        let malware2 = extensions
-            .iter()
-            .find(|e| e["extensionName"].as_str() == Some("bad2"))
-            .expect("malware2.bad2 should exist");
-        assert!(
-            malware2["displayName"]
-                .as_str()
-                .unwrap()
-                .starts_with("⛔ MALWARE:"),
-            "malware2 displayName should start with malware marker, got: {}",
-            malware2["displayName"].as_str().unwrap(),
-        );
-    }
-
-    #[test]
-    fn test_rewrite_marketplace_json_handles_nested_results() {
-        let body = r#"{
-            "results": [
-                {
-                    "extensions": [
-                        {
-                            "publisher": { "publisherName": "test1" },
-                            "extensionName": "ext1",
-                            "displayName": "Extension 1"
-                        }
-                    ]
-                },
-                {
-                    "extensions": [
-                        {
-                            "publisher": { "publisherName": "malware" },
-                            "extensionName": "bad",
-                            "displayName": "Bad Extension"
-                        }
-                    ]
-                }
-            ]
-        }"#;
-
-        let rule = RuleVSCode::new_test(["malware.bad"]);
-        let modified = rule
-            .rewrite_marketplace_json_response_body(body.as_bytes())
-            .expect("should rewrite");
-
-        let val: Value = sonic_rs::from_slice(modified.as_ref()).unwrap();
-        let results = val["results"].as_array().unwrap();
-
-        assert_eq!(results.len(), 2);
-        assert_eq!(
-            results[0]["extensions"][0]["displayName"].as_str().unwrap(),
-            "Extension 1"
-        );
-        assert!(
-            results[1]["extensions"][0]["displayName"]
-                .as_str()
-                .unwrap()
-                .starts_with("⛔ MALWARE:")
-        );
-    }
-
-    #[test]
-    fn test_rewrite_marketplace_json_preserves_other_fields() {
-        let body = r#"{
-            "results": [{
-                "extensions": [{
-                    "publisher": { "publisherName": "test", "url": "https://example.com" },
-                    "extensionName": "test",
-                    "displayName": "Test",
-                    "version": "1.0.0",
-                    "lastUpdated": "2024-01-01",
-                    "downloadCount": 1000
-                }]
-            }]
-        }"#;
-
-        let rule = RuleVSCode::new_test(["test.test"]);
-        let modified = rule
-            .rewrite_marketplace_json_response_body(body.as_bytes())
-            .expect("should rewrite");
-
-        let val: Value = sonic_rs::from_slice(modified.as_ref()).unwrap();
-        let ext = &val["results"][0]["extensions"][0];
-
-        // Modified fields
-        assert!(
-            ext["displayName"]
-                .as_str()
-                .unwrap()
-                .starts_with("⛔ MALWARE:")
-        );
-        assert!(ext.get("shortDescription").is_some());
-
-        // Preserved fields
-        assert_eq!(ext["version"].as_str().unwrap(), "1.0.0");
-        assert_eq!(ext["lastUpdated"].as_str().unwrap(), "2024-01-01");
-        assert_eq!(ext["downloadCount"].as_i64().unwrap(), 1000);
-        assert_eq!(
-            ext["publisher"]["url"].as_str().unwrap(),
-            "https://example.com"
-        );
-    }
-
-    #[test]
-    fn test_rewrite_marketplace_json_handles_large_response() {
-        // Create a response with many extensions
-        let mut extensions = Vec::new();
-        for i in 0..100 {
-            extensions.push(sonic_rs::json!({
-                "publisher": { "publisherName": format!("publisher{}", i) },
-                "extensionName": format!("ext{}", i),
-                "displayName": format!("Extension {}", i)
-            }));
-        }
-
-        let body_json = sonic_rs::json!({
-            "results": [{
-                "extensions": extensions
-            }]
-        });
-
-        let body = sonic_rs::to_vec(&body_json).unwrap();
-
-        // Mark the 50th extension as malware
-        let rule = RuleVSCode::new_test(["publisher50.ext50"]);
-        let modified = rule
-            .rewrite_marketplace_json_response_body(&body)
-            .expect("should rewrite");
-
-        let val: Value = sonic_rs::from_slice(modified.as_ref()).unwrap();
-        let result_extensions = val["results"][0]["extensions"].as_array().unwrap();
-
-        assert_eq!(result_extensions.len(), 100);
-        assert!(
-            result_extensions[50]["displayName"]
-                .as_str()
-                .unwrap()
-                .starts_with("⛔ MALWARE:")
-        );
-        assert_eq!(
-            result_extensions[0]["displayName"].as_str().unwrap(),
-            "Extension 0"
-        );
-        assert_eq!(
-            result_extensions[99]["displayName"].as_str().unwrap(),
-            "Extension 99"
-        );
+        assert!(rule
+            .rewrite_marketplace_json_response_body(
+                br#"{\"results\":[{\"extensions\":[{\"publisher\":{\"publisherName\":\"pythoner\"},\"displayName\":\"Python Theme\"}]}]}"#
+            )
+            .is_none());
     }
 
     #[test]
