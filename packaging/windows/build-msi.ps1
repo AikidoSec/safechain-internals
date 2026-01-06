@@ -38,15 +38,9 @@ Write-Host "  Project directory: $ProjectDir"
 
 # Verify required binaries exist
 $AgentExe = Join-Path $BinDir "SafeChainAgent.exe"
-$SetupExe = Join-Path $BinDir "SafeChainSetup.exe"
 
 if (-not (Test-Path $AgentExe)) {
     Write-Host "Error: SafeChainAgent.exe not found at $AgentExe" -ForegroundColor Red
-    exit 1
-}
-
-if (-not (Test-Path $SetupExe)) {
-    Write-Host "Error: SafeChainSetup.exe not found at $SetupExe" -ForegroundColor Red
     exit 1
 }
 

@@ -18,7 +18,6 @@ Start PowerShell as Administrator and run:
 ```powershell
 Invoke-WebRequest -Uri "https://github.com/AikidoSec/safechain-agent/releases/latest/download/SafeChainAgent.amd64.msi" -OutFile "SafeChainAgent.msi"
 msiexec /i SafeChainAgent.msi /qn /norestart
-SafeChainSetup.exe
 ```
 
 ## Proxy

@@ -46,9 +46,6 @@
                         Remove="uninstall"
                         Wait="yes" />
       </Component>
-      <Component Id="AikidoSetupExe" Guid="7b4e9d2f-8c3a-4b5e-9f1d-2e6a8c4b7d9e">
-        <File Id="AikidoSetupExeFile" Source="$(var.BinDir)\SafeChainSetup.exe" KeyPath="yes" />
-      </Component>
     </ComponentGroup>
 
     <!-- Add to PATH -->
