@@ -46,7 +46,7 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 	installDir := filepath.Dir(binaryPath)
 
 	if err := os.MkdirAll(installDir, 0755); err != nil {
-		return fmt.Errorf("failed to create install directory: %w", err)
+		return fmt.Errorf("failed to create install directory %s: %w", installDir, err)
 	}
 
 	downloadURL := fmt.Sprintf("%s/releases/download/%s/%s", repoURL, version, binaryName)

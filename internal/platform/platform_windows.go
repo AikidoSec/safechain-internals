@@ -21,10 +21,10 @@ func initConfig() error {
 	return nil
 }
 
-// prepareShellEnvironment sets the PowerShell execution policy to RemoteSigned for the current user.
+// PrepareShellEnvironment sets the PowerShell execution policy to RemoteSigned for the current user.
 // This is necessary to allow the safe-chain binary to execute PowerShell scripts during setup,
 // such as modifying the PowerShell profile for shell integration.
-func prepareShellEnvironment(ctx context.Context) error {
+func PrepareShellEnvironment(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "powershell", "-Command",
 		"Set-ExecutionPolicy", "-ExecutionPolicy", "RemoteSigned", "-Scope", "CurrentUser", "-Force")
 	cmd.Stdout = os.Stdout
@@ -32,7 +32,7 @@ func prepareShellEnvironment(ctx context.Context) error {
 	return cmd.Run()
 }
 
-func setupLogging() (io.Writer, error) {
+func SetupLogging() (io.Writer, error) {
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return os.Stdout, err
 	}
@@ -46,22 +46,22 @@ func setupLogging() (io.Writer, error) {
 	return io.MultiWriter(os.Stdout, f), nil
 }
 
-func setSystemProxy(ctx context.Context, proxyURL string) error {
+func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	return nil
 }
 
-func unsetSystemProxy(ctx context.Context) error {
+func UnsetSystemProxy(ctx context.Context) error {
 	return nil
 }
 
-func installProxyCA(ctx context.Context, caCertPath string) error {
+func InstallProxyCA(ctx context.Context, caCertPath string) error {
 	return nil
 }
 
-func isProxyCAInstalled(ctx context.Context) bool {
+func IsProxyCAInstalled(ctx context.Context) bool {
 	return false
 }
 
-func uninstallProxyCA(ctx context.Context) error {
+func UninstallProxyCA(ctx context.Context) error {
 	return nil
 }

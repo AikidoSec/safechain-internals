@@ -34,11 +34,11 @@ func initConfig() error {
 	return nil
 }
 
-func prepareShellEnvironment(_ context.Context) error {
+func PrepareShellEnvironment(_ context.Context) error {
 	return nil
 }
 
-func setupLogging() (io.Writer, error) {
+func SetupLogging() (io.Writer, error) {
 	return os.Stdout, nil
 }
 
@@ -69,7 +69,7 @@ func getNetworkServices(ctx context.Context) ([]string, error) {
 	return services, nil
 }
 
-func setSystemProxy(ctx context.Context, proxyURL string) error {
+func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	parsed, err := url.Parse(proxyURL)
 	if err != nil {
 		return err
@@ -101,7 +101,7 @@ func setSystemProxy(ctx context.Context, proxyURL string) error {
 	return nil
 }
 
-func unsetSystemProxy(ctx context.Context) error {
+func UnsetSystemProxy(ctx context.Context) error {
 	services, err := getNetworkServices(ctx)
 	if err != nil {
 		return err
@@ -121,7 +121,7 @@ func unsetSystemProxy(ctx context.Context) error {
 	return nil
 }
 
-func installProxyCA(ctx context.Context, certPath string) error {
+func InstallProxyCA(ctx context.Context, certPath string) error {
 	cmd := exec.CommandContext(ctx, "security", "add-trusted-cert",
 		"-d",
 		"-r", "trustRoot",
@@ -135,7 +135,7 @@ func installProxyCA(ctx context.Context, certPath string) error {
 	return nil
 }
 
-func isProxyCAInstalled(ctx context.Context) bool {
+func IsProxyCAInstalled(ctx context.Context) bool {
 	cmd := exec.CommandContext(ctx, "security", "find-certificate",
 		"-c", "aikido.dev",
 		"/Library/Keychains/System.keychain")
@@ -147,7 +147,7 @@ func isProxyCAInstalled(ctx context.Context) bool {
 	return true
 }
 
-func uninstallProxyCA(ctx context.Context) error {
+func UninstallProxyCA(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "security", "delete-certificate",
 		"-c", "aikido.dev",
 		"/Library/Keychains/System.keychain")
