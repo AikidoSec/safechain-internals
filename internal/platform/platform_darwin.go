@@ -18,17 +18,13 @@ import (
 var serviceRegex = regexp.MustCompile(`^\((\d+)\)\s+(.+)$`)
 var deviceRegex = regexp.MustCompile(`Device:\s*(en\d+)`)
 
-func initConfig(originalUser string) error {
+func initConfig() error {
 	var homeDir string
-	if originalUser != "" {
-		homeDir = filepath.Join("/Users", originalUser)
-	} else {
-		var err error
-		homeDir, err = os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("failed to get home directory: %v", err)
-		}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %v", err)
 	}
+	log.Println("Home directory:", homeDir)
 
 	safeChainHomeDir := filepath.Join(homeDir, ".safe-chain")
 	config.BinaryDir = "/opt/homebrew/bin"

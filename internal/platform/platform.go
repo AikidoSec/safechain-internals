@@ -18,8 +18,8 @@ type Config struct {
 
 var config Config
 
-func Init(originalUser string) error {
-	if err := initConfig(originalUser); err != nil {
+func Init() error {
+	if err := initConfig(); err != nil {
 		return err
 	}
 

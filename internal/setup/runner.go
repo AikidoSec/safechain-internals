@@ -3,56 +3,40 @@ package setup
 import (
 	"context"
 	"fmt"
-	"os"
+	"log"
 	"slices"
 
-	"github.com/AikidoSec/safechain-agent/internal/platform"
+	install_proxy_ca "github.com/AikidoSec/safechain-agent/internal/setup/steps/01_install_proxy_ca"
+	set_system_proxy "github.com/AikidoSec/safechain-agent/internal/setup/steps/02_set_system_proxy"
 )
 
 type Runner struct {
 	steps     []Step
-	Uninstall bool
-	prompter  *Prompter
+	uninstall bool
 }
 
-func NewRunner(prompter *Prompter, uninstall bool) *Runner {
+func NewRunner(uninstall bool) *Runner {
 	return &Runner{
-		steps:     make([]Step, 0),
-		prompter:  prompter,
-		Uninstall: uninstall,
+		steps: []Step{
+			install_proxy_ca.New(),
+			set_system_proxy.New(),
+		},
+		uninstall: uninstall,
 	}
-}
-
-func (r *Runner) AddStep(step Step) {
-	r.steps = append(r.steps, step)
-}
-
-func (r *Runner) OriginalUser() string {
-	if u := os.Getenv("SUDO_USER"); u != "" {
-		return u
-	}
-	if u := os.Getenv("USER"); u != "" {
-		return u
-	}
-	return "root"
 }
 
 func (r *Runner) Run(ctx context.Context) error {
 	total := len(r.steps)
 	if total == 0 {
-		r.prompter.Println("No setup steps to run.")
+		log.Println("No setup steps to run.")
 		return nil
 	}
 
-	if err := platform.Init(r.OriginalUser()); err != nil {
-		return fmt.Errorf("failed to initialize platform: %v", err)
-	}
+	log.Println("SafeChain Setup")
+	log.Println("================")
+	log.Printf("This setup will run %d step(s).\n\n", total)
 
-	r.prompter.Println("SafeChain Setup")
-	r.prompter.Println("================")
-	r.prompter.Print("This setup will run %d step(s).\n\n", total)
-
-	if r.Uninstall {
+	if r.uninstall {
 		slices.Reverse(r.steps)
 	}
 
@@ -65,26 +49,16 @@ func (r *Runner) Run(ctx context.Context) error {
 
 		name := step.InstallName()
 		description := step.InstallDescription()
-		if r.Uninstall {
+		if r.uninstall {
 			name = step.UninstallName()
 			description = step.UninstallDescription()
 		}
 
-		r.prompter.Print("[%d/%d] %s\n", i+1, total, name)
-		r.prompter.Print("      %s\n\n", description)
-
-		confirmed, err := r.prompter.Confirm("Proceed with this step?")
-		if err != nil {
-			return fmt.Errorf("failed to read confirmation: %w", err)
-		}
-
-		if !confirmed {
-			r.prompter.Println("Setup cancelled by user.")
-			return fmt.Errorf("user declined to proceed with step %q", name)
-		}
+		log.Printf("[%d/%d] %s\n", i+1, total, name)
+		log.Printf("      %s\n\n", description)
 
 		functionToRun := step.Install
-		if r.Uninstall {
+		if r.uninstall {
 			functionToRun = step.Uninstall
 		}
 
@@ -92,11 +66,11 @@ func (r *Runner) Run(ctx context.Context) error {
 			return fmt.Errorf("%q failed: %w", name, err)
 		}
 
-		r.prompter.Println("✓ Step completed successfully")
-		r.prompter.Println()
+		log.Println("Step completed successfully")
+		log.Println()
 	}
 
-	if r.Uninstall {
+	if r.uninstall {
 		RemoveSetupFinishedMarker()
 	} else {
 		if err := CreateSetupFinishedMarker(); err != nil {
@@ -104,8 +78,8 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
-	r.prompter.Println("================")
-	r.prompter.Println("Setup complete!")
+	log.Println("================")
+	log.Println("Setup complete!")
 
 	return nil
 }

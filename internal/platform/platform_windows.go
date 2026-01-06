@@ -12,7 +12,7 @@ import (
 
 var logDir = filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent", "logs")
 
-func initConfig(_ string) error {
+func initConfig() error {
 	safeChainHomeDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChain")
 	config.LogDir = filepath.Join(safeChainHomeDir, "logs")
 	config.RunDir = filepath.Join(safeChainHomeDir, "run")

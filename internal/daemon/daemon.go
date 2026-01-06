@@ -86,8 +86,12 @@ func (d *Daemon) Stop(ctx context.Context) error {
 			log.Printf("Error uninstalling scanners: %v", err)
 		}
 
-		if stopErr := d.proxy.Stop(); stopErr != nil {
-			log.Printf("Error stopping proxy: %v", stopErr)
+		if err := setup.Uninstall(ctx); err != nil {
+			log.Printf("Error uninstalling setup: %v", err)
+		}
+
+		if err := d.proxy.Stop(); err != nil {
+			log.Printf("Error stopping proxy: %v", err)
 		}
 
 		d.cancel()
@@ -117,12 +121,16 @@ func (d *Daemon) run(ctx context.Context) error {
 
 	log.Println("Daemon is running...")
 
-	if err := platform.Init(""); err != nil {
+	if err := platform.Init(); err != nil {
 		return fmt.Errorf("failed to initialize platform: %v", err)
 	}
 
 	if err := d.proxy.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start proxy: %v", err)
+	}
+
+	if err := setup.Install(ctx); err != nil {
+		return fmt.Errorf("failed to install setup: %v", err)
 	}
 
 	if err := d.registry.InstallAll(ctx); err != nil {
