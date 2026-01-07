@@ -5,9 +5,13 @@ package platform
 import (
 	"context"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
+
+	"golang.org/x/sys/windows/svc"
 )
 
 var logDir = filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent", "logs")
@@ -64,4 +68,73 @@ func IsProxyCAInstalled(ctx context.Context) bool {
 
 func UninstallProxyCA(ctx context.Context) error {
 	return nil
+}
+
+type ServiceRunner interface {
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
+}
+
+type windowsService struct {
+	runner ServiceRunner
+}
+
+func (s *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
+	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
+	changes <- svc.Status{State: svc.StartPending}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errChan := make(chan error, 1)
+	go func() {
+		if err := s.runner.Start(ctx); err != nil {
+			errChan <- err
+		}
+	}()
+
+	changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
+
+loop:
+	for {
+		select {
+		case err := <-errChan:
+			log.Printf("Service runner error: %v", err)
+			break loop
+		case c := <-r:
+			switch c.Cmd {
+			case svc.Interrogate:
+				changes <- c.CurrentStatus
+			case svc.Stop, svc.Shutdown:
+				log.Printf("Received service control: %v", c.Cmd)
+				break loop
+			default:
+				log.Printf("Unexpected service control request: %v", c.Cmd)
+			}
+		}
+	}
+
+	changes <- svc.Status{State: svc.StopPending}
+	cancel()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+	if err := s.runner.Stop(shutdownCtx); err != nil {
+		log.Printf("Error during shutdown: %v", err)
+	}
+
+	return false, 0
+}
+
+func IsWindowsService() bool {
+	isService, err := svc.IsWindowsService()
+	if err != nil {
+		log.Printf("Failed to determine if running as Windows service: %v", err)
+		return false
+	}
+	return isService
+}
+
+func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
+	return svc.Run(serviceName, &windowsService{runner: runner})
 }

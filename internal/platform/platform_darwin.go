@@ -158,3 +158,16 @@ func UninstallProxyCA(ctx context.Context) error {
 	}
 	return nil
 }
+
+type ServiceRunner interface {
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
+}
+
+func IsWindowsService() bool {
+	return false
+}
+
+func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
+	return nil
+}
