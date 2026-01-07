@@ -14,7 +14,7 @@ import (
 const (
 	ProxyBind          = "127.0.0.1:7654"
 	ProxyMeta          = "127.0.0.1:7655"
-	ProxyReadyTimeout  = 60 * time.Second
+	ProxyReadyTimeout  = 10 * time.Second
 	ProxyReadyInterval = 1 * time.Second
 )
 
@@ -55,7 +55,7 @@ func (p *Proxy) Start(ctx context.Context) error {
 		"--meta", ProxyMeta,
 		"--data", platform.GetProxyRunDir(),
 		"--output", filepath.Join(config.LogDir, "safechain-proxy.log"),
-		"--secrets", platform.GetProxyRunDir(),
+		"--secrets", "memory",
 	)
 
 	log.Println("Starting Safe Chain Proxy with command:", p.cmd.String())
