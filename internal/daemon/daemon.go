@@ -44,7 +44,7 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 }
 
 func (d *Daemon) Start(ctx context.Context) error {
-	log.Print("Starting Safe Chain Daemon:\n", version.Info())
+	log.Print("Starting SafeChain Daemon:\n", version.Info())
 
 	mergedCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -65,7 +65,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 
 	select {
 	case <-mergedCtx.Done():
-		log.Println("Safe Chain Daemon main loop stopped")
+		log.Println("SafeChain Daemon main loop stopped")
 	case err := <-errCh:
 		if err != nil {
 			d.wg.Wait()
@@ -80,7 +80,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 func (d *Daemon) Stop(ctx context.Context) error {
 	var err error
 	d.stopOnce.Do(func() {
-		log.Println("Stopping Safe Chain Daemon...")
+		log.Println("Stopping SafeChain Daemon...")
 
 		if err := d.registry.UninstallAll(ctx); err != nil {
 			log.Printf("Error uninstalling scanners: %v", err)
@@ -104,7 +104,7 @@ func (d *Daemon) Stop(ctx context.Context) error {
 
 		select {
 		case <-done:
-			log.Println("Safe Chain Daemon stopped successfully")
+			log.Println("SafeChain Daemon stopped successfully")
 		case <-ctx.Done():
 			err = fmt.Errorf("timeout waiting for daemon to stop")
 			log.Println("Timeout waiting for daemon to stop")

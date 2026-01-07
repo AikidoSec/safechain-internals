@@ -31,7 +31,7 @@ if (-not (Test-Path $OutputDir)) {
 $ProjectDir = (Get-Item (Split-Path -Parent $MyInvocation.MyCommand.Path)).Parent.Parent.FullName
 $WxsFile = Join-Path $ProjectDir "packaging\windows\SafeChainAgent.wxs"
 
-Write-Host "Building MSI installer for Aikido Safe Chain Agent v$Version (WiX version: $WixVersion)"
+Write-Host "Building MSI installer for Aikido SafeChain Agent v$Version (WiX version: $WixVersion)"
 Write-Host "  Binary directory: $BinDir"
 Write-Host "  Output directory: $OutputDir"
 Write-Host "  Project directory: $ProjectDir"

@@ -50,15 +50,15 @@ func (p *Proxy) Start(ctx context.Context) error {
 	config := platform.GetConfig()
 	p.ctx, p.cancel = context.WithCancel(ctx)
 	p.cmd = exec.CommandContext(p.ctx,
-		filepath.Join(config.BinaryDir, "safechain-proxy"),
+		filepath.Join(config.BinaryDir, platform.SafeChainProxyBinaryName),
 		"--bind", ProxyBind,
 		"--meta", ProxyMeta,
 		"--data", platform.GetProxyRunDir(),
-		"--output", filepath.Join(config.LogDir, "safechain-proxy.log"),
+		"--output", filepath.Join(config.LogDir, platform.SafeChainProxyLogName),
 		"--secrets", "memory",
 	)
 
-	log.Println("Starting Safe Chain Proxy with command:", p.cmd.String())
+	log.Println("Starting SafeChain Proxy with command:", p.cmd.String())
 
 	if err := p.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start proxy: %v", err)
@@ -71,7 +71,7 @@ func (p *Proxy) Start(ctx context.Context) error {
 
 	log.Println("Proxy URL:", ProxyHttpUrl)
 	log.Println("Meta URL:", MetaHttpUrl)
-	log.Println("Safe Chain Proxy started successfully!")
+	log.Println("SafeChain Proxy started successfully!")
 	return nil
 }
 
@@ -80,7 +80,7 @@ func (p *Proxy) IsProxyRunning() bool {
 }
 
 func (p *Proxy) Stop() error {
-	log.Println("Stopping Safe Chain Proxy...")
+	log.Println("Stopping SafeChain Proxy...")
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -88,6 +88,6 @@ func (p *Proxy) Stop() error {
 		_ = p.cmd.Wait()
 	}
 
-	log.Println("Safe Chain Proxy stopped successfully!")
+	log.Println("SafeChain Proxy stopped successfully!")
 	return nil
 }

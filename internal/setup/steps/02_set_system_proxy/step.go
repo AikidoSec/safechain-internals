@@ -21,7 +21,7 @@ func (s *Step) InstallName() string {
 }
 
 func (s *Step) InstallDescription() string {
-	return "Configures the system-level proxy to route traffic through Safe Chain Proxy"
+	return "Configures the system-level proxy to route traffic through SafeChain Proxy"
 }
 
 func (s *Step) UninstallName() string {

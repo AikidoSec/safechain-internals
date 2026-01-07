@@ -24,7 +24,7 @@ func (s *Step) InstallName() string {
 }
 
 func (s *Step) InstallDescription() string {
-	return "Installs the Safe Chain Proxy certificate authority"
+	return "Installs the SafeChain Proxy certificate authority"
 }
 
 func (s *Step) UninstallName() string {

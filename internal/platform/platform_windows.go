@@ -14,14 +14,17 @@ import (
 	"golang.org/x/sys/windows/svc"
 )
 
-var logDir = filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent", "logs")
+const (
+	SafeChainProxyBinaryName = "SafeChainProxy.exe"
+	SafeChainProxyLogName    = "SafeChainProxy.log"
+)
 
 func initConfig() error {
-	safeChainHomeDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChain")
-	config.LogDir = filepath.Join(safeChainHomeDir, "logs")
-	config.RunDir = filepath.Join(safeChainHomeDir, "run")
-	config.SafeChainBinaryPath = filepath.Join(safeChainHomeDir, "bin", "safe-chain.exe")
-	config.SafeChainProxyRunDir = filepath.Join(safeChainHomeDir, "run", "safechain-proxy")
+	programDataDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent")
+	config.BinaryDir = "C:\\Program Files\\SafeChainAgent"
+	config.LogDir = filepath.Join(programDataDir, "logs")
+	config.RunDir = filepath.Join(programDataDir, "run")
+	config.SafeChainBinaryPath = filepath.Join(programDataDir, "bin", "safe-chain.exe")
 	return nil
 }
 
@@ -37,11 +40,11 @@ func PrepareShellEnvironment(ctx context.Context) error {
 }
 
 func SetupLogging() (io.Writer, error) {
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(config.LogDir, 0755); err != nil {
 		return os.Stdout, err
 	}
 
-	logPath := filepath.Join(logDir, "safechain-agent.log")
+	logPath := filepath.Join(config.LogDir, "SafeChainAgent.log")
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return os.Stdout, err

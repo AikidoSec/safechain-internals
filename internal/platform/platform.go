@@ -7,11 +7,10 @@ import (
 )
 
 type Config struct {
-	BinaryDir            string
-	RunDir               string
-	LogDir               string
-	SafeChainBinaryPath  string
-	SafeChainProxyRunDir string
+	BinaryDir           string
+	RunDir              string
+	LogDir              string
+	SafeChainBinaryPath string
 }
 
 var config Config

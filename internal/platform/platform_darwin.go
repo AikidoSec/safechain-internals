@@ -15,6 +15,11 @@ import (
 	"strings"
 )
 
+const (
+	SafeChainProxyBinaryName = "safechain-proxy"
+	SafeChainProxyLogName    = "safechain-proxy.log"
+)
+
 var serviceRegex = regexp.MustCompile(`^\((\d+)\)\s+(.+)$`)
 var deviceRegex = regexp.MustCompile(`Device:\s*(en\d+)`)
 
