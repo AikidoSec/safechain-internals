@@ -97,7 +97,7 @@ impl RuleVSCode {
     ///
     /// Returns `true` if the object was rewritten.
     fn mark_extension_if_malware(&self, value: &mut Value) -> bool {
-        let (display_name_str, extension_id) = {
+        let (malware_display, extension_id) = {
             let Some(obj) = value.as_object() else {
                 return false;
             };
@@ -116,7 +116,7 @@ impl RuleVSCode {
                 return false;
             }
 
-            (display_name.to_string(), extension_id)
+            (format!("⛔ MALWARE: {display_name}"), extension_id)
         };
 
         tracing::info!(
@@ -125,7 +125,7 @@ impl RuleVSCode {
         );
 
         if let Some(obj_mut) = value.as_object_mut() {
-            Self::rewrite_extension_object(obj_mut, &display_name_str);
+            Self::rewrite_extension_object(obj_mut, &malware_display);
         }
         true
     }
@@ -151,9 +151,8 @@ impl RuleVSCode {
         Some(format_smolstr!("{publisher}.{name}"))
     }
 
-    fn rewrite_extension_object(obj: &mut sonic_rs::Object, original_name: &str) {
-        let malware_display = format!("⛔ MALWARE: {original_name}");
-        obj.insert("displayName", Value::from(malware_display.as_str()));
+    fn rewrite_extension_object(obj: &mut sonic_rs::Object, malware_display: &str) {
+        obj.insert("displayName", Value::from(malware_display));
 
         const BLOCK_MSG: &str = "This extension has been marked as malware by Aikido safe-chain. Installation will be blocked.";
 
@@ -205,7 +204,7 @@ mod tests {
         });
         let obj = json.as_object_mut().unwrap();
 
-        RuleVSCode::rewrite_extension_object(obj, "Test Extension");
+        RuleVSCode::rewrite_extension_object(obj, "⛔ MALWARE: Test Extension");
 
         assert_eq!(
             obj.get(&"displayName").and_then(|v| v.as_str()),
