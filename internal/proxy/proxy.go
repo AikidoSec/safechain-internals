@@ -85,9 +85,7 @@ func (p *Proxy) Stop() error {
 		p.cancel()
 	}
 	if p.cmd != nil && p.cmd.Process != nil {
-		if err := p.cmd.Wait(); err != nil {
-			return fmt.Errorf("failed to wait for proxy: %v", err)
-		}
+		_ = p.cmd.Wait()
 	}
 
 	log.Println("Safe Chain Proxy stopped successfully!")
