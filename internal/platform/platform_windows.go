@@ -21,7 +21,7 @@ const (
 
 func initConfig() error {
 	programDataDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent")
-	config.BinaryDir = "C:\\Program Files\\SafeChainAgent\\bin"
+	config.BinaryDir = "C:\\Program Files\\AikidoSecurity\\SafeChainAgent\\bin"
 	config.LogDir = filepath.Join(programDataDir, "logs")
 	config.RunDir = filepath.Join(programDataDir, "run")
 	config.SafeChainBinaryPath = filepath.Join(programDataDir, "bin", "safe-chain.exe")
