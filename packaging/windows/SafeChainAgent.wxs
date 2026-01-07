@@ -38,7 +38,7 @@
                         Start="auto"
                         Type="ownProcess"
                         ErrorControl="normal"
-                        Account="NT AUTHORITY\LocalService" />
+                        Account="LocalSystem" />
         <ServiceControl Id="SafeChainAgentServiceControl"
                         Name="SafeChainAgent"
                         Start="install"
