@@ -38,9 +38,15 @@ Write-Host "  Project directory: $ProjectDir"
 
 # Verify required binaries exist
 $AgentExe = Join-Path $BinDir "SafeChainAgent.exe"
+$ProxyExe = Join-Path $BinDir "SafeChainProxy.exe"
 
 if (-not (Test-Path $AgentExe)) {
     Write-Host "Error: SafeChainAgent.exe not found at $AgentExe" -ForegroundColor Red
+    exit 1
+}
+
+if (-not (Test-Path $ProxyExe)) {
+    Write-Host "Error: SafeChainProxy.exe not found at $ProxyExe" -ForegroundColor Red
     exit 1
 }
 

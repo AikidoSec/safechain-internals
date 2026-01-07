@@ -46,6 +46,9 @@
                         Remove="uninstall"
                         Wait="yes" />
       </Component>
+      <Component Id="SafeChainProxyExe" Guid="8a745110-05f7-4bb8-8013-5fca733409ef">
+        <File Id="SafeChainProxyExeFile" Source="$(var.BinDir)\SafeChainProxy.exe" KeyPath="yes" />
+      </Component>
     </ComponentGroup>
 
     <!-- Add to PATH -->
