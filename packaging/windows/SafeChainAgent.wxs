@@ -61,12 +61,6 @@
       <Component Id="SafeChainProxyExe" Guid="8a745110-05f7-4bb8-8013-5fca733409ef">
         <File Id="SafeChainProxyExeFile" Source="$(var.BinDir)\SafeChainProxy.exe" KeyPath="yes" />
       </Component>
-      <Component Id="VCRuntime140" Guid="d4a2e7f8-9b3c-4e5d-a6f7-8c9d0e1f2a3b">
-        <File Id="VCRuntime140Dll" Source="$(var.BinDir)\vcruntime140.dll" KeyPath="yes" />
-      </Component>
-      <Component Id="VCRuntime140_1" Guid="e5b3f8a9-0c4d-5f6e-b7a8-9d0e1f2a3b4c">
-        <File Id="VCRuntime140_1Dll" Source="$(var.BinDir)\vcruntime140_1.dll" KeyPath="yes" />
-      </Component>
     </ComponentGroup>
 
     <!-- Add to PATH -->

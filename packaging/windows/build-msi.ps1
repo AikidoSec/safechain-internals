@@ -50,22 +50,6 @@ if (-not (Test-Path $ProxyExe)) {
     exit 1
 }
 
-# Copy VC Runtime DLLs
-$VCRuntimeFiles = @("vcruntime140.dll", "vcruntime140_1.dll")
-$VCRuntimeSource = "$env:SystemRoot\System32"
-
-foreach ($dll in $VCRuntimeFiles) {
-    $sourcePath = Join-Path $VCRuntimeSource $dll
-    $destPath = Join-Path $BinDir $dll
-    
-    if (Test-Path $sourcePath) {
-        Copy-Item -Path $sourcePath -Destination $destPath -Force
-        Write-Host "  Copied $dll from System32"
-    } else {
-        Write-Host "Warning: $dll not found in System32, MSI build may fail" -ForegroundColor Yellow
-    }
-}
-
 # Build the MSI
 $OutputMsi = Join-Path $OutputDir "SafeChainAgent.$Arch.msi"
 $WixArch = if ($Arch -eq "arm64") { "arm64" } else { "x64" }
