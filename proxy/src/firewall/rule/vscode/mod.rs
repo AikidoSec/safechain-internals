@@ -255,21 +255,22 @@ impl RuleVSCode {
         let parts: SmallVec<[&str; 8]> = path.splitn(8, '/').collect();
 
         // Pattern: files/<publisher>/<extension>/<version>/...
-        if parts.first() == Some(&"files") && parts.len() >= 4 {
+        if parts.len() >= 4 
+        && parts[0].eq_ignore_ascii_case("files") {
             return Some(format_smolstr!("{}.{}", parts[1], parts[2]));
         }
 
         // Pattern: extensions/<publisher>/<extension>/...
-        if parts.first() == Some(&"extensions") && parts.len() >= 3 {
+        if parts.len() >= 3 && parts[0].eq_ignore_ascii_case("extensions") {
             return Some(format_smolstr!("{}.{}", parts[1], parts[2]));
         }
 
         // Pattern: _apis/public/gallery/publishers/<publisher>/vsextensions/<extension>/...
         if parts.len() >= 7
-            && parts[0] == "_apis"
-            && parts[1] == "public"
-            && parts[2] == "gallery"
-            && parts[3] == "publishers"
+            && parts[0].eq_ignore_ascii_case("_apis")
+            && parts[1].eq_ignore_ascii_case("public")
+            && parts[2].eq_ignore_ascii_case("gallery")
+            && parts[3].eq_ignore_ascii_case("publishers")
             && (parts[5].eq_ignore_ascii_case("vsextensions")
                 || parts[5].eq_ignore_ascii_case("extensions"))
         {
@@ -279,10 +280,10 @@ impl RuleVSCode {
         // Pattern: _apis/public/gallery/publisher/<publisher>/<extension>/...
         // Pattern: _apis/public/gallery/publisher/<publisher>/extension/<extension>/...
         if parts.len() >= 6
-            && parts[0] == "_apis"
-            && parts[1] == "public"
-            && parts[2] == "gallery"
-            && parts[3] == "publisher"
+            && parts[0].eq_ignore_ascii_case("_apis")
+            && parts[1].eq_ignore_ascii_case("public")
+            && parts[2].eq_ignore_ascii_case("gallery")
+            && parts[3].eq_ignore_ascii_case("publisher")
         {
             let publisher = parts[4];
 
@@ -371,11 +372,19 @@ mod tests {
                 Some("ms-python.python"),
             ),
             (
+                "/FiLeS/ms-python/python/2024.22.0/ms-python.python-2024.22.0.vsix",
+                Some("ms-python.python"),
+            ),
+            (
                 "files/ms-python/python/2024.22.0/ms-python.python-2024.22.0.vsix",
                 Some("ms-python.python"),
             ),
             (
                 "/_apis/public/gallery/publisher/ms-python/python/2024.22.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage",
+                Some("ms-python.python"),
+            ),
+            (
+                "/_ApIs/PuBlIc/GaLlErY/Publisher/ms-python/python/2024.22.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage",
                 Some("ms-python.python"),
             ),
             (
@@ -387,11 +396,19 @@ mod tests {
                 Some("ms-python.python"),
             ),
             (
+                "/_APIs/Public/Gallery/Publishers/ms-python/VSextensions/python/2024.22.0/assetbyname/Microsoft.VisualStudio.Code.Manifest",
+                Some("ms-python.python"),
+            ),
+            (
                 "/_apis/public/gallery/publishers/MattFoulks/extensions/har-analyzer/0.0.11/vspackage",
                 Some("MattFoulks.har-analyzer"),
             ),
             (
                 "/extensions/ms-python/python/2024.22.0/Microsoft.VisualStudio.Services.VsixSignature",
+                Some("ms-python.python"),
+            ),
+            (
+                "/ExTeNsIoNs/ms-python/python/2024.22.0/Microsoft.VisualStudio.Services.VsixSignature",
                 Some("ms-python.python"),
             ),
             ("/extensions/ms-python/python", Some("ms-python.python")),
