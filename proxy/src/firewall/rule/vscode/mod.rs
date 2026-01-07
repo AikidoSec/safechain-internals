@@ -11,7 +11,10 @@ use rama::{
     },
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
-    utils::str::smol_str::{SmolStr, format_smolstr},
+    utils::{
+        collections::smallvec::SmallVec,
+        str::smol_str::{SmolStr, format_smolstr},
+    },
 };
 
 use rama::http::body::util::BodyExt;
@@ -249,7 +252,7 @@ impl RuleVSCode {
     /// Parse extension ID (publisher.name) from .vsix download URL path.
     fn parse_extension_id_from_path(path: &str) -> Option<SmolStr> {
         let path = path.trim_start_matches('/');
-        let parts: Vec<&str> = path.split('/').collect();
+        let parts: SmallVec<[&str; 8]> = path.splitn(8, '/').collect();
 
         // Pattern: files/<publisher>/<extension>/<version>/...
         if parts.first() == Some(&"files") && parts.len() >= 4 {
