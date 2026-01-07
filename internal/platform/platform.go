@@ -21,8 +21,14 @@ func Init() error {
 		return err
 	}
 
+	if err := os.RemoveAll(config.RunDir); err != nil {
+		return fmt.Errorf("failed to clear run directory %s: %v", config.RunDir, err)
+	}
 	if err := os.MkdirAll(config.RunDir, 0755); err != nil {
 		return fmt.Errorf("failed to create run directory %s: %v", config.RunDir, err)
+	}
+	if err := os.RemoveAll(config.LogDir); err != nil {
+		return fmt.Errorf("failed to clear log directory %s: %v", config.LogDir, err)
 	}
 	if err := os.MkdirAll(config.LogDir, 0755); err != nil {
 		return fmt.Errorf("failed to create log directory %s: %v", config.LogDir, err)
