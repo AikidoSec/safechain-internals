@@ -69,15 +69,15 @@ func runConsoleMode(ctx context.Context, cancel context.CancelFunc, d *daemon.Da
 	select {
 	case sig := <-sigChan:
 		log.Printf("Received signal: %v, shutting down gracefully...", sig)
-		cancel()
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer shutdownCancel()
-		if err := d.Stop(shutdownCtx); err != nil {
-			log.Printf("Error during shutdown: %v", err)
-		}
 	case err := <-errChan:
-		log.Fatalf("Daemon error: %v", err)
+		log.Printf("Daemon error: %v, shutting down gracefully...", err)
 	}
 
+	cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+	if err := d.Stop(shutdownCtx); err != nil {
+		log.Printf("Error during shutdown: %v", err)
+	}
 	log.Println("Daemon stopped")
 }
