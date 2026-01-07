@@ -255,8 +255,7 @@ impl RuleVSCode {
         let parts: SmallVec<[&str; 8]> = path.splitn(8, '/').collect();
 
         // Pattern: files/<publisher>/<extension>/<version>/...
-        if parts.len() >= 4 
-        && parts[0].eq_ignore_ascii_case("files") {
+        if parts.len() >= 4 && parts[0].eq_ignore_ascii_case("files") {
             return Some(format_smolstr!("{}.{}", parts[1], parts[2]));
         }
 
@@ -303,9 +302,7 @@ impl RuleVSCode {
 mod tests {
     use super::*;
     use crate::firewall::malware_list::{MalwareEntry, PackageVersion, Reason};
-    use arc_swap::ArcSwap;
     use radix_trie::Trie;
-    use std::sync::Arc;
 
     impl RuleVSCode {
         /// Create a test instance with custom malware extension IDs
@@ -325,9 +322,8 @@ mod tests {
 
             Self {
                 target_domains: Default::default(),
-                remote_malware_list: crate::firewall::malware_list::RemoteMalwareList {
-                    trie: Arc::new(ArcSwap::new(Arc::new(trie))),
-                },
+                remote_malware_list:
+                    crate::firewall::malware_list::RemoteMalwareList::from_trie_for_test(trie),
             }
         }
     }
