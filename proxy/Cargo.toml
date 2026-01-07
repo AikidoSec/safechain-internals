@@ -43,6 +43,9 @@ jemallocator = { package = "tikv-jemallocator", version = "0.6" }
 windows-native-keyring-store = "0.4"
 mimalloc = { version = "0.1", default-features = false }
 
+[target.'cfg(target_os = "windows")'.build-dependencies]
+static_vcruntime = "3.0"
+
 [dependencies.rama]
 workspace = true
 features = ["http-full", "proxy-full", "dns", "boring"]
