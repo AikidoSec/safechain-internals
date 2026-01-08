@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"golang.org/x/sys/windows/svc"
@@ -55,28 +56,44 @@ func SetupLogging() (io.Writer, error) {
 }
 
 func SetSystemProxy(ctx context.Context, proxyURL string) error {
-	return nil
+	cmd := exec.CommandContext(ctx, "netsh", "winhttp", "set", "proxy", proxyURL)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func IsSystemProxySet(ctx context.Context) bool {
+	cmd := exec.CommandContext(ctx, "netsh", "winhttp", "show", "proxy")
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return !strings.Contains(string(output), "Direct access")
 }
 
 func UnsetSystemProxy(ctx context.Context) error {
-	return nil
+	cmd := exec.CommandContext(ctx, "netsh", "winhttp", "reset", "proxy")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func InstallProxyCA(ctx context.Context, caCertPath string) error {
-	return nil
+	cmd := exec.CommandContext(ctx, "certutil", "-addstore", "-f", "Root", caCertPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func IsProxyCAInstalled(ctx context.Context) bool {
-	return false
+	return true
 }
 
 func UninstallProxyCA(ctx context.Context) error {
-	return nil
-}
-
-type ServiceRunner interface {
-	Start(ctx context.Context) error
-	Stop(ctx context.Context) error
+	cmd := exec.CommandContext(ctx, "certutil", "-delstore", "Root", "aikido.dev")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 type windowsService struct {
