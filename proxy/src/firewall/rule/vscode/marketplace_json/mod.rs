@@ -161,6 +161,4 @@ impl RuleVSCode {
 }
 
 #[cfg(test)]
-mod tests {
-    include!("marketplace_json_tests.rs");
-}
+mod test;

@@ -20,9 +20,8 @@ impl RuleVSCode {
 
         Self {
             target_domains: Default::default(),
-            remote_malware_list: crate::firewall::malware_list::RemoteMalwareList::from_trie_for_test(
-                trie,
-            ),
+            remote_malware_list:
+                crate::firewall::malware_list::RemoteMalwareList::from_trie_for_test(trie),
         }
     }
 }
@@ -145,6 +144,11 @@ fn test_parse_extension_id_from_path_preserves_case() {
 
     for (input, expected) in test_cases {
         let parsed = RuleVSCode::parse_extension_id_from_path(input);
-        assert_eq!(parsed.as_deref(), expected, "Failed to parse path: {}", input);
+        assert_eq!(
+            parsed.as_deref(),
+            expected,
+            "Failed to parse path: {}",
+            input
+        );
     }
 }
