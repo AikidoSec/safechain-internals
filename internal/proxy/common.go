@@ -36,11 +36,11 @@ func GetProxyUrl() (string, string, error) {
 }
 
 func GetMetaUrl() (string, string, error) {
-	metaIpPort, err := readProxyConfig(filepath.Join(platform.GetProxyRunDir(), "meta.addr.txt"))
+	metaAddress, err := readProxyConfig(filepath.Join(platform.GetProxyRunDir(), "meta.addr.txt"))
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read meta config: %v", err)
 	}
-	return "http://" + metaIpPort, "https://" + metaIpPort, nil
+	return "http://" + metaAddress, "https://" + metaAddress, nil
 }
 
 func Ping(url string) error {

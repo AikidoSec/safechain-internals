@@ -29,7 +29,7 @@ func (s *Step) UninstallName() string {
 }
 
 func (s *Step) UninstallDescription() string {
-	return "Removes the system-level proxy configuration"
+	return "Removes the system-level proxy configuration that routes traffic through SafeChain Proxy"
 }
 
 func (s *Step) Uninstall(ctx context.Context) error {

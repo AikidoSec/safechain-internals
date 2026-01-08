@@ -90,8 +90,8 @@ func (d *Daemon) Stop(ctx context.Context) error {
 			log.Printf("Error uninstalling scanners: %v", err)
 		}
 
-		if err := setup.Uninstall(ctx); err != nil {
-			log.Printf("Error uninstalling setup: %v", err)
+		if err := setup.Teardown(ctx); err != nil {
+			log.Printf("Error teardown setup: %v", err)
 		}
 
 		if err := d.proxy.Stop(); err != nil {

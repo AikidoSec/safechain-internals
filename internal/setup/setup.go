@@ -13,10 +13,10 @@ func Install(ctx context.Context) error {
 	return nil
 }
 
-func Uninstall(ctx context.Context) error {
+func Teardown(ctx context.Context) error {
 	runner := NewRunner(true)
 	if err := runner.Run(ctx); err != nil {
-		return fmt.Errorf("failed to do setup uninstallation: %v", err)
+		return fmt.Errorf("failed to do setup teardown: %v", err)
 	}
 	return nil
 }

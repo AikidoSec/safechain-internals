@@ -13,7 +13,7 @@ import (
 
 const (
 	ProxyBind          = "127.0.0.1:7654"
-	ProxyMeta          = "127.0.0.1:7655"
+	ProxyMeta          = "127.0.0.1:7655" // This hosts the proxy's CA and is also useful for health checks
 	ProxyReadyTimeout  = 10 * time.Second
 	ProxyReadyInterval = 1 * time.Second
 )
@@ -56,6 +56,10 @@ func (p *Proxy) Start(ctx context.Context) error {
 		"--data", platform.GetProxyRunDir(),
 		"--output", filepath.Join(config.LogDir, platform.SafeChainProxyLogName),
 		"--secrets", "memory",
+		// We use memory secrets storage for the proxy's CA in order to avoid storing the CA in the filesystem or keyring
+		// This helps in cleaning up the installed CA, by removing the CA when the proxy is stopped
+		// When it will be installed again, a new CA will be generated and installed
+		// If the agent / proxy is down, this allows us to leave the system state as before installation
 	)
 
 	log.Println("Starting SafeChain Proxy with command:", p.cmd.String())
