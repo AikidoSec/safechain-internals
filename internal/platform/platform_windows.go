@@ -67,11 +67,30 @@ func SetupLogging() (io.Writer, error) {
 	return io.MultiWriter(os.Stdout, &syncWriter{f: f}), nil
 }
 
+const registryInternetSettings = `HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings`
+
 func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	cmd := exec.CommandContext(ctx, "netsh", "winhttp", "set", "proxy", proxyURL)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	regCmds := [][]string{
+		{"reg", "add", registryInternetSettings, "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "1", "/f"},
+		{"reg", "add", registryInternetSettings, "/v", "ProxyServer", "/t", "REG_SZ", "/d", proxyURL, "/f"},
+		{"reg", "add", registryInternetSettings, "/v", "ProxyOverride", "/t", "REG_SZ", "/d", "<local>,localhost,127.0.0.1", "/f"},
+	}
+	for _, args := range regCmds {
+		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func IsSystemProxySet(ctx context.Context, proxyURL string) bool {
@@ -80,14 +99,37 @@ func IsSystemProxySet(ctx context.Context, proxyURL string) bool {
 	if err != nil {
 		return false
 	}
-	return !strings.Contains(string(output), "Direct access")
+	if strings.Contains(string(output), "Direct access") {
+		return false
+	}
+
+	regCmd := exec.CommandContext(ctx, "reg", "query", registryInternetSettings, "/v", "ProxyEnable")
+	regOutput, err := regCmd.Output()
+	if err != nil || !strings.Contains(string(regOutput), "0x1") {
+		return false
+	}
+
+	regCmd = exec.CommandContext(ctx, "reg", "query", registryInternetSettings, "/v", "ProxyServer")
+	regOutput, err = regCmd.Output()
+	if err != nil || !strings.Contains(string(regOutput), proxyURL) {
+		return false
+	}
+
+	return true
 }
 
 func UnsetSystemProxy(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "netsh", "winhttp", "reset", "proxy")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	regCmd := exec.CommandContext(ctx, "reg", "add", registryInternetSettings, "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "0", "/f")
+	regCmd.Stdout = os.Stdout
+	regCmd.Stderr = os.Stderr
+	return regCmd.Run()
 }
 
 func InstallProxyCA(ctx context.Context, caCertPath string) error {
