@@ -41,6 +41,18 @@ func PrepareShellEnvironment(ctx context.Context) error {
 	return cmd.Run()
 }
 
+type syncWriter struct {
+	f *os.File
+}
+
+func (w *syncWriter) Write(p []byte) (n int, err error) {
+	n, err = w.f.Write(p)
+	if err != nil {
+		return n, err
+	}
+	return n, w.f.Sync()
+}
+
 func SetupLogging() (io.Writer, error) {
 	if err := os.MkdirAll(config.LogDir, 0755); err != nil {
 		return os.Stdout, err
@@ -52,7 +64,7 @@ func SetupLogging() (io.Writer, error) {
 		return os.Stdout, err
 	}
 
-	return io.MultiWriter(os.Stdout, f), nil
+	return io.MultiWriter(os.Stdout, &syncWriter{f: f}), nil
 }
 
 func SetSystemProxy(ctx context.Context, proxyURL string) error {
