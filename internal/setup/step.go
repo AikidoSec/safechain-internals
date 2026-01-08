@@ -3,7 +3,10 @@ package setup
 import "context"
 
 type Step interface {
-	Name() string
-	Description() string
-	Run(ctx context.Context) error
+	InstallName() string
+	InstallDescription() string
+	UninstallName() string
+	UninstallDescription() string
+	Install(ctx context.Context) error
+	Uninstall(ctx context.Context) error
 }

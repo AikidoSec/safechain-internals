@@ -1,7 +1,6 @@
-.PHONY: build build-setup build-release build-release-setup build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 clean test run run-setup help
+.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 clean test run help
 
 BINARY_NAME=safechain-agent
-SETUP_BINARY_NAME=safechain-setup
 VERSION?=dev
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -62,41 +61,26 @@ build:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT) ./cmd/daemon
 	@echo "Binary built: $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)"
 
-build-setup:
-	@echo "Building $(SETUP_BINARY_NAME) for $(GOOS)/$(GOARCH)..."
-	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(SETUP_BINARY_NAME)$(BINARY_EXT) ./cmd/setup
-	@echo "Binary built: $(BIN_DIR)/$(SETUP_BINARY_NAME)$(BINARY_EXT)"
-
 build-release:
 	@echo "Building release $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/daemon
 	@echo "Binary built: $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
 
-build-release-setup:
-	@echo "Building release $(SETUP_BINARY_NAME) for $(GOOS)/$(GOARCH)..."
-	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(SETUP_BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/setup
-	@echo "Binary built: $(BIN_DIR)/$(SETUP_BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
-
 build-darwin-amd64:
-	@$(MAKE) GOOS=darwin GOARCH=amd64 build-release build-release-setup
+	@$(MAKE) GOOS=darwin GOARCH=amd64 build-release
 
 build-darwin-arm64:
-	@$(MAKE) GOOS=darwin GOARCH=arm64 build-release build-release-setup
+	@$(MAKE) GOOS=darwin GOARCH=arm64 build-release
 
 build-windows-amd64:
-	@$(MAKE) GOOS=windows GOARCH=amd64 build-release build-release-setup
+	@$(MAKE) GOOS=windows GOARCH=amd64 build-release
 
 build-windows-arm64:
-	@$(MAKE) GOOS=windows GOARCH=arm64 build-release build-release-setup
+	@$(MAKE) GOOS=windows GOARCH=arm64 build-release
 
 run: build
 	$(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)
-
-run-setup: build-setup
-	$(BIN_DIR)/$(SETUP_BINARY_NAME)$(BINARY_EXT)
 
 test:
 	go test -v ./...

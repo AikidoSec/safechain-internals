@@ -3,34 +3,42 @@ package setup
 import (
 	"context"
 	"fmt"
+	"log"
+	"slices"
+
+	install_proxy_ca "github.com/AikidoSec/safechain-agent/internal/setup/steps/01_install_proxy_ca"
+	set_system_proxy "github.com/AikidoSec/safechain-agent/internal/setup/steps/02_set_system_proxy"
 )
 
 type Runner struct {
-	steps    []Step
-	prompter *Prompter
+	steps     []Step
+	uninstall bool
 }
 
-func NewRunner(prompter *Prompter) *Runner {
+func NewRunner(uninstall bool) *Runner {
 	return &Runner{
-		steps:    make([]Step, 0),
-		prompter: prompter,
+		steps: []Step{
+			install_proxy_ca.New(),
+			set_system_proxy.New(),
+		},
+		uninstall: uninstall,
 	}
-}
-
-func (r *Runner) AddStep(step Step) {
-	r.steps = append(r.steps, step)
 }
 
 func (r *Runner) Run(ctx context.Context) error {
 	total := len(r.steps)
 	if total == 0 {
-		r.prompter.Println("No setup steps to run.")
+		log.Println("No setup steps to run.")
 		return nil
 	}
 
-	r.prompter.Println("SafeChain Setup")
-	r.prompter.Println("================")
-	r.prompter.Print("This setup will run %d step(s).\n\n", total)
+	log.Println("SafeChain Setup")
+	log.Println("================")
+	log.Printf("This setup will run %d step(s).\n\n", total)
+
+	if r.uninstall {
+		slices.Reverse(r.steps)
+	}
 
 	for i, step := range r.steps {
 		select {
@@ -39,29 +47,39 @@ func (r *Runner) Run(ctx context.Context) error {
 		default:
 		}
 
-		r.prompter.Print("[%d/%d] %s\n", i+1, total, step.Name())
-		r.prompter.Print("      %s\n\n", step.Description())
-
-		confirmed, err := r.prompter.Confirm("Proceed with this step?")
-		if err != nil {
-			return fmt.Errorf("failed to read confirmation: %w", err)
+		name := step.InstallName()
+		description := step.InstallDescription()
+		if r.uninstall {
+			name = step.UninstallName()
+			description = step.UninstallDescription()
 		}
 
-		if !confirmed {
-			r.prompter.Println("Skipping step...")
-			r.prompter.Println()
-			continue
+		log.Printf("[%d/%d] %s\n", i+1, total, name)
+		log.Printf("      %s\n\n", description)
+
+		functionToRun := step.Install
+		if r.uninstall {
+			functionToRun = step.Uninstall
 		}
 
-		if err := step.Run(ctx); err != nil {
-			return fmt.Errorf("step %q failed: %w", step.Name(), err)
+		if err := functionToRun(ctx); err != nil {
+			return fmt.Errorf("%q failed: %w", name, err)
 		}
 
-		r.prompter.Println("✓ Step completed successfully")
-		r.prompter.Println()
+		log.Println("Step completed successfully")
+		log.Println()
 	}
 
-	r.prompter.Println("================")
-	r.prompter.Println("Setup complete!")
+	if r.uninstall {
+		RemoveSetupFinishedMarker()
+	} else {
+		if err := CreateSetupFinishedMarker(); err != nil {
+			return fmt.Errorf("failed to create setup finished marker: %w", err)
+		}
+	}
+
+	log.Println("================")
+	log.Println("Setup complete!")
+
 	return nil
 }

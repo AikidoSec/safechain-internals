@@ -3,5 +3,5 @@ package constants
 import "time"
 
 const (
-	HeartbeatInterval = 10 * time.Minute
+	DaemonHeartbeatInterval = 1 * time.Minute // Interval at which the daemon will check the if proxy and scanners are running
 )

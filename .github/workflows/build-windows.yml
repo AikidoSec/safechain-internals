@@ -14,7 +14,7 @@ on:
         type: string
 
 jobs:
-  build-windows:
+  build-windows-agent:
     strategy:
       matrix:
         include:
@@ -39,38 +39,24 @@ jobs:
         run: make build-windows-${{ matrix.arch }} VERSION="${{ inputs.version || 'dev' }}"
         shell: bash
 
-      - name: Rename binaries for packaging
+      - name: Rename binary for artifact
         run: |
-          mv bin/safechain-agent-windows-${{ matrix.arch }}.exe bin/SafeChainAgent.exe
-          mv bin/safechain-setup-windows-${{ matrix.arch }}.exe bin/SafeChainSetup.exe
+          mv bin/safechain-agent-windows-${{ matrix.arch }}.exe bin/SafeChainAgent.${{ matrix.arch }}.exe
         shell: bash
 
-      - name: Install WiX Toolset
-        run: dotnet tool install -g wix
-
-      - name: Add WiX UI extension
-        run: wix extension add WixToolset.UI.wixext
-
-      - name: Build MSI installer
-        run: |
-          .\packaging\windows\build-msi.ps1 -Version "${{ inputs.version || 'dev' }}" -Arch "${{ matrix.arch }}" -BinDir ".\bin" -OutputDir "."
-        shell: pwsh
-
-      - name: Upload Windows artifacts
+      - name: Upload Windows agent artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SafeChainAgent.${{ matrix.arch }}.msi
-          path: |
-            SafeChainAgent.${{ matrix.arch }}.msi
+          name: SafeChainAgent.${{ matrix.arch }}.exe
+          path: bin/SafeChainAgent.${{ matrix.arch }}.exe
 
   build-windows-proxy:
     strategy:
       matrix:
         include:
-          # NOTE: windows-11-arm is not YET supported in private Github Action runners
-          # - arch: arm64
-          #   target: aarch64-pc-windows-msvc
-          #   runner: windows-11-arm
+          - arch: arm64
+            target: aarch64-pc-windows-msvc
+            runner: windows-11-arm
           - arch: amd64
             target: x86_64-pc-windows-msvc
             runner: windows-latest
@@ -123,3 +109,51 @@ jobs:
           name: SafeChainProxy.${{ matrix.arch }}.exe
           path: |
             SafeChainProxy.${{ matrix.arch }}.exe
+
+  build-msi:
+    needs: [build-windows-agent, build-windows-proxy]
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+          - arch: arm64
+
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download SafeChainAgent artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SafeChainAgent.${{ matrix.arch }}.exe
+          path: bin
+
+      - name: Download SafeChainProxy artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SafeChainProxy.${{ matrix.arch }}.exe
+          path: bin
+
+      - name: Rename binaries for packaging
+        run: |
+          mv bin/SafeChainAgent.${{ matrix.arch }}.exe bin/SafeChainAgent.exe
+          mv bin/SafeChainProxy.${{ matrix.arch }}.exe bin/SafeChainProxy.exe
+        shell: bash
+
+      - name: Install WiX Toolset
+        run: dotnet tool install -g wix
+
+      - name: Add WiX UI extension
+        run: wix extension add WixToolset.UI.wixext
+
+      - name: Build MSI installer
+        run: |
+          .\packaging\windows\build-msi.ps1 -Version "${{ inputs.version || 'dev' }}" -Arch "${{ matrix.arch }}" -BinDir ".\bin" -OutputDir "."
+        shell: pwsh
+
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SafeChainAgent.${{ matrix.arch }}.msi
+          path: SafeChainAgent.${{ matrix.arch }}.msi
