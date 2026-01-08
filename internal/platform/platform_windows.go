@@ -19,6 +19,7 @@ const (
 	SafeChainProxyLogName    = "SafeChainProxy.log"
 )
 
+// Configuration folders are configured and cleaned up in the Windows MSI install (packaging/windows/SafeChainAgent.wxs)
 func initConfig() error {
 	programDataDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent")
 	config.BinaryDir = "C:\\Program Files\\AikidoSecurity\\SafeChainAgent\\bin"
