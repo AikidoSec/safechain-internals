@@ -28,11 +28,11 @@ func readProxyConfig(filePath string) (string, error) {
 }
 
 func GetProxyUrl() (string, string, error) {
-	proxyIpPort, err := readProxyConfig(filepath.Join(platform.GetProxyRunDir(), "proxy.addr.txt"))
+	proxyAddress, err := readProxyConfig(filepath.Join(platform.GetProxyRunDir(), "proxy.addr.txt"))
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read proxy config: %v", err)
 	}
-	return "http://" + proxyIpPort, "https://" + proxyIpPort, nil
+	return "http://" + proxyAddress, "https://" + proxyAddress, nil
 }
 
 func GetMetaUrl() (string, string, error) {
