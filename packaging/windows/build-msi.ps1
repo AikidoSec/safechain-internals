@@ -31,22 +31,22 @@ if (-not (Test-Path $OutputDir)) {
 $ProjectDir = (Get-Item (Split-Path -Parent $MyInvocation.MyCommand.Path)).Parent.Parent.FullName
 $WxsFile = Join-Path $ProjectDir "packaging\windows\SafeChainAgent.wxs"
 
-Write-Host "Building MSI installer for Aikido Safe Chain Agent v$Version (WiX version: $WixVersion)"
+Write-Host "Building MSI installer for Aikido SafeChain Agent v$Version (WiX version: $WixVersion)"
 Write-Host "  Binary directory: $BinDir"
 Write-Host "  Output directory: $OutputDir"
 Write-Host "  Project directory: $ProjectDir"
 
 # Verify required binaries exist
 $AgentExe = Join-Path $BinDir "SafeChainAgent.exe"
-$SetupExe = Join-Path $BinDir "SafeChainSetup.exe"
+$ProxyExe = Join-Path $BinDir "SafeChainProxy.exe"
 
 if (-not (Test-Path $AgentExe)) {
     Write-Host "Error: SafeChainAgent.exe not found at $AgentExe" -ForegroundColor Red
     exit 1
 }
 
-if (-not (Test-Path $SetupExe)) {
-    Write-Host "Error: SafeChainSetup.exe not found at $SetupExe" -ForegroundColor Red
+if (-not (Test-Path $ProxyExe)) {
+    Write-Host "Error: SafeChainProxy.exe not found at $ProxyExe" -ForegroundColor Red
     exit 1
 }
 

@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
-  <Package Name="Safe Chain Agent"
+  <Package Name="SafeChain Agent"
            Manufacturer="Aikido Security BV"
            Version="$(var.Version)"
            ProductCode="5d8fd7e2-55b5-4fc4-82b2-de8ee83f0061"
            UpgradeCode="adb9d7b9-de00-4953-af0e-9c1e9ec15c81"
            Scope="perMachine">
 
-    <MajorUpgrade DowngradeErrorMessage="A newer version of Safe Chain Agent is already installed." />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of SafeChain Agent is already installed." />
     
     <Media Id="1" Cabinet="SafeChainAgent.cab" EmbedCab="yes" />
 
@@ -21,10 +21,22 @@
       </Directory>
     </StandardDirectory>
 
+    <!-- ProgramData directory for cleanup on uninstall -->
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="APPDATAAIKIDO" Name="AikidoSecurity">
+        <Directory Id="APPDATAAGENT" Name="SafeChainAgent">
+          <Directory Id="APPDATALOGSDIR" Name="logs" />
+          <Directory Id="APPDATARUNDIR" Name="run" />
+          <Directory Id="APPDATABINDIR" Name="bin" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
     <!-- Main feature -->
     <Feature Id="MainFeature" Title="Aikido Agent" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
       <ComponentRef Id="PathComponent" />
+      <ComponentRef Id="CleanupProgramData" />
     </Feature>
 
     <!-- Components -->
@@ -33,12 +45,12 @@
         <File Id="AikidoAgentExeFile" Source="$(var.BinDir)\SafeChainAgent.exe" KeyPath="yes" />
         <ServiceInstall Id="SafeChainAgentService"
                         Name="SafeChainAgent"
-                        DisplayName="Safe Chain Agent"
-                        Description="Aikido Security Safe Chain Agent - monitors and secures the software supply chain"
+                        DisplayName="SafeChain Agent"
+                        Description="Aikido Security SafeChain Agent - monitors and secures the software supply chain"
                         Start="auto"
                         Type="ownProcess"
                         ErrorControl="normal"
-                        Account="NT AUTHORITY\LocalService" />
+                        Account="LocalSystem" />
         <ServiceControl Id="SafeChainAgentServiceControl"
                         Name="SafeChainAgent"
                         Start="install"
@@ -46,8 +58,8 @@
                         Remove="uninstall"
                         Wait="yes" />
       </Component>
-      <Component Id="AikidoSetupExe" Guid="7b4e9d2f-8c3a-4b5e-9f1d-2e6a8c4b7d9e">
-        <File Id="AikidoSetupExeFile" Source="$(var.BinDir)\SafeChainSetup.exe" KeyPath="yes" />
+      <Component Id="SafeChainProxyExe" Guid="8a745110-05f7-4bb8-8013-5fca733409ef">
+        <File Id="SafeChainProxyExeFile" Source="$(var.BinDir)\SafeChainProxy.exe" KeyPath="yes" />
       </Component>
     </ComponentGroup>
 
@@ -55,6 +67,21 @@
     <DirectoryRef Id="BINDIR">
       <Component Id="PathComponent" Guid="5809b6b6-57a0-4c2a-9d55-7b274ceb916a">
         <Environment Id="PATH" Name="PATH" Value="[BINDIR]" Permanent="no" Part="last" Action="set" System="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Cleanup ProgramData on uninstall -->
+    <DirectoryRef Id="APPDATAAGENT">
+      <Component Id="CleanupProgramData" Guid="c7e8f9a1-2b3c-4d5e-6f7a-8b9c0d1e2f3a">
+        <RemoveFile Id="RemoveLogsFiles" Directory="APPDATALOGSDIR" Name="*" On="uninstall" />
+        <RemoveFile Id="RemoveRunFiles" Directory="APPDATARUNDIR" Name="*" On="uninstall" />
+        <RemoveFile Id="RemoveBinFiles" Directory="APPDATABINDIR" Name="*" On="uninstall" />
+        <RemoveFile Id="RemoveAgentFiles" Name="*" On="uninstall" />
+        <RemoveFolder Id="RemoveLogsDir" Directory="APPDATALOGSDIR" On="uninstall" />
+        <RemoveFolder Id="RemoveRunDir" Directory="APPDATARUNDIR" On="uninstall" />
+        <RemoveFolder Id="RemoveBinDir" Directory="APPDATABINDIR" On="uninstall" />
+        <RemoveFolder Id="RemoveAgentDir" Directory="APPDATAAGENT" On="uninstall" />
+        <RemoveFolder Id="RemoveAikidoDir" Directory="APPDATAAIKIDO" On="uninstall" />
       </Component>
     </DirectoryRef>
 

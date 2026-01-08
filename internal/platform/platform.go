@@ -1,26 +1,48 @@
 package platform
 
 import (
-	"context"
-	"io"
+	"fmt"
 	"os"
+	"path/filepath"
 )
 
-var homeDir, _ = os.UserHomeDir()
-
 type Config struct {
-	SafeChainBinaryPath string
+	BinaryDir           string
+	RunDir              string
 	LogDir              string
+	SafeChainBinaryPath string
 }
 
-func Get() *Config {
-	return getConfig()
+var config Config
+
+func Init() error {
+	if err := initConfig(); err != nil {
+		return err
+	}
+
+	if err := os.RemoveAll(config.RunDir); err != nil {
+		return fmt.Errorf("failed to clear run directory %s: %v", config.RunDir, err)
+	}
+	if err := os.MkdirAll(config.RunDir, 0755); err != nil {
+		return fmt.Errorf("failed to create run directory %s: %v", config.RunDir, err)
+	}
+	if err := os.RemoveAll(config.LogDir); err != nil {
+		return fmt.Errorf("failed to clear log directory %s: %v", config.LogDir, err)
+	}
+	if err := os.MkdirAll(config.LogDir, 0755); err != nil {
+		return fmt.Errorf("failed to create log directory %s: %v", config.LogDir, err)
+	}
+	return nil
 }
 
-func PrepareShellEnvironment(ctx context.Context) error {
-	return prepareShellEnvironment(ctx)
+func GetConfig() *Config {
+	return &config
 }
 
-func SetupLogging() (io.Writer, error) {
-	return setupLogging()
+func GetProxyRunDir() string {
+	return config.RunDir
+}
+
+func GetProxySetupFinishedMarker() string {
+	return filepath.Join(GetProxyRunDir(), ".setup_finished")
 }
