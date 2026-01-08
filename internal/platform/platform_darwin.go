@@ -106,6 +106,10 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	return nil
 }
 
+func IsSystemProxySet(ctx context.Context) bool {
+	return true
+}
+
 func UnsetSystemProxy(ctx context.Context) error {
 	services, err := getNetworkServices(ctx)
 	if err != nil {
