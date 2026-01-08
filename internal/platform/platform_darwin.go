@@ -106,8 +106,35 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	return nil
 }
 
-func IsSystemProxySet(ctx context.Context) bool {
-	return true
+func IsSystemProxySet(ctx context.Context, proxyURL string) bool {
+	parsed, err := url.Parse(proxyURL)
+	if err != nil {
+		return false
+	}
+
+	host := parsed.Hostname()
+	port := parsed.Port()
+	if port == "" {
+		return false
+	}
+
+	services, err := getNetworkServices(ctx)
+	if err != nil {
+		return false
+	}
+
+	for _, service := range services {
+		output, err := exec.CommandContext(ctx, "networksetup", "-getwebproxy", service).Output()
+		if err != nil {
+			continue
+		}
+		if strings.Contains(string(output), "Enabled: Yes") &&
+			strings.Contains(string(output), "Server: "+host) &&
+			strings.Contains(string(output), "Port: "+port) {
+			return true
+		}
+	}
+	return false
 }
 
 func UnsetSystemProxy(ctx context.Context) error {
