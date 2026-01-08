@@ -62,7 +62,7 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	return cmd.Run()
 }
 
-func IsSystemProxySet(ctx context.Context) bool {
+func IsSystemProxySet(ctx context.Context, proxyURL string) bool {
 	cmd := exec.CommandContext(ctx, "netsh", "winhttp", "show", "proxy")
 	output, err := cmd.Output()
 	if err != nil {
