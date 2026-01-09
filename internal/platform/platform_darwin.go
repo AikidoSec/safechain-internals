@@ -24,13 +24,10 @@ var serviceRegex = regexp.MustCompile(`^\((\d+)\)\s+(.+)$`)
 var deviceRegex = regexp.MustCompile(`Device:\s*(en\d+)`)
 
 func initConfig() error {
-	var homeDir string
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %v", err)
 	}
-	log.Println("Home directory:", homeDir)
-
 	safeChainHomeDir := filepath.Join(homeDir, ".safe-chain")
 	config.BinaryDir = "/opt/homebrew/bin"
 	config.RunDir = filepath.Join(safeChainHomeDir, "run")
