@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -44,6 +45,12 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 	}
 
 	d.initLogging()
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %v", err)
+	}
+	log.Println("Home directory:", homeDir)
 	return d, nil
 }
 

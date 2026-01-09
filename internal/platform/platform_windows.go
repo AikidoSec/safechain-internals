@@ -4,7 +4,6 @@ package platform
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -25,12 +24,6 @@ const (
 
 // Configuration folders are configured and cleaned up in the Windows MSI install (packaging/windows/SafeChainAgent.wxs)
 func initConfig() error {
-	var homeDir string
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home directory: %v", err)
-	}
-	log.Println("Home directory:", homeDir)
 	programDataDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent")
 	config.BinaryDir = `C:\Program Files\AikidoSecurity\SafeChainAgent\bin`
 	config.LogDir = filepath.Join(programDataDir, "logs")
