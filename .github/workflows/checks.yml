@@ -33,6 +33,11 @@ jobs:
       - name: check
         run: |
           cargo check --workspace
+      - name: doc
+        run: |
+          cargo doc -p safechain-proxy --no-deps
+        env:
+          RUSTDOCFLAGS: "-D rustdoc::broken-intra-doc-links"
       - name: clippy
         run: |
           cargo clippy --workspace
