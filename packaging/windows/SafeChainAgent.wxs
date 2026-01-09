@@ -4,11 +4,11 @@
   <Package Name="SafeChain Agent"
            Manufacturer="Aikido Security BV"
            Version="$(var.Version)"
-           ProductCode="275036d6-3abd-40d3-9735-5a2749d77d28"
+           ProductCode="*"
            UpgradeCode="adb9d7b9-de00-4953-af0e-9c1e9ec15c81"
            Scope="perMachine">
 
-    <MajorUpgrade DowngradeErrorMessage="A newer version of SafeChain Agent is already installed." />
+    <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="A newer version of SafeChain Agent is already installed." />
     
     <Media Id="1" Cabinet="SafeChainAgent.cab" EmbedCab="yes" />
 
