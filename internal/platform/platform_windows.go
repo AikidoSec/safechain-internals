@@ -20,16 +20,17 @@ import (
 )
 
 var (
-	modwtsapi32                 = windows.NewLazySystemDLL("wtsapi32.dll")
-	modadvapi32                 = windows.NewLazySystemDLL("advapi32.dll")
-	moduserenv                  = windows.NewLazySystemDLL("userenv.dll")
-	procWTSEnumerateSessions    = modwtsapi32.NewProc("WTSEnumerateSessionsW")
-	procWTSFreeMemory           = modwtsapi32.NewProc("WTSFreeMemory")
-	procWTSQueryUserToken       = modwtsapi32.NewProc("WTSQueryUserToken")
-	procDuplicateTokenEx        = modadvapi32.NewProc("DuplicateTokenEx")
-	procCreateProcessAsUserW    = modadvapi32.NewProc("CreateProcessAsUserW")
-	procCreateEnvironmentBlock  = moduserenv.NewProc("CreateEnvironmentBlock")
-	procDestroyEnvironmentBlock = moduserenv.NewProc("DestroyEnvironmentBlock")
+	modwtsapi32                  = windows.NewLazySystemDLL("wtsapi32.dll")
+	modadvapi32                  = windows.NewLazySystemDLL("advapi32.dll")
+	moduserenv                   = windows.NewLazySystemDLL("userenv.dll")
+	procWTSEnumerateSessions     = modwtsapi32.NewProc("WTSEnumerateSessionsW")
+	procWTSFreeMemory            = modwtsapi32.NewProc("WTSFreeMemory")
+	procWTSQueryUserToken        = modwtsapi32.NewProc("WTSQueryUserToken")
+	procDuplicateTokenEx         = modadvapi32.NewProc("DuplicateTokenEx")
+	procCreateProcessAsUserW     = modadvapi32.NewProc("CreateProcessAsUserW")
+	procCreateEnvironmentBlock   = moduserenv.NewProc("CreateEnvironmentBlock")
+	procDestroyEnvironmentBlock  = moduserenv.NewProc("DestroyEnvironmentBlock")
+	procGetUserProfileDirectoryW = moduserenv.NewProc("GetUserProfileDirectoryW")
 )
 
 const (
@@ -44,14 +45,56 @@ const (
 	proxyOverride                  = "<local>,localhost,127.0.0.1"
 )
 
-// Configuration folders are configured and cleaned up in the Windows MSI install (packaging/windows/SafeChainAgent.wxs)
 func initConfig() error {
 	programDataDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent")
 	config.BinaryDir = `C:\Program Files\AikidoSecurity\SafeChainAgent\bin`
 	config.LogDir = filepath.Join(programDataDir, "logs")
 	config.RunDir = filepath.Join(programDataDir, "run")
-	config.SafeChainBinaryPath = filepath.Join(programDataDir, "bin", "safe-chain.exe")
+
+	homeDir, err := GetActiveUserHomeDir()
+	if err != nil {
+		homeDir, _ = os.UserHomeDir()
+	}
+	safeChainDir := filepath.Join(homeDir, ".safe-chain")
+	config.SafeChainBinaryPath = filepath.Join(safeChainDir, "bin", "safe-chain.exe")
 	return nil
+}
+
+func GetActiveUserHomeDir() (string, error) {
+	if !IsWindowsService() {
+		return os.UserHomeDir()
+	}
+
+	sessionID, err := getActiveUserSessionID()
+	if err != nil {
+		return "", err
+	}
+
+	var userToken windows.Token
+	ret, _, err := procWTSQueryUserToken.Call(uintptr(sessionID), uintptr(unsafe.Pointer(&userToken)))
+	if ret == 0 {
+		return "", fmt.Errorf("WTSQueryUserToken failed: %v", err)
+	}
+	defer userToken.Close()
+
+	var size uint32
+	procGetUserProfileDirectoryW.Call(uintptr(userToken), 0, uintptr(unsafe.Pointer(&size)))
+
+	if size == 0 {
+		return "", fmt.Errorf("failed to get profile directory size")
+	}
+
+	buf := make([]uint16, size)
+	ret, _, err = procGetUserProfileDirectoryW.Call(
+		uintptr(userToken),
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(unsafe.Pointer(&size)),
+	)
+	if ret == 0 {
+		return "", fmt.Errorf("GetUserProfileDirectory failed: %v", err)
+	}
+
+	return syscall.UTF16ToString(buf), nil
 }
 
 // PrepareShellEnvironment sets the PowerShell execution policy to RemoteSigned for the current user.
