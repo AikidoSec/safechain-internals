@@ -24,14 +24,20 @@ var serviceRegex = regexp.MustCompile(`^\((\d+)\)\s+(.+)$`)
 var deviceRegex = regexp.MustCompile(`Device:\s*(en\d+)`)
 
 func initConfig() error {
-	var homeDir string
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home directory: %v", err)
+	if os.Getuid() == 0 {
+		username, _, err := getConsoleUser(context.Background())
+		if err != nil {
+			return fmt.Errorf("failed to get console user: %v", err)
+		}
+		config.HomeDir = filepath.Join("/Users", username)
+	} else {
+		var err error
+		config.HomeDir, err = os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to get home directory: %v", err)
+		}
 	}
-	log.Println("Home directory:", homeDir)
-
-	safeChainHomeDir := filepath.Join(homeDir, ".safe-chain")
+	safeChainHomeDir := filepath.Join(config.HomeDir, ".safe-chain")
 	config.BinaryDir = "/opt/homebrew/bin"
 	config.RunDir = filepath.Join(safeChainHomeDir, "run")
 	config.LogDir = filepath.Join(safeChainHomeDir, "logs")
@@ -106,6 +112,37 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	return nil
 }
 
+func IsSystemProxySet(ctx context.Context, proxyURL string) bool {
+	parsed, err := url.Parse(proxyURL)
+	if err != nil {
+		return false
+	}
+
+	host := parsed.Hostname()
+	port := parsed.Port()
+	if port == "" {
+		return false
+	}
+
+	services, err := getNetworkServices(ctx)
+	if err != nil {
+		return false
+	}
+
+	for _, service := range services {
+		output, err := exec.CommandContext(ctx, "networksetup", "-getwebproxy", service).Output()
+		if err != nil {
+			continue
+		}
+		if strings.Contains(string(output), "Enabled: Yes") &&
+			strings.Contains(string(output), "Server: "+host) &&
+			strings.Contains(string(output), "Port: "+port) {
+			return true
+		}
+	}
+	return false
+}
+
 func UnsetSystemProxy(ctx context.Context) error {
 	services, err := getNetworkServices(ctx)
 	if err != nil {
@@ -175,4 +212,43 @@ func IsWindowsService() bool {
 
 func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
 	return nil
+}
+
+func getConsoleUser(ctx context.Context) (string, string, error) {
+	output, err := exec.CommandContext(ctx, "stat", "-f%Su", "/dev/console").Output()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get console user: %v", err)
+	}
+	username := strings.TrimSpace(string(output))
+	if username == "" || username == "root" {
+		return "", "", fmt.Errorf("no interactive user logged in")
+	}
+
+	uidOutput, err := exec.CommandContext(ctx, "id", "-u", username).Output()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get uid for user %s: %v", username, err)
+	}
+	uid := strings.TrimSpace(string(uidOutput))
+
+	return username, uid, nil
+}
+
+func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) error {
+	if os.Getuid() != 0 {
+		cmd := exec.CommandContext(ctx, binaryPath, args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+
+	_, uid, err := getConsoleUser(ctx)
+	if err != nil {
+		return err
+	}
+
+	launchctlArgs := append([]string{"asuser", uid, binaryPath}, args...)
+	cmd := exec.CommandContext(ctx, "launchctl", launchctlArgs...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }

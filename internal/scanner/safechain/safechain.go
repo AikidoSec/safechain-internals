@@ -66,10 +66,7 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 
 	args := []string{"setup"}
 
-	cmd := exec.CommandContext(ctx, binaryPath, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := platform.RunAsCurrentUser(ctx, binaryPath, args); err != nil {
 		return fmt.Errorf("failed to run safe-chain setup: %w", err)
 	}
 

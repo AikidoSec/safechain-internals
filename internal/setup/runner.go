@@ -26,19 +26,21 @@ func NewRunner(uninstall bool) *Runner {
 }
 
 func (r *Runner) Run(ctx context.Context) error {
-	total := len(r.steps)
-	if total == 0 {
-		log.Println("No setup steps to run.")
+	stage := "Setup"
+	if r.uninstall {
+		stage = "Teardown"
+		slices.Reverse(r.steps)
+	}
+
+	numberOfSteps := len(r.steps)
+	if numberOfSteps == 0 {
+		log.Println("No steps to run.")
 		return nil
 	}
 
-	log.Println("SafeChain Setup")
+	log.Println("SafeChain", stage)
 	log.Println("================")
-	log.Printf("This setup will run %d step(s).\n\n", total)
-
-	if r.uninstall {
-		slices.Reverse(r.steps)
-	}
+	log.Printf("%s will run %d step(s).\n\n", stage, numberOfSteps)
 
 	for i, step := range r.steps {
 		select {
@@ -49,25 +51,21 @@ func (r *Runner) Run(ctx context.Context) error {
 
 		name := step.InstallName()
 		description := step.InstallDescription()
+		functionToRun := step.Install
 		if r.uninstall {
 			name = step.UninstallName()
 			description = step.UninstallDescription()
-		}
-
-		log.Printf("[%d/%d] %s\n", i+1, total, name)
-		log.Printf("      %s\n\n", description)
-
-		functionToRun := step.Install
-		if r.uninstall {
 			functionToRun = step.Uninstall
 		}
+
+		log.Printf("[%d/%d] %s\n", i+1, numberOfSteps, name)
+		log.Printf("      %s\n\n", description)
 
 		if err := functionToRun(ctx); err != nil {
 			return fmt.Errorf("%q failed: %w", name, err)
 		}
 
-		log.Println("Step completed successfully")
-		log.Println()
+		log.Printf("%s step completed successfully\n\n", stage)
 	}
 
 	if r.uninstall {
@@ -79,7 +77,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 
 	log.Println("================")
-	log.Println("Setup complete!")
+	log.Printf("%s complete!\n", stage)
 
 	return nil
 }

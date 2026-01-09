@@ -49,6 +49,7 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 
 func (d *Daemon) Start(ctx context.Context) error {
 	log.Print("Starting SafeChain Daemon:\n", version.Info())
+	log.Println("User home directory used for SafeChain:", platform.GetConfig().HomeDir)
 
 	mergedCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
