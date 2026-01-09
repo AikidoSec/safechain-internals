@@ -66,7 +66,12 @@ func SetupLogging() (io.Writer, error) {
 		return os.Stdout, err
 	}
 
-	return io.MultiWriter(os.Stdout, &syncWriter{f: f}), nil
+	fileWriter := &syncWriter{f: f}
+	if IsWindowsService() {
+		return fileWriter, nil
+	}
+
+	return io.MultiWriter(os.Stdout, fileWriter), nil
 }
 
 func SetSystemProxy(ctx context.Context, proxyURL string) error {
@@ -84,6 +89,7 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	}
 	for _, args := range regCmds {
 		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+		log.Printf("Running command: %q", strings.Join(args, " "))
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
@@ -126,10 +132,21 @@ func UnsetSystemProxy(ctx context.Context) error {
 		return err
 	}
 
-	regCmd := exec.CommandContext(ctx, "reg", "add", registryInternetSettings, "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "0", "/f")
-	regCmd.Stdout = os.Stdout
-	regCmd.Stderr = os.Stderr
-	return regCmd.Run()
+	regCmds := [][]string{
+		{"reg", "add", registryInternetSettings, "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "0", "/f"},
+		{"reg", "delete", registryInternetSettings, "/v", "ProxyServer", "/f"},
+		{"reg", "delete", registryInternetSettings, "/v", "ProxyOverride", "/f"},
+	}
+	for _, args := range regCmds {
+		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+		log.Printf("Running command: %q", strings.Join(args, " "))
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			log.Printf("Warning: failed to run %q: %v", strings.Join(args, " "), err)
+		}
+	}
+	return nil
 }
 
 func InstallProxyCA(ctx context.Context, caCertPath string) error {
