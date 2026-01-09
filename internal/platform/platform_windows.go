@@ -51,11 +51,13 @@ func initConfig() error {
 	config.LogDir = filepath.Join(programDataDir, "logs")
 	config.RunDir = filepath.Join(programDataDir, "run")
 
-	homeDir, err := GetActiveUserHomeDir()
+	var err error
+	config.HomeDir, err = GetActiveUserHomeDir()
 	if err != nil {
-		homeDir, _ = os.UserHomeDir()
+		config.HomeDir, _ = os.UserHomeDir()
 	}
-	safeChainDir := filepath.Join(homeDir, ".safe-chain")
+	log.Println("User home directory used for SafeChain:", config.HomeDir)
+	safeChainDir := filepath.Join(config.HomeDir, ".safe-chain")
 	config.SafeChainBinaryPath = filepath.Join(safeChainDir, "bin", "safe-chain.exe")
 	return nil
 }

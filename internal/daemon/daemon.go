@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"sync"
 	"time"
 
@@ -45,17 +44,12 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 	}
 
 	d.initLogging()
-
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %v", err)
-	}
-	log.Println("Home directory:", homeDir)
 	return d, nil
 }
 
 func (d *Daemon) Start(ctx context.Context) error {
 	log.Print("Starting SafeChain Daemon:\n", version.Info())
+	log.Println("User home directory used for SafeChain:", platform.GetConfig().HomeDir)
 
 	mergedCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -177,5 +171,4 @@ func (d *Daemon) initLogging() {
 	}
 	log.SetOutput(writer)
 	log.SetFlags(log.LstdFlags)
-	log.Printf("Logging setup complete")
 }
