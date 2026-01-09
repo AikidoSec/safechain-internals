@@ -25,16 +25,6 @@ pub enum RequestAction {
 //
 // For now all implementations are in Rust, to keep it easy.
 
-/// A firewall rule for a specific ecosystem/product.
-///
-/// Rules can influence proxy behaviour in three ways:
-/// - Identify whether they apply to a request/response via [`Rule::match_domain`].
-/// - Block or allow requests/responses via [`Rule::evaluate_request`] and [`Rule::evaluate_response`].
-/// - Contribute domains to the generated PAC (Proxy Auto-Configuration) script via
-///   [`Rule::collect_pac_domains`].
-///
-/// PAC is used to selectively route traffic through the proxy. For the full background and
-/// operational details, see the proxy docs in `safechain-agent/docs/proxy.md`.
 pub trait Rule: Sized + Send + Sync + 'static {
     fn product_name(&self) -> &'static str;
 
