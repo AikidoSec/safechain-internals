@@ -47,10 +47,6 @@ impl RuleVSCode {
     where
         C: Service<Request, Output = Response, Error = OpaqueError>,
     {
-        // NOTE: should you ever need to share a remote malware list between different rules,
-        // you would simply create it outside of the rule, clone and pass it in.
-        // These remoter malware list resources are cloneable and will share the list,
-        // so it only gets updated once
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_vscode.json"),
@@ -85,7 +81,7 @@ impl fmt::Debug for RuleVSCode {
 impl Rule for RuleVSCode {
     #[inline(always)]
     fn product_name(&self) -> &'static str {
-        "VSCode"
+        "VSCode Extensions"
     }
 
     #[inline(always)]
