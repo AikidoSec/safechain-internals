@@ -8,8 +8,10 @@ built with <https://ramaproxy.org/>.
 
 Other proxy docs:
 
-- [./proxy/auth-flow.md](./proxy/auth-flow.md): learn more about the proxy auto flow,
+- [./proxy/auth-flow.md](./proxy/auth-flow.md): learn more about the proxy authentication flow,
   and specifically how to pass a user config when connecting to the safechain proxy.
+- [./proxy/pac.md](./proxy/pac.md): learn more about Proxy Auto Configuration
+  and how the safechain proxy project supports this flow.
 
 ## Quick Start
 

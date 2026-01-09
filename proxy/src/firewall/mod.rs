@@ -133,6 +133,12 @@ impl Firewall {
         Ok(mod_resp)
     }
 
+    /// Generates and serves a PAC script,
+    /// with the target domains collected using the
+    /// [`Firewall`]'s [`Rule`] list.
+    ///
+    /// See `docs/proxy/pac.md` for in-depth documentation regarding
+    /// Proxy Auto Configuration (PAC in short).
     pub fn generate_pac_script_response(
         &self,
         proxy_address: SocketAddress,
