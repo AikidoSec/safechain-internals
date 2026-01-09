@@ -11,6 +11,7 @@ type Config struct {
 	RunDir              string
 	LogDir              string
 	SafeChainBinaryPath string
+	SafeChainLogPath    string
 }
 
 var config Config

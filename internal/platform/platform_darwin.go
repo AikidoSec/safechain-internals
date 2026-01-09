@@ -204,3 +204,10 @@ func IsWindowsService() bool {
 func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
 	return nil
 }
+
+func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) error {
+	cmd := exec.CommandContext(ctx, binaryPath, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}

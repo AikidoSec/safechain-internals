@@ -4,15 +4,32 @@ package platform
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
+	"unsafe"
 
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
+)
+
+var (
+	modwtsapi32                 = windows.NewLazySystemDLL("wtsapi32.dll")
+	modkernel32                 = windows.NewLazySystemDLL("kernel32.dll")
+	modadvapi32                 = windows.NewLazySystemDLL("advapi32.dll")
+	moduserenv                  = windows.NewLazySystemDLL("userenv.dll")
+	procWTSGetActiveConsole     = modkernel32.NewProc("WTSGetActiveConsoleSessionId")
+	procWTSQueryUserToken       = modwtsapi32.NewProc("WTSQueryUserToken")
+	procDuplicateTokenEx        = modadvapi32.NewProc("DuplicateTokenEx")
+	procCreateProcessAsUserW    = modadvapi32.NewProc("CreateProcessAsUserW")
+	procCreateEnvironmentBlock  = moduserenv.NewProc("CreateEnvironmentBlock")
+	procDestroyEnvironmentBlock = moduserenv.NewProc("DestroyEnvironmentBlock")
 )
 
 const (
@@ -284,4 +301,110 @@ func IsWindowsService() bool {
 
 func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
 	return svc.Run(serviceName, &windowsService{runner: runner})
+}
+
+func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) error {
+	if !IsWindowsService() {
+		cmd := exec.CommandContext(ctx, binaryPath, args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+
+	return runAsLoggedInUser(binaryPath, args)
+}
+
+func runAsLoggedInUser(binaryPath string, args []string) error {
+	sessionID, _, _ := procWTSGetActiveConsole.Call()
+	if sessionID == 0xFFFFFFFF {
+		return fmt.Errorf("no active console session found")
+	}
+
+	var userToken windows.Token
+	ret, _, err := procWTSQueryUserToken.Call(sessionID, uintptr(unsafe.Pointer(&userToken)))
+	if ret == 0 {
+		return fmt.Errorf("WTSQueryUserToken failed: %v", err)
+	}
+	defer userToken.Close()
+
+	var duplicatedToken windows.Token
+	const securityImpersonation = 2
+	const tokenPrimary = 1
+	ret, _, err = procDuplicateTokenEx.Call(
+		uintptr(userToken),
+		0,
+		0,
+		securityImpersonation,
+		tokenPrimary,
+		uintptr(unsafe.Pointer(&duplicatedToken)),
+	)
+	if ret == 0 {
+		return fmt.Errorf("DuplicateTokenEx failed: %v", err)
+	}
+	defer duplicatedToken.Close()
+
+	var envBlock uintptr
+	ret, _, err = procCreateEnvironmentBlock.Call(
+		uintptr(unsafe.Pointer(&envBlock)),
+		uintptr(duplicatedToken),
+		0,
+	)
+	if ret == 0 {
+		return fmt.Errorf("CreateEnvironmentBlock failed: %v", err)
+	}
+	defer procDestroyEnvironmentBlock.Call(envBlock)
+
+	cmdLine := binaryPath
+	if len(args) > 0 {
+		cmdLine = fmt.Sprintf(`"%s" %s`, binaryPath, strings.Join(args, " "))
+	} else {
+		cmdLine = fmt.Sprintf(`"%s"`, binaryPath)
+	}
+	cmdLinePtr, _ := syscall.UTF16PtrFromString(cmdLine)
+
+	var si windows.StartupInfo
+	si.Cb = uint32(unsafe.Sizeof(si))
+	si.Desktop, _ = syscall.UTF16PtrFromString("winsta0\\default")
+
+	var pi windows.ProcessInformation
+	const createUnicodeEnvironment = 0x00000400
+
+	ret, _, err = procCreateProcessAsUserW.Call(
+		uintptr(duplicatedToken),
+		0,
+		uintptr(unsafe.Pointer(cmdLinePtr)),
+		0,
+		0,
+		0,
+		createUnicodeEnvironment,
+		envBlock,
+		0,
+		uintptr(unsafe.Pointer(&si)),
+		uintptr(unsafe.Pointer(&pi)),
+	)
+	if ret == 0 {
+		return fmt.Errorf("CreateProcessAsUserW failed: %v", err)
+	}
+
+	defer windows.CloseHandle(pi.Thread)
+	defer windows.CloseHandle(pi.Process)
+
+	event, err := windows.WaitForSingleObject(pi.Process, windows.INFINITE)
+	if err != nil {
+		return fmt.Errorf("WaitForSingleObject failed: %v", err)
+	}
+	if event != windows.WAIT_OBJECT_0 {
+		return fmt.Errorf("unexpected wait result: %d", event)
+	}
+
+	var exitCode uint32
+	if err := windows.GetExitCodeProcess(pi.Process, &exitCode); err != nil {
+		return fmt.Errorf("GetExitCodeProcess failed: %v", err)
+	}
+	if exitCode != 0 {
+		return fmt.Errorf("process exited with code %d", exitCode)
+	}
+
+	log.Printf("Process %s completed successfully as logged-in user", binaryPath)
+	return nil
 }
