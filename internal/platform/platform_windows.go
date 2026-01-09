@@ -18,12 +18,14 @@ import (
 const (
 	SafeChainProxyBinaryName = "SafeChainProxy.exe"
 	SafeChainProxyLogName    = "SafeChainProxy.log"
+	registryInternetSettings = `HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings`
+	proxyOverride            = "<local>,localhost,127.0.0.1"
 )
 
 // Configuration folders are configured and cleaned up in the Windows MSI install (packaging/windows/SafeChainAgent.wxs)
 func initConfig() error {
 	programDataDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent")
-	config.BinaryDir = "C:\\Program Files\\AikidoSecurity\\SafeChainAgent\\bin"
+	config.BinaryDir = `C:\Program Files\AikidoSecurity\SafeChainAgent\bin`
 	config.LogDir = filepath.Join(programDataDir, "logs")
 	config.RunDir = filepath.Join(programDataDir, "run")
 	config.SafeChainBinaryPath = filepath.Join(programDataDir, "bin", "safe-chain.exe")
@@ -67,8 +69,6 @@ func SetupLogging() (io.Writer, error) {
 	return io.MultiWriter(os.Stdout, &syncWriter{f: f}), nil
 }
 
-const registryInternetSettings = `HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings`
-
 func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	cmd := exec.CommandContext(ctx, "netsh", "winhttp", "set", "proxy", proxyURL)
 	cmd.Stdout = os.Stdout
@@ -80,7 +80,7 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	regCmds := [][]string{
 		{"reg", "add", registryInternetSettings, "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "1", "/f"},
 		{"reg", "add", registryInternetSettings, "/v", "ProxyServer", "/t", "REG_SZ", "/d", proxyURL, "/f"},
-		{"reg", "add", registryInternetSettings, "/v", "ProxyOverride", "/t", "REG_SZ", "/d", "<local>,localhost,127.0.0.1", "/f"},
+		{"reg", "add", registryInternetSettings, "/v", "ProxyOverride", "/t", "REG_SZ", "/d", proxyOverride, "/f"},
 	}
 	for _, args := range regCmds {
 		cmd := exec.CommandContext(ctx, args[0], args[1:]...)

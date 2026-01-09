@@ -170,4 +170,5 @@ func (d *Daemon) initLogging() {
 	}
 	log.SetOutput(writer)
 	log.SetFlags(log.LstdFlags)
+	log.Printf("Logging setup complete")
 }
