@@ -21,15 +21,20 @@ import (
 
 var (
 	modwtsapi32                 = windows.NewLazySystemDLL("wtsapi32.dll")
-	modkernel32                 = windows.NewLazySystemDLL("kernel32.dll")
 	modadvapi32                 = windows.NewLazySystemDLL("advapi32.dll")
 	moduserenv                  = windows.NewLazySystemDLL("userenv.dll")
-	procWTSGetActiveConsole     = modkernel32.NewProc("WTSGetActiveConsoleSessionId")
+	procWTSEnumerateSessions    = modwtsapi32.NewProc("WTSEnumerateSessionsW")
+	procWTSFreeMemory           = modwtsapi32.NewProc("WTSFreeMemory")
 	procWTSQueryUserToken       = modwtsapi32.NewProc("WTSQueryUserToken")
 	procDuplicateTokenEx        = modadvapi32.NewProc("DuplicateTokenEx")
 	procCreateProcessAsUserW    = modadvapi32.NewProc("CreateProcessAsUserW")
 	procCreateEnvironmentBlock  = moduserenv.NewProc("CreateEnvironmentBlock")
 	procDestroyEnvironmentBlock = moduserenv.NewProc("DestroyEnvironmentBlock")
+)
+
+const (
+	wtsActive        = 0
+	wtsCurrentServer = 0
 )
 
 const (
@@ -314,14 +319,53 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) err
 	return runAsLoggedInUser(binaryPath, args)
 }
 
-func runAsLoggedInUser(binaryPath string, args []string) error {
-	sessionID, _, _ := procWTSGetActiveConsole.Call()
-	if sessionID == 0xFFFFFFFF {
-		return fmt.Errorf("no active console session found")
+type wtsSessionInfo struct {
+	SessionID      uint32
+	WinStationName *uint16
+	State          uint32
+}
+
+func getActiveUserSessionID() (uint32, error) {
+	var sessionInfo uintptr
+	var count uint32
+
+	ret, _, err := procWTSEnumerateSessions.Call(
+		wtsCurrentServer,
+		0,
+		1,
+		uintptr(unsafe.Pointer(&sessionInfo)),
+		uintptr(unsafe.Pointer(&count)),
+	)
+	if ret == 0 {
+		return 0, fmt.Errorf("WTSEnumerateSessions failed: %v", err)
+	}
+	defer procWTSFreeMemory.Call(sessionInfo)
+
+	sessions := unsafe.Slice((*wtsSessionInfo)(unsafe.Pointer(sessionInfo)), count)
+	for _, session := range sessions {
+		if session.State == wtsActive && session.SessionID != 0 {
+			var token windows.Token
+			ret, _, _ := procWTSQueryUserToken.Call(uintptr(session.SessionID), uintptr(unsafe.Pointer(&token)))
+			if ret != 0 {
+				token.Close()
+				return session.SessionID, nil
+			}
+		}
 	}
 
+	return 0, fmt.Errorf("no active user session found")
+}
+
+func runAsLoggedInUser(binaryPath string, args []string) error {
+	sessionID, err := getActiveUserSessionID()
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Found active user session: %d", sessionID)
+
 	var userToken windows.Token
-	ret, _, err := procWTSQueryUserToken.Call(sessionID, uintptr(unsafe.Pointer(&userToken)))
+	ret, _, err := procWTSQueryUserToken.Call(uintptr(sessionID), uintptr(unsafe.Pointer(&userToken)))
 	if ret == 0 {
 		return fmt.Errorf("WTSQueryUserToken failed: %v", err)
 	}
