@@ -54,6 +54,8 @@ pub async fn run_meta_https_server(
             let response = root_ca.as_http_response();
             std::future::ready(response)
         })
+        // See `docs/proxy/pac.md` for in-depth documentation regarding
+        // Proxy Auto Configuration (PAC in short).
         .with_get("/pac", move |req: Request| {
             if !req.extensions().contains::<SecureTransport>() {
                 tracing::debug!("/pac endpoint only available for TLS connections (as MITM proxy would anyway fail if Root CA is not trusted)");

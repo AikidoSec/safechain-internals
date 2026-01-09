@@ -7,6 +7,7 @@ rust-qa:
     cargo fmt
     @cargo install cargo-sort
     cargo sort --grouped
+    cargo doc -p safechain-proxy --no-deps
     cargo check --workspace --all-targets
     cargo clippy --workspace --all-targets
     cargo test --workspace
