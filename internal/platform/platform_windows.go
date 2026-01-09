@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	SafeChainProxyBinaryName = "SafeChainProxy.exe"
-	SafeChainProxyLogName    = "SafeChainProxy.log"
-	registryInternetSettings = `HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings`
-	proxyOverride            = "<local>,localhost,127.0.0.1"
+	SafeChainProxyBinaryName       = "SafeChainProxy.exe"
+	SafeChainProxyLogName          = "SafeChainProxy.log"
+	registryInternetSettingsSuffix = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
+	proxyOverride                  = "<local>,localhost,127.0.0.1"
 )
 
 // Configuration folders are configured and cleaned up in the Windows MSI install (packaging/windows/SafeChainAgent.wxs)
@@ -74,6 +74,31 @@ func SetupLogging() (io.Writer, error) {
 	return io.MultiWriter(os.Stdout, fileWriter), nil
 }
 
+func getLoggedInUserSIDs(ctx context.Context) ([]string, error) {
+	cmd := exec.CommandContext(ctx, "reg", "query", "HKU")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var sids []string
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "HKEY_USERS\\") {
+			continue
+		}
+		sid := strings.TrimPrefix(line, "HKEY_USERS\\")
+		if !strings.HasPrefix(sid, "S-1-5-21-") {
+			continue
+		}
+		if strings.HasSuffix(sid, "_Classes") {
+			continue
+		}
+		sids = append(sids, sid)
+	}
+	return sids, nil
+}
+
 func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	cmd := exec.CommandContext(ctx, "netsh", "winhttp", "set", "proxy", proxyURL)
 	cmd.Stdout = os.Stdout
@@ -82,18 +107,26 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 		return err
 	}
 
-	regCmds := [][]string{
-		{"reg", "add", registryInternetSettings, "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "1", "/f"},
-		{"reg", "add", registryInternetSettings, "/v", "ProxyServer", "/t", "REG_SZ", "/d", proxyURL, "/f"},
-		{"reg", "add", registryInternetSettings, "/v", "ProxyOverride", "/t", "REG_SZ", "/d", proxyOverride, "/f"},
+	sids, err := getLoggedInUserSIDs(ctx)
+	if err != nil {
+		return err
 	}
-	for _, args := range regCmds {
-		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-		log.Printf("Running command: %q", strings.Join(args, " "))
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return err
+
+	for _, sid := range sids {
+		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
+		regCmds := [][]string{
+			{"reg", "add", regPath, "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "1", "/f"},
+			{"reg", "add", regPath, "/v", "ProxyServer", "/t", "REG_SZ", "/d", proxyURL, "/f"},
+			{"reg", "add", regPath, "/v", "ProxyOverride", "/t", "REG_SZ", "/d", proxyOverride, "/f"},
+		}
+		for _, args := range regCmds {
+			cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+			log.Printf("Running command: %q", strings.Join(args, " "))
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -109,16 +142,24 @@ func IsSystemProxySet(ctx context.Context, proxyURL string) bool {
 		return false
 	}
 
-	regCmd := exec.CommandContext(ctx, "reg", "query", registryInternetSettings, "/v", "ProxyEnable")
-	regOutput, err := regCmd.Output()
-	if err != nil || !strings.Contains(string(regOutput), "0x1") {
+	sids, err := getLoggedInUserSIDs(ctx)
+	if err != nil || len(sids) == 0 {
 		return false
 	}
 
-	regCmd = exec.CommandContext(ctx, "reg", "query", registryInternetSettings, "/v", "ProxyServer")
-	regOutput, err = regCmd.Output()
-	if err != nil || !strings.Contains(string(regOutput), proxyURL) {
-		return false
+	for _, sid := range sids {
+		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
+		regCmd := exec.CommandContext(ctx, "reg", "query", regPath, "/v", "ProxyEnable")
+		regOutput, err := regCmd.Output()
+		if err != nil || !strings.Contains(string(regOutput), "0x1") {
+			return false
+		}
+
+		regCmd = exec.CommandContext(ctx, "reg", "query", regPath, "/v", "ProxyServer")
+		regOutput, err = regCmd.Output()
+		if err != nil || !strings.Contains(string(regOutput), proxyURL) {
+			return false
+		}
 	}
 
 	return true
@@ -132,18 +173,27 @@ func UnsetSystemProxy(ctx context.Context) error {
 		return err
 	}
 
-	regCmds := [][]string{
-		{"reg", "add", registryInternetSettings, "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "0", "/f"},
-		{"reg", "delete", registryInternetSettings, "/v", "ProxyServer", "/f"},
-		{"reg", "delete", registryInternetSettings, "/v", "ProxyOverride", "/f"},
+	sids, err := getLoggedInUserSIDs(ctx)
+	if err != nil {
+		log.Printf("Warning: failed to get user SIDs: %v", err)
+		return nil
 	}
-	for _, args := range regCmds {
-		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-		log.Printf("Running command: %q", strings.Join(args, " "))
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			log.Printf("Warning: failed to run %q: %v", strings.Join(args, " "), err)
+
+	for _, sid := range sids {
+		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
+		regCmds := [][]string{
+			{"reg", "add", regPath, "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "0", "/f"},
+			{"reg", "delete", regPath, "/v", "ProxyServer", "/f"},
+			{"reg", "delete", regPath, "/v", "ProxyOverride", "/f"},
+		}
+		for _, args := range regCmds {
+			cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+			log.Printf("Running command: %q", strings.Join(args, " "))
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				log.Printf("Warning: failed to run %q: %v", strings.Join(args, " "), err)
+			}
 		}
 	}
 	return nil
