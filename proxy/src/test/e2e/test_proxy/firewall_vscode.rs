@@ -268,3 +268,26 @@ async fn test_vscode_https_install_asset_subdomain_gallery_api_malware_blocked()
         "expected blocked response to mention malware, got: {payload}"
     );
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_vscode_domain_gating_marketplace_json_rewrite() {
+    let runtime = e2e::runtime::get().await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // Request from a non-matching domain
+    let resp_other = client
+        .get("https://example.com/_apis/public/gallery/extensionquery")
+        .typed_header(Accept::json())
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::OK, resp_other.status());
+    let _payload_other = resp_other.try_into_string().await.unwrap();
+    
+    assert!(
+        logs_contain("VSCode rule did not match response domain: passthrough"),
+        "expected trace log indicating domain gating blocked processing"
+    );
+}
