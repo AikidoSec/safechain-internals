@@ -66,10 +66,6 @@ jobs:
             target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
             os: linux
-          - arch: arm64
-            target: aarch64-unknown-linux-gnu
-            runner: ubuntu-latest
-            os: linux
 
     runs-on: ${{ matrix.runner }}
     steps:
