@@ -24,7 +24,7 @@ var serviceRegex = regexp.MustCompile(`^\((\d+)\)\s+(.+)$`)
 var deviceRegex = regexp.MustCompile(`Device:\s*(en\d+)`)
 
 func initConfig() error {
-	if os.Getuid() == 0 {
+	if RunningAsRoot() {
 		username, _, err := getConsoleUser(context.Background())
 		if err != nil {
 			return fmt.Errorf("failed to get console user: %v", err)
@@ -53,6 +53,11 @@ func SetupLogging() (io.Writer, error) {
 	return os.Stdout, nil
 }
 
+/*
+This function returns the list of network services on the system.
+It identifies the services that are currently active and have a physical network interface.
+Examples of services are: "Wi-Fi", "LAN", ...
+*/
 func getNetworkServices(ctx context.Context) ([]string, error) {
 	output, err := exec.CommandContext(ctx, "networksetup", "-listnetworkserviceorder").Output()
 	if err != nil {
@@ -129,18 +134,19 @@ func IsSystemProxySet(ctx context.Context, proxyURL string) bool {
 		return false
 	}
 
+	servicesWithProxySet := 0
 	for _, service := range services {
 		output, err := exec.CommandContext(ctx, "networksetup", "-getwebproxy", service).Output()
 		if err != nil {
-			continue
+			break
 		}
 		if strings.Contains(string(output), "Enabled: Yes") &&
 			strings.Contains(string(output), "Server: "+host) &&
 			strings.Contains(string(output), "Port: "+port) {
-			return true
+			servicesWithProxySet += 1
 		}
 	}
-	return false
+	return servicesWithProxySet > 0 && len(services) == servicesWithProxySet
 }
 
 func UnsetSystemProxy(ctx context.Context) error {
@@ -215,26 +221,23 @@ func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
 }
 
 func getConsoleUser(ctx context.Context) (string, string, error) {
-	output, err := exec.CommandContext(ctx, "stat", "-f%Su", "/dev/console").Output()
+	output, err := exec.CommandContext(ctx, "stat", "-f", "%Su %u", "/dev/console").Output()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to get console user: %v", err)
 	}
-	username := strings.TrimSpace(string(output))
+	parts := strings.Fields(string(output))
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("unexpected stat output: %s", output)
+	}
+	username, uid := parts[0], parts[1]
 	if username == "" || username == "root" {
 		return "", "", fmt.Errorf("no interactive user logged in")
 	}
-
-	uidOutput, err := exec.CommandContext(ctx, "id", "-u", username).Output()
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get uid for user %s: %v", username, err)
-	}
-	uid := strings.TrimSpace(string(uidOutput))
-
 	return username, uid, nil
 }
 
 func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) error {
-	if os.Getuid() != 0 {
+	if !RunningAsRoot() {
 		cmd := exec.CommandContext(ctx, binaryPath, args...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -246,9 +249,14 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) err
 		return err
 	}
 
+	// launchtl asuser 123 <binary_path> args...
 	launchctlArgs := append([]string{"asuser", uid, binaryPath}, args...)
 	cmd := exec.CommandContext(ctx, "launchctl", launchctlArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func RunningAsRoot() bool {
+	return os.Getuid() == 0
 }
