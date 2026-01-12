@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"strings"
 
 	install_proxy_ca "github.com/AikidoSec/safechain-agent/internal/setup/steps/01_install_proxy_ca"
 	set_system_proxy "github.com/AikidoSec/safechain-agent/internal/setup/steps/02_set_system_proxy"
@@ -40,7 +41,7 @@ func (r *Runner) Run(ctx context.Context) error {
 
 	log.Println("SafeChain", stage)
 	log.Println("================")
-	log.Printf("%s will run %d step(s).\n\n", stage, numberOfSteps)
+	log.Printf("This %s will run %d step(s).\n\n", strings.ToLower(stage), numberOfSteps)
 
 	for i, step := range r.steps {
 		select {
