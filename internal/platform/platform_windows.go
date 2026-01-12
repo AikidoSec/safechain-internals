@@ -243,7 +243,7 @@ func UnsetSystemProxy(ctx context.Context) error {
 	sids, err := getLoggedInUserSIDs(ctx)
 	if err != nil {
 		log.Printf("Warning: failed to get user SIDs: %v", err)
-		return nil
+		return err
 	}
 
 	for _, sid := range sids {
