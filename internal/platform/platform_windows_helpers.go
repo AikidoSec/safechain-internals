@@ -22,6 +22,7 @@ func getActiveUserSessionID() (uint32, error) {
 
 	sessions := unsafe.Slice(sessionInfo, count)
 	for _, session := range sessions {
+        // get the current active session that's not root
 		if session.State == windows.WTSActive && session.SessionID != 0 {
 			var token windows.Token
 			if err := windows.WTSQueryUserToken(session.SessionID, &token); err == nil {
