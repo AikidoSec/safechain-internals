@@ -240,10 +240,7 @@ func getConsoleUser(ctx context.Context) (string, string, error) {
 
 func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) error {
 	if !RunningAsRoot() {
-		cmd := exec.CommandContext(ctx, binaryPath, args...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
+		return utils.RunCommand(ctx, binaryPath, args...)
 	}
 
 	_, uid, err := getConsoleUser(ctx)
