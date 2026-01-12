@@ -103,31 +103,6 @@ func SetupLogging() (io.Writer, error) {
 	return io.MultiWriter(os.Stdout, fileWriter), nil
 }
 
-func getLoggedInUserSIDs(ctx context.Context) ([]string, error) {
-	cmd := exec.CommandContext(ctx, "reg", "query", "HKU")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-
-	var sids []string
-	for _, line := range strings.Split(string(output), "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "HKEY_USERS\\") {
-			continue
-		}
-		sid := strings.TrimPrefix(line, "HKEY_USERS\\")
-		if !strings.HasPrefix(sid, "S-1-5-21-") {
-			continue
-		}
-		if strings.HasSuffix(sid, "_Classes") {
-			continue
-		}
-		sids = append(sids, sid)
-	}
-	return sids, nil
-}
-
 func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	if err := utils.RunCommand(ctx, "netsh", "winhttp", "set", "proxy", proxyURL); err != nil {
 		return err
@@ -140,13 +115,13 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 
 	for _, sid := range sids {
 		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
-		regCmds := [][]string{
-			{"reg", "add", regPath, "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "1", "/f"},
-			{"reg", "add", regPath, "/v", "ProxyServer", "/t", "REG_SZ", "/d", proxyURL, "/f"},
-			{"reg", "add", regPath, "/v", "ProxyOverride", "/t", "REG_SZ", "/d", proxyOverride, "/f"},
+		regCmds := []RegistryValue{
+			{Type: "REG_DWORD", Value: "ProxyEnable", Data: "1"},
+			{Type: "REG_SZ", Value: "ProxyServer", Data: proxyURL},        // URL to be used as proxy server by the OS
+			{Type: "REG_SZ", Value: "ProxyOverride", Data: proxyOverride}, // List of hosts to bypass the proxy
 		}
-		for _, args := range regCmds {
-			if err := utils.RunCommand(ctx, args[0], args[1:]...); err != nil {
+		for _, value := range regCmds {
+			if err := setRegistryValue(ctx, regPath, value); err != nil {
 				return err
 			}
 		}

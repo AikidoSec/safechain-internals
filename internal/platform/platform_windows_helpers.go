@@ -3,11 +3,14 @@
 package platform
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"os/exec"
 	"strings"
 	"unsafe"
 
+	"github.com/AikidoSec/safechain-agent/internal/utils"
 	"golang.org/x/sys/windows"
 )
 
@@ -33,6 +36,31 @@ func getActiveUserSessionID() (uint32, error) {
 	}
 
 	return 0, fmt.Errorf("no active user session found")
+}
+
+func getLoggedInUserSIDs(ctx context.Context) ([]string, error) {
+	cmd := exec.CommandContext(ctx, "reg", "query", "HKU")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var sids []string
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "HKEY_USERS\\") {
+			continue
+		}
+		sid := strings.TrimPrefix(line, "HKEY_USERS\\")
+		if !strings.HasPrefix(sid, "S-1-5-21-") {
+			continue
+		}
+		if strings.HasSuffix(sid, "_Classes") {
+			continue
+		}
+		sids = append(sids, sid)
+	}
+	return sids, nil
 }
 
 func buildCommandLineForWindowsProcess(binaryPath string, args []string) *uint16 {
@@ -119,4 +147,15 @@ func runAsLoggedInUser(binaryPath string, args []string) error {
 
 	log.Printf("Process %s completed successfully as logged-in user", binaryPath)
 	return nil
+}
+
+type RegistryValue struct {
+	Type  string
+	Value string
+	Data  string
+}
+
+func setRegistryValue(ctx context.Context, path string, value RegistryValue) error {
+	// reg add with /f flag will overwrite the existing value if it exists
+	return utils.RunCommand(ctx, "reg", "add", path, "/v", value.Value, "/t", value.Type, "/d", value.Data, "/f")
 }
