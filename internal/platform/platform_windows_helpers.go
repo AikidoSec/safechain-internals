@@ -25,7 +25,7 @@ func getActiveUserSessionID() (uint32, error) {
 
 	sessions := unsafe.Slice(sessionInfo, count)
 	for _, session := range sessions {
-        // get the current active session that's not root
+		// get the current active session that's not root
 		if session.State == windows.WTSActive && session.SessionID != 0 {
 			var token windows.Token
 			if err := windows.WTSQueryUserToken(session.SessionID, &token); err == nil {
@@ -158,4 +158,17 @@ type RegistryValue struct {
 func setRegistryValue(ctx context.Context, path string, value RegistryValue) error {
 	// reg add with /f flag will overwrite the existing value if it exists
 	return utils.RunCommand(ctx, "reg", "add", path, "/v", value.Value, "/t", value.Type, "/d", value.Data, "/f")
+}
+
+func registryValueContains(ctx context.Context, path string, value string, toContain string) bool {
+	cmd := exec.CommandContext(ctx, "reg", "query", path, "/v", value)
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(output), toContain)
+}
+
+func deleteRegistryValue(ctx context.Context, path string, value string) error {
+	return utils.RunCommand(ctx, "reg", "delete", path, "/v", value, "/f")
 }
