@@ -101,7 +101,6 @@ impl Rule for RuleVSCode {
             .map(|domain| self.match_domain(&domain))
             .unwrap_or_default()
         {
-            tracing::trace!("VSCode rule did not match incoming request: passthrough");
             return Ok(RequestAction::Allow(req));
         }
 
@@ -161,7 +160,6 @@ impl Rule for RuleVSCode {
             .map(|domain| self.match_domain(&domain.0))
             .unwrap_or_default()
         {
-            tracing::trace!("VSCode rule did not match response domain: passthrough");
             return Ok(resp);
         }
 
