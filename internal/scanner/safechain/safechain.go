@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/AikidoSec/safechain-agent/internal/platform"
@@ -66,10 +65,7 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 
 	args := []string{"setup"}
 
-	cmd := exec.CommandContext(ctx, binaryPath, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := platform.RunAsCurrentUser(ctx, binaryPath, args); err != nil {
 		return fmt.Errorf("failed to run safe-chain setup: %w", err)
 	}
 
@@ -78,11 +74,8 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 
 func (s *SafechainScanner) Uninstall(ctx context.Context) error {
 	cfg := platform.GetConfig()
-	cmd := exec.CommandContext(ctx, cfg.SafeChainBinaryPath, "teardown")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 	log.Printf("Running safe-chain teardown...")
-	if err := cmd.Run(); err != nil {
+	if err := utils.RunCommand(ctx, cfg.SafeChainBinaryPath, "teardown"); err != nil {
 		return fmt.Errorf("failed to run safe-chain teardown: %w", err)
 	}
 

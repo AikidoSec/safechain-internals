@@ -64,6 +64,7 @@ func (s *Step) Install(ctx context.Context) error {
 	if !platform.IsProxyCAInstalled(ctx) {
 		return fmt.Errorf("ca cert not installed")
 	}
+
 	log.Println("Installed CA cert successfully")
 	return nil
 }
