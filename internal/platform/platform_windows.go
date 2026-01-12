@@ -146,15 +146,10 @@ func IsSystemProxySet(ctx context.Context, proxyURL string) bool {
 
 	for _, sid := range sids {
 		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
-		regCmd := exec.CommandContext(ctx, "reg", "query", regPath, "/v", "ProxyEnable")
-		regOutput, err := regCmd.Output()
-		if err != nil || !strings.Contains(string(regOutput), "0x1") {
+		if !registryValueContains(ctx, regPath, "ProxyEnable", "0x1") {
 			return false
 		}
-
-		regCmd = exec.CommandContext(ctx, "reg", "query", regPath, "/v", "ProxyServer")
-		regOutput, err = regCmd.Output()
-		if err != nil || !strings.Contains(string(regOutput), proxyURL) {
+		if !registryValueContains(ctx, regPath, "ProxyServer", proxyURL) {
 			return false
 		}
 	}
@@ -174,13 +169,13 @@ func UnsetSystemProxy(ctx context.Context) error {
 
 	for _, sid := range sids {
 		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
-		regCmds := [][]string{
-			{"reg", "add", regPath, "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "0", "/f"},
-			{"reg", "delete", regPath, "/v", "ProxyServer", "/f"},
-			{"reg", "delete", regPath, "/v", "ProxyOverride", "/f"},
+		regValueToDelete := []string{
+			"ProxyEnable",
+			"ProxyServer",
+			"ProxyOverride",
 		}
-		for _, args := range regCmds {
-			if err := utils.RunCommand(ctx, args[0], args[1:]...); err != nil {
+		for _, regValue := range regValueToDelete {
+			if err := deleteRegistryValue(ctx, regPath, regValue); err != nil {
 				return err
 			}
 		}
