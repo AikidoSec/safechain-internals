@@ -15,6 +15,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/AikidoSec/safechain-agent/internal/utils"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 )
@@ -108,11 +109,8 @@ func GetActiveUserHomeDir() (string, error) {
 // This is necessary to allow the safe-chain binary to execute PowerShell scripts during setup,
 // such as modifying the PowerShell profile for shell integration.
 func PrepareShellEnvironment(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "powershell", "-Command",
+	return utils.RunCommand(ctx, "powershell", "-Command",
 		"Set-ExecutionPolicy", "-ExecutionPolicy", "RemoteSigned", "-Scope", "CurrentUser", "-Force")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
 }
 
 type syncWriter struct {
@@ -172,10 +170,7 @@ func getLoggedInUserSIDs(ctx context.Context) ([]string, error) {
 }
 
 func SetSystemProxy(ctx context.Context, proxyURL string) error {
-	cmd := exec.CommandContext(ctx, "netsh", "winhttp", "set", "proxy", proxyURL)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := utils.RunCommand(ctx, "netsh", "winhttp", "set", "proxy", proxyURL); err != nil {
 		return err
 	}
 
@@ -238,10 +233,7 @@ func IsSystemProxySet(ctx context.Context, proxyURL string) bool {
 }
 
 func UnsetSystemProxy(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "netsh", "winhttp", "reset", "proxy")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := utils.RunCommand(ctx, "netsh", "winhttp", "reset", "proxy"); err != nil {
 		return err
 	}
 
@@ -272,21 +264,17 @@ func UnsetSystemProxy(ctx context.Context) error {
 }
 
 func InstallProxyCA(ctx context.Context, caCertPath string) error {
-	cmd := exec.CommandContext(ctx, "certutil", "-addstore", "-f", "Root", caCertPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return utils.RunCommand(ctx, "certutil", "-addstore", "-f", "Root", caCertPath)
 }
 
 func IsProxyCAInstalled(ctx context.Context) bool {
-	return true
+	// certutil returns non-zero exit code if the certificate is not installed
+	err := utils.RunCommand(ctx, "certutil", "-store", "Root", "aikido.dev")
+	return err == nil
 }
 
 func UninstallProxyCA(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "certutil", "-delstore", "Root", "aikido.dev")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return utils.RunCommand(ctx, "certutil", "-delstore", "Root", "aikido.dev")
 }
 
 type ServiceRunner interface {

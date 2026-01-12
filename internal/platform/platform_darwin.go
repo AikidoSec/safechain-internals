@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/AikidoSec/safechain-agent/internal/utils"
 )
 
 const (
@@ -251,10 +253,7 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) err
 
 	// launchtl asuser 123 <binary_path> args...
 	launchctlArgs := append([]string{"asuser", uid, binaryPath}, args...)
-	cmd := exec.CommandContext(ctx, "launchctl", launchctlArgs...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return utils.RunCommand(ctx, "launchctl", launchctlArgs...)
 }
 
 func RunningAsRoot() bool {
