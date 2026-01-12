@@ -11,34 +11,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 	"unsafe"
 
 	"github.com/AikidoSec/safechain-agent/internal/utils"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
-)
-
-var (
-	modwtsapi32                  = windows.NewLazySystemDLL("wtsapi32.dll")
-	modadvapi32                  = windows.NewLazySystemDLL("advapi32.dll")
-	moduserenv                   = windows.NewLazySystemDLL("userenv.dll")
-	procWTSEnumerateSessions     = modwtsapi32.NewProc("WTSEnumerateSessionsW")
-	procWTSFreeMemory            = modwtsapi32.NewProc("WTSFreeMemory")
-	procWTSQueryUserToken        = modwtsapi32.NewProc("WTSQueryUserToken")
-	procDuplicateTokenEx         = modadvapi32.NewProc("DuplicateTokenEx")
-	procCreateProcessAsUserW     = modadvapi32.NewProc("CreateProcessAsUserW")
-	procCreateEnvironmentBlock   = moduserenv.NewProc("CreateEnvironmentBlock")
-	procDestroyEnvironmentBlock  = moduserenv.NewProc("DestroyEnvironmentBlock")
-	procGetUserProfileDirectoryW = moduserenv.NewProc("GetUserProfileDirectoryW")
-)
-
-const (
-	WTS_CURRENT_SERVER_HANDLE  = 0          // https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtsenumeratesessionsw
-	CREATE_UNICODE_ENVIRONMENT = 0x00000400 // https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
-	TokenPrimary               = 1          // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ne-winnt-token_type
-	SecurityImpersonation      = 2          // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ne-winnt-security_impersonation_level
 )
 
 const (
@@ -79,30 +57,12 @@ func GetActiveUserHomeDir() (string, error) {
 	}
 
 	var userToken windows.Token
-	ret, _, err := procWTSQueryUserToken.Call(uintptr(sessionID), uintptr(unsafe.Pointer(&userToken)))
-	if ret == 0 {
+	if err := windows.WTSQueryUserToken(sessionID, &userToken); err != nil {
 		return "", fmt.Errorf("WTSQueryUserToken failed: %v", err)
 	}
 	defer userToken.Close()
 
-	var size uint32
-	procGetUserProfileDirectoryW.Call(uintptr(userToken), 0, uintptr(unsafe.Pointer(&size)))
-
-	if size == 0 {
-		return "", fmt.Errorf("failed to get profile directory size")
-	}
-
-	buf := make([]uint16, size)
-	ret, _, err = procGetUserProfileDirectoryW.Call(
-		uintptr(userToken),
-		uintptr(unsafe.Pointer(&buf[0])),
-		uintptr(unsafe.Pointer(&size)),
-	)
-	if ret == 0 {
-		return "", fmt.Errorf("GetUserProfileDirectory failed: %v", err)
-	}
-
-	return syscall.UTF16ToString(buf), nil
+	return userToken.GetUserProfileDirectory()
 }
 
 // PrepareShellEnvironment sets the PowerShell execution policy to RemoteSigned for the current user.
@@ -239,7 +199,6 @@ func UnsetSystemProxy(ctx context.Context) error {
 
 	sids, err := getLoggedInUserSIDs(ctx)
 	if err != nil {
-		log.Printf("Warning: failed to get user SIDs: %v", err)
 		return err
 	}
 
@@ -357,34 +316,20 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) err
 	return runAsLoggedInUser(binaryPath, args)
 }
 
-type wtsSessionInfo struct {
-	SessionID      uint32
-	WinStationName *uint16
-	State          uint32
-}
-
 func getActiveUserSessionID() (uint32, error) {
-	var sessionInfo uintptr
+	var sessionInfo *windows.WTS_SESSION_INFO
 	var count uint32
 
-	ret, _, err := procWTSEnumerateSessions.Call(
-		WTS_CURRENT_SERVER_HANDLE,
-		0,
-		1,
-		uintptr(unsafe.Pointer(&sessionInfo)),
-		uintptr(unsafe.Pointer(&count)),
-	)
-	if ret == 0 {
+	if err := windows.WTSEnumerateSessions(0, 0, 1, &sessionInfo, &count); err != nil {
 		return 0, fmt.Errorf("WTSEnumerateSessions failed: %v", err)
 	}
-	defer procWTSFreeMemory.Call(sessionInfo)
+	defer windows.WTSFreeMemory(uintptr(unsafe.Pointer(sessionInfo)))
 
-	sessions := unsafe.Slice((*wtsSessionInfo)(unsafe.Pointer(sessionInfo)), count)
+	sessions := unsafe.Slice(sessionInfo, count)
 	for _, session := range sessions {
-		if session.State == WTS_CURRENT_SERVER_HANDLE && session.SessionID != 0 {
+		if session.State == windows.WTSActive && session.SessionID != 0 {
 			var token windows.Token
-			ret, _, _ := procWTSQueryUserToken.Call(uintptr(session.SessionID), uintptr(unsafe.Pointer(&token)))
-			if ret != 0 {
+			if err := windows.WTSQueryUserToken(session.SessionID, &token); err == nil {
 				token.Close()
 				return session.SessionID, nil
 			}
@@ -403,36 +348,22 @@ func runAsLoggedInUser(binaryPath string, args []string) error {
 	log.Printf("Found active user session: %d", sessionID)
 
 	var userToken windows.Token
-	ret, _, err := procWTSQueryUserToken.Call(uintptr(sessionID), uintptr(unsafe.Pointer(&userToken)))
-	if ret == 0 {
+	if err := windows.WTSQueryUserToken(sessionID, &userToken); err != nil {
 		return fmt.Errorf("WTSQueryUserToken failed: %v", err)
 	}
 	defer userToken.Close()
 
 	var duplicatedToken windows.Token
-	ret, _, err = procDuplicateTokenEx.Call(
-		uintptr(userToken),
-		0,
-		0,
-		SecurityImpersonation,
-		TokenPrimary,
-		uintptr(unsafe.Pointer(&duplicatedToken)),
-	)
-	if ret == 0 {
+	if err := windows.DuplicateTokenEx(userToken, 0, nil, windows.SecurityImpersonation, windows.TokenPrimary, &duplicatedToken); err != nil {
 		return fmt.Errorf("DuplicateTokenEx failed: %v", err)
 	}
 	defer duplicatedToken.Close()
 
-	var envBlock uintptr
-	ret, _, err = procCreateEnvironmentBlock.Call(
-		uintptr(unsafe.Pointer(&envBlock)),
-		uintptr(duplicatedToken),
-		0,
-	)
-	if ret == 0 {
+	var envBlock *uint16
+	if err := windows.CreateEnvironmentBlock(&envBlock, duplicatedToken, false); err != nil {
 		return fmt.Errorf("CreateEnvironmentBlock failed: %v", err)
 	}
-	defer procDestroyEnvironmentBlock.Call(envBlock)
+	defer windows.DestroyEnvironmentBlock(envBlock)
 
 	cmdLine := binaryPath
 	if len(args) > 0 {
@@ -440,29 +371,16 @@ func runAsLoggedInUser(binaryPath string, args []string) error {
 	} else {
 		cmdLine = fmt.Sprintf(`"%s"`, binaryPath)
 	}
-	cmdLinePtr, _ := syscall.UTF16PtrFromString(cmdLine)
+	cmdLinePtr, _ := windows.UTF16PtrFromString(cmdLine)
 
 	var si windows.StartupInfo
 	si.Cb = uint32(unsafe.Sizeof(si))
-	si.Desktop, _ = syscall.UTF16PtrFromString("winsta0\\default")
+	si.Desktop, _ = windows.UTF16PtrFromString("winsta0\\default")
 
 	var pi windows.ProcessInformation
 
-	ret, _, err = procCreateProcessAsUserW.Call(
-		uintptr(duplicatedToken),
-		0,
-		uintptr(unsafe.Pointer(cmdLinePtr)),
-		0,
-		0,
-		0,
-		CREATE_UNICODE_ENVIRONMENT,
-		envBlock,
-		0,
-		uintptr(unsafe.Pointer(&si)),
-		uintptr(unsafe.Pointer(&pi)),
-	)
-	if ret == 0 {
-		return fmt.Errorf("CreateProcessAsUserW failed: %v", err)
+	if err := windows.CreateProcessAsUser(duplicatedToken, nil, cmdLinePtr, nil, nil, false, windows.CREATE_UNICODE_ENVIRONMENT, envBlock, nil, &si, &pi); err != nil {
+		return fmt.Errorf("CreateProcessAsUser failed: %v", err)
 	}
 
 	defer windows.CloseHandle(pi.Thread)
