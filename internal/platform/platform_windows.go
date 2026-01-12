@@ -34,8 +34,7 @@ var (
 )
 
 const (
-	wtsActive                  = 0
-	wtsCurrentServer           = 0
+	WTS_CURRENT_SERVER_HANDLE  = 0          // https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtsenumeratesessionsw
 	CREATE_UNICODE_ENVIRONMENT = 0x00000400 // https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
 	TokenPrimary               = 1          // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ne-winnt-token_type
 	SecurityImpersonation      = 2          // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ne-winnt-security_impersonation_level
@@ -381,7 +380,7 @@ func getActiveUserSessionID() (uint32, error) {
 	var count uint32
 
 	ret, _, err := procWTSEnumerateSessions.Call(
-		wtsCurrentServer,
+		WTS_CURRENT_SERVER_HANDLE,
 		0,
 		1,
 		uintptr(unsafe.Pointer(&sessionInfo)),
@@ -394,7 +393,7 @@ func getActiveUserSessionID() (uint32, error) {
 
 	sessions := unsafe.Slice((*wtsSessionInfo)(unsafe.Pointer(sessionInfo)), count)
 	for _, session := range sessions {
-		if session.State == wtsActive && session.SessionID != 0 {
+		if session.State == WTS_CURRENT_SERVER_HANDLE && session.SessionID != 0 {
 			var token windows.Token
 			ret, _, _ := procWTSQueryUserToken.Call(uintptr(session.SessionID), uintptr(unsafe.Pointer(&token)))
 			if ret != 0 {
