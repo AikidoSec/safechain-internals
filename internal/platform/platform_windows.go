@@ -34,8 +34,11 @@ var (
 )
 
 const (
-	wtsActive        = 0
-	wtsCurrentServer = 0
+	wtsActive                  = 0
+	wtsCurrentServer           = 0
+	CREATE_UNICODE_ENVIRONMENT = 0x00000400 // https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
+	TokenPrimary               = 1          // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ne-winnt-token_type
+	SecurityImpersonation      = 2          // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ne-winnt-security_impersonation_level
 )
 
 const (
@@ -54,7 +57,10 @@ func initConfig() error {
 	var err error
 	config.HomeDir, err = GetActiveUserHomeDir()
 	if err != nil {
-		config.HomeDir, _ = os.UserHomeDir()
+		config.HomeDir, err = os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to get home directory: %v", err)
+		}
 	}
 	log.Println("User home directory used for SafeChain:", config.HomeDir)
 	safeChainDir := filepath.Join(config.HomeDir, ".safe-chain")
@@ -417,14 +423,12 @@ func runAsLoggedInUser(binaryPath string, args []string) error {
 	defer userToken.Close()
 
 	var duplicatedToken windows.Token
-	const securityImpersonation = 2
-	const tokenPrimary = 1
 	ret, _, err = procDuplicateTokenEx.Call(
 		uintptr(userToken),
 		0,
 		0,
-		securityImpersonation,
-		tokenPrimary,
+		SecurityImpersonation,
+		TokenPrimary,
 		uintptr(unsafe.Pointer(&duplicatedToken)),
 	)
 	if ret == 0 {
@@ -456,7 +460,6 @@ func runAsLoggedInUser(binaryPath string, args []string) error {
 	si.Desktop, _ = syscall.UTF16PtrFromString("winsta0\\default")
 
 	var pi windows.ProcessInformation
-	const createUnicodeEnvironment = 0x00000400
 
 	ret, _, err = procCreateProcessAsUserW.Call(
 		uintptr(duplicatedToken),
@@ -465,7 +468,7 @@ func runAsLoggedInUser(binaryPath string, args []string) error {
 		0,
 		0,
 		0,
-		createUnicodeEnvironment,
+		CREATE_UNICODE_ENVIRONMENT,
 		envBlock,
 		0,
 		uintptr(unsafe.Pointer(&si)),
