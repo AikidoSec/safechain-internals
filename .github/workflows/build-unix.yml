@@ -57,9 +57,19 @@ jobs:
           - arch: arm64
             target: aarch64-apple-darwin
             runner: macos-14
+            os: darwin
           - arch: amd64
             target: x86_64-apple-darwin
             runner: macos-14
+            os: darwin
+          - arch: amd64
+            target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            os: linux
+          - arch: arm64
+            target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            os: linux
 
     runs-on: ${{ matrix.runner }}
     steps:
@@ -71,6 +81,12 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.os == 'linux' && matrix.arch == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
@@ -87,17 +103,19 @@ jobs:
         run: |
           cargo fmt --check
 
-      - name: Build proxy binary for ${{ matrix.arch }}
+      - name: Build proxy binary for ${{ matrix.os }}/${{ matrix.arch }}
         run: |
           cargo build --release -p safechain-proxy --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
       - name: Prepare artifacts
         run: |
-          mv target/${{ matrix.target }}/release/safechain-proxy safechain-proxy-darwin-${{ matrix.arch }}
+          mv target/${{ matrix.target }}/release/safechain-proxy safechain-proxy-${{ matrix.os }}-${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: safechain-proxy-darwin-${{ matrix.arch }}
+          name: safechain-proxy-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            safechain-proxy-darwin-${{ matrix.arch }}
+            safechain-proxy-${{ matrix.os }}-${{ matrix.arch }}
