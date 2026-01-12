@@ -14,6 +14,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+const PROCESS_TIMEOUT_MS = 60000 // 1 minute
+
 func getActiveUserSessionID() (uint32, error) {
 	var sessionInfo *windows.WTS_SESSION_INFO
 	var count uint32
@@ -91,9 +93,12 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 	defer windows.CloseHandle(pi.Thread)
 	defer windows.CloseHandle(pi.Process)
 
-	event, err := windows.WaitForSingleObject(pi.Process, windows.INFINITE)
+	event, err := windows.WaitForSingleObject(pi.Process, PROCESS_TIMEOUT_MS)
 	if err != nil {
 		return fmt.Errorf("WaitForSingleObject failed: %v", err)
+	}
+	if event == uint32(windows.WAIT_TIMEOUT) {
+		return fmt.Errorf("process timed out after 1 minute")
 	}
 	if event != windows.WAIT_OBJECT_0 {
 		return fmt.Errorf("unexpected wait result: %d", event)
