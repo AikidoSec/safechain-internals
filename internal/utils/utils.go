@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"regexp"
 	"runtime"
 )
@@ -100,4 +101,11 @@ func DownloadBinary(ctx context.Context, url, destPath string) error {
 	}
 
 	return nil
+}
+
+func RunCommand(ctx context.Context, command string, args ...string) error {
+	cmd := exec.CommandContext(ctx, command, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
