@@ -7,6 +7,7 @@ import (
 )
 
 type Config struct {
+	HomeDir             string
 	BinaryDir           string
 	RunDir              string
 	LogDir              string

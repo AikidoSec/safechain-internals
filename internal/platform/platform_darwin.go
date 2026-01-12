@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/AikidoSec/safechain-agent/internal/utils"
 )
 
 const (
@@ -24,14 +26,20 @@ var serviceRegex = regexp.MustCompile(`^\((\d+)\)\s+(.+)$`)
 var deviceRegex = regexp.MustCompile(`Device:\s*(en\d+)`)
 
 func initConfig() error {
-	var homeDir string
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home directory: %v", err)
+	if RunningAsRoot() {
+		username, _, err := getConsoleUser(context.Background())
+		if err != nil {
+			return fmt.Errorf("failed to get console user: %v", err)
+		}
+		config.HomeDir = filepath.Join("/Users", username)
+	} else {
+		var err error
+		config.HomeDir, err = os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to get home directory: %v", err)
+		}
 	}
-	log.Println("Home directory:", homeDir)
-
-	safeChainHomeDir := filepath.Join(homeDir, ".safe-chain")
+	safeChainHomeDir := filepath.Join(config.HomeDir, ".safe-chain")
 	config.BinaryDir = "/opt/homebrew/bin"
 	config.RunDir = filepath.Join(safeChainHomeDir, "run")
 	config.LogDir = filepath.Join(safeChainHomeDir, "logs")
@@ -47,6 +55,11 @@ func SetupLogging() (io.Writer, error) {
 	return os.Stdout, nil
 }
 
+/*
+This function returns the list of network services on the system.
+It identifies the services that are currently active and have a physical network interface.
+Examples of services are: "Wi-Fi", "LAN", ...
+*/
 func getNetworkServices(ctx context.Context) ([]string, error) {
 	output, err := exec.CommandContext(ctx, "networksetup", "-listnetworkserviceorder").Output()
 	if err != nil {
@@ -104,6 +117,38 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	}
 
 	return nil
+}
+
+func IsSystemProxySet(ctx context.Context, proxyURL string) bool {
+	parsed, err := url.Parse(proxyURL)
+	if err != nil {
+		return false
+	}
+
+	host := parsed.Hostname()
+	port := parsed.Port()
+	if port == "" {
+		return false
+	}
+
+	services, err := getNetworkServices(ctx)
+	if err != nil {
+		return false
+	}
+
+	servicesWithProxySet := 0
+	for _, service := range services {
+		output, err := exec.CommandContext(ctx, "networksetup", "-getwebproxy", service).Output()
+		if err != nil {
+			continue
+		}
+		if strings.Contains(string(output), "Enabled: Yes") &&
+			strings.Contains(string(output), "Server: "+host) &&
+			strings.Contains(string(output), "Port: "+port) {
+			servicesWithProxySet += 1
+		}
+	}
+	return servicesWithProxySet > 0 && len(services) == servicesWithProxySet
 }
 
 func UnsetSystemProxy(ctx context.Context) error {
@@ -175,4 +220,39 @@ func IsWindowsService() bool {
 
 func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
 	return nil
+}
+
+func getConsoleUser(ctx context.Context) (string, string, error) {
+	output, err := exec.CommandContext(ctx, "stat", "-f", "%Su %u", "/dev/console").Output()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get console user: %v", err)
+	}
+	parts := strings.Fields(string(output))
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("unexpected stat output: %s", output)
+	}
+	username, uid := parts[0], parts[1]
+	if username == "" || username == "root" {
+		return "", "", fmt.Errorf("no interactive user logged in")
+	}
+	return username, uid, nil
+}
+
+func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) error {
+	if !RunningAsRoot() {
+		return utils.RunCommand(ctx, binaryPath, args...)
+	}
+
+	_, uid, err := getConsoleUser(ctx)
+	if err != nil {
+		return err
+	}
+
+	// launchtl asuser 123 <binary_path> args...
+	launchctlArgs := append([]string{"asuser", uid, binaryPath}, args...)
+	return utils.RunCommand(ctx, "launchctl", launchctlArgs...)
+}
+
+func RunningAsRoot() bool {
+	return os.Getuid() == 0
 }
