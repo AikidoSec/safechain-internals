@@ -138,7 +138,7 @@ func IsSystemProxySet(ctx context.Context, proxyURL string) bool {
 	for _, service := range services {
 		output, err := exec.CommandContext(ctx, "networksetup", "-getwebproxy", service).Output()
 		if err != nil {
-			break
+			continue
 		}
 		if strings.Contains(string(output), "Enabled: Yes") &&
 			strings.Contains(string(output), "Server: "+host) &&
