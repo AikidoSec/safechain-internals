@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"strings"
 )
 
 func FetchLatestVersion(ctx context.Context, repoURL, binaryName string) (string, error) {
@@ -104,6 +105,7 @@ func DownloadBinary(ctx context.Context, url, destPath string) error {
 }
 
 func RunCommand(ctx context.Context, command string, args ...string) error {
+	log.Printf("Running command: %s %s", command, strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, command, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

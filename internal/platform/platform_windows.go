@@ -146,11 +146,7 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 			{"reg", "add", regPath, "/v", "ProxyOverride", "/t", "REG_SZ", "/d", proxyOverride, "/f"},
 		}
 		for _, args := range regCmds {
-			cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-			log.Printf("Running command: %q", strings.Join(args, " "))
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			if err := cmd.Run(); err != nil {
+			if err := utils.RunCommand(ctx, args[0], args[1:]...); err != nil {
 				return err
 			}
 		}
@@ -209,12 +205,8 @@ func UnsetSystemProxy(ctx context.Context) error {
 			{"reg", "delete", regPath, "/v", "ProxyOverride", "/f"},
 		}
 		for _, args := range regCmds {
-			cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-			log.Printf("Running command: %q", strings.Join(args, " "))
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			if err := cmd.Run(); err != nil {
-				log.Printf("Warning: failed to run %q: %v", strings.Join(args, " "), err)
+			if err := utils.RunCommand(ctx, args[0], args[1:]...); err != nil {
+				return err
 			}
 		}
 	}
@@ -306,10 +298,7 @@ func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
 
 func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) error {
 	if !IsWindowsService() {
-		cmd := exec.CommandContext(ctx, binaryPath, args...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
+		return utils.RunCommand(ctx, binaryPath, args...)
 	}
 
 	return runAsLoggedInUser(binaryPath, args)
