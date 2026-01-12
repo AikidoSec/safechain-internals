@@ -67,8 +67,8 @@ func GetActiveUserHomeDir() (string, error) {
 // This is necessary to allow the safe-chain binary to execute PowerShell scripts during setup,
 // such as modifying the PowerShell profile for shell integration.
 func PrepareShellEnvironment(ctx context.Context) error {
-	return utils.RunCommand(ctx, "powershell", "-Command",
-		"Set-ExecutionPolicy", "-ExecutionPolicy", "RemoteSigned", "-Scope", "CurrentUser", "-Force")
+	return RunAsCurrentUser(ctx, "powershell", []string{"-Command",
+		"Set-ExecutionPolicy", "-ExecutionPolicy", "RemoteSigned", "-Scope", "CurrentUser", "-Force"})
 }
 
 type syncWriter struct {
