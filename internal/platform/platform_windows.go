@@ -66,6 +66,7 @@ func GetActiveUserHomeDir() (string, error) {
 // PrepareShellEnvironment sets the PowerShell execution policy to RemoteSigned for the current user.
 // This is necessary to allow the safe-chain binary to execute PowerShell scripts during setup,
 // such as modifying the PowerShell profile for shell integration.
+// As safe-chain will run as the current user, we need to set the PowerShell execution policy for the current user.
 func PrepareShellEnvironment(ctx context.Context) error {
 	return RunAsCurrentUser(ctx, "powershell", []string{"-Command",
 		"Set-ExecutionPolicy", "-ExecutionPolicy", "RemoteSigned", "-Scope", "CurrentUser", "-Force"})
