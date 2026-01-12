@@ -54,7 +54,9 @@ func getLoggedInUserSIDs(ctx context.Context) ([]string, error) {
 			continue
 		}
 		sid := strings.TrimPrefix(line, "HKEY_USERS\\")
-		if !strings.HasPrefix(sid, "S-1-5-21-") { // local system accounts -> https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/81d92bba-d22b-4a8c-908a-554ab29148ab
+
+		// local system accounts -> https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/81d92bba-d22b-4a8c-908a-554ab29148ab
+		if !strings.HasPrefix(sid, "S-1-5-21-") {
 			continue
 		}
 		if strings.HasSuffix(sid, "_Classes") {
