@@ -22,7 +22,6 @@ const (
 	SafeChainProxyBinaryName       = "SafeChainProxy.exe"
 	SafeChainProxyLogName          = "SafeChainProxy.log"
 	registryInternetSettingsSuffix = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
-	// proxyOverride                  = "<local>,localhost,127.0.0.1"
 )
 
 func initConfig() error {
@@ -118,7 +117,6 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 		regCmds := []RegistryValue{
 			{Type: "REG_DWORD", Value: "ProxyEnable", Data: "1"},
 			{Type: "REG_SZ", Value: "ProxyServer", Data: proxyURL}, // URL to be used as proxy server by the OS
-			// {Type: "REG_SZ", Value: "ProxyOverride", Data: proxyOverride}, // List of hosts to bypass the proxy
 		}
 		for _, value := range regCmds {
 			if err := setRegistryValue(ctx, regPath, value); err != nil {
@@ -172,7 +170,6 @@ func UnsetSystemProxy(ctx context.Context) error {
 		regValueToDelete := []string{
 			"ProxyEnable",
 			"ProxyServer",
-			//"ProxyOverride",
 		}
 		for _, regValue := range regValueToDelete {
 			if err := deleteRegistryValue(ctx, regPath, regValue); err != nil {
