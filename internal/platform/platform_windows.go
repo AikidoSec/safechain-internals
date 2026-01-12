@@ -128,32 +128,32 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	return nil
 }
 
-func IsSystemProxySet(ctx context.Context, proxyURL string) bool {
+func IsSystemProxySet(ctx context.Context, proxyURL string) error {
 	cmd := exec.CommandContext(ctx, "netsh", "winhttp", "show", "proxy")
 	output, err := cmd.Output()
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to show winhttp proxy: %v", err)
 	}
 	if strings.Contains(string(output), "Direct access") {
-		return false
+		return fmt.Errorf("winhttp proxy is not set")
 	}
 
 	sids, err := getLoggedInUserSIDs(ctx)
 	if err != nil || len(sids) == 0 {
-		return false
+		return fmt.Errorf("failed to get logged in user sids: %v", err)
 	}
 
 	for _, sid := range sids {
 		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
 		if !registryValueContains(ctx, regPath, "ProxyEnable", "0x1") {
-			return false
+			return fmt.Errorf("ProxyEnable is not set in registry for user %s", sid)
 		}
 		if !registryValueContains(ctx, regPath, "ProxyServer", proxyURL) {
-			return false
+			return fmt.Errorf("ProxyServer is not set in registry for user %s", sid)
 		}
 	}
 
-	return true
+	return nil
 }
 
 func UnsetSystemProxy(ctx context.Context) error {
@@ -185,10 +185,9 @@ func InstallProxyCA(ctx context.Context, caCertPath string) error {
 	return utils.RunCommand(ctx, "certutil", "-addstore", "-f", "Root", caCertPath)
 }
 
-func IsProxyCAInstalled(ctx context.Context) bool {
+func IsProxyCAInstalled(ctx context.Context) error {
 	// certutil returns non-zero exit code if the certificate is not installed
-	err := utils.RunCommand(ctx, "certutil", "-store", "Root", "aikido.dev")
-	return err == nil
+	return utils.RunCommand(ctx, "certutil", "-store", "Root", "aikido.dev")
 }
 
 func UninstallProxyCA(ctx context.Context) error {
