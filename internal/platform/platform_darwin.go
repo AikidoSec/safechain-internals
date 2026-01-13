@@ -119,21 +119,21 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	return nil
 }
 
-func IsSystemProxySet(ctx context.Context, proxyURL string) bool {
+func IsSystemProxySet(ctx context.Context, proxyURL string) error {
 	parsed, err := url.Parse(proxyURL)
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to parse proxy URL: %v", err)
 	}
 
 	host := parsed.Hostname()
 	port := parsed.Port()
 	if port == "" {
-		return false
+		return fmt.Errorf("port is required")
 	}
 
 	services, err := getNetworkServices(ctx)
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to get network services: %v", err)
 	}
 
 	servicesWithProxySet := 0
@@ -148,7 +148,10 @@ func IsSystemProxySet(ctx context.Context, proxyURL string) bool {
 			servicesWithProxySet += 1
 		}
 	}
-	return servicesWithProxySet > 0 && len(services) == servicesWithProxySet
+	if servicesWithProxySet != len(services) {
+		return fmt.Errorf("system proxy is not set correctly for all services")
+	}
+	return nil
 }
 
 func UnsetSystemProxy(ctx context.Context) error {
@@ -172,41 +175,30 @@ func UnsetSystemProxy(ctx context.Context) error {
 }
 
 func InstallProxyCA(ctx context.Context, certPath string) error {
-	cmd := exec.CommandContext(ctx, "security", "add-trusted-cert",
+	// CA needs to be installed as current user, in order to be prompted for security permissions
+	return RunAsCurrentUser(ctx, "security", []string{"add-trusted-cert",
 		"-d",
 		"-r", "trustRoot",
 		"-k", "/Library/Keychains/System.keychain",
-		certPath)
-
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed to add trusted certificate: %v", err)
-	}
-	return nil
+		certPath})
 }
 
-func IsProxyCAInstalled(ctx context.Context) bool {
+func IsProxyCAInstalled(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "security", "find-certificate",
 		"-c", "aikido.dev",
 		"/Library/Keychains/System.keychain")
 
 	err := cmd.Run()
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to find certificate: %v", err)
 	}
-	return true
+	return nil
 }
 
 func UninstallProxyCA(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "security", "delete-certificate",
+	return RunAsCurrentUser(ctx, "security", []string{"delete-certificate",
 		"-c", "aikido.dev",
-		"/Library/Keychains/System.keychain")
-
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed to delete certificate: %v", err)
-	}
-	return nil
+		"/Library/Keychains/System.keychain"})
 }
 
 type ServiceRunner interface {
