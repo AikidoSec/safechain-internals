@@ -268,3 +268,44 @@ async fn test_vscode_https_install_asset_subdomain_gallery_api_malware_blocked()
         "expected blocked response to mention malware, got: {payload}"
     );
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_vscode_domain_gating_marketplace_json_rewrite() {
+    let runtime = e2e::runtime::get().await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // Matching domain
+    let resp_vscode = client
+        .get("https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery")
+        .typed_header(Accept::json())
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::OK, resp_vscode.status());
+    let payload_vscode = resp_vscode.try_into_string().await.unwrap();
+
+    if payload_vscode.contains("pythontheme") {
+        assert!(
+            payload_vscode.contains("⛔ MALWARE"),
+            "expected malware extension marked in VS Code Marketplace domain"
+        );
+    }
+
+    // Non-matching domain - should passthrough without JSON parsing/modification
+    let resp_other = client
+        .get("https://example.com/_apis/public/gallery/extensionquery")
+        .typed_header(Accept::json())
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::OK, resp_other.status());
+    let payload_other = resp_other.try_into_string().await.unwrap();
+
+    assert!(
+        !payload_other.contains("⛔ MALWARE"),
+        "non-matching domain response should not be modified with malware markers"
+    );
+}

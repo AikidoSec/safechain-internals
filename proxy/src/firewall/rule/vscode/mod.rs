@@ -3,6 +3,7 @@ use std::fmt;
 use rama::{
     Service,
     error::{ErrorContext as _, OpaqueError},
+    extensions::ExtensionsRef as _,
     graceful::ShutdownGuard,
     http::{
         Body, Request, Response, StatusCode, Uri,
@@ -20,6 +21,7 @@ use rama::{
 use rama::http::body::util::BodyExt;
 
 use crate::{
+    firewall::layer::evaluate_resp::ResponseRequestDomain,
     firewall::{malware_list::RemoteMalwareList, pac::PacScriptGenerator},
     http::{
         KnownContentType, remove_cache_headers, response::generate_malware_blocked_response_for_req,
@@ -153,6 +155,16 @@ impl Rule for RuleVSCode {
     }
 
     async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+        if !resp
+            .extensions()
+            .get::<ResponseRequestDomain>()
+            .map(|domain| self.match_domain(&domain.0))
+            .unwrap_or_default()
+        {
+            tracing::trace!("VSCode rule did not match response domain: passthrough");
+            return Ok(resp);
+        }
+
         // Check content type; JSON responses from gallery API will be inspected for blocked extensions.
         let is_json = resp
             .headers()
