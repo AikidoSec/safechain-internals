@@ -82,16 +82,25 @@ jobs:
       - name: Install musl tools
         if: contains(matrix.target, 'musl')
         run: |
-          sudo apt-get update && sudo apt-get install -y musl-tools musl-dev clang
-          echo CC_x86_64_unknown_linux_musl=clang >> $GITHUB_ENV
-          echo CXX_x86_64_unknown_linux_musl=clang++ >> $GITHUB_ENV
-          echo AR_x86_64_unknown_linux_musl=llvm-ar >> $GITHUB_ENV
-          echo CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=clang >> $GITHUB_ENV
-          echo CFLAGS_x86_64_unknown_linux_musl=-target x86_64-unknown-linux-musl >> $GITHUB_ENV
-          echo CXXFLAGS_x86_64_unknown_linux_musl=-target x86_64-unknown-linux-musl >> $GITHUB_ENV
-        env:
-          CC: clang
-          CXX: clang++
+          curl -LO https://github.com/cross-tools/musl-cross/releases/download/20250911/x86_64-unknown-linux-musl.tar.xz
+          sudo mkdir -p /opt/x-tools
+          sudo tar -xf x86_64-unknown-linux-musl.tar.xz -C /opt/x-tools
+          echo CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=/opt/x-tools/x86_64-unknown-linux-musl/bin/x86_64-unknown-linux-musl-gcc >> $GITHUB_ENV
+          echo CC_x86_64_unknown_linux_musl=/opt/x-tools/x86_64-unknown-linux-musl/bin/x86_64-unknown-linux-musl-gcc >> $GITHUB_ENV
+          echo CXX_x86_64_unknown_linux_musl=/opt/x-tools/x86_64-unknown-linux-musl/bin/x86_64-unknown-linux-musl-g++ >> $GITHUB_ENV
+          echo AR_x86_64_unknown_linux_musl=/opt/x-tools/x86_64-unknown-linux-musl/bin/x86_64-unknown-linux-musl-ar >> $GITHUB_ENV
+          echo RANLIB_x86_64_unknown_linux_musl=/opt/x-tools/x86_64-unknown-linux-musl/bin/x86_64-unknown-linux-musl-ranlib >> $GITHUB_ENV
+          echo STRIP_x86_64_unknown_linux_musl=/opt/x-tools/x86_64-unknown-linux-musl/bin/x86_64-unknown-linux-musl-strip >> $GITHUB_ENV
+        #   sudo apt-get update && sudo apt-get install -y musl-tools musl-dev clang
+        #   echo CC_x86_64_unknown_linux_musl=clang >> $GITHUB_ENV
+        #   echo CXX_x86_64_unknown_linux_musl=clang++ >> $GITHUB_ENV
+        #   echo AR_x86_64_unknown_linux_musl=llvm-ar >> $GITHUB_ENV
+        #   echo CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=clang >> $GITHUB_ENV
+        #   echo CFLAGS_x86_64_unknown_linux_musl=-target x86_64-unknown-linux-musl >> $GITHUB_ENV
+        #   echo CXXFLAGS_x86_64_unknown_linux_musl=-target x86_64-unknown-linux-musl >> $GITHUB_ENV
+        # env:
+        #   CC: clang
+        #   CXX: clang++
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
