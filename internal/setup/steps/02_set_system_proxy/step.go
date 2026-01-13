@@ -41,7 +41,7 @@ func (s *Step) Install(ctx context.Context) error {
 		return fmt.Errorf("failed to set system proxy: %v", err)
 	}
 	if err := platform.IsSystemProxySet(ctx, proxy.ProxyHttpUrl); err != nil {
-		return fmt.Errorf("failed to check if system proxy is set: %v", err)
+		return fmt.Errorf("could not verify if system proxy is set: %v", err)
 	}
 	log.Println("System proxy set successfully")
 	return nil
