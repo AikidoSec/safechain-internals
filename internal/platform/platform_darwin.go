@@ -175,6 +175,7 @@ func UnsetSystemProxy(ctx context.Context) error {
 }
 
 func InstallProxyCA(ctx context.Context, certPath string) error {
+	// CA needs to be installed as current user, in order to be prompted for security permissions
 	return RunAsCurrentUser(ctx, "security", []string{"add-trusted-cert",
 		"-d",
 		"-r", "trustRoot",
