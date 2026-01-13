@@ -1,11 +1,10 @@
 use rama::{
     Layer, Service,
     error::{BoxError, OpaqueError},
+    extensions::ExtensionsMut as _,
     http::{Request, Response},
     telemetry::tracing,
 };
-
-use rama::extensions::ExtensionsMut as _;
 
 use crate::firewall::Firewall;
 
