@@ -49,14 +49,20 @@ jobs:
         run: |
           mv artifacts/safechain-agent-darwin-amd64/safechain-agent-darwin-amd64 .
           mv artifacts/safechain-agent-darwin-arm64/safechain-agent-darwin-arm64 .
-          mv artifacts/SafeChainAgent.amd64.msi/SafeChainAgent.amd64.msi .
-          mv artifacts/SafeChainAgent.arm64.msi/SafeChainAgent.arm64.msi .
+          
           mv artifacts/safechain-proxy-darwin-amd64/safechain-proxy-darwin-amd64 .
           mv artifacts/safechain-proxy-darwin-arm64/safechain-proxy-darwin-arm64 .
+<<<<<<< HEAD
           mv artifacts/safechain-proxy-linux-amd64/safechain-proxy-linux-amd64 .
           mv artifacts/SafeChainProxy.amd64.exe/SafeChainProxy.amd64.exe .
           mv artifacts/SafeChainProxy.arm64.exe/SafeChainProxy.arm64.exe .
 
+=======
+
+          mv artifacts/SafeChainAgent.amd64.msi/SafeChainAgent.amd64.msi ./SafeChainAgent-windows-amd64.msi
+          mv artifacts/SafeChainAgent.arm64.msi/SafeChainAgent.arm64.msi ./SafeChainAgent-windows-arm64.msi
+                    
+>>>>>>> 86e3276 (Release Windows binaries + docs)
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -65,6 +71,12 @@ jobs:
             safechain-agent-darwin-arm64
             safechain-proxy-darwin-amd64
             safechain-proxy-darwin-arm64
+<<<<<<< HEAD
             safechain-proxy-linux-amd64
+=======
+            SafeChainAgent-windows-amd64.msi
+            SafeChainAgent-windows-arm64.msi
+
+>>>>>>> 86e3276 (Release Windows binaries + docs)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
