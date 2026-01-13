@@ -175,17 +175,11 @@ func UnsetSystemProxy(ctx context.Context) error {
 }
 
 func InstallProxyCA(ctx context.Context, certPath string) error {
-	cmd := exec.CommandContext(ctx, "security", "add-trusted-cert",
+	return RunAsCurrentUser(ctx, "security", []string{"add-trusted-cert",
 		"-d",
 		"-r", "trustRoot",
 		"-k", "/Library/Keychains/System.keychain",
-		certPath)
-
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed to add trusted certificate: %v", err)
-	}
-	return nil
+		certPath})
 }
 
 func IsProxyCAInstalled(ctx context.Context) error {
@@ -201,15 +195,9 @@ func IsProxyCAInstalled(ctx context.Context) error {
 }
 
 func UninstallProxyCA(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "security", "delete-certificate",
+	return RunAsCurrentUser(ctx, "security", []string{"delete-certificate",
 		"-c", "aikido.dev",
-		"/Library/Keychains/System.keychain")
-
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed to delete certificate: %v", err)
-	}
-	return nil
+		"/Library/Keychains/System.keychain"})
 }
 
 type ServiceRunner interface {
