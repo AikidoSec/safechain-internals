@@ -26,7 +26,6 @@ msiexec /i SafeChainAgent.msi /qn /norestart
 
 ```bash
 sudo brew services stop safechain-agent
-brew services stop safechain-agent
 brew uninstall safechain-agent
 ```
 
