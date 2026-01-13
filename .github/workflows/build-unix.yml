@@ -52,6 +52,7 @@ jobs:
 
   build-unix-proxy:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: arm64
@@ -77,6 +78,10 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
+
+      - name: Install musl tools
+        if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
