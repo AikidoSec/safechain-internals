@@ -28,7 +28,7 @@ jobs:
         with:
           toolchain: stable
           components: clippy, rustfmt
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@90558ad1e179036f31467972b00dec6cb80701fa
         with:
           tool: nextest
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
@@ -70,7 +70,7 @@ jobs:
           toolchain: stable
           components: clippy, rustfmt
       - name: Install Zig
-        uses: mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@e7d1537c378b83b8049f65dda471d87a2f7b2df2
         with:
           version: 0.13.0
       - name: Install cargo-zigbuild

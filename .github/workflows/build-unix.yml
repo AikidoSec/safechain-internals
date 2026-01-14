@@ -85,7 +85,7 @@ jobs:
 
       - name: Install Zig
         if: contains(matrix.target, 'unknown-linux-musl')
-        uses: mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@e7d1537c378b83b8049f65dda471d87a2f7b2df2
         with:
           version: 0.13.0
 
