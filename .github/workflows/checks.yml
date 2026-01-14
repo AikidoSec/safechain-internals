@@ -79,6 +79,6 @@ jobs:
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
         with:
           env-vars: "RUST_TOOLCHAIN=stable"
-      - name: integration test
+      - name: musl build check
         run: |
           cargo zigbuild -p safechain-proxy --target ${{ matrix.target }} --all-features
