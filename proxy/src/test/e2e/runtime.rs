@@ -28,6 +28,7 @@ use rama::{
         user::{Basic, ProxyCredential},
     },
     proxy::socks5::Socks5ProxyConnectorLayer,
+    rt::Executor,
     tls::boring::{
         client::TlsConnectorDataBuilder,
         core::x509::{X509, store::X509StoreBuilder},
@@ -237,7 +238,7 @@ fn create_client_inner(
             http_proxy_layer,
         ))
         .with_tls_support_using_boringssl(tls_config)
-        .with_default_http_connector()
+        .with_default_http_connector(Executor::default())
         .try_with_default_connection_pool()
         .expect("create connection pool for proxy web client")
         .build_client();

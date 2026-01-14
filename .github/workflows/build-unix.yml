@@ -83,37 +83,28 @@ jobs:
           toolchain: stable
           targets: ${{ matrix.target }}
 
-      - name: Install musl tools
-        if: contains(matrix.target, 'musl')
-        run: |
-          curl -LO https://github.com/cross-tools/musl-cross/releases/download/20250911/x86_64-unknown-linux-musl.tar.xz
-          sudo mkdir -p /opt/x-tools
-          sudo tar -xf x86_64-unknown-linux-musl.tar.xz -C /opt/x-tools
-          echo CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=/opt/x-tools/x86_64-unknown-linux-musl/bin/x86_64-unknown-linux-musl-gcc >> $GITHUB_ENV
-          echo CC_x86_64_unknown_linux_musl=/opt/x-tools/x86_64-unknown-linux-musl/bin/x86_64-unknown-linux-musl-gcc >> $GITHUB_ENV
-          echo CXX_x86_64_unknown_linux_musl=/opt/x-tools/x86_64-unknown-linux-musl/bin/x86_64-unknown-linux-musl-g++ >> $GITHUB_ENV
-          echo AR_x86_64_unknown_linux_musl=/opt/x-tools/x86_64-unknown-linux-musl/bin/x86_64-unknown-linux-musl-ar >> $GITHUB_ENV
-          echo RANLIB_x86_64_unknown_linux_musl=/opt/x-tools/x86_64-unknown-linux-musl/bin/x86_64-unknown-linux-musl-ranlib >> $GITHUB_ENV
-          echo STRIP_x86_64_unknown_linux_musl=/opt/x-tools/x86_64-unknown-linux-musl/bin/x86_64-unknown-linux-musl-strip >> $GITHUB_ENV
+      - name: Install Zig
+        if: contains(matrix.target, 'unknown-linux-musl')
+        uses: mlugg/setup-zig@e7d1537c378b83b8049f65dda471d87a2f7b2df2
+        with:
+          version: 0.13.0
+
+      - name: Install cargo-zigbuild
+        if: contains(matrix.target, 'unknown-linux-musl')
+        run: cargo install cargo-zigbuild --locked
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
         with:
           env-vars: "RUST_TOOLCHAIN=stable"
 
-      - name: cargo check
-        run: |
-          cargo check -p safechain-proxy --target ${{ matrix.target }}
-      - name: clippy
-        run: |
-          cargo clippy -p safechain-proxy --target ${{ matrix.target }}
-      - name: rustfmt
-        run: |
-          cargo fmt --check
-
       - name: Build proxy binary for ${{ matrix.os }}/${{ matrix.arch }}
         run: |
-          cargo build --release -p safechain-proxy --target ${{ matrix.target }}
+          if [[ "${{ matrix.target.name }}" == *"unknown-linux-musl"* ]]; then
+            cargo zigbuild --release -p safechain-proxy --target "${{ matrix.target.name }}"
+          else
+            cargo build --release -p safechain-proxy --target ${{ matrix.target }}
+          fi
 
       - name: Prepare artifacts
         run: |

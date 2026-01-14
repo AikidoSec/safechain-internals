@@ -11,6 +11,7 @@ use rama::{
     },
     layer::MapErrLayer,
     net::address::Domain,
+    rt::Executor,
     service::service_fn,
     telemetry::tracing,
 };
@@ -22,7 +23,7 @@ mod vscode_marketplace;
 pub fn new_mock_client()
 -> Result<impl Service<Request, Output = Response, Error = OpaqueError> + Clone, OpaqueError> {
     let echo_svc_builder = EchoServiceBuilder::default();
-    let echo_svc = Arc::new(echo_svc_builder.build_http());
+    let echo_svc = Arc::new(echo_svc_builder.build_http(Executor::default()));
     let not_found_svc = service_fn(move |req| {
         let echo_svc = echo_svc.clone();
         async move { echo_svc.serve(req).await.map(IntoResponse::into_response) }
