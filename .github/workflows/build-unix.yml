@@ -69,7 +69,7 @@ jobs:
             os: linux
           - arch: arm64
             target: aarch64-unknown-linux-musl
-            runner: ubuntu-latest
+            runner: ubuntu-24.04-arm
             os: linux
 
     runs-on: ${{ matrix.runner }}
