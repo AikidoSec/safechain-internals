@@ -1,0 +1,68 @@
+name: Build macOS Package
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+jobs:
+  build-unix:
+    uses: ./.github/workflows/build-unix.yml
+    with:
+      version: ${{ inputs.version || 'dev' }}
+
+  build-pkg:
+    needs: build-unix
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+          - arch: arm64
+
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download agent artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: safechain-agent-darwin-${{ matrix.arch }}
+          path: bin
+
+      - name: Download proxy artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: safechain-proxy-darwin-${{ matrix.arch }}
+          path: bin
+
+      - name: Verify binaries exist
+        run: |
+          ls -lh bin/
+          ls -lh bin/safechain-agent-darwin-${{ matrix.arch }}
+          ls -lh bin/safechain-proxy-darwin-${{ matrix.arch }}
+
+      - name: Build distribution .pkg installer
+        run: |
+          cd packaging/macos
+          ./build-distribution-pkg.sh -v "${{ inputs.version || 'dev' }}" -a "${{ matrix.arch }}" -b "../../bin" -o "../../dist"
+
+      - name: Upload .pkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SafeChainAgent-${{ matrix.arch }}.pkg
+          path: dist/SafeChainAgent-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.pkg
+
+      - name: Upload .pkg checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: SafeChainAgent-${{ matrix.arch }}.pkg.sha256
+          path: dist/SafeChainAgent-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.pkg.sha256

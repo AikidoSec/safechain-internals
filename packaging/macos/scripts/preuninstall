@@ -1,0 +1,26 @@
+#!/bin/bash
+
+set -e
+
+echo "SafeChain Agent Uninstaller - Pre-uninstall"
+
+LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.safechainagent.plist"
+
+# Stop and unload the daemon
+if launchctl list | grep -q "com.aikidosecurity.safechainagent"; then
+    echo "Stopping SafeChain Agent daemon..."
+    launchctl bootout system/com.aikidosecurity.safechainagent 2>/dev/null || {
+        echo "Trying alternative unload method..."
+        launchctl unload "$LAUNCHDAEMON_PLIST" 2>/dev/null || true
+    }
+fi
+
+# Remove LaunchDaemon plist
+if [ -f "$LAUNCHDAEMON_PLIST" ]; then
+    echo "Removing LaunchDaemon configuration..."
+    rm -f "$LAUNCHDAEMON_PLIST"
+fi
+
+echo "Pre-uninstall completed"
+
+exit 0
