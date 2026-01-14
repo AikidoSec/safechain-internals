@@ -50,7 +50,10 @@ jobs:
           ls -lh bin/safechain-agent-darwin-${{ matrix.arch }}
           ls -lh bin/safechain-proxy-darwin-${{ matrix.arch }}
 
-      # --- macOS signing + notarization (no entitlements for CLI) ---
+      - name: Make scripts executable
+        run: chmod +x .github/scripts/macos/**/*.sh
+      
+        # --- macOS signing + notarization (no entitlements for CLI) ---
       - name: Import macOS certificate
         env:
           MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
