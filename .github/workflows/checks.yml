@@ -60,7 +60,7 @@ jobs:
             toolchain: stable
             target: aarch64-unknown-linux-musl
 
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.os }}
     env:
       RUSTFLAGS: -D warnings
     steps:
