@@ -74,6 +74,7 @@ jobs:
         run: |
           cd packaging/macos
           ./build-distribution-pkg.sh -v "${{ inputs.version || 'dev' }}" -a "${{ matrix.arch }}" -b "../../bin" -o "../../dist"
+          mv dist/SafeChainAgent-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.pkg dist/SafeChainAgent-${{ matrix.arch }}.pkg
 
       - name: Create and notarize macOS packages
         env:
@@ -85,16 +86,16 @@ jobs:
           KEYCHAIN_PATH: ${{ env.KEYCHAIN_PATH }}
           VERSION: ${{ inputs.version }}
           BUILD_NUMBER: ${{ github.run_number }}
-        run: .github/scripts/macos/packages/sign-and-notarize-package.sh dist/SafeChainAgent-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.pkg
+        run: .github/scripts/macos/packages/sign-and-notarize-package.sh dist/SafeChainAgent-${{ matrix.arch }}.pkg
 
       - name: Upload .pkg artifact
         uses: actions/upload-artifact@v4
         with:
           name: SafeChainAgent-${{ matrix.arch }}.pkg
-          path: dist/SafeChainAgent-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.pkg
+          path: dist/SafeChainAgent-${{ matrix.arch }}.pkg
 
       - name: Upload .pkg checksum
         uses: actions/upload-artifact@v4
         with:
           name: SafeChainAgent-${{ matrix.arch }}.pkg.sha256
-          path: dist/SafeChainAgent-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.pkg.sha256
+          path: dist/SafeChainAgent-${{ matrix.arch }}.pkg.sha256
