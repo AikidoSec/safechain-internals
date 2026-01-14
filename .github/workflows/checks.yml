@@ -69,6 +69,7 @@ jobs:
         with:
           toolchain: stable
           components: clippy, rustfmt
+          targets: ${{ matrix.target }}
       - name: Install Zig
         uses: mlugg/setup-zig@e7d1537c378b83b8049f65dda471d87a2f7b2df2
         with:
