@@ -98,7 +98,7 @@ pub async fn run_proxy_server(
     );
 
     let exec = Executor::graceful(guard.clone());
-    let http_service = HttpServer::auto(exec).service(
+    let http_service = HttpServer::auto(exec.clone()).service(
         (
             TraceLayer::new_for_http(),
             ConsumeErrLayer::trace(Level::DEBUG),
@@ -116,6 +116,7 @@ pub async fn run_proxy_server(
                 // We make use use the void trailer parser to ensure we drop any ignored label.
                 .with_labels::<((), self::auth::FirewallUserConfigParser)>(),
             UpgradeLayer::new(
+                exec,
                 MethodMatcher::CONNECT,
                 service_fn(http_connect_accept),
                 http_proxy_mitm_server,

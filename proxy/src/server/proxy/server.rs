@@ -61,7 +61,7 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
     )
         .into_layer(super::client::new_https_client(firewall.clone())?);
 
-    let http_server = HttpServer::auto(Executor::graceful(guard)).service(https_svc);
+    let http_server = HttpServer::auto(Executor::graceful(guard.clone())).service(https_svc);
 
     let inner = TlsPeekRouter::new((tls_acceptor).into_layer(http_server.clone()))
         .with_fallback(http_server);
@@ -70,7 +70,7 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
         inner,
         mitm_all,
         firewall,
-        forwarder: DefaultForwarder::ctx(),
+        forwarder: DefaultForwarder::ctx(Executor::graceful(guard)),
     })
 }
 
