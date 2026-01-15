@@ -206,6 +206,7 @@ where
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_meta_https_server(
     args: Args,
     guard: ShutdownGuard,

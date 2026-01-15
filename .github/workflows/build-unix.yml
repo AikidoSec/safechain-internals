@@ -52,14 +52,25 @@ jobs:
 
   build-unix-proxy:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: arm64
             target: aarch64-apple-darwin
             runner: macos-14
+            os: darwin
           - arch: amd64
             target: x86_64-apple-darwin
             runner: macos-14
+            os: darwin
+          - arch: amd64
+            target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+            os: linux
+          - arch: arm64
+            target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+            os: linux
 
     runs-on: ${{ matrix.runner }}
     steps:
@@ -72,32 +83,36 @@ jobs:
           toolchain: stable
           targets: ${{ matrix.target }}
 
+      - name: Install Zig
+        if: contains(matrix.target, 'unknown-linux-musl')
+        uses: mlugg/setup-zig@e7d1537c378b83b8049f65dda471d87a2f7b2df2
+        with:
+          version: 0.13.0
+
+      - name: Install cargo-zigbuild
+        if: contains(matrix.target, 'unknown-linux-musl')
+        run: cargo install cargo-zigbuild --locked
+
       - name: Rust Cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
         with:
           env-vars: "RUST_TOOLCHAIN=stable"
 
-      - name: cargo check
-        run: |
-          cargo check -p safechain-proxy --target ${{ matrix.target }}
-      - name: clippy
-        run: |
-          cargo clippy -p safechain-proxy --target ${{ matrix.target }}
-      - name: rustfmt
-        run: |
-          cargo fmt --check
+      - name: Build proxy binary for linux musl
+        if: ${{ contains(matrix.target, 'unknown-linux-musl') }}
+        run: cargo zigbuild --release -p safechain-proxy --target "${{ matrix.target }}"
 
-      - name: Build proxy binary for ${{ matrix.arch }}
-        run: |
-          cargo build --release -p safechain-proxy --target ${{ matrix.target }}
+      - name: Build proxy binary for ${{ matrix.os }}/${{ matrix.arch }}
+        if: ${{ !(contains(matrix.target, 'unknown-linux-musl')) }}
+        run: cargo build --release -p safechain-proxy --target ${{ matrix.target }}
 
       - name: Prepare artifacts
         run: |
-          mv target/${{ matrix.target }}/release/safechain-proxy safechain-proxy-darwin-${{ matrix.arch }}
+          mv target/${{ matrix.target }}/release/safechain-proxy safechain-proxy-${{ matrix.os }}-${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: safechain-proxy-darwin-${{ matrix.arch }}
+          name: safechain-proxy-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            safechain-proxy-darwin-${{ matrix.arch }}
+            safechain-proxy-${{ matrix.os }}-${{ matrix.arch }}

@@ -9,6 +9,7 @@ use rama::{
         header::CONTENT_TYPE,
         layer::{
             map_request_body::MapRequestBodyLayer,
+            map_response_body::MapResponseBodyLayer,
             retry::{ManagedPolicy, RetryLayer},
             timeout::TimeoutLayer,
         },
@@ -45,6 +46,7 @@ impl Firewall {
         let inner_https_client = crate::client::new_web_client()?;
 
         let shared_remote_malware_client = (
+            MapResponseBodyLayer::new(Body::new),
             MapErrLayer::new(OpaqueError::from_std),
             TimeoutLayer::new(Duration::from_secs(60)), // NOTE: if you have slow servers this might need to be more
             RetryLayer::new(
