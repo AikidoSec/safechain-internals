@@ -87,10 +87,16 @@ PKG_ROOT="$BUILD_DIR/pkg_root"
 PKG_SCRIPTS="$BUILD_DIR/scripts"
 INSTALL_DIR="$PKG_ROOT/Library/Application Support/AikidoSecurity/SafeChainAgent"
 LAUNCHDAEMONS_DIR="$PKG_ROOT/Library/LaunchDaemons"
+LOGS_DIR="$PKG_ROOT/Library/Logs/AikidoSecurity/SafeChainAgent"
 
 mkdir -p "$INSTALL_DIR/bin"
 mkdir -p "$LAUNCHDAEMONS_DIR"
+mkdir -p "$LOGS_DIR"
 mkdir -p "$PKG_SCRIPTS"
+
+# Create placeholder file in logs directory to ensure it's included in package
+touch "$LOGS_DIR/.keep"
+chmod 644 "$LOGS_DIR/.keep"
 
 # Copy binaries
 echo "Copying binaries..."

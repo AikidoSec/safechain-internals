@@ -15,6 +15,9 @@ if launchctl list | grep -q "com.aikidosecurity.safechainagent"; then
     }
 fi
 
+echo "Running SafeChain Agent teardown..."
+sudo /Library/Application\ Support/AikidoSecurity/SafeChainAgent/bin/safechain-agent --teardown
+
 # Remove LaunchDaemon plist
 if [ -f "$LAUNCHDAEMON_PLIST" ]; then
     echo "Removing LaunchDaemon configuration..."

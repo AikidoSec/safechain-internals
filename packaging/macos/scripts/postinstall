@@ -8,8 +8,8 @@ INSTALL_DIR="/Library/Application Support/AikidoSecurity/SafeChainAgent"
 LOGS_DIR="/Library/Logs/AikidoSecurity/SafeChainAgent"
 LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.safechainagent.plist"
 
-# Create logs directory with proper permissions
-echo "Creating logs directory..."
+# Ensure logs directory exists and has proper permissions
+echo "Setting up logs directory..."
 mkdir -p "$LOGS_DIR"
 chmod 755 "$LOGS_DIR"
 
