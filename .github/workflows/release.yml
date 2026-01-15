@@ -54,6 +54,8 @@ jobs:
           mv artifacts/safechain-proxy-darwin-arm64/safechain-proxy-darwin-arm64 .
 
           mv artifacts/safechain-proxy-linux-amd64/safechain-proxy-linux-amd64 .
+          mv artifacts/safechain-proxy-linux-arm64/safechain-proxy-linux-arm64 .
+
           mv artifacts/SafeChainAgent.amd64.msi/SafeChainAgent.amd64.msi ./SafeChainAgent-windows-amd64.msi
           mv artifacts/SafeChainAgent.arm64.msi/SafeChainAgent.arm64.msi ./SafeChainAgent-windows-arm64.msi
 
@@ -66,6 +68,7 @@ jobs:
             safechain-proxy-darwin-amd64
             safechain-proxy-darwin-arm64
             safechain-proxy-linux-amd64
+            safechain-proxy-linux-arm64
             SafeChainAgent-windows-amd64.msi
             SafeChainAgent-windows-arm64.msi
 
