@@ -100,7 +100,7 @@ jobs:
 
       - name: Build proxy binary for linux musl
         if: ${{ contains(matrix.target, 'unknown-linux-musl') }}
-        run: cargo zigbuild --release -p safechain-proxy --target "${{ matrix.target.name }}"
+        run: cargo zigbuild --release -p safechain-proxy --target "${{ matrix.target }}"
 
       - name: Build proxy binary for ${{ matrix.os }}/${{ matrix.arch }}
         if: ${{ !(contains(matrix.target, 'unknown-linux-musl')) }}
