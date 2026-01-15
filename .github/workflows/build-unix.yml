@@ -98,13 +98,13 @@ jobs:
         with:
           env-vars: "RUST_TOOLCHAIN=stable"
 
+      - name: Build proxy binary for linux musl
+        if: contains(matrix.target, 'unknown-linux-musl')
+        run: cargo zigbuild --release -p safechain-proxy --target "${{ matrix.target.name }}"
+
       - name: Build proxy binary for ${{ matrix.os }}/${{ matrix.arch }}
-        run: |
-          if [[ "${{ matrix.target.name }}" == *"unknown-linux-musl"* ]]; then
-            cargo zigbuild --release -p safechain-proxy --target "${{ matrix.target.name }}"
-          else
-            cargo build --release -p safechain-proxy --target ${{ matrix.target }}
-          fi
+        if: !(contains(matrix.target, 'unknown-linux-musl'))
+        run: cargo build --release -p safechain-proxy --target ${{ matrix.target }}
 
       - name: Prepare artifacts
         run: |
