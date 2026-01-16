@@ -11,7 +11,8 @@ use rama::{
         server::HttpServer,
         service::web::{
             Router,
-            response::{Html, IntoResponse},
+            extract::Query,
+            response::{Html, IntoResponse, Json},
         },
     },
     layer::TimeoutLayer,
@@ -28,7 +29,11 @@ use rama::{
 #[cfg(feature = "har")]
 use crate::diagnostics::har::HarClient;
 
-use crate::{Args, firewall::Firewall, tls::RootCA};
+use crate::{
+    Args,
+    firewall::{Firewall, events::EventsQuery},
+    tls::RootCA,
+};
 
 pub async fn run_meta_https_server(
     args: Args,
@@ -46,6 +51,9 @@ pub async fn run_meta_https_server(
 
     tracing::info!("meta HTTP(S) server received proxy address from proxy task: {proxy_addr}");
 
+    let firewall_for_pac = firewall.clone();
+    let firewall_for_events = firewall.clone();
+
     #[cfg_attr(not(feature = "har"), allow(unused_mut))]
     let mut http_router = Router::new()
         .with_get("/", Html(META_SITE_INDEX_HTML))
@@ -53,6 +61,10 @@ pub async fn run_meta_https_server(
         .with_get("/ca", move || {
             let response = root_ca.as_http_response();
             std::future::ready(response)
+        })
+        .with_get("/events", move |Query(query): Query<EventsQuery>| {
+            let payload = firewall_for_events.query_blocked_events(query);
+            std::future::ready(Json(payload).into_response())
         })
         // See `docs/proxy/pac.md` for in-depth documentation regarding
         // Proxy Auto Configuration (PAC in short).
@@ -62,7 +74,7 @@ pub async fn run_meta_https_server(
                 return std::future::ready(StatusCode::NOT_FOUND.into_response());
             }
 
-            let response = firewall.generate_pac_script_response(proxy_addr, req);
+            let response = firewall_for_pac.generate_pac_script_response(proxy_addr, req);
             std::future::ready(response)
         });
 

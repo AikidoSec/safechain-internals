@@ -20,6 +20,7 @@ use rama::{
     utils::{backoff::ExponentialBackoff, rng::HasherRng},
 };
 
+pub mod events;
 pub mod layer;
 pub mod malware_list;
 pub mod rule;
@@ -36,6 +37,7 @@ pub struct Firewall {
     // e.g. removing/adding them, we can ArcSwap these and have
     // a background task update these when needed..
     block_rules: Arc<Vec<self::rule::DynRule>>,
+    blocked_events: Arc<self::events::BlockedEventsStore>,
 }
 
 impl Firewall {
@@ -92,7 +94,25 @@ impl Firewall {
                     .context("create block rule: pypi")?
                     .into_dyn(),
             ]),
+            // Keep 1h of events.
+            blocked_events: Arc::new(self::events::BlockedEventsStore::new(
+                Duration::from_secs(60 * 60),
+                2048,
+            )),
         })
+    }
+
+    #[inline]
+    pub fn record_blocked_event(&self, info: self::events::BlockedEventInfo) {
+        self.blocked_events.record(info);
+    }
+
+    #[inline]
+    pub fn query_blocked_events(
+        &self,
+        query: self::events::EventsQuery,
+    ) -> self::events::BlockedEventsResponse {
+        self.blocked_events.query(query)
     }
 
     pub fn match_domain(&self, domain: &Domain) -> bool {
@@ -115,8 +135,9 @@ impl Firewall {
         for rule in self.block_rules.iter() {
             match rule.evaluate_request(mod_req).await? {
                 RequestAction::Allow(new_mod_req) => mod_req = new_mod_req,
-                RequestAction::Block(resp) => {
-                    return Ok(RequestAction::Block(resp));
+                RequestAction::Block(blocked) => {
+                    self.record_blocked_event(blocked.info.clone());
+                    return Ok(RequestAction::Block(blocked));
                 }
             }
         }

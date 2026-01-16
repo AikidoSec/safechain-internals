@@ -10,6 +10,7 @@ use rama::{
 };
 
 use crate::{
+    firewall::events::{BlockedArtifact, BlockedEventInfo},
     firewall::{
         malware_list::{MalwareEntry, RemoteMalwareList},
         pac::PacScriptGenerator,
@@ -18,7 +19,7 @@ use crate::{
     storage::SyncCompactDataStorage,
 };
 
-use super::{RequestAction, Rule};
+use super::{BlockedRequest, RequestAction, Rule};
 
 pub(in crate::firewall) struct RuleNpm {
     target_domains: DomainTrie<()>,
@@ -110,11 +111,19 @@ impl Rule for RuleNpm {
                 .entries()
                 && entries.iter().any(|entry| package.matches(entry))
             {
-                let package_name = package.fully_qualified_name;
+                let package_name = package.fully_qualified_name.to_string();
+                let package_version = package.version.to_string();
                 tracing::warn!("Blocked malware from {package_name}");
-                return Ok(RequestAction::Block(
-                    generate_generic_blocked_response_for_req(req),
-                ));
+                return Ok(RequestAction::Block(BlockedRequest {
+                    response: generate_generic_blocked_response_for_req(req),
+                    info: BlockedEventInfo {
+                        product: self.product_name().to_string(),
+                        artifact: BlockedArtifact::Npm {
+                            name: package_name,
+                            version: package_version,
+                        },
+                    },
+                }));
             } else {
                 tracing::debug!("Npm url: {path} does not contain malware: passthrough");
                 return Ok(RequestAction::Allow(req));
