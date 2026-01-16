@@ -7,13 +7,14 @@ rust-qa:
     cargo fmt
     @cargo install cargo-sort
     cargo sort --grouped
-    cargo doc -p safechain-proxy --no-deps
-    cargo check --workspace --all-targets
-    cargo clippy --workspace --all-targets
-    cargo test --workspace
+    cargo doc --all-features --workspace --no-deps
+    cargo check --all-features --workspace --all-targets
+    cargo clippy --all-features --workspace --all-targets
+    @cargo install cargo-nextest --locked
+    cargo nextest run --all-features --workspace
 
 rust-qa-full: rust-qa
-    cargo test --workspace -- --ignored
+    cargo nextest run --workspace --all-features --run-ignored=only
 
 run-proxy *ARGS:
     mkdir -p .aikido/safechain-proxy

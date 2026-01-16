@@ -17,6 +17,7 @@ jobs:
           # NOTE: windows-11-arm is not YET supported in private Github Action runners
           # - runner: windows-11-arm
           - runner: ubuntu-latest
+          - runner: ubuntu-24.04-arm
 
     runs-on: ${{ matrix.runner }}
     env:
@@ -27,23 +28,57 @@ jobs:
         with:
           toolchain: stable
           components: clippy, rustfmt
+      - uses: taiki-e/install-action@90558ad1e179036f31467972b00dec6cb80701fa
+        with:
+          tool: nextest
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
         with:
           env-vars: "RUST_TOOLCHAIN=stable"
-      - name: check
-        run: |
-          cargo check --workspace
-      - name: doc
-        run: |
-          cargo doc -p safechain-proxy --no-deps
-        env:
-          RUSTDOCFLAGS: "-D rustdoc::broken-intra-doc-links"
       - name: clippy
         run: |
-          cargo clippy --workspace
+          cargo clippy --all-features --workspace
+      - name: doc
+        run: |
+          cargo doc --all-features --workspace --no-deps
+        env:
+          RUSTDOCFLAGS: "-D rustdoc::broken-intra-doc-links"
       - name: test
         run: |
-          cargo test --workspace
+          cargo nextest run --all-features --workspace
       - name: integration test
         run: |
-          cargo test --workspace -- --ignored
+          cargo nextest run --workspace --all-features --run-ignored=only
+
+  proxy-build-check-musl:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            toolchain: stable
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-24.04-arm
+            toolchain: stable
+            target: aarch64-unknown-linux-musl
+
+    runs-on: ${{ matrix.os }}
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+          targets: ${{ matrix.target }}
+      - name: Install Zig
+        uses: mlugg/setup-zig@e7d1537c378b83b8049f65dda471d87a2f7b2df2
+        with:
+          version: 0.13.0
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --locked
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
+        with:
+          env-vars: "RUST_TOOLCHAIN=stable"
+      - name: musl build check
+        run: |
+          cargo zigbuild -p safechain-proxy --target ${{ matrix.target }} --all-features
