@@ -141,6 +141,13 @@ jobs:
           mv bin/SafeChainProxy.${{ matrix.arch }}.exe bin/SafeChainProxy.exe
         shell: bash
 
+      - name: Sign binaries
+        run: |
+          dotnet tool install --global AzureSignTool --version 6.0.1
+          AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "bin/SafeChainAgent.exe"
+          AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "bin/SafeChainProxy.exe"
+        shell: bash
+
       - name: Install WiX Toolset
         run: dotnet tool install -g wix
 
@@ -150,6 +157,7 @@ jobs:
       - name: Build MSI installer
         run: |
           .\packaging\windows\build-msi.ps1 -Version "${{ inputs.version || 'dev' }}" -Arch "${{ matrix.arch }}" -BinDir ".\bin" -OutputDir "."
+          AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "SafeChainAgent.${{ matrix.arch }}.msi"
         shell: pwsh
 
       - name: Upload MSI artifact
