@@ -31,11 +31,11 @@ where
                 .serve(req)
                 .await
                 .map_err(|err| OpaqueError::from_boxed(err.into())),
-            RequestAction::Block(resp) => {
+            RequestAction::Block(blocked) => {
                 tracing::trace!(
-                    "EvaluateRequestService: firewall blocked reuqest with self-generated response"
+                    "EvaluateRequestService: firewall blocked request with self-generated response"
                 );
-                Ok(resp)
+                Ok(blocked.response)
             }
         }
     }

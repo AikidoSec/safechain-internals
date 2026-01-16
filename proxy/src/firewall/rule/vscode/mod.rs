@@ -21,6 +21,7 @@ use rama::{
 use rama::http::body::util::BodyExt;
 
 use crate::{
+    firewall::events::{BlockedArtifact, BlockedEventInfo},
     firewall::layer::evaluate_resp::ResponseRequestDomain,
     firewall::{malware_list::RemoteMalwareList, pac::PacScriptGenerator},
     http::{
@@ -29,7 +30,7 @@ use crate::{
     storage::SyncCompactDataStorage,
 };
 
-use super::{RequestAction, Rule};
+use super::{BlockedRequest, RequestAction, Rule};
 
 mod marketplace_json;
 
@@ -140,9 +141,15 @@ impl Rule for RuleVSCode {
                 package = %extension_id,
                 "blocked VSCode extension install asset download"
             );
-            return Ok(RequestAction::Block(
-                generate_malware_blocked_response_for_req(req),
-            ));
+            return Ok(RequestAction::Block(BlockedRequest {
+                response: generate_malware_blocked_response_for_req(req),
+                info: BlockedEventInfo {
+                    product: self.product_name().to_string(),
+                    artifact: BlockedArtifact::VscodeExtension {
+                        id: extension_id.to_string(),
+                    },
+                },
+            }));
         }
 
         tracing::trace!(

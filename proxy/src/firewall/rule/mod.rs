@@ -6,6 +6,13 @@ use rama::{
     net::address::Domain,
 };
 
+use super::events::BlockedEventInfo;
+
+pub struct BlockedRequest {
+    pub response: Response,
+    pub info: BlockedEventInfo,
+}
+
 pub use super::pac::PacScriptGenerator;
 
 pub mod chrome;
@@ -26,9 +33,10 @@ pub enum RequestAction {
     Allow(Request),
     /// Block the [`Request`] from proceeding to the next [`Rule`] or egress server.
     ///
-    /// Instead of proceeding the provided http [`Response`] will be returned to the
-    /// ingress client (e.g. the application wishing to downlod an extension).
-    Block(Response),
+    /// A [`BlockedRequest`] contains both the http [`Response`] to return to the ingress client
+    /// (e.g. the application wishing to download an extension) and [`BlockedEventInfo`] metadata
+    /// about what was blocked.
+    Block(BlockedRequest),
 }
 
 // NOTE: anything can implement this rule,

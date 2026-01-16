@@ -17,6 +17,7 @@ use rama::{
 };
 
 use crate::{
+    firewall::events::{BlockedArtifact, BlockedEventInfo},
     firewall::{
         malware_list::{MalwareEntry, PackageVersion, RemoteMalwareList},
         pac::PacScriptGenerator,
@@ -25,7 +26,7 @@ use crate::{
     storage::SyncCompactDataStorage,
 };
 
-use super::{RequestAction, Rule};
+use super::{BlockedRequest, RequestAction, Rule};
 
 struct PackageInfo {
     name: SmolStr,
@@ -180,9 +181,21 @@ impl Rule for RulePyPI {
         if self.is_blocked(&package_info)? {
             tracing::debug!(package = %package_info.name, version = ?package_info.version, "blocked PyPI package download");
 
-            return Ok(RequestAction::Block(
-                generate_generic_blocked_response_for_req(req),
-            ));
+            let name = package_info.name.to_string();
+            let version = match &package_info.version {
+                PackageVersion::Semver(v) => v.to_string(),
+                PackageVersion::Any => "*".to_string(),
+                PackageVersion::None => "".to_string(),
+                PackageVersion::Unknown(v) => v.to_string(),
+            };
+
+            return Ok(RequestAction::Block(BlockedRequest {
+                response: generate_generic_blocked_response_for_req(req),
+                info: BlockedEventInfo {
+                    product: self.product_name().to_string(),
+                    artifact: BlockedArtifact::Pypi { name, version },
+                },
+            }));
         }
 
         Ok(RequestAction::Allow(req))

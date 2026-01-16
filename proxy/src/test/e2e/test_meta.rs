@@ -4,10 +4,19 @@ use rama::{
     tls::boring::core::x509::X509,
 };
 
-use crate::test::e2e;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use crate::{firewall::events::BlockedEventsResponse, test::e2e};
 
 mod http {
     use super::*;
+
+    fn now_unix_ms() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_secs(0))
+            .as_millis() as u64
+    }
 
     #[tokio::test]
     #[tracing_test::traced_test]
@@ -80,6 +89,46 @@ mod http {
 
         // should only be available over tls
         assert_eq!(StatusCode::NOT_FOUND, resp.status());
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_endpoint_events_reports_blocked_pypi_download() {
+        let runtime = e2e::runtime::get().await;
+        let proxy_client = runtime.client_with_http_proxy().await;
+        let meta_client = runtime.client_with_ca_trust().await;
+
+        let start_ms = now_unix_ms();
+
+        let resp = proxy_client
+            .get("http://files.pythonhosted.org/packages/abc/def/safe_chain_pi_test-0.1.0-py3-none-any.whl")
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(StatusCode::FORBIDDEN, resp.status());
+
+        let end_ms = now_unix_ms();
+
+        let query_start = start_ms.saturating_sub(2_000);
+        let query_end = end_ms.saturating_add(2_000);
+
+        let payload: BlockedEventsResponse = meta_client
+            .get(format!(
+                "http://{}/events?since_unix_ms={query_start}&until_unix_ms={query_end}",
+                runtime.meta_socket_addr()
+            ))
+            .send()
+            .await
+            .unwrap()
+            .try_into_json()
+            .await
+            .unwrap();
+
+        assert!(
+            payload.events.iter().any(|e| e.product == "PyPI"),
+            "expected at least one PyPI blocked event in window; got: {payload:?}"
+        );
     }
 }
 
