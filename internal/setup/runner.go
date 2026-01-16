@@ -7,8 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	install_proxy_ca "github.com/AikidoSec/safechain-agent/internal/setup/steps/01_install_proxy_ca"
-	set_system_proxy "github.com/AikidoSec/safechain-agent/internal/setup/steps/02_set_system_proxy"
+	set_system_proxy "github.com/AikidoSec/safechain-agent/internal/setup/steps/01_set_system_proxy"
 )
 
 type Runner struct {
@@ -19,7 +18,6 @@ type Runner struct {
 func NewRunner(uninstall bool) *Runner {
 	return &Runner{
 		steps: []Step{
-			install_proxy_ca.New(),
 			set_system_proxy.New(),
 		},
 		uninstall: uninstall,
@@ -67,14 +65,6 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 
 		log.Printf("%s step completed successfully\n\n", stage)
-	}
-
-	if r.uninstall {
-		RemoveSetupFinishedMarker()
-	} else {
-		if err := CreateSetupFinishedMarker(); err != nil {
-			return fmt.Errorf("failed to create setup finished marker: %w", err)
-		}
 	}
 
 	log.Println("================")

@@ -1,0 +1,104 @@
+name: Build macOS Package
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+jobs:
+  build-unix:
+    uses: ./.github/workflows/build-unix.yml
+    with:
+      version: ${{ inputs.version || 'dev' }}
+
+  build-pkg:
+    needs: build-unix
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+          - arch: arm64
+
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download agent artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: safechain-agent-darwin-${{ matrix.arch }}
+          path: bin
+
+      - name: Download proxy artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: safechain-proxy-darwin-${{ matrix.arch }}
+          path: bin
+
+      - name: Verify binaries exist
+        run: |
+          ls -lh bin/
+          ls -lh bin/safechain-agent-darwin-${{ matrix.arch }}
+          ls -lh bin/safechain-proxy-darwin-${{ matrix.arch }}
+
+      - name: Make scripts executable
+        run: chmod +x .github/scripts/macos/**/*.sh
+      
+        # --- macOS signing + notarization (no entitlements for CLI) ---
+      - name: Import macOS certificate
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_INSTALLER_CERTIFICATE_P12: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_P12 }}
+        run: .github/scripts/macos/core/import-certificate.sh
+
+      - name: Sign macOS agent binary
+        env:
+          DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-agent-darwin-${{ matrix.arch }}
+
+      - name: Sign macOS proxy binary
+        env:
+          DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-proxy-darwin-${{ matrix.arch }}
+
+      - name: Build distribution .pkg installer
+        run: |
+          cd packaging/macos
+          ./build-distribution-pkg.sh -v "${{ inputs.version || 'dev' }}" -a "${{ matrix.arch }}" -b "../../bin" -o "../../dist"
+          mv dist/SafeChainAgent-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.pkg dist/SafeChainAgent-${{ matrix.arch }}.pkg
+
+      - name: Create and notarize macOS packages
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
+          DEV_ID_INSTALLER_SHA: ${{ env.DEV_ID_INSTALLER_SHA }}
+          KEYCHAIN_PATH: ${{ env.KEYCHAIN_PATH }}
+          VERSION: ${{ inputs.version }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: .github/scripts/macos/packages/sign-and-notarize-package.sh dist/SafeChainAgent-${{ matrix.arch }}.pkg
+
+      - name: Upload .pkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SafeChainAgent-${{ matrix.arch }}.pkg
+          path: dist/SafeChainAgent-${{ matrix.arch }}.pkg
+
+      - name: Upload .pkg checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: SafeChainAgent-${{ matrix.arch }}.pkg.sha256
+          path: dist/SafeChainAgent-${{ matrix.arch }}.pkg.sha256

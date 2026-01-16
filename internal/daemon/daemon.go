@@ -130,6 +130,12 @@ func (d *Daemon) run(ctx context.Context) error {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
+	if !proxy.ProxyCAInstalled() {
+		if err := proxy.InstallProxyCA(ctx); err != nil {
+			return fmt.Errorf("failed to install proxy CA: %v", err)
+		}
+	}
+
 	if err := setup.Install(ctx); err != nil {
 		return fmt.Errorf("failed to install setup: %v", err)
 	}
@@ -151,9 +157,18 @@ func (d *Daemon) run(ctx context.Context) error {
 	}
 }
 
+func (d *Daemon) Teardown(ctx context.Context) error {
+	log.Println("Tearing down the SafeChain Agent...")
+
+	if err := proxy.UninstallProxyCA(ctx); err != nil {
+		return fmt.Errorf("failed to uninstall proxy CA: %v", err)
+	}
+	return nil
+}
+
 func (d *Daemon) heartbeat() error {
-	if !setup.DidSetupFinish() {
-		log.Println("Setup not finished yet, skipping heartbeat checks...")
+	if !proxy.ProxyCAInstalled() {
+		log.Println("Proxy CA not installed yet, skipping heartbeat checks...")
 		return nil
 	}
 	if !d.proxy.IsProxyRunning() {

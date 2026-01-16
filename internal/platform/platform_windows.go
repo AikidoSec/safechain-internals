@@ -270,3 +270,7 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) err
 
 	return runAsLoggedInUser(binaryPath, args)
 }
+
+func RunShellScriptAsCurrentUser(ctx context.Context, scriptPath string) error {
+	return RunAsCurrentUser(ctx, "sh", []string{scriptPath})
+}

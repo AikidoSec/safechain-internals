@@ -40,9 +40,9 @@ func initConfig() error {
 		}
 	}
 	safeChainHomeDir := filepath.Join(config.HomeDir, ".safe-chain")
-	config.BinaryDir = "/opt/homebrew/bin"
-	config.RunDir = filepath.Join(safeChainHomeDir, "run")
-	config.LogDir = filepath.Join(safeChainHomeDir, "logs")
+	config.BinaryDir = "/Library/Application Support/AikidoSecurity/SafeChainAgent/bin"
+	config.RunDir = "/Library/Application Support/AikidoSecurity/SafeChainAgent/run"
+	config.LogDir = "/Library/Logs/AikidoSecurity/SafeChainAgent"
 	config.SafeChainBinaryPath = filepath.Join(safeChainHomeDir, "bin", "safe-chain")
 	return nil
 }
@@ -196,9 +196,34 @@ func IsProxyCAInstalled(ctx context.Context) error {
 }
 
 func UninstallProxyCA(ctx context.Context) error {
-	return RunAsCurrentUser(ctx, "security", []string{"delete-certificate",
-		"-c", "aikido.dev",
-		"/Library/Keychains/System.keychain"})
+	output, err := exec.CommandContext(ctx, "security", "find-certificate",
+		"-a", "-c", "aikido.dev", "-Z",
+		"/Library/Keychains/System.keychain").Output()
+	if err == nil {
+		hashRegex := regexp.MustCompile(`SHA-1 hash:\s*([A-F0-9]+)`)
+		matches := hashRegex.FindAllStringSubmatch(string(output), -1)
+
+		for _, match := range matches {
+			if len(match) < 2 {
+				continue
+			}
+			hash := match[1]
+			err := RunAsCurrentUser(ctx, "security", []string{"delete-certificate",
+				"-Z", hash,
+				"/Library/Keychains/System.keychain"})
+			if err != nil {
+				return fmt.Errorf("failed to delete certificate with hash %s: %v", hash, err)
+			}
+		}
+	}
+
+	if err := RunAsCurrentUser(ctx, "security", []string{"delete-generic-password",
+		"-l", "tls-root-ca-key",
+		"/Library/Keychains/System.keychain"}); err != nil {
+		return fmt.Errorf("failed to delete generic password: %v", err)
+	}
+
+	return nil
 }
 
 type ServiceRunner interface {
@@ -240,8 +265,24 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) err
 		return err
 	}
 
-	// launchtl asuser 123 <binary_path> args...
 	launchctlArgs := append([]string{"asuser", uid, binaryPath}, args...)
+	return utils.RunCommand(ctx, "launchctl", launchctlArgs...)
+}
+
+func RunShellScriptAsCurrentUser(ctx context.Context, scriptPath string) error {
+	if !RunningAsRoot() {
+		return utils.RunCommand(ctx, "sh", scriptPath)
+	}
+
+	username, uid, err := getConsoleUser(ctx)
+	if err != nil {
+		return err
+	}
+
+	homeDir := filepath.Join("/Users", username)
+	shellCmd := fmt.Sprintf("export HOME=%s && sh %s", homeDir, scriptPath)
+
+	launchctlArgs := []string{"asuser", uid, "/bin/sh", "-c", shellCmd}
 	return utils.RunCommand(ctx, "launchctl", launchctlArgs...)
 }
 

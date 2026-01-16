@@ -1,0 +1,157 @@
+#!/bin/bash
+
+set -e
+
+# Build macOS .pkg installer for SafeChain Agent
+# Usage: ./build-pkg.sh -v VERSION -a ARCH [-b BIN_DIR] [-o OUTPUT_DIR]
+
+VERSION=""
+ARCH=""
+BIN_DIR="./bin"
+OUTPUT_DIR="./dist"
+
+# Parse command line arguments
+while getopts "v:a:b:o:h" opt; do
+    case $opt in
+        v) VERSION="$OPTARG" ;;
+        a) ARCH="$OPTARG" ;;
+        b) BIN_DIR="$OPTARG" ;;
+        o) OUTPUT_DIR="$OPTARG" ;;
+        h)
+            echo "Usage: $0 -v VERSION -a ARCH [-b BIN_DIR] [-o OUTPUT_DIR]"
+            echo "  -v VERSION      Version number (e.g., 1.0.0)"
+            echo "  -a ARCH         Architecture (arm64 or amd64)"
+            echo "  -b BIN_DIR      Binary directory (default: ./bin)"
+            echo "  -o OUTPUT_DIR   Output directory (default: ./dist)"
+            exit 0
+            ;;
+        \?)
+            echo "Invalid option: -$OPTARG" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Validate required arguments
+if [ -z "$VERSION" ]; then
+    echo "Error: VERSION is required (-v)" >&2
+    exit 1
+fi
+
+if [ -z "$ARCH" ]; then
+    echo "Error: ARCH is required (-a)" >&2
+    exit 1
+fi
+
+# Normalize version for dev builds
+if [ "$VERSION" = "dev" ]; then
+    PKG_VERSION="0.0.0"
+else
+    PKG_VERSION="$VERSION"
+fi
+
+# Resolve absolute paths
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+BIN_DIR="$(cd "$BIN_DIR" 2>/dev/null && pwd || echo "$PROJECT_DIR/$BIN_DIR")"
+OUTPUT_DIR="$(mkdir -p "$OUTPUT_DIR" && cd "$OUTPUT_DIR" && pwd)"
+
+echo "Building macOS .pkg installer for SafeChain Agent v$VERSION"
+echo "  Architecture: $ARCH"
+echo "  Binary directory: $BIN_DIR"
+echo "  Output directory: $OUTPUT_DIR"
+echo "  Project directory: $PROJECT_DIR"
+
+# Verify binaries exist
+AGENT_BIN="$BIN_DIR/safechain-agent-darwin-$ARCH"
+PROXY_BIN="$BIN_DIR/safechain-proxy-darwin-$ARCH"
+
+if [ ! -f "$AGENT_BIN" ]; then
+    echo "Error: safechain-agent binary not found at $AGENT_BIN" >&2
+    exit 1
+fi
+
+if [ ! -f "$PROXY_BIN" ]; then
+    echo "Error: safechain-proxy binary not found at $PROXY_BIN" >&2
+    exit 1
+fi
+
+# Create temporary build directory
+BUILD_DIR="$(mktemp -d)"
+trap "rm -rf '$BUILD_DIR'" EXIT
+
+echo "Using temporary build directory: $BUILD_DIR"
+
+# Create package directory structure
+PKG_ROOT="$BUILD_DIR/pkg_root"
+PKG_SCRIPTS="$BUILD_DIR/scripts"
+INSTALL_DIR="$PKG_ROOT/Library/Application Support/AikidoSecurity/SafeChainAgent"
+LAUNCHDAEMONS_DIR="$PKG_ROOT/Library/LaunchDaemons"
+LOGS_DIR="$PKG_ROOT/Library/Logs/AikidoSecurity/SafeChainAgent"
+
+mkdir -p "$INSTALL_DIR/bin"
+mkdir -p "$LAUNCHDAEMONS_DIR"
+mkdir -p "$LOGS_DIR"
+mkdir -p "$PKG_SCRIPTS"
+
+# Create placeholder file in logs directory to ensure it's included in package
+touch "$LOGS_DIR/.keep"
+chmod 644 "$LOGS_DIR/.keep"
+
+# Copy binaries
+echo "Copying binaries..."
+cp "$AGENT_BIN" "$INSTALL_DIR/bin/safechain-agent"
+cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-proxy"
+chmod 755 "$INSTALL_DIR/bin/safechain-agent"
+chmod 755 "$INSTALL_DIR/bin/safechain-proxy"
+
+# Copy LaunchDaemon plist
+echo "Copying LaunchDaemon plist..."
+cp "$SCRIPT_DIR/com.aikidosecurity.safechainagent.plist" "$LAUNCHDAEMONS_DIR/"
+chmod 644 "$LAUNCHDAEMONS_DIR/com.aikidosecurity.safechainagent.plist"
+
+# Copy scripts and set permissions
+echo "Copying installer scripts..."
+cp "$SCRIPT_DIR/scripts/preinstall" "$PKG_SCRIPTS/"
+cp "$SCRIPT_DIR/scripts/postinstall" "$PKG_SCRIPTS/"
+chmod 755 "$PKG_SCRIPTS/preinstall"
+chmod 755 "$PKG_SCRIPTS/postinstall"
+
+# Build the package
+OUTPUT_PKG="$OUTPUT_DIR/SafeChainAgent.$ARCH.pkg"
+IDENTIFIER="com.aikidosecurity.safechainagent"
+
+echo "Building package..."
+pkgbuild \
+    --root "$PKG_ROOT" \
+    --scripts "$PKG_SCRIPTS" \
+    --identifier "$IDENTIFIER" \
+    --version "$PKG_VERSION" \
+    --install-location "/" \
+    "$OUTPUT_PKG"
+
+if [ $? -eq 0 ]; then
+    echo ""
+    echo "✓ Package built successfully: $OUTPUT_PKG"
+    echo ""
+    
+    # Calculate checksum
+    CHECKSUM=$(shasum -a 256 "$OUTPUT_PKG" | awk '{print $1}')
+    echo "SHA256: $CHECKSUM"
+    echo "$CHECKSUM" > "$OUTPUT_PKG.sha256"
+    echo ""
+    
+    # Display package info
+    echo "Package information:"
+    pkgutil --payload-files "$OUTPUT_PKG" | head -20
+    echo ""
+    
+    # Display package size
+    SIZE=$(du -h "$OUTPUT_PKG" | awk '{print $1}')
+    echo "Package size: $SIZE"
+else
+    echo "Error: Package build failed" >&2
+    exit 1
+fi
+
+exit 0
