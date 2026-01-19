@@ -35,9 +35,8 @@ func RunModalApp(modal *Modal, title string, width, height unit.Dp) {
 }
 
 func runModal(w *app.Window, modal *Modal) error {
-	th := material.NewTheme()
 	a := &ModalApp{
-		theme: th,
+		theme: NewAikidoTheme().Theme,
 		modal: modal,
 	}
 
