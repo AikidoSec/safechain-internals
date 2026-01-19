@@ -1,4 +1,4 @@
-.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 clean test run help
+.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-full install-pkg uninstall-pkg clean test run help
 
 BINARY_NAME=safechain-agent
 VERSION?=dev
@@ -10,6 +10,8 @@ LDFLAGS=-X 'github.com/AikidoSec/safechain-agent/internal/version.Version=$(VERS
 RELEASE_LDFLAGS=$(LDFLAGS) -s -w
 
 BIN_DIR=bin
+DIST_DIR=dist
+PROXY_DIR=proxy
 
 UNAME_S := $(shell uname -s 2>/dev/null || echo Windows)
 UNAME_M := $(shell uname -m 2>/dev/null || echo x86_64)
@@ -55,36 +57,78 @@ help:
 	@echo 'Available targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-25s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-build:
+build: ## Build agent binary for current platform
 	@echo "Building $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT) ./cmd/daemon
 	@echo "Binary built: $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)"
 
-build-release:
+build-release: ## Build release agent binary for current platform
 	@echo "Building release $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/daemon
 	@echo "Binary built: $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
 
-build-darwin-amd64:
+build-darwin-amd64: ## Build release agent for macOS Intel (amd64)
 	@$(MAKE) GOOS=darwin GOARCH=amd64 build-release
 
-build-darwin-arm64:
+build-darwin-arm64: ## Build release agent for macOS Apple Silicon (arm64)
 	@$(MAKE) GOOS=darwin GOARCH=arm64 build-release
 
-build-windows-amd64:
+build-windows-amd64: ## Build release agent for Windows Intel (amd64)
 	@$(MAKE) GOOS=windows GOARCH=amd64 build-release
 
-build-windows-arm64:
+build-windows-arm64: ## Build release agent for Windows ARM64
 	@$(MAKE) GOOS=windows GOARCH=arm64 build-release
 
-run: build
+build-proxy: ## Build the Rust proxy binary
+	@echo "Building safechain-proxy..."
+	@cd $(PROXY_DIR) && cargo build --release
+	@mkdir -p $(BIN_DIR)
+	@cp target/release/safechain-proxy $(BIN_DIR)/safechain-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)
+	@echo "Proxy built: $(BIN_DIR)/safechain-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)"
+
+build-pkg: ## Build macOS PKG installer (requires binaries to exist)
+ifeq ($(DETECTED_OS),darwin)
+	@echo "Building macOS PKG installer..."
+	@cd packaging/macos && ./build-distribution-pkg.sh -v $(VERSION) -a $(DETECTED_ARCH) -b ../../$(BIN_DIR) -o ../../$(DIST_DIR)
+	@echo "PKG built: $(DIST_DIR)/SafeChainAgent-$(VERSION)-$(DETECTED_ARCH).pkg"
+else
+	@echo "Error: PKG building is only supported on macOS"
+	@exit 1
+endif
+
+build-pkg-full: ## Build binaries, proxy, and macOS PKG installer with signing
+ifeq ($(DETECTED_OS),darwin)
+	@echo "Building complete macOS package..."
+	@cd packaging/macos && ./build-and-sign-local.sh $(VERSION)
+else
+	@echo "Error: PKG building is only supported on macOS"
+	@exit 1
+endif
+
+install-pkg: ## Install the local macOS PKG
+ifeq ($(DETECTED_OS),darwin)
+	@cd packaging/macos && ./install-local.sh
+else
+	@echo "Error: PKG installation is only supported on macOS"
+	@exit 1
+endif
+
+uninstall-pkg: ## Uninstall the macOS PKG
+ifeq ($(DETECTED_OS),darwin)
+	@cd packaging/macos && ./uninstall-local.sh
+else
+	@echo "Error: PKG uninstallation is only supported on macOS"
+	@exit 1
+endif
+
+run: build ## Run the agent binary
 	$(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)
 
-test:
+test: ## Run Go tests
 	go test -v ./...
 
-clean:
-	rm -rf $(BIN_DIR)
+clean: ## Clean build artifacts
+	rm -rf $(BIN_DIR) $(DIST_DIR)
 	@echo "Cleaned build artifacts"
