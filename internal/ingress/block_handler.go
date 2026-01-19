@@ -3,6 +3,7 @@ package ingress
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -35,19 +36,36 @@ func showBlockedModal(event BlockEvent) {
 	cfg := platform.GetConfig()
 	binaryPath := filepath.Join(cfg.BinaryDir, BlockedModalBinaryName)
 
+	title := "SafeChain Ultimate"
+	text := buildBlockedText(event)
+
 	args := []string{
-		"--product", event.Product,
-		"--package", event.PackageName,
+		"--title", title,
+		"--text", text,
 	}
 
-	if event.PackageVersion != "" {
-		args = append(args, "--version", event.PackageVersion)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// Make sure that the modals close on their own after an hour so there are no hanging
+	// processes.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	defer cancel()
 
 	if err := platform.RunAsCurrentUser(ctx, binaryPath, args); err != nil {
 		log.Printf("Failed to show blocked modal: %v", err)
 	}
+}
+
+func buildBlockedText(event BlockEvent) string {
+	if event.PackageVersion != "" {
+		return fmt.Sprintf(
+			"SafeChain blocked a potentially malicious %s package:\n\n%s@%s",
+			event.Product,
+			event.PackageName,
+			event.PackageVersion,
+		)
+	}
+	return fmt.Sprintf(
+		"SafeChain blocked a potentially malicious %s package:\n\n%s",
+		event.Product,
+		event.PackageName,
+	)
 }
