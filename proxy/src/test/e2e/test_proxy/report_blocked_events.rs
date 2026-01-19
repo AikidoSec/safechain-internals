@@ -68,7 +68,6 @@ async fn test_report_blocked_events_posts_json_to_endpoint() {
         .get("artifact")
         .and_then(|v| v.as_object())
         .expect("artifact should be a JSON object");
-
     let product = artifact
         .get("product")
         .and_then(|v| v.as_str())
