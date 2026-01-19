@@ -70,9 +70,11 @@ impl EventNotifier {
     }
 
     pub fn notify(&self, event: BlockedEvent) {
-        if let Some(inner) = &self.inner
-            && let Err(e) = inner.tx.send(event)
-        {
+        let Some(inner) = &self.inner else {
+            return;
+        };
+
+        if let Err(e) = inner.tx.send(event) {
             tracing::debug!(
                 "failed to send event notification (receiver dropped): {}",
                 e
