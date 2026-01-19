@@ -88,7 +88,7 @@ func (m *Modal) layoutConfirm(gtx layout.Context, th *AikidoTheme) layout.Dimens
 
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return inset.Layout(gtx, material.Body1(th.Theme, "Are you sure you want to bypass?").Layout)
+			return inset.Layout(gtx, material.Body1(th.Theme, "Are you sure you want to bypass SafeChain Ultimate and risk installing malware.").Layout)
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return inset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -97,14 +97,14 @@ func (m *Modal) layoutConfirm(gtx layout.Context, th *AikidoTheme) layout.Dimens
 					Spacing: layout.SpaceEnd,
 				}.Layout(gtx,
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						btn := material.Button(th.Theme, &m.yesBtn, "Yes")
-						btn.Background = th.Danger
-						return btn.Layout(gtx)
+						return layout.Inset{Right: unit.Dp(8)}.Layout(gtx,
+							material.Button(th.Theme, &m.noBtn, "Go Back").Layout,
+						)
 					}),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return layout.Inset{Left: unit.Dp(8)}.Layout(gtx,
-							material.Button(th.Theme, &m.noBtn, "No").Layout,
-						)
+						btn := material.Button(th.Theme, &m.yesBtn, "I understand the risks")
+						btn.Background = th.Danger
+						return btn.Layout(gtx)
 					}),
 				)
 			})
