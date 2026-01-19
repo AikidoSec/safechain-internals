@@ -91,8 +91,8 @@ pub struct Args {
     pub graceful: f64,
 
     /// callback address for block event notifications (e.g., "127.0.0.1:7656")
-    #[arg(long = "ingress", value_name = "HOST:PORT")]
-    pub daemon_ingress: Option<rama::net::address::Authority>,
+    #[arg(long = "reporting-endpoint", value_name = "HOST:PORT")]
+    pub reporting_endpoint: Option<rama::net::address::Authority>,
 }
 
 #[tokio::main]
