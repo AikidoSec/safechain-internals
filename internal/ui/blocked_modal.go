@@ -28,6 +28,10 @@ func CreateBlockedModal(text string, onBypass func()) *Modal {
 }
 
 func (m *Modal) Layout(gtx layout.Context, th *AikidoTheme) layout.Dimensions {
+	// Remove minimum X,Y constraint to allow re-sizing
+	gtx.Constraints.Min.X = 0
+	gtx.Constraints.Min.Y = 0
+
 	// Handle button clicks
 	if m.okBtn.Clicked(gtx) && m.Close != nil {
 		m.Close()

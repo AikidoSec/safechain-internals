@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+	"image"
 	"log"
 	"os"
 
@@ -43,6 +45,7 @@ func runModal(w *app.Window, modal *Modal) error {
 	}
 
 	var ops op.Ops
+	var lastSize image.Point
 
 	for {
 		e := w.Event()
@@ -51,7 +54,18 @@ func runModal(w *app.Window, modal *Modal) error {
 			return e.Err
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
-			a.Layout(gtx)
+			dims := a.Layout(gtx)
+			fmt.Println("dims: ", dims)
+			// Update window size if content size changed
+			newSize := image.Point{X: dims.Size.X, Y: dims.Size.Y}
+			if newSize != lastSize && newSize.X > 0 && newSize.Y > 0 {
+				w.Option(app.Size(
+					unit.Dp(float32(newSize.X)/gtx.Metric.PxPerDp),
+					unit.Dp(float32(newSize.Y)/gtx.Metric.PxPerDp),
+				))
+				lastSize = newSize
+			}
+
 			e.Frame(gtx.Ops)
 		}
 	}
