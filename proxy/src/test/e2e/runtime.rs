@@ -304,7 +304,18 @@ pub(super) async fn get() -> Runtime {
 async fn read_file_or_wait(path: PathBuf) -> SocketAddress {
     loop {
         match tokio::fs::read_to_string(&path).await {
-            Ok(s) => return s.parse().unwrap(),
+            Ok(s) => {
+                let s = s.trim();
+                match s.parse() {
+                    Ok(addr) => return addr,
+                    Err(_) => {
+                        // The file is written asynchronously; a concurrent read can
+                        // observe a transient/partial write and fail to parse.
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                        continue;
+                    }
+                }
+            }
             Err(err) => {
                 if err.kind() == ErrorKind::NotFound {
                     tokio::time::sleep(Duration::from_millis(200)).await;

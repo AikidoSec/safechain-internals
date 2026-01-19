@@ -39,12 +39,14 @@ pub struct Firewall {
     // a background task update these when needed..
     block_rules: Arc<Vec<self::rule::DynRule>>,
     blocked_events: Arc<self::events::BlockedEventsStore>,
+    notifier: self::notifier::EventNotifier,
 }
 
 impl Firewall {
     pub async fn try_new(
         guard: ShutdownGuard,
         data: SyncCompactDataStorage,
+        blocked_events_reporting_endpoint: Option<String>,
     ) -> Result<Self, OpaqueError> {
         let inner_https_client = crate::client::new_web_client()?;
 
@@ -95,25 +97,16 @@ impl Firewall {
                     .context("create block rule: pypi")?
                     .into_dyn(),
             ]),
-            // Keep 1h of events.
-            blocked_events: Arc::new(self::events::BlockedEventsStore::new(
-                Duration::from_secs(60 * 60),
-                2048,
-            )),
+            // Keep a small rolling window of the last N blocked events.
+            blocked_events: Arc::new(self::events::BlockedEventsStore::new(256)),
+            notifier: self::notifier::EventNotifier::new(blocked_events_reporting_endpoint),
         })
     }
 
     #[inline]
     pub fn record_blocked_event(&self, info: self::events::BlockedEventInfo) {
-        self.blocked_events.record(info);
-    }
-
-    #[inline]
-    pub fn query_blocked_events(
-        &self,
-        query: self::events::EventsQuery,
-    ) -> self::events::BlockedEventsResponse {
-        self.blocked_events.query(query)
+        let event = self.blocked_events.record(info);
+        self.notifier.notify(event);
     }
 
     pub fn match_domain(&self, domain: &Domain) -> bool {

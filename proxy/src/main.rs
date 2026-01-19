@@ -89,6 +89,12 @@ pub struct Args {
     #[arg(long, value_name = "SECONDS", default_value_t = 1.)]
     /// the graceful shutdown timeout (<= 0.0 = no timeout)
     pub graceful: f64,
+
+    /// Optional endpoint URL to POST blocked-event notifications to.
+    ///
+    /// If omitted, blocked events are still recorded locally but not reported.
+    #[arg(long = "report-blocked-events-to")]
+    pub report_blocked_events_to: Option<String>,
 }
 
 #[tokio::main]
@@ -143,7 +149,11 @@ where
     // this can happen for example in case remote lists need to be fetched and the
     // something on the network on either side is not working
     let firewall = tokio::select! {
-        result = self::firewall::Firewall::try_new(graceful.guard(), data_storage) => {
+        result = self::firewall::Firewall::try_new(
+            graceful.guard(),
+            data_storage,
+            args.report_blocked_events_to.clone(),
+        ) => {
             result?
         }
 

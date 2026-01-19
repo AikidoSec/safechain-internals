@@ -1,13 +1,8 @@
-use std::sync::Arc;
-
+use super::events::BlockedEvent;
 use rama::telemetry::tracing;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
-use super::events::BlockedEvent;
-
-/// A handle to send block notifications to a reporting endpoint.
-///
-/// This is cheaply cloneable and can be shared across rules.
 #[derive(Clone)]
 pub struct EventNotifier {
     inner: Option<Arc<EventNotifierInner>>,
@@ -26,9 +21,6 @@ impl std::fmt::Debug for EventNotifier {
 }
 
 impl EventNotifier {
-    /// Creates a new event notifier that sends events to the given reporting endpoint.
-    ///
-    /// Returns a no-op notifier if no endpoint URL is provided.
     pub fn new(reporting_endpoint: Option<String>) -> Self {
         let Some(endpoint) = reporting_endpoint else {
             return Self::noop();
@@ -36,7 +28,6 @@ impl EventNotifier {
 
         let (tx, rx) = mpsc::unbounded_channel();
 
-        // Spawn background task to send notifications
         tokio::spawn(notification_worker(endpoint, rx));
 
         Self {
@@ -44,27 +35,22 @@ impl EventNotifier {
         }
     }
 
-    /// Creates a no-op notifier that discards all events.
     pub fn noop() -> Self {
         Self { inner: None }
     }
 
-    /// Returns true if notifications are enabled.
     pub fn is_enabled(&self) -> bool {
         self.inner.is_some()
     }
 
-    /// Sends a blocked event notification.
-    ///
-    /// This is non-blocking and will not fail if the receiver is full or closed.
     pub fn notify(&self, event: BlockedEvent) {
-        if let Some(inner) = &self.inner {
-            if let Err(e) = inner.tx.send(event) {
-                tracing::debug!(
-                    "failed to send event notification (receiver dropped): {}",
-                    e
-                );
-            }
+        if let Some(inner) = &self.inner
+            && let Err(e) = inner.tx.send(event)
+        {
+            tracing::debug!(
+                "failed to send event notification (receiver dropped): {}",
+                e
+            );
         }
     }
 }
@@ -93,12 +79,9 @@ async fn notification_worker(
             }
         };
 
-        // TODO: Parse endpoint URL and extract host/path
-        // For now, assume format: http://host:port/path
         let _endpoint_clone = reporting_endpoint.clone();
         let result = tokio::task::spawn_blocking(move || {
             // TODO: Implement HTTP POST to endpoint
-            // This is a placeholder - actual implementation should:
             // 1. Parse the URL
             // 2. Create TCP connection
             // 3. Send HTTP/1.1 POST request
