@@ -177,15 +177,17 @@ func UnsetSystemProxy(ctx context.Context) error {
 func InstallProxyCA(ctx context.Context, certPath string) error {
 	// CA needs to be installed as current user, in order to be prompted for security permissions
 	return RunAsCurrentUser(ctx, "security", []string{"add-trusted-cert",
-		"-d",
+		"-d", // Add to admin cert store; default is user
 		"-r", "trustRoot",
 		"-k", "/Library/Keychains/System.keychain",
 		certPath})
 }
 
 func IsProxyCAInstalled(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "security", "find-certificate",
-		"-c", "aikido.dev",
+	cmd := exec.CommandContext(ctx,
+		"security",
+		"find-certificate",
+		"-c", "aikido.dev", // Search for certificate with common name "aikido.dev"
 		"/Library/Keychains/System.keychain")
 
 	err := cmd.Run()
@@ -196,8 +198,12 @@ func IsProxyCAInstalled(ctx context.Context) error {
 }
 
 func UninstallProxyCA(ctx context.Context) error {
-	output, err := exec.CommandContext(ctx, "security", "find-certificate",
-		"-a", "-c", "aikido.dev", "-Z",
+	output, err := exec.CommandContext(ctx,
+		"security",
+		"find-certificate",
+		"-a",               //Find all matching certificates, not just the first one
+		"-c", "aikido.dev", // Search for certificate with common name "aikido.dev"
+		"-Z", // Print SHA-256 (and SHA-1) hash of the certificate
 		"/Library/Keychains/System.keychain").Output()
 	if err == nil {
 		hashRegex := regexp.MustCompile(`SHA-1 hash:\s*([A-F0-9]+)`)
@@ -260,30 +266,14 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) err
 		return utils.RunCommand(ctx, binaryPath, args...)
 	}
 
-	_, uid, err := getConsoleUser(ctx)
-	if err != nil {
-		return err
-	}
-
-	launchctlArgs := append([]string{"asuser", uid, binaryPath}, args...)
-	return utils.RunCommand(ctx, "launchctl", launchctlArgs...)
-}
-
-func RunShellScriptAsCurrentUser(ctx context.Context, scriptPath string) error {
-	if !RunningAsRoot() {
-		return utils.RunCommand(ctx, "sh", scriptPath)
-	}
-
 	username, uid, err := getConsoleUser(ctx)
 	if err != nil {
 		return err
 	}
 
 	homeDir := filepath.Join("/Users", username)
-	shellCmd := fmt.Sprintf("export HOME=%s && sh %s", homeDir, scriptPath)
-
-	launchctlArgs := []string{"asuser", uid, "/bin/sh", "-c", shellCmd}
-	return utils.RunCommand(ctx, "launchctl", launchctlArgs...)
+	launchctlArgs := append([]string{"asuser", uid, binaryPath}, args...)
+	return utils.RunCommandWithEnv(ctx, []string{fmt.Sprintf("HOME=%s", homeDir)}, "launchctl", launchctlArgs...)
 }
 
 func RunningAsRoot() bool {

@@ -30,14 +30,8 @@ jobs:
     with:
       version: ${{ needs.extract-version.outputs.version }}
 
-  build-macos-pkg:
-    needs: extract-version
-    uses: ./.github/workflows/build-macos-pkg.yml
-    with:
-      version: ${{ needs.extract-version.outputs.version }}
-
   release:
-    needs: [extract-version, build-unix, build-windows, build-macos-pkg]
+    needs: [extract-version, build-unix, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -53,8 +47,6 @@ jobs:
       - name: Prepare release files
         id: checksums
         run: |
-          VERSION=${{ needs.extract-version.outputs.version }}
-          
           mv artifacts/safechain-agent-darwin-amd64/safechain-agent-darwin-amd64 .
           mv artifacts/safechain-agent-darwin-arm64/safechain-agent-darwin-arm64 .
           
@@ -66,10 +58,7 @@ jobs:
 
           mv artifacts/SafeChainAgent.amd64.msi/SafeChainAgent.amd64.msi ./SafeChainAgent-windows-amd64.msi
           mv artifacts/SafeChainAgent.arm64.msi/SafeChainAgent.arm64.msi ./SafeChainAgent-windows-arm64.msi
-          
-          mv "artifacts/SafeChainAgent-amd64.pkg/SafeChainAgent-$VERSION-amd64.pkg" ./SafeChainAgent-macos-amd64.pkg
-          mv "artifacts/SafeChainAgent-arm64.pkg/SafeChainAgent-$VERSION-arm64.pkg" ./SafeChainAgent-macos-arm64.pkg
-                    
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -82,8 +71,6 @@ jobs:
             safechain-proxy-linux-arm64
             SafeChainAgent-windows-amd64.msi
             SafeChainAgent-windows-arm64.msi
-            SafeChainAgent-macos-amd64.pkg
-            SafeChainAgent-macos-arm64.pkg
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

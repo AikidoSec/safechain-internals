@@ -157,8 +157,8 @@ func (d *Daemon) run(ctx context.Context) error {
 	}
 }
 
-func (d *Daemon) Teardown(ctx context.Context) error {
-	log.Println("Tearing down the SafeChain Agent...")
+func (d *Daemon) Uninstall(ctx context.Context) error {
+	log.Println("Uninstalling the SafeChain Agent...")
 
 	if err := proxy.UninstallProxyCA(ctx); err != nil {
 		return fmt.Errorf("failed to uninstall proxy CA: %v", err)
