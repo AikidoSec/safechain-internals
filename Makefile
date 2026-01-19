@@ -60,7 +60,7 @@ build:
 	@echo "Building $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT) ./cmd/daemon
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME_UI)$(BINARY_EXT) ./cmd/ui
+	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME_UI)$(BINARY_EXT) ./cmd/ui
 	@echo "Binaries built:"
 	@echo "$(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)"
 	@echo "$(BIN_DIR)/$(BINARY_NAME_UI)$(BINARY_EXT)"
@@ -69,7 +69,7 @@ build-release:
 	@echo "Building release $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/daemon
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/ui
+	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/ui
 	@echo "Binaries built:"
 	@echo "$(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
 	@echo "$(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
