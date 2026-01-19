@@ -7,7 +7,7 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
-    utils::str::arcstr::ArcStr,
+    utils::str::arcstr::{ArcStr, arcstr},
 };
 
 use crate::{
@@ -119,7 +119,7 @@ impl Rule for RuleNpm {
                     response: generate_generic_blocked_response_for_req(req),
                     info: BlockedEventInfo {
                         artifact: BlockedArtifact {
-                            product: ArcStr::from("npm"),
+                            product: arcstr!("npm"),
                             identifier: ArcStr::from(package_name),
                             version: Some(ArcStr::from(package_version)),
                         },

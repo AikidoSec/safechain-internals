@@ -20,7 +20,7 @@ use rama::{
 
 use rama::http::body::util::BodyExt;
 
-use rama::utils::str::arcstr::ArcStr;
+use rama::utils::str::arcstr::{ArcStr, arcstr};
 
 use crate::{
     firewall::events::{BlockedArtifact, BlockedEventInfo},
@@ -147,8 +147,8 @@ impl Rule for RuleVSCode {
                 response: generate_malware_blocked_response_for_req(req),
                 info: BlockedEventInfo {
                     artifact: BlockedArtifact {
-                        product: ArcStr::from("vscode"),
-                        identifier: ArcStr::from(extension_id.to_string()),
+                        product: arcstr!("vscode"),
+                        identifier: ArcStr::from(extension_id.as_str()),
                         version: None,
                     },
                 },

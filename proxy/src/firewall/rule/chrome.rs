@@ -5,7 +5,10 @@ use rama::{
     http::{Request, Response, service::web::extract::Query},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
-    utils::str::{arcstr::ArcStr, starts_with_ignore_ascii_case},
+    utils::str::{
+        arcstr::{ArcStr, arcstr},
+        starts_with_ignore_ascii_case,
+    },
 };
 
 use serde::Deserialize;
@@ -104,8 +107,8 @@ impl Rule for RuleChrome {
                 response: generate_generic_blocked_response_for_req(req),
                 info: BlockedEventInfo {
                     artifact: BlockedArtifact {
-                        product: ArcStr::from("chrome"),
-                        identifier: ArcStr::from(product_id.to_string()),
+                        product: arcstr!("chrome"),
+                        identifier: product_id,
                         version: None,
                     },
                 },

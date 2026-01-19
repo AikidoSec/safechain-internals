@@ -1,14 +1,14 @@
 use super::*;
-use rama::utils::str::arcstr::ArcStr;
+use rama::utils::str::arcstr::arcstr;
 
 #[test]
 fn blocked_event_serializes_with_expected_keys() {
     let event = BlockedEvent {
         ts_ms: 42,
         artifact: BlockedArtifact {
-            product: ArcStr::from("npm"),
-            identifier: ArcStr::from("foo"),
-            version: Some(ArcStr::from("1.3.0")),
+            product: arcstr!("npm"),
+            identifier: arcstr!("foo"),
+            version: Some(arcstr!("1.3.0")),
         },
     };
 
@@ -29,17 +29,17 @@ fn store_enforces_max_events_min_1() {
 
     store.record(BlockedEventInfo {
         artifact: BlockedArtifact {
-            product: ArcStr::from("pypi"),
-            identifier: ArcStr::from("a"),
-            version: Some(ArcStr::from("1.0.0")),
+            product: arcstr!("pypi"),
+            identifier: arcstr!("a"),
+            version: Some(arcstr!("1.0.0")),
         },
     });
 
     store.record(BlockedEventInfo {
         artifact: BlockedArtifact {
-            product: ArcStr::from("pypi"),
-            identifier: ArcStr::from("b"),
-            version: Some(ArcStr::from("2.0.0")),
+            product: arcstr!("pypi"),
+            identifier: arcstr!("b"),
+            version: Some(arcstr!("2.0.0")),
         },
     });
 
@@ -54,25 +54,25 @@ fn store_prunes_by_max_events_keeps_most_recent() {
 
     store.record(BlockedEventInfo {
         artifact: BlockedArtifact {
-            product: ArcStr::from("npm"),
-            identifier: ArcStr::from("a"),
-            version: Some(ArcStr::from("1")),
+            product: arcstr!("npm"),
+            identifier: arcstr!("a"),
+            version: Some(arcstr!("1")),
         },
     });
 
     store.record(BlockedEventInfo {
         artifact: BlockedArtifact {
-            product: ArcStr::from("npm"),
-            identifier: ArcStr::from("b"),
-            version: Some(ArcStr::from("1")),
+            product: arcstr!("npm"),
+            identifier: arcstr!("b"),
+            version: Some(arcstr!("1")),
         },
     });
 
     store.record(BlockedEventInfo {
         artifact: BlockedArtifact {
-            product: ArcStr::from("npm"),
-            identifier: ArcStr::from("c"),
-            version: Some(ArcStr::from("1")),
+            product: arcstr!("npm"),
+            identifier: arcstr!("c"),
+            version: Some(arcstr!("1")),
         },
     });
 
@@ -88,29 +88,29 @@ fn store_keeps_most_recent_events_with_timestamps() {
 
     store.record(BlockedEventInfo {
         artifact: BlockedArtifact {
-            product: ArcStr::from("npm"),
-            identifier: ArcStr::from("a"),
+            product: arcstr!("npm"),
+            identifier: arcstr!("a"),
             version: None,
         },
     });
     store.record(BlockedEventInfo {
         artifact: BlockedArtifact {
-            product: ArcStr::from("npm"),
-            identifier: ArcStr::from("b"),
+            product: arcstr!("npm"),
+            identifier: arcstr!("b"),
             version: None,
         },
     });
     store.record(BlockedEventInfo {
         artifact: BlockedArtifact {
-            product: ArcStr::from("npm"),
-            identifier: ArcStr::from("c"),
+            product: arcstr!("npm"),
+            identifier: arcstr!("c"),
             version: None,
         },
     });
     store.record(BlockedEventInfo {
         artifact: BlockedArtifact {
-            product: ArcStr::from("npm"),
-            identifier: ArcStr::from("d"),
+            product: arcstr!("npm"),
+            identifier: arcstr!("d"),
             version: None,
         },
     });

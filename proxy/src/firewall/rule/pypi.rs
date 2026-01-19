@@ -16,7 +16,7 @@ use rama::{
     },
 };
 
-use rama::utils::str::arcstr::ArcStr;
+use rama::utils::str::arcstr::{ArcStr, arcstr};
 
 use crate::{
     firewall::events::{BlockedArtifact, BlockedEventInfo},
@@ -185,23 +185,19 @@ impl Rule for RulePyPI {
 
             let name = package_info.name.to_string();
             let version = match &package_info.version {
-                PackageVersion::Semver(v) => v.to_string(),
-                PackageVersion::Any => "*".to_string(),
-                PackageVersion::None => "".to_string(),
-                PackageVersion::Unknown(v) => v.to_string(),
+                PackageVersion::Semver(v) => Some(ArcStr::from(v.to_string())),
+                PackageVersion::Any => Some(arcstr!("*")),
+                PackageVersion::None => None,
+                PackageVersion::Unknown(v) => Some(v.clone()),
             };
 
             return Ok(RequestAction::Block(BlockedRequest {
                 response: generate_generic_blocked_response_for_req(req),
                 info: BlockedEventInfo {
                     artifact: BlockedArtifact {
-                        product: ArcStr::from("pypi"),
+                        product: arcstr!("pypi"),
                         identifier: ArcStr::from(name),
-                        version: if version.is_empty() {
-                            None
-                        } else {
-                            Some(ArcStr::from(version))
-                        },
+                        version,
                     },
                 },
             }));
