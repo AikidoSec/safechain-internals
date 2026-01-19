@@ -8,8 +8,6 @@ import (
 	"gioui.org/io/system"
 	"gioui.org/layout"
 	"gioui.org/op"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget/material"
 )
@@ -41,7 +39,6 @@ func runModal(w *app.Window, modal *Modal) error {
 		modal: modal,
 	}
 
-	// Set up modal close handler to close the window
 	modal.Close = func() {
 		w.Perform(system.ActionClose)
 	}
@@ -62,41 +59,5 @@ func runModal(w *app.Window, modal *Modal) error {
 }
 
 func (a *ModalApp) Layout(gtx layout.Context) layout.Dimensions {
-	return a.layoutModalOverlay(gtx)
-}
-
-func (a *ModalApp) layoutModalOverlay(gtx layout.Context) layout.Dimensions {
-	// Semi-transparent background
-	defer clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops).Pop()
-	paint.ColorOp{Color: rgba(0x000000, 0x88)}.Add(gtx.Ops)
-	paint.PaintOp{}.Add(gtx.Ops)
-
-	// Center the modal
-	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		// Modal background (white box)
-		return layout.Stack{}.Layout(gtx,
-			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				// Constrain modal size
-				gtx.Constraints.Max.X = gtx.Dp(unit.Dp(400))
-				gtx.Constraints.Min.X = gtx.Dp(unit.Dp(350))
-
-				dims := a.modal.Layout(gtx, a.theme)
-
-				// Draw white background for modal
-				defer clip.Rect{Max: dims.Size}.Push(gtx.Ops).Pop()
-				paint.ColorOp{Color: rgba(0xFFFFFF, 0xFF)}.Add(gtx.Ops)
-				paint.PaintOp{}.Add(gtx.Ops)
-
-				return dims
-			}),
-			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-				// Constrain modal size
-				gtx.Constraints.Max.X = gtx.Dp(unit.Dp(400))
-				gtx.Constraints.Min.X = gtx.Dp(unit.Dp(350))
-
-				// Render modal content on top
-				return a.modal.Layout(gtx, a.theme)
-			}),
-		)
-	})
+	return a.modal.Layout(gtx, a.theme)
 }
