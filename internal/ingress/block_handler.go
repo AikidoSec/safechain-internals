@@ -26,13 +26,13 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received block event: product=%s package=%s", event.Product, event.PackageName)
 
 	// Show UI modal in a goroutine to not block the HTTP response
-	go showBlockedModal(event)
+	go showBlockedModal(event, s.Addr())
 
 	w.WriteHeader(http.StatusOK)
 }
 
 // showBlockedModal launches the ui binary as the current user to display the UI.
-func showBlockedModal(event BlockEvent) {
+func showBlockedModal(event BlockEvent, ingressAddress string) {
 	cfg := platform.GetConfig()
 	binaryPath := filepath.Join(cfg.BinaryDir, BlockedModalBinaryName)
 
@@ -42,6 +42,7 @@ func showBlockedModal(event BlockEvent) {
 	args := []string{
 		"--title", title,
 		"--text", text,
+		"--ingress", ingressAddress,
 	}
 
 	// Make sure that the modals close on their own after an hour so there are no hanging
