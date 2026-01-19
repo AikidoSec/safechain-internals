@@ -146,7 +146,6 @@ func (d *Daemon) run(ctx context.Context) error {
 	if ingressAddr == "" {
 		return fmt.Errorf("proxy ingress server failed to start")
 	}
-	log.Printf("Proxy ingress server listening on %s", ingressAddr)
 
 	if err := d.proxy.Start(ctx, ingressAddr); err != nil {
 		return fmt.Errorf("failed to start proxy: %v", err)
