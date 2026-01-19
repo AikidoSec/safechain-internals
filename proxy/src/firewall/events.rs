@@ -49,30 +49,18 @@ impl BlockedEventsStore {
             ts_ms: now_unix_ms(),
             artifact: info.artifact,
         };
-        self.push_event(event.clone());
-        event
-    }
 
-    #[cfg(test)]
-    pub(crate) fn record_at(&self, unix_ts_ms: u64, info: BlockedEventInfo) -> BlockedEvent {
-        let event = BlockedEvent {
-            ts_ms: unix_ts_ms,
-            artifact: info.artifact,
-        };
-        self.push_event(event.clone());
-        event
-    }
-
-    fn push_event(&self, event: BlockedEvent) {
         let mut events = self
             .events
             .lock()
             .expect("blocked events store mutex poisoned");
 
-        events.push_back(event);
+        events.push_back(event.clone());
         while events.len() > self.max_events {
             events.pop_front();
         }
+
+        event
     }
 
     #[cfg(test)]
