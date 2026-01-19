@@ -46,8 +46,6 @@ pub async fn run_meta_https_server(
 
     tracing::info!("meta HTTP(S) server received proxy address from proxy task: {proxy_addr}");
 
-    let firewall_for_pac = firewall.clone();
-
     #[cfg_attr(not(feature = "har"), allow(unused_mut))]
     let mut http_router = Router::new()
         .with_get("/", Html(META_SITE_INDEX_HTML))
@@ -64,7 +62,7 @@ pub async fn run_meta_https_server(
                 return std::future::ready(StatusCode::NOT_FOUND.into_response());
             }
 
-            let response = firewall_for_pac.generate_pac_script_response(proxy_addr, req);
+            let response = firewall.generate_pac_script_response(proxy_addr, req);
             std::future::ready(response)
         });
 
