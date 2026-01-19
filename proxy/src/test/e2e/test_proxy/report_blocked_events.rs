@@ -21,7 +21,7 @@ async fn test_report_blocked_events_posts_json_to_endpoint() {
 
     // Spawn a dedicated proxy instance so we can pass custom CLI flags.
     let runtime = e2e::runtime::spawn_with_args(&[
-        "--report-blocked-events-to",
+        "--reporting-endpoint",
         "http://assert-test.internal/blocked-events",
     ])
     .await;

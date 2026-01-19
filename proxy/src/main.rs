@@ -93,8 +93,8 @@ pub struct Args {
     /// Optional endpoint URL to POST blocked-event notifications to.
     ///
     /// If omitted, blocked events are still recorded locally but not reported.
-    #[arg(long = "report-blocked-events-to")]
-    pub report_blocked_events_to: Option<String>,
+    #[arg(long = "reporting-endpoint")]
+    pub reporting_endpoint: Option<String>,
 }
 
 #[tokio::main]
@@ -152,7 +152,7 @@ where
         result = self::firewall::Firewall::try_new(
             graceful.guard(),
             data_storage,
-            args.report_blocked_events_to.clone(),
+            args.reporting_endpoint.clone(),
         ) => {
             result?
         }

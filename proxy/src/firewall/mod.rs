@@ -46,7 +46,7 @@ impl Firewall {
     pub async fn try_new(
         guard: ShutdownGuard,
         data: SyncCompactDataStorage,
-        blocked_events_reporting_endpoint: Option<String>,
+        reporting_endpoint: Option<String>,
     ) -> Result<Self, OpaqueError> {
         let inner_https_client = crate::client::new_web_client()?;
 
@@ -99,7 +99,7 @@ impl Firewall {
             ]),
             // Keep a small rolling window of the last N blocked events.
             blocked_events: Arc::new(self::events::BlockedEventsStore::new(256)),
-            notifier: self::notifier::EventNotifier::new(blocked_events_reporting_endpoint),
+            notifier: self::notifier::EventNotifier::new(reporting_endpoint),
         })
     }
 
