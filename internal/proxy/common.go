@@ -28,7 +28,7 @@ func readProxyConfig(filePath string) (string, error) {
 }
 
 func GetProxyUrl() (string, string, error) {
-	proxyAddress, err := readProxyConfig(filepath.Join(platform.GetProxyRunDir(), "proxy.addr.txt"))
+	proxyAddress, err := readProxyConfig(filepath.Join(platform.GetRunDir(), "proxy.addr.txt"))
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read proxy config: %v", err)
 	}
@@ -36,7 +36,7 @@ func GetProxyUrl() (string, string, error) {
 }
 
 func GetMetaUrl() (string, string, error) {
-	metaAddress, err := readProxyConfig(filepath.Join(platform.GetProxyRunDir(), "meta.addr.txt"))
+	metaAddress, err := readProxyConfig(filepath.Join(platform.GetRunDir(), "meta.addr.txt"))
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read meta config: %v", err)
 	}
