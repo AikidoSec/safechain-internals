@@ -28,9 +28,9 @@ func CreateBlockedModal(text string, onBypass func()) *Modal {
 }
 
 func (m *Modal) Layout(gtx layout.Context, th *AikidoTheme) layout.Dimensions {
-	// Remove minimum X,Y constraint to allow re-sizing
-	gtx.Constraints.Min.X = 0
+	// Remove minimum Y constraint to allow modal to have an end
 	gtx.Constraints.Min.Y = 0
+	gtx.Constraints.Max.X = gtx.Constraints.Max.X - gtx.Dp(unit.Dp(20))
 
 	// Handle button clicks
 	if m.okBtn.Clicked(gtx) && m.Close != nil {

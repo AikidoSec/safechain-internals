@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"image"
 	"log"
 	"os"
@@ -10,6 +9,8 @@ import (
 	"gioui.org/io/system"
 	"gioui.org/layout"
 	"gioui.org/op"
+	"gioui.org/op/clip"
+	"gioui.org/op/paint"
 	"gioui.org/unit"
 )
 
@@ -45,7 +46,6 @@ func runModal(w *app.Window, modal *Modal) error {
 	}
 
 	var ops op.Ops
-	var lastSize image.Point
 
 	for {
 		e := w.Event()
@@ -54,23 +54,56 @@ func runModal(w *app.Window, modal *Modal) error {
 			return e.Err
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
-			dims := a.Layout(gtx)
-			fmt.Println("dims: ", dims)
-			// Update window size if content size changed
-			newSize := image.Point{X: dims.Size.X, Y: dims.Size.Y}
-			if newSize != lastSize && newSize.X > 0 && newSize.Y > 0 {
-				w.Option(app.Size(
-					unit.Dp(float32(newSize.X)/gtx.Metric.PxPerDp),
-					unit.Dp(float32(newSize.Y)/gtx.Metric.PxPerDp),
-				))
-				lastSize = newSize
-			}
-
+			a.Layout(gtx)
 			e.Frame(gtx.Ops)
 		}
 	}
 }
 
 func (a *ModalApp) Layout(gtx layout.Context) layout.Dimensions {
-	return a.modal.Layout(gtx, a.theme)
+	// Fill background with a slightly darker background than the modal.
+	paint.Fill(gtx.Ops, darken(a.theme.Bg, 0.95))
+
+	// Center content
+	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Flex{
+			Axis:      layout.Vertical,
+			Alignment: layout.Middle,
+		}.Layout(gtx,
+			// SVG Image
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layoutAikidoLogo(gtx, unit.Dp(64))
+			}),
+			// Spacing
+			layout.Rigid(layout.Spacer{Height: unit.Dp(5)}.Layout),
+			// Modal with rounded corners
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return a.layoutRoundedModal(gtx)
+			}),
+		)
+	})
+}
+
+func (a *ModalApp) layoutRoundedModal(gtx layout.Context) layout.Dimensions {
+	// Create a macro to capture the modal layout
+	macro := op.Record(gtx.Ops)
+	dims := a.modal.Layout(gtx, a.theme)
+	call := macro.Stop()
+
+	// Draw rounded rectangle background
+	rr := image.Rectangle{
+		Max: dims.Size,
+	}
+
+	radius := 12
+	clip.RRect{
+		Rect: rr,
+		NE:   radius, NW: radius, SE: radius, SW: radius,
+	}.Push(gtx.Ops)
+
+	paint.Fill(gtx.Ops, a.theme.Theme.Bg)
+
+	call.Add(gtx.Ops)
+
+	return dims
 }
