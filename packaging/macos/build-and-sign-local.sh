@@ -49,6 +49,10 @@ echo ""
 echo "Step 2: Checking for signing certificates..."
 echo ""
 
+echo "Checking for signing certificates..."
+security find-identity -v -p codesigning
+echo ""
+
 # Check if we have a Developer ID Application certificate
 if security find-identity -v -p codesigning | grep "Developer ID Application" > /dev/null; then
     echo "✓ Found Developer ID Application certificate"
