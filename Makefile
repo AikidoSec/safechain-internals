@@ -1,4 +1,4 @@
-.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 clean test run help
+.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 build-linux-amd64 build-linux-arm64 build-rpm clean test run help
 
 BINARY_NAME=safechain-agent
 VERSION?=dev
@@ -78,6 +78,20 @@ build-windows-amd64:
 
 build-windows-arm64:
 	@$(MAKE) GOOS=windows GOARCH=arm64 build-release
+
+build-linux-amd64:
+	@$(MAKE) GOOS=linux GOARCH=amd64 build-release
+
+build-linux-arm64:
+	@$(MAKE) GOOS=linux GOARCH=arm64 build-release
+
+build-rpm:
+	@if [ -z "$(VERSION)" ] || [ -z "$(ARCH)" ]; then \
+		echo "Error: VERSION and ARCH are required"; \
+		echo "Usage: make build-rpm VERSION=1.0.0 ARCH=amd64"; \
+		exit 1; \
+	fi
+	./packaging/linux/rpm/build-rpm.sh -v $(VERSION) -a $(ARCH) -b $(BIN_DIR) -o dist
 
 run: build
 	$(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)

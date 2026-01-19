@@ -1,0 +1,16 @@
+[Unit]
+Description=SafeChain Agent - Aikido Security
+Documentation=https://www.aikido.dev
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/aikidosecurity/safechainagent/bin/safechain-agent
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/aikidosecurity/safechainagent/safechain-agent.log
+StandardError=append:/var/log/aikidosecurity/safechainagent/safechain-agent.error.log
+Environment=PATH=/opt/aikidosecurity/safechainagent/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target
