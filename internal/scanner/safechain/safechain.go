@@ -37,9 +37,9 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath); err != nil {
 		return fmt.Errorf("failed to download install script: %w", err)
 	}
-	//defer os.Remove(scriptPath)
+	defer os.Remove(scriptPath)
 
-	if err := platform.RunShellScriptAsCurrentUser(ctx, scriptPath); err != nil {
+	if err := platform.RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
 		return fmt.Errorf("failed to run install script: %w", err)
 	}
 
@@ -56,9 +56,9 @@ func (s *SafechainScanner) Uninstall(ctx context.Context) error {
 	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath); err != nil {
 		return fmt.Errorf("failed to download uninstall script: %w", err)
 	}
-	//defer os.Remove(scriptPath)
+	defer os.Remove(scriptPath)
 
-	if err := platform.RunShellScriptAsCurrentUser(ctx, scriptPath); err != nil {
+	if err := platform.RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
 		return fmt.Errorf("failed to run uninstall script: %w", err)
 	}
 

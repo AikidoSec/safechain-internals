@@ -184,7 +184,8 @@ func InstallProxyCA(ctx context.Context, certPath string) error {
 }
 
 func IsProxyCAInstalled(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "security", "find-certificate",
+	cmd := exec.CommandContext(ctx,
+		"security", "find-certificate",
 		"-c", "aikido.dev",
 		"/Library/Keychains/System.keychain")
 
@@ -260,30 +261,14 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) err
 		return utils.RunCommand(ctx, binaryPath, args...)
 	}
 
-	_, uid, err := getConsoleUser(ctx)
-	if err != nil {
-		return err
-	}
-
-	launchctlArgs := append([]string{"asuser", uid, binaryPath}, args...)
-	return utils.RunCommand(ctx, "launchctl", launchctlArgs...)
-}
-
-func RunShellScriptAsCurrentUser(ctx context.Context, scriptPath string) error {
-	if !RunningAsRoot() {
-		return utils.RunCommand(ctx, "sh", scriptPath)
-	}
-
 	username, uid, err := getConsoleUser(ctx)
 	if err != nil {
 		return err
 	}
 
 	homeDir := filepath.Join("/Users", username)
-	shellCmd := fmt.Sprintf("export HOME=%s && sh %s", homeDir, scriptPath)
-
-	launchctlArgs := []string{"asuser", uid, "/bin/sh", "-c", shellCmd}
-	return utils.RunCommand(ctx, "launchctl", launchctlArgs...)
+	launchctlArgs := append([]string{"asuser", uid, binaryPath}, args...)
+	return utils.RunCommandWithEnv(ctx, []string{fmt.Sprintf("HOME=%s", homeDir)}, "launchctl", launchctlArgs...)
 }
 
 func RunningAsRoot() bool {
