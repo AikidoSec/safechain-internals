@@ -11,9 +11,11 @@ import (
 
 func main() {
 	var (
-		title         = flag.String("title", "", "Modal title")
-		text          = flag.String("text", "", "Modal text content")
+		title = flag.String("title", "", "Modal title")
+		text  = flag.String("text", "", "Modal text content")
+		// ingress logic
 		ingress       = flag.String("ingress", "", "Daemon ingress address, to report back when bypass requested.")
+		packageKey    = flag.String("package-key", "", "Key used to identify UI in requests to ingress")
 		bypassEnabled = flag.Bool("bypass-enabled", false, "Enable bypass requested.")
 	)
 	flag.Parse()
@@ -25,6 +27,10 @@ func main() {
 
 	bypassTrigger := func() {
 
+		err := sendBypassRequest(*ingress, *packageKey)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	if !(*bypassEnabled) {

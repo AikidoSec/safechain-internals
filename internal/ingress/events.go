@@ -8,3 +8,7 @@ type BlockEvent struct {
 	PackageVersion string `json:"package_version,omitempty"`
 	Reason         string `json:"reason,omitempty"`
 }
+
+type RequestBypassEvent struct {
+	Key string `json:"key"`
+}

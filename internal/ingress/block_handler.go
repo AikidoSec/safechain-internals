@@ -38,11 +38,14 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 
 	title := "SafeChain Ultimate"
 	text := buildBlockedText(event)
+	key := buildKey(event)
 
 	args := []string{
+		"--package-key", key,
 		"--title", title,
 		"--text", text,
 		"--ingress", ingressAddress,
+		"--bypass-enabled", "true",
 	}
 
 	// Make sure that the modals close on their own after an hour so there are no hanging
@@ -66,6 +69,22 @@ func buildBlockedText(event BlockEvent) string {
 	}
 	return fmt.Sprintf(
 		"SafeChain blocked a potentially malicious %s package:\n\n%s",
+		event.Product,
+		event.PackageName,
+	)
+}
+
+func buildKey(event BlockEvent) string {
+	if event.PackageVersion != "" {
+		return fmt.Sprintf(
+			"%s{%s@%s}",
+			event.Product,
+			event.PackageName,
+			event.PackageVersion,
+		)
+	}
+	return fmt.Sprintf(
+		"%s{%s}",
 		event.Product,
 		event.PackageName,
 	)
