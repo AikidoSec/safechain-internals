@@ -9,11 +9,10 @@ import (
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/unit"
-	"gioui.org/widget/material"
 )
 
 type ModalApp struct {
-	theme *material.Theme
+	theme *AikidoTheme
 	modal *Modal
 }
 
@@ -35,7 +34,7 @@ func RunModalApp(modal *Modal, title string, width, height unit.Dp) error {
 
 func runModal(w *app.Window, modal *Modal) error {
 	a := &ModalApp{
-		theme: NewAikidoTheme().Theme,
+		theme: NewAikidoTheme(),
 		modal: modal,
 	}
 

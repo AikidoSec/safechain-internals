@@ -27,12 +27,10 @@ func CreateBlockedModal(text string, onBypass func()) *Modal {
 	}
 }
 
-func (m *Modal) Layout(gtx layout.Context, th *material.Theme) layout.Dimensions {
+func (m *Modal) Layout(gtx layout.Context, th *AikidoTheme) layout.Dimensions {
 	// Handle button clicks
-	if m.okBtn.Clicked(gtx) {
-		if m.Close != nil {
-			m.Close()
-		}
+	if m.okBtn.Clicked(gtx) && m.Close != nil {
+		m.Close()
 	}
 
 	if m.bypassBtn.Clicked(gtx) {
@@ -58,31 +56,24 @@ func (m *Modal) Layout(gtx layout.Context, th *material.Theme) layout.Dimensions
 	return m.layoutMain(gtx, th)
 }
 
-func (m *Modal) layoutMain(gtx layout.Context, th *material.Theme) layout.Dimensions {
-	return layout.Flex{
-		Axis: layout.Vertical,
-	}.Layout(
-		gtx,
+func (m *Modal) layoutMain(gtx layout.Context, th *AikidoTheme) layout.Dimensions {
+	inset := layout.UniformInset(unit.Dp(16))
+
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: unit.Dp(20), Left: unit.Dp(20), Right: unit.Dp(20)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				lbl := material.Body1(th, m.Text)
-				return lbl.Layout(gtx)
-			})
+			return inset.Layout(gtx, material.Body1(th.Theme, m.Text).Layout)
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: unit.Dp(20), Bottom: unit.Dp(20), Left: unit.Dp(20), Right: unit.Dp(20)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return inset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{
 					Axis:    layout.Horizontal,
 					Spacing: layout.SpaceEnd,
-				}.Layout(
-					gtx,
+				}.Layout(gtx,
+					layout.Rigid(material.Button(th.Theme, &m.okBtn, "Ok").Layout),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						btn := material.Button(th, &m.okBtn, "Ok")
-						return btn.Layout(gtx)
-					}),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return layout.Inset{Left: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							btn := material.Button(th, &m.bypassBtn, "Request Bypass")
+						return layout.Inset{Left: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							btn := material.Button(th.Theme, &m.bypassBtn, "Request Bypass")
+							btn.Background = th.Danger
 							return btn.Layout(gtx)
 						})
 					}),
@@ -92,33 +83,28 @@ func (m *Modal) layoutMain(gtx layout.Context, th *material.Theme) layout.Dimens
 	)
 }
 
-func (m *Modal) layoutConfirm(gtx layout.Context, th *material.Theme) layout.Dimensions {
-	return layout.Flex{
-		Axis: layout.Vertical,
-	}.Layout(
-		gtx,
+func (m *Modal) layoutConfirm(gtx layout.Context, th *AikidoTheme) layout.Dimensions {
+	inset := layout.UniformInset(unit.Dp(16))
+
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: unit.Dp(20), Left: unit.Dp(20), Right: unit.Dp(20)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				lbl := material.Body1(th, "Are you sure you want to bypass?")
-				return lbl.Layout(gtx)
-			})
+			return inset.Layout(gtx, material.Body1(th.Theme, "Are you sure you want to bypass?").Layout)
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: unit.Dp(20), Bottom: unit.Dp(20), Left: unit.Dp(20), Right: unit.Dp(20)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return inset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{
 					Axis:    layout.Horizontal,
 					Spacing: layout.SpaceEnd,
-				}.Layout(
-					gtx,
+				}.Layout(gtx,
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						btn := material.Button(th, &m.yesBtn, "Yes")
+						btn := material.Button(th.Theme, &m.yesBtn, "Yes")
+						btn.Background = th.Danger
 						return btn.Layout(gtx)
 					}),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return layout.Inset{Left: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							btn := material.Button(th, &m.noBtn, "No")
-							return btn.Layout(gtx)
-						})
+						return layout.Inset{Left: unit.Dp(8)}.Layout(gtx,
+							material.Button(th.Theme, &m.noBtn, "No").Layout,
+						)
 					}),
 				)
 			})
