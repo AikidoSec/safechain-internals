@@ -38,7 +38,7 @@ func main() {
 	}
 
 	if *teardown {
-		if err := d.Teardown(ctx); err != nil {
+		if err := d.Uninstall(ctx); err != nil {
 			log.Fatalf("Failed to teardown daemon: %v", err)
 		}
 		return
