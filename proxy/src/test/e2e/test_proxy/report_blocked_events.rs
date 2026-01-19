@@ -8,10 +8,8 @@ use crate::test::e2e;
 #[tokio::test]
 #[tracing_test::traced_test]
 async fn test_report_blocked_events_posts_json_to_endpoint() {
-    // Use the in-crate mock egress server to capture POSTs made by the notifier.
     let capture_client = crate::client::new_web_client().unwrap();
 
-    // Ensure test isolation in case other tests already hit this endpoint.
     let resp = capture_client
         .get("http://assert-test.internal/blocked-events/clear")
         .send()
@@ -35,7 +33,6 @@ async fn test_report_blocked_events_posts_json_to_endpoint() {
         .unwrap();
     assert_eq!(StatusCode::FORBIDDEN, resp.status());
 
-    // Poll until the notifier worker has had a chance to POST to the capture endpoint.
     let mut captured: Vec<serde_json::Value> = Vec::new();
     for _ in 0..40 {
         let resp = capture_client
