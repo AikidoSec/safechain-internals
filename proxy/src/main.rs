@@ -89,6 +89,10 @@ pub struct Args {
     #[arg(long, value_name = "SECONDS", default_value_t = 1.)]
     /// the graceful shutdown timeout (<= 0.0 = no timeout)
     pub graceful: f64,
+
+    /// callback address for block event notifications (e.g., "127.0.0.1:7656")
+    #[arg(long, value_name = "HOST:PORT")]
+    pub ingress: Option<rama::net::address::Authority>,
 }
 
 #[tokio::main]
