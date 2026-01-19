@@ -1,6 +1,11 @@
 use super::events::BlockedEvent;
-use rama::telemetry::tracing;
-use std::sync::Arc;
+use rama::{
+    Service,
+    error::{ErrorContext as _, OpaqueError},
+    http::{Request, Response, Uri, service::client::HttpClientExt as _},
+    telemetry::tracing,
+};
+use std::{str::FromStr as _, sync::Arc};
 use tokio::sync::mpsc;
 
 #[derive(Clone)]
@@ -26,9 +31,30 @@ impl EventNotifier {
             return Self::noop();
         };
 
+        let endpoint_uri = match Uri::from_str(&endpoint) {
+            Ok(uri) => uri,
+            Err(err) => {
+                tracing::warn!(
+                    "invalid reporting endpoint URL for blocked events: '{endpoint}': {err}"
+                );
+                return Self::noop();
+            }
+        };
+
+        let client = match crate::client::new_web_client() {
+            Ok(client) => client,
+            Err(err) => {
+                tracing::warn!(
+                    error = %err,
+                    "failed to create web client for blocked-event reporting; notifier disabled"
+                );
+                return Self::noop();
+            }
+        };
+
         let (tx, rx) = mpsc::unbounded_channel();
 
-        tokio::spawn(notification_worker(endpoint, rx));
+        tokio::spawn(notification_worker(endpoint_uri, client, rx));
 
         Self {
             inner: Some(Arc::new(EventNotifierInner { tx })),
@@ -55,10 +81,13 @@ impl EventNotifier {
     }
 }
 
-async fn notification_worker(
-    reporting_endpoint: String,
+async fn notification_worker<C>(
+    reporting_endpoint: Uri,
+    client: C,
     mut rx: mpsc::UnboundedReceiver<BlockedEvent>,
-) {
+) where
+    C: Service<Request, Output = Response, Error = OpaqueError> + 'static,
+{
     tracing::info!(
         "event notifier worker started, sending events to {}",
         reporting_endpoint
@@ -71,35 +100,36 @@ async fn notification_worker(
             event.artifact
         );
 
-        let _body = match serde_json::to_vec(&event) {
-            Ok(body) => body,
-            Err(e) => {
-                tracing::warn!("failed to serialize event: {}", e);
-                continue;
-            }
-        };
+        let resp = client
+            .post(reporting_endpoint.clone())
+            .json(&event)
+            .send()
+            .await
+            .with_context(|| {
+                format!(
+                    "send blocked-event notification to reporting endpoint '{}'",
+                    reporting_endpoint
+                )
+            });
 
-        let _endpoint_clone = reporting_endpoint.clone();
-        let result = tokio::task::spawn_blocking(move || {
-            // TODO: Implement HTTP POST to endpoint
-            // 1. Parse the URL
-            // 2. Create TCP connection
-            // 3. Send HTTP/1.1 POST request
-            // 4. Handle response and errors gracefully
-
-            Ok::<_, std::io::Error>(())
-        })
-        .await;
-
-        match result {
-            Ok(Ok(())) => {
+        match resp {
+            Ok(resp) if resp.status().is_success() => {
                 tracing::debug!("event notification sent successfully");
             }
-            Ok(Err(e)) => {
-                tracing::warn!("failed to send event notification: {}", e);
+            Ok(resp) => {
+                let status = resp.status();
+                tracing::warn!(
+                    status = %status,
+                    endpoint = %reporting_endpoint,
+                    "blocked-event notification endpoint returned non-success status"
+                );
             }
-            Err(e) => {
-                tracing::warn!("event notification task panicked: {}", e);
+            Err(err) => {
+                tracing::warn!(
+                    error = %err,
+                    endpoint = %reporting_endpoint,
+                    "failed to send blocked-event notification"
+                );
             }
         }
     }
