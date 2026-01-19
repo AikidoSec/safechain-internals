@@ -7,11 +7,12 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
+    utils::str::arcstr::ArcStr,
 };
 
 use crate::{
-    firewall::events::{BlockedArtifact, BlockedEventInfo},
     firewall::{
+        events::{BlockedArtifact, BlockedEventInfo},
         malware_list::{MalwareEntry, RemoteMalwareList},
         pac::PacScriptGenerator,
     },
@@ -117,10 +118,10 @@ impl Rule for RuleNpm {
                 return Ok(RequestAction::Block(BlockedRequest {
                     response: generate_generic_blocked_response_for_req(req),
                     info: BlockedEventInfo {
-                        product: self.product_name().to_string(),
-                        artifact: BlockedArtifact::Npm {
-                            name: package_name,
-                            version: package_version,
+                        artifact: BlockedArtifact {
+                            product: ArcStr::from("npm"),
+                            identifier: ArcStr::from(package_name),
+                            version: Some(ArcStr::from(package_version)),
                         },
                     },
                 }));

@@ -23,6 +23,7 @@ use rama::{
 pub mod events;
 pub mod layer;
 pub mod malware_list;
+pub mod notifier;
 pub mod rule;
 
 mod pac;

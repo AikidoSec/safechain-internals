@@ -11,8 +11,10 @@ use rama::{
 use serde::Deserialize;
 
 use crate::{
-    firewall::events::{BlockedArtifact, BlockedEventInfo},
-    firewall::pac::PacScriptGenerator,
+    firewall::{
+        events::{BlockedArtifact, BlockedEventInfo},
+        pac::PacScriptGenerator,
+    },
     http::response::generate_generic_blocked_response_for_req,
     storage::SyncCompactDataStorage,
 };
@@ -101,9 +103,10 @@ impl Rule for RuleChrome {
             return Ok(RequestAction::Block(BlockedRequest {
                 response: generate_generic_blocked_response_for_req(req),
                 info: BlockedEventInfo {
-                    product: self.product_name().to_string(),
-                    artifact: BlockedArtifact::ChromeExtension {
-                        id: product_id.to_string(),
+                    artifact: BlockedArtifact {
+                        product: ArcStr::from("chrome"),
+                        identifier: ArcStr::from(product_id.to_string()),
+                        version: None,
                     },
                 },
             }));

@@ -30,6 +30,7 @@ memchr = "2.7"
 rand = "0.9"
 parking_lot = "0.12.5"
 serde_html_form = "0.4"
+crossbeam-skiplist = "0.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 linux-keyutils-keyring-store = "0.2"

@@ -126,7 +126,10 @@ mod http {
             .unwrap();
 
         assert!(
-            payload.events.iter().any(|e| e.product == "PyPI"),
+            payload
+                .events
+                .iter()
+                .any(|e| e.artifact.product.as_ref() as &str == "pypi"),
             "expected at least one PyPI blocked event in window; got: {payload:?}"
         );
     }
