@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/AikidoSec/safechain-agent/internal/constants"
+	"github.com/AikidoSec/safechain-agent/internal/ingress"
 	"github.com/AikidoSec/safechain-agent/internal/platform"
 	"github.com/AikidoSec/safechain-agent/internal/proxy"
-	"github.com/AikidoSec/safechain-agent/internal/proxyingress"
 	"github.com/AikidoSec/safechain-agent/internal/scannermanager"
 	"github.com/AikidoSec/safechain-agent/internal/setup"
 	"github.com/AikidoSec/safechain-agent/internal/version"
@@ -22,24 +22,24 @@ type Config struct {
 }
 
 type Daemon struct {
-	config       *Config
-	ctx          context.Context
-	cancel       context.CancelFunc
-	wg           sync.WaitGroup
-	stopOnce     sync.Once
-	proxy        *proxy.Proxy
-	registry     *scannermanager.Registry
-	proxyIngress *proxyingress.Server
+	config   *Config
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
+	stopOnce sync.Once
+	proxy    *proxy.Proxy
+	registry *scannermanager.Registry
+	ingress  *ingress.Server
 }
 
 func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
 	d := &Daemon{
-		ctx:          ctx,
-		cancel:       cancel,
-		config:       config,
-		proxy:        proxy.New(),
-		registry:     scannermanager.NewRegistry(),
-		proxyIngress: proxyingress.New(),
+		ctx:      ctx,
+		cancel:   cancel,
+		config:   config,
+		proxy:    proxy.New(),
+		registry: scannermanager.NewRegistry(),
+		ingress:  ingress.New(),
 	}
 
 	if err := platform.Init(); err != nil {
@@ -102,8 +102,8 @@ func (d *Daemon) Stop(ctx context.Context) error {
 			log.Printf("Error stopping proxy: %v", err)
 		}
 
-		if err := d.proxyIngress.Stop(); err != nil {
-			log.Printf("Error stopping proxy ingress server: %v", err)
+		if err := d.ingress.Stop(); err != nil {
+			log.Printf("Error stopping ingress server: %v", err)
 		}
 
 		d.cancel()
@@ -133,18 +133,18 @@ func (d *Daemon) run(ctx context.Context) error {
 
 	log.Println("Daemon is running...")
 
-	// Start proxy ingress server first (proxy needs its address for callbacks)
+	// Start ingress server first (proxy needs its address for callbacks)
 	go func() {
-		if err := d.proxyIngress.Start(ctx); err != nil {
-			log.Printf("Proxy ingress server error: %v", err)
+		if err := d.ingress.Start(ctx); err != nil {
+			log.Printf("Ingress server error: %v", err)
 		}
 	}()
 
-	// Wait briefly for proxy ingress server to bind
+	// Wait briefly for ingress server to bind
 	time.Sleep(100 * time.Millisecond)
-	ingressAddr := d.proxyIngress.Addr()
+	ingressAddr := d.ingress.Addr()
 	if ingressAddr == "" {
-		return fmt.Errorf("proxy ingress server failed to start")
+		return fmt.Errorf("ingress server failed to start")
 	}
 
 	if err := d.proxy.Start(ctx, ingressAddr); err != nil {
