@@ -8,10 +8,11 @@ import (
 )
 
 type Modal struct {
-	Text     string
-	OnBypass func()
-	Close    func()
-	Confirm  bool
+	Text          string
+	OnBypass      func()
+	Close         func()
+	Confirm       bool
+	BypassEnabled bool
 
 	// Persistent clickable widgets
 	okBtn     widget.Clickable
@@ -20,10 +21,11 @@ type Modal struct {
 	noBtn     widget.Clickable
 }
 
-func CreateBlockedModal(text string, onBypass func()) *Modal {
+func CreateBlockedModal(text string, isBypassEnabled bool, onBypass func()) *Modal {
 	return &Modal{
-		Text:     text,
-		OnBypass: onBypass,
+		Text:          text,
+		OnBypass:      onBypass,
+		BypassEnabled: isBypassEnabled,
 	}
 }
 
@@ -75,6 +77,9 @@ func (m *Modal) layoutMain(gtx layout.Context, th *AikidoTheme) layout.Dimension
 				}.Layout(gtx,
 					layout.Rigid(material.Button(th.Theme, &m.okBtn, "Ok").Layout),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						if !m.BypassEnabled {
+							return layout.Dimensions{}
+						}
 						return layout.Inset{Left: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 							btn := material.Button(th.Theme, &m.bypassBtn, "Request Bypass")
 							btn.Background = th.Danger
