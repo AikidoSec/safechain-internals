@@ -55,7 +55,7 @@ The proxy is written in Rust.
 Learn more about the Proxy, what it is and how to use it,
 in the Proxy README: [../docs/proxy.md](../docs/proxy.md).
 
-Using `just` you can using a single command: format code,
+With `just` you can use a single command: format code,
 sort `Cargo.toml` dependencies, lint (`clippy`), check code can compile
 and run all tests as follows:
 
@@ -84,7 +84,7 @@ Using `just`:
 just run-proxy
 ```
 
-You can using the same `justfile` also toggle the [HAR](https://en.wikipedia.org/wiki/HAR_(file_format))
+You can use the same `justfile` to also toggle the [HAR](https://en.wikipedia.org/wiki/HAR_(file_format))
 recording on and off:
 
 ```sh
