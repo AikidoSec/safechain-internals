@@ -98,6 +98,7 @@ mkdir -p "$RESOURCES_DIR"
 cp "$SCRIPT_DIR/welcome.html" "$RESOURCES_DIR/"
 cp "$SCRIPT_DIR/conclusion.html" "$RESOURCES_DIR/"
 cp "$SCRIPT_DIR/license.txt" "$RESOURCES_DIR/"
+cp "$PROJECT_DIR/packaging/shared/background.png" "$RESOURCES_DIR/"
 
 # Build the distribution package
 OUTPUT_DIST_PKG="$OUTPUT_DIR/SafeChainAgent-$VERSION-$ARCH.pkg"

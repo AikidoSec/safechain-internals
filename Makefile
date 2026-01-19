@@ -1,4 +1,4 @@
-.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-full install-pkg uninstall-pkg clean test run help
+.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-full install-pkg uninstall-pkg generate-icons clean test run help
 
 BINARY_NAME=safechain-agent
 VERSION?=dev
@@ -128,6 +128,10 @@ run: build ## Run the agent binary
 
 test: ## Run Go tests
 	go test -v ./...
+
+generate-icons: ## Generate icon files from SVG
+	@echo "Generating icon files..."
+	@cd packaging/shared && ./generate-icons.sh
 
 clean: ## Clean build artifacts
 	rm -rf $(BIN_DIR) $(DIST_DIR)

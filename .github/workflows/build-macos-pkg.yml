@@ -73,6 +73,12 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: .github/scripts/macos/core/sign-binary.sh bin/safechain-proxy-darwin-${{ matrix.arch }}
 
+      - name: Verify icon files exist
+        run: |
+          ls -la packaging/shared/
+          test -f packaging/shared/background.png || (echo "background.png missing" && exit 1)
+          test -f packaging/shared/SafeChain.icns || (echo "SafeChain.icns missing" && exit 1)
+
       - name: Build distribution .pkg installer
         run: |
           cd packaging/macos

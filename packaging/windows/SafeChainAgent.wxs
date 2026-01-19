@@ -6,11 +6,16 @@
            Version="$(var.Version)"
            ProductCode="*"
            UpgradeCode="adb9d7b9-de00-4953-af0e-9c1e9ec15c81"
-           Scope="perMachine">
+           Scope="perMachine"
+           InstallerVersion="500">
 
     <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="A newer version of SafeChain Agent is already installed." />
     
     <Media Id="1" Cabinet="SafeChainAgent.cab" EmbedCab="yes" />
+    
+    <!-- Product icon shown in Add/Remove Programs -->
+    <Icon Id="SafeChainIcon" SourceFile="$(var.ProjectDir)\packaging\shared\SafeChain.ico" />
+    <Property Id="ARPPRODUCTICON" Value="SafeChainIcon" />
 
     <!-- Define installation directory structure -->
     <StandardDirectory Id="ProgramFiles64Folder">

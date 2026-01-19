@@ -35,6 +35,16 @@ jobs:
         run: make test
         shell: bash
 
+      - name: Install go-winres
+        run: go install github.com/tc-hib/go-winres@latest
+        shell: bash
+
+      - name: Generate Windows resources
+        run: |
+          cd cmd/daemon
+          go-winres make --arch ${{ matrix.arch == 'amd64' && 'amd64' || 'arm64' }} --product-version "${{ inputs.version || '0.0.0' }}" --file-version "${{ inputs.version || '0.0.0' }}"
+        shell: bash
+
       - name: Build Windows binaries for ${{ matrix.arch }}
         run: make build-windows-${{ matrix.arch }} VERSION="${{ inputs.version || 'dev' }}"
         shell: bash
