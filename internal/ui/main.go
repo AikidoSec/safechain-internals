@@ -10,7 +10,7 @@ import (
 // Parameters:
 //   - text: The message to display in the modal
 //   - onBypass: Callback function to execute when bypass is confirmed
-func ShowBlockedModal(text string, title string, onBypass func()) {
+func ShowBlockedModal(text string, title string, onBypass func()) error {
 	modal := CreateBlockedModal(text, onBypass)
-	RunModalApp(modal, title, unit.Dp(450), unit.Dp(250))
+	return RunModalApp(modal, title, unit.Dp(450), unit.Dp(250))
 }

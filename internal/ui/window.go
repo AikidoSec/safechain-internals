@@ -20,7 +20,7 @@ type ModalApp struct {
 }
 
 // RunModalApp creates and runs a Gio application with the given modal
-func RunModalApp(modal *Modal, title string, width, height unit.Dp) {
+func RunModalApp(modal *Modal, title string, width, height unit.Dp) error {
 	go func() {
 		w := new(app.Window)
 		w.Option(app.Title(title))
@@ -32,6 +32,7 @@ func RunModalApp(modal *Modal, title string, width, height unit.Dp) {
 		os.Exit(0)
 	}()
 	app.Main()
+	return nil
 }
 
 func runModal(w *app.Window, modal *Modal) error {
