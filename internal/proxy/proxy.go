@@ -53,13 +53,9 @@ func (p *Proxy) Start(ctx context.Context) error {
 		filepath.Join(config.BinaryDir, platform.SafeChainProxyBinaryName),
 		"--bind", ProxyBind,
 		"--meta", ProxyMeta,
-		"--data", platform.GetProxyRunDir(),
+		"--data", platform.GetRunDir(),
 		"--output", filepath.Join(config.LogDir, platform.SafeChainProxyLogName),
-		"--secrets", "memory",
-		// We use memory secrets storage for the proxy's CA in order to avoid storing the CA in the filesystem or keyring
-		// This helps in cleaning up the installed CA, by removing the CA when the proxy is stopped
-		// When it will be installed again, a new CA will be generated and installed
-		// If the agent / proxy is down, this allows us to leave the system state as before installation
+		"--secrets", "keyring",
 	)
 
 	log.Println("Starting SafeChain Proxy with command:", p.cmd.String())

@@ -19,9 +19,8 @@ const serviceName = "SafeChainAgent"
 
 func main() {
 	var (
-		configPath  = flag.String("config", "", "Path to configuration file")
-		logLevel    = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 		showVersion = flag.Bool("version", false, "Show version information")
+		uninstall   = flag.Bool("uninstall", false, "Uninstall the SafeChain Agent")
 	)
 	flag.Parse()
 
@@ -33,12 +32,16 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	d, err := daemon.New(ctx, cancel, &daemon.Config{
-		ConfigPath: *configPath,
-		LogLevel:   *logLevel,
-	})
+	d, err := daemon.New(ctx, cancel, &daemon.Config{})
 	if err != nil {
 		log.Fatalf("Failed to create daemon: %v", err)
+	}
+
+	if *uninstall {
+		if err := d.Uninstall(ctx); err != nil {
+			log.Fatalf("Failed to teardown daemon: %v", err)
+		}
+		return
 	}
 
 	if platform.IsWindowsService() {
