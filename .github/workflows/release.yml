@@ -46,7 +46,7 @@ jobs:
 
       - name: Prepare release files
         id: checksums
-        run: |          
+        run: |
           mv artifacts/safechain-agent-darwin-amd64/safechain-agent-darwin-amd64 .
           mv artifacts/safechain-agent-darwin-arm64/safechain-agent-darwin-arm64 .
           
