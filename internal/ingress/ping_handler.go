@@ -1,4 +1,4 @@
-package proxyingress
+package ingress
 
 import (
 	"log"
@@ -8,6 +8,6 @@ import (
 func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 	_, err := w.Write([]byte("pong"))
 	if err != nil {
-		log.Printf("proxy ingress, failed to write response: %v", err)
+		log.Printf("ingress: failed to write response: %v", err)
 	}
 }

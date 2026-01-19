@@ -1,6 +1,6 @@
-// Package proxyingress provides an HTTP server that receives events from the proxy
+// Package ingress provides an HTTP server that receives events from the proxy
 // and handles them appropriately (e.g., showing UI modals for blocked packages).
-package proxyingress
+package ingress
 
 import (
 	"context"
@@ -41,7 +41,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	listener, err := net.Listen("tcp", DefaultBind)
 	if err != nil {
-		return fmt.Errorf("failed to bind proxy ingress server: %w", err)
+		return fmt.Errorf("failed to bind ingress server: %w", err)
 	}
 
 	s.mu.Lock()
@@ -50,18 +50,18 @@ func (s *Server) Start(ctx context.Context) error {
 	s.server = &http.Server{Handler: mux}
 	s.mu.Unlock()
 
-	log.Printf("Proxy ingress server listening on %s", s.addr)
+	log.Printf("Ingress server listening on %s", s.addr)
 
 	go func() {
 		<-ctx.Done()
 		err := s.Stop()
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("Error stopping ingress server: %v", err)
 		}
 	}()
 
 	if err := s.server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("proxy ingress server error: %w", err)
+		return fmt.Errorf("ingress server error: %w", err)
 	}
 
 	return nil
