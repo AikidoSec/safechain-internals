@@ -11,7 +11,7 @@ Before you begin, ensure you have the following installed:
 - **Make**: Typically pre-installed on Unix-like systems, used for building.
 - **Just**: You can install it via a package manager of choice: <https://just.systems/man/en/packages.html>
 
-Requirementsd to build the (Rust) proxy:
+Requirements to build the (Rust) proxy:
 
 - **CMake**: Required for certain builds and dependencies. You can install it via your package manager or download it from the [CMake website](https://cmake.org/download/).
 - Unix-only dependencies:
@@ -63,7 +63,7 @@ and run all tests as follows:
 just rust-qa
 ```
 
-It's recommended to run the `rust-qa` target locally prior to comitting to github,
+It's recommended to run the `rust-qa` target locally prior to comitting to GitHub,
 as it will catch 99% of the reasons why your CI might fail otherwise.
 
 If you also wish to _also_ run the ignored tests (which include slower tests,
@@ -74,7 +74,7 @@ just rust-qa-full
 ```
 
 These ignored tests are on top of all other `rust-qa` checks all run
-in the Github CI as well.
+in the GitHub CI as well.
 
 #### Proxy: run
 
