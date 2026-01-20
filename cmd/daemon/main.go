@@ -20,7 +20,7 @@ const serviceName = "SafeChainAgent"
 func main() {
 	var (
 		showVersion = flag.Bool("version", false, "Show version information")
-		uninstall   = flag.Bool("uninstall", false, "Uninstall the SafeChain Agent")
+		teardown    = flag.Bool("teardown", false, "Teardown the SafeChain Agent")
 	)
 	flag.Parse()
 
@@ -37,7 +37,7 @@ func main() {
 		log.Fatalf("Failed to create daemon: %v", err)
 	}
 
-	if *uninstall {
+	if *teardown {
 		if err := d.Uninstall(ctx); err != nil {
 			log.Fatalf("Failed to teardown daemon: %v", err)
 		}

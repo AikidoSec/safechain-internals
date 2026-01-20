@@ -188,7 +188,7 @@ func IsProxyCAInstalled(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx,
 		"security",
 		"find-certificate",
-		"-c", "aikido.dev", // Search for certificate with common name "aikido.dev"
+		"-c", "aikidosafechain.com", // Search for certificate with common name "aikidosafechain.com"
 		"/Library/Keychains/System.keychain")
 
 	err := cmd.Run()
@@ -202,8 +202,8 @@ func UninstallProxyCA(ctx context.Context) error {
 	output, err := exec.CommandContext(ctx,
 		"security",
 		"find-certificate",
-		"-a",               //Find all matching certificates, not just the first one
-		"-c", "aikido.dev", // Search for certificate with common name "aikido.dev"
+		"-a",                        //Find all matching certificates, not just the first one
+		"-c", "aikidosafechain.com", // Search for certificate with common name "aikidosafechain.com"
 		"-Z", // Print SHA-256 (and SHA-1) hash of the certificate
 		"/Library/Keychains/System.keychain").Output()
 	if err == nil {
