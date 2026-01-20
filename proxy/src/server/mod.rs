@@ -23,12 +23,31 @@ async fn write_server_socket_address_as_file(
     addr: SocketAddress,
 ) -> Result<(), OpaqueError> {
     let path = dir.join(format!("{name}.addr.txt"));
-    tokio::fs::write(&path, addr.to_string())
+
+    // Write via a temp file + rename so readers never observe a truncated/partial file.
+    // This matters for the e2e runtime which polls these files while the proxy is starting.
+    let tmp_path = dir.join(format!("{name}.addr.txt.tmp"));
+
+    tokio::fs::write(&tmp_path, addr.to_string())
         .await
         .with_context(|| {
             format!(
-                "write socket address '{addr}' for server '{name}' to file '{}'",
-                path.display()
+                "write socket address '{addr}' for server '{name}' to temp file '{}'",
+                tmp_path.display()
             )
-        })
+        })?;
+
+    // On Windows, renaming over an existing file can fail; remove best-effort.
+    #[cfg(target_os = "windows")]
+    {
+        let _ = tokio::fs::remove_file(&path).await;
+    }
+
+    tokio::fs::rename(&tmp_path, &path).await.with_context(|| {
+        format!(
+            "rename temp socket address file '{}' to '{}'",
+            tmp_path.display(),
+            path.display()
+        )
+    })
 }

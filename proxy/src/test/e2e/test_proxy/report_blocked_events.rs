@@ -3,6 +3,7 @@ use rama::{
     telemetry::tracing,
 };
 
+use crate::firewall::events::BlockedEvent;
 use crate::test::e2e;
 
 #[tokio::test]
@@ -33,7 +34,7 @@ async fn test_report_blocked_events_posts_json_to_endpoint() {
         .unwrap();
     assert_eq!(StatusCode::FORBIDDEN, resp.status());
 
-    let mut captured: Vec<serde_json::Value> = Vec::new();
+    let mut captured: Vec<BlockedEvent> = Vec::new();
     for _ in 0..40 {
         let resp = capture_client
             .get("http://assert-test.internal/blocked-events/take")
@@ -60,25 +61,9 @@ async fn test_report_blocked_events_posts_json_to_endpoint() {
     let first = captured
         .first()
         .expect("expected at least one blocked-event notification");
-    let obj = first
-        .as_object()
-        .expect("blocked-event notification should be a JSON object");
 
-    assert!(obj.contains_key("ts_ms"));
-    assert!(obj.contains_key("artifact"));
-
-    let artifact = obj
-        .get("artifact")
-        .and_then(|v| v.as_object())
-        .expect("artifact should be a JSON object");
-    let product = artifact
-        .get("product")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default();
-    let identifier = artifact
-        .get("identifier")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default();
+    let product = first.artifact.product.as_str();
+    let identifier = first.artifact.identifier.as_str();
 
     tracing::info!(product, identifier, "captured blocked-event notification");
 
