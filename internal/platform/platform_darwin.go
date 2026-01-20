@@ -176,18 +176,19 @@ func UnsetSystemProxy(ctx context.Context) error {
 
 func InstallProxyCA(ctx context.Context, certPath string) error {
 	// CA needs to be installed as current user, in order to be prompted for security permissions
-	return RunAsCurrentUser(ctx, "security", []string{"add-trusted-cert",
+	_, err := RunAsCurrentUser(ctx, "security", []string{"add-trusted-cert",
 		"-d", // Add to admin cert store; default is user
 		"-r", "trustRoot",
 		"-k", "/Library/Keychains/System.keychain",
 		certPath})
+	return err
 }
 
 func IsProxyCAInstalled(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx,
 		"security",
 		"find-certificate",
-		"-c", "aikido.dev", // Search for certificate with common name "aikido.dev"
+		"-c", "aikidosafechain.com", // Search for certificate with common name "aikidosafechain.com"
 		"/Library/Keychains/System.keychain")
 
 	err := cmd.Run()
@@ -201,8 +202,8 @@ func UninstallProxyCA(ctx context.Context) error {
 	output, err := exec.CommandContext(ctx,
 		"security",
 		"find-certificate",
-		"-a",               //Find all matching certificates, not just the first one
-		"-c", "aikido.dev", // Search for certificate with common name "aikido.dev"
+		"-a",                        //Find all matching certificates, not just the first one
+		"-c", "aikidosafechain.com", // Search for certificate with common name "aikidosafechain.com"
 		"-Z", // Print SHA-256 (and SHA-1) hash of the certificate
 		"/Library/Keychains/System.keychain").Output()
 	if err == nil {
@@ -214,7 +215,7 @@ func UninstallProxyCA(ctx context.Context) error {
 				continue
 			}
 			hash := match[1]
-			err := RunAsCurrentUser(ctx, "security", []string{"delete-certificate",
+			_, err := RunAsCurrentUser(ctx, "security", []string{"delete-certificate",
 				"-Z", hash,
 				"/Library/Keychains/System.keychain"})
 			if err != nil {
@@ -223,7 +224,7 @@ func UninstallProxyCA(ctx context.Context) error {
 		}
 	}
 
-	if err := RunAsCurrentUser(ctx, "security", []string{"delete-generic-password",
+	if _, err := RunAsCurrentUser(ctx, "security", []string{"delete-generic-password",
 		"-l", "tls-root-ca-key",
 		"/Library/Keychains/System.keychain"}); err != nil {
 		return fmt.Errorf("failed to delete generic password: %v", err)
@@ -261,14 +262,14 @@ func getConsoleUser(ctx context.Context) (string, string, error) {
 	return username, uid, nil
 }
 
-func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) error {
+func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
 	if !RunningAsRoot() {
 		return utils.RunCommand(ctx, binaryPath, args...)
 	}
 
 	username, uid, err := getConsoleUser(ctx)
 	if err != nil {
-		return err
+		return "", fmt.Errorf("failed to get console user: %v", err)
 	}
 
 	homeDir := filepath.Join("/Users", username)
