@@ -274,3 +274,14 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (st
 
 	return runAsLoggedInUser(binaryPath, args)
 }
+
+func InstallSafeChain(ctx context.Context, repoURL, version string) error {
+	scriptURL := fmt.Sprintf("%s/releases/download/%s/install-safe-chain.ps1", repoURL, version)
+	cmd := fmt.Sprintf(`iex (iwr "%s" -UseBasicParsing)`, scriptURL)
+
+	log.Printf("Running PowerShell install script from %s...", scriptURL)
+	if _, err := RunAsCurrentUser(ctx, "powershell", []string{"-Command", cmd}); err != nil {
+		return fmt.Errorf("failed to run install script: %w", err)
+	}
+	return nil
+}

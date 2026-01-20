@@ -51,22 +51,10 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 	}
 	log.Printf("Latest safe-chain version: %s", version)
 
-	scriptURL := fmt.Sprintf("%s/releases/download/%s/install-safe-chain.sh", repoURL, version)
-	scriptPath := filepath.Join(os.TempDir(), "install-safe-chain.sh")
-
-	log.Printf("Downloading install script from %s...", scriptURL)
-	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath); err != nil {
-		return fmt.Errorf("failed to download install script: %w", err)
-	}
-	defer os.Remove(scriptPath)
-
-	if _, err := platform.RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
-		return fmt.Errorf("failed to run install script: %w", err)
+	if err := platform.InstallSafeChain(ctx, repoURL, version); err != nil {
+		return fmt.Errorf("failed to install safe-chain: %w", err)
 	}
 
-	if s.Version(ctx) == "" {
-		return fmt.Errorf("failed to get safe-chain version")
-	}
 	return nil
 }
 
@@ -86,10 +74,6 @@ func (s *SafechainScanner) Uninstall(ctx context.Context) error {
 		return fmt.Errorf("failed to download uninstall script: %w", err)
 	}
 	defer os.Remove(scriptPath)
-
-	if _, err := platform.RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
-		return fmt.Errorf("failed to run uninstall script: %w", err)
-	}
 
 	return nil
 }
