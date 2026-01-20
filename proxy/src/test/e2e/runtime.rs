@@ -335,9 +335,14 @@ async fn read_file_or_wait(path: PathBuf) -> SocketAddress {
         match tokio::fs::read_to_string(&path).await {
             Ok(s) => {
                 let s = s.trim();
+                if s.is_empty() {
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    continue;
+                }
                 match s.parse() {
                     Ok(addr) => return addr,
-                    Err(_) => {
+                    Err(err) => {
+                        eprintln!("unexpected error parsing socket addr (content={s:?}): {err}");
                         tokio::time::sleep(Duration::from_millis(200)).await;
                         continue;
                     }
