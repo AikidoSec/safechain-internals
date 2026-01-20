@@ -68,32 +68,34 @@ async fn notification_worker<C>(
             event.artifact
         );
 
-        let resp = client
+        let resp = match client
             .post(reporting_endpoint.clone())
             .json(&event)
             .send()
-            .await;
-
-        match resp {
-            Ok(resp) if resp.status().is_success() => {
-                tracing::debug!("event notification sent successfully");
-            }
-            Ok(resp) => {
-                let status = resp.status();
-                tracing::warn!(
-                    status = %status,
-                    endpoint = %reporting_endpoint,
-                    "blocked-event notification endpoint returned non-success status"
-                );
-            }
+            .await
+        {
+            Ok(resp) => resp,
             Err(err) => {
                 tracing::warn!(
                     error = %err,
                     endpoint = %reporting_endpoint,
                     "failed to send blocked-event notification"
                 );
+                continue;
             }
+        };
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            tracing::warn!(
+                status = %status,
+                endpoint = %reporting_endpoint,
+                "blocked-event notification endpoint returned non-success status"
+            );
+            continue;
         }
+
+        tracing::debug!("event notification sent successfully");
     }
 
     tracing::debug!("event notifier worker shutting down");
