@@ -8,10 +8,7 @@ use rama::{
         Body, HeaderValue, Request, Response,
         header::CONTENT_TYPE,
         layer::{
-            map_request_body::MapRequestBodyLayer,
-            map_response_body::MapResponseBodyLayer,
-            retry::{ManagedPolicy, RetryLayer},
-            timeout::TimeoutLayer,
+            decompression::DecompressionLayer, map_request_body::MapRequestBodyLayer, map_response_body::MapResponseBodyLayer, retry::{ManagedPolicy, RetryLayer}, timeout::TimeoutLayer
         },
         service::web::response::IntoResponse as _,
     },
@@ -47,6 +44,7 @@ impl Firewall {
 
         let shared_remote_malware_client = (
             MapResponseBodyLayer::new(Body::new),
+            DecompressionLayer::new(),
             MapErrLayer::new(OpaqueError::from_std),
             TimeoutLayer::new(Duration::from_secs(60)), // NOTE: if you have slow servers this might need to be more
             RetryLayer::new(
