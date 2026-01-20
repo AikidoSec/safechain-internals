@@ -68,8 +68,9 @@ func GetActiveUserHomeDir() (string, error) {
 // such as modifying the PowerShell profile for shell integration.
 // As safe-chain will run as the current user, we need to set the PowerShell execution policy for the current user.
 func PrepareShellEnvironment(ctx context.Context) error {
-	return RunAsCurrentUser(ctx, "powershell", []string{"-Command",
+	_, err := RunAsCurrentUser(ctx, "powershell", []string{"-Command",
 		"Set-ExecutionPolicy", "-ExecutionPolicy", "RemoteSigned", "-Scope", "CurrentUser", "-Force"})
+	return err
 }
 
 type syncWriter struct {
@@ -104,7 +105,7 @@ func SetupLogging() (io.Writer, error) {
 }
 
 func SetSystemProxy(ctx context.Context, proxyURL string) error {
-	if err := utils.RunCommand(ctx, "netsh", "winhttp", "set", "proxy", proxyURL); err != nil {
+	if _, err := utils.RunCommand(ctx, "netsh", "winhttp", "set", "proxy", proxyURL); err != nil {
 		return err
 	}
 
@@ -157,7 +158,7 @@ func IsSystemProxySet(ctx context.Context, proxyURL string) error {
 }
 
 func UnsetSystemProxy(ctx context.Context) error {
-	if err := utils.RunCommand(ctx, "netsh", "winhttp", "reset", "proxy"); err != nil {
+	if _, err := utils.RunCommand(ctx, "netsh", "winhttp", "reset", "proxy"); err != nil {
 		return err
 	}
 
@@ -182,16 +183,19 @@ func UnsetSystemProxy(ctx context.Context) error {
 }
 
 func InstallProxyCA(ctx context.Context, caCertPath string) error {
-	return utils.RunCommand(ctx, "certutil", "-addstore", "-f", "Root", caCertPath)
+	_, err := utils.RunCommand(ctx, "certutil", "-addstore", "-f", "Root", caCertPath)
+	return err
 }
 
 func IsProxyCAInstalled(ctx context.Context) error {
 	// certutil returns non-zero exit code if the certificate is not installed
-	return utils.RunCommand(ctx, "certutil", "-store", "Root", "aikidosafechain.com")
+	_, err := utils.RunCommand(ctx, "certutil", "-store", "Root", "aikido.dev")
+	return err
 }
 
 func UninstallProxyCA(ctx context.Context) error {
-	return utils.RunCommand(ctx, "certutil", "-delstore", "Root", "aikidosafechain.com")
+	_, err := utils.RunCommand(ctx, "certutil", "-delstore", "Root", "aikido.dev")
+	return err
 }
 
 type ServiceRunner interface {
@@ -263,7 +267,7 @@ func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
 	return svc.Run(serviceName, &windowsService{runner: runner})
 }
 
-func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) error {
+func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
 	if !IsWindowsService() {
 		return utils.RunCommand(ctx, binaryPath, args...)
 	}

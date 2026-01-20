@@ -27,10 +27,31 @@ func (s *SafechainScanner) Name() string {
 	return "safechain"
 }
 
+func (s *SafechainScanner) Version(ctx context.Context) string {
+	output, err := platform.RunAsCurrentUser(ctx, "safe-chain", []string{"-v"})
+	if err != nil {
+		return ""
+	}
+
+	var version string
+	_, err = fmt.Sscanf(string(output), "Current safe-chain version: %s", &version)
+	if err != nil {
+		return ""
+	}
+
+	return version
+}
+
 func (s *SafechainScanner) Install(ctx context.Context) error {
 	log.Printf("Installing safe-chain via install script...")
 
-	scriptURL := repoURL + "/releases/latest/download/install-safe-chain.sh"
+	version, err := utils.FetchLatestVersion(ctx, repoURL, "install-safe-chain.sh")
+	if err != nil {
+		return fmt.Errorf("failed to fetch latest version: %w", err)
+	}
+	log.Printf("Latest safe-chain version: %s", version)
+
+	scriptURL := fmt.Sprintf("%s/releases/download/%s/install-safe-chain.sh", repoURL, version)
 	scriptPath := filepath.Join(os.TempDir(), "install-safe-chain.sh")
 
 	log.Printf("Downloading install script from %s...", scriptURL)
@@ -39,17 +60,25 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 	}
 	defer os.Remove(scriptPath)
 
-	if err := platform.RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
+	if _, err := platform.RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
 		return fmt.Errorf("failed to run install script: %w", err)
 	}
 
+	if s.Version(ctx) == "" {
+		return fmt.Errorf("failed to get safe-chain version")
+	}
 	return nil
 }
 
 func (s *SafechainScanner) Uninstall(ctx context.Context) error {
 	log.Printf("Uninstalling safe-chain via uninstall script...")
 
-	scriptURL := repoURL + "/releases/latest/download/uninstall-safe-chain.sh"
+	version := s.Version(ctx)
+	if version == "" {
+		return fmt.Errorf("safe-chain version not set, cannot uninstall")
+	}
+
+	scriptURL := fmt.Sprintf("%s/releases/download/%s/uninstall-safe-chain.sh", repoURL, version)
 	scriptPath := filepath.Join(os.TempDir(), "uninstall-safe-chain.sh")
 
 	log.Printf("Downloading uninstall script from %s...", scriptURL)
@@ -58,15 +87,13 @@ func (s *SafechainScanner) Uninstall(ctx context.Context) error {
 	}
 	defer os.Remove(scriptPath)
 
-	if err := platform.RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
+	if _, err := platform.RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
 		return fmt.Errorf("failed to run uninstall script: %w", err)
 	}
 
 	return nil
 }
 
-func (s *SafechainScanner) IsInstalled(ctx context.Context) (bool, error) {
-	cfg := platform.GetConfig()
-	_, err := os.Stat(cfg.SafeChainBinaryPath)
-	return err == nil, nil
+func (s *SafechainScanner) IsInstalled(ctx context.Context) bool {
+	return s.Version(ctx) != ""
 }
