@@ -26,7 +26,7 @@ func (s *SafechainScanner) Name() string {
 }
 
 func (s *SafechainScanner) Version(ctx context.Context) string {
-	output, err := platform.RunAsCurrentUser(ctx, "safe-chain", []string{"-v"})
+	output, err := platform.RunAsCurrentUser(ctx, platform.GetConfig().SafeChainBinaryPath, []string{"-v"})
 	if err != nil {
 		return ""
 	}
