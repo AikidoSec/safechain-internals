@@ -1,7 +1,7 @@
+use crate::firewall::malware_list::PackageVersion;
 use rama::utils::str::arcstr::ArcStr;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::firewall::malware_list::PackageVersion;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockedArtifact {
