@@ -285,3 +285,14 @@ func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 	}
 	return nil
 }
+
+func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
+	scriptURL := fmt.Sprintf("%s/releases/download/%s/uninstall-safe-chain.ps1", repoURL, version)
+	cmd := fmt.Sprintf(`iex (iwr "%s" -UseBasicParsing)`, scriptURL)
+
+	log.Printf("Running PowerShell uninstall script from %s...", scriptURL)
+	if _, err := RunAsCurrentUser(ctx, "powershell", []string{"-Command", cmd}); err != nil {
+		return fmt.Errorf("failed to run uninstall script: %w", err)
+	}
+	return nil
+}

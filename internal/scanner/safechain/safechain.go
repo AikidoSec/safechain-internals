@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 
 	"github.com/AikidoSec/safechain-agent/internal/platform"
 	"github.com/AikidoSec/safechain-agent/internal/scanner"
@@ -66,14 +64,9 @@ func (s *SafechainScanner) Uninstall(ctx context.Context) error {
 		return fmt.Errorf("safe-chain version not set, cannot uninstall")
 	}
 
-	scriptURL := fmt.Sprintf("%s/releases/download/%s/uninstall-safe-chain.sh", repoURL, version)
-	scriptPath := filepath.Join(os.TempDir(), "uninstall-safe-chain.sh")
-
-	log.Printf("Downloading uninstall script from %s...", scriptURL)
-	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath); err != nil {
-		return fmt.Errorf("failed to download uninstall script: %w", err)
+	if err := platform.UninstallSafeChain(ctx, repoURL, version); err != nil {
+		return fmt.Errorf("failed to uninstall safe-chain: %w", err)
 	}
-	defer os.Remove(scriptPath)
 
 	return nil
 }
