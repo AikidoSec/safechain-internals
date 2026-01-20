@@ -269,11 +269,7 @@ func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
 
 func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
 	if !IsWindowsService() {
-		output, err := utils.RunCommand(ctx, binaryPath, args...)
-		if err != nil {
-			return "", fmt.Errorf("failed to run command: %v", err)
-		}
-		return output, nil
+		return utils.RunCommand(ctx, binaryPath, args...)
 	}
 
 	return runAsLoggedInUser(binaryPath, args)
