@@ -42,6 +42,7 @@ jobs:
       - name: Rename binary for artifact
         run: |
           mv bin/safechain-agent-windows-${{ matrix.arch }}.exe bin/SafeChainAgent.${{ matrix.arch }}.exe
+          mv bin/safechain-agent-ui-windows-${{ matrix.arch }}.exe bin/SafeChainAgentUI.${{ matrix.arch }}.exe
         shell: bash
 
       - name: Upload Windows agent artifact
@@ -49,6 +50,11 @@ jobs:
         with:
           name: SafeChainAgent.${{ matrix.arch }}.exe
           path: bin/SafeChainAgent.${{ matrix.arch }}.exe
+      - name: Upload Windows agent UI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SafeChainAgentUI.${{ matrix.arch }}.exe
+          path: bin/SafeChainAgentUI.${{ matrix.arch }}.exe
 
   build-windows-proxy:
     strategy:
@@ -129,6 +135,12 @@ jobs:
           name: SafeChainAgent.${{ matrix.arch }}.exe
           path: bin
 
+      - name: Download SafeChainAgent UI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SafeChainAgentUI.${{ matrix.arch }}.exe
+          path: bin
+
       - name: Download SafeChainProxy artifact
         uses: actions/download-artifact@v4
         with:
@@ -138,6 +150,7 @@ jobs:
       - name: Rename binaries for packaging
         run: |
           mv bin/SafeChainAgent.${{ matrix.arch }}.exe bin/SafeChainAgent.exe
+          mv bin/SafeChainAgentUI.${{ matrix.arch }}.exe bin/SafeChainAgentUI.exe
           mv bin/SafeChainProxy.${{ matrix.arch }}.exe bin/SafeChainProxy.exe
         shell: bash
 
@@ -145,6 +158,7 @@ jobs:
         run: |
           dotnet tool install --global AzureSignTool --version 6.0.1
           AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "bin/SafeChainAgent.exe"
+          AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "bin/SafeChainAgentUI.exe"
           AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "bin/SafeChainProxy.exe"
         shell: bash
 
