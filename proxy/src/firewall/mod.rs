@@ -8,7 +8,11 @@ use rama::{
         Body, HeaderValue, Request, Response,
         header::CONTENT_TYPE,
         layer::{
-            decompression::DecompressionLayer, map_request_body::MapRequestBodyLayer, map_response_body::MapResponseBodyLayer, retry::{ManagedPolicy, RetryLayer}, timeout::TimeoutLayer
+            decompression::DecompressionLayer,
+            map_request_body::MapRequestBodyLayer,
+            map_response_body::MapResponseBodyLayer,
+            retry::{ManagedPolicy, RetryLayer},
+            timeout::TimeoutLayer,
         },
         service::web::response::IntoResponse as _,
     },
