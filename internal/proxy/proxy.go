@@ -49,8 +49,8 @@ func (p *Proxy) WaitForProxyToBeReady() error {
 func (p *Proxy) Start(ctx context.Context, proxyIngressAddr string) error {
 	config := platform.GetConfig()
 	p.ctx, p.cancel = context.WithCancel(ctx)
-
-	args := []string{
+	p.cmd = exec.CommandContext(p.ctx,
+		filepath.Join(config.BinaryDir, platform.SafeChainProxyBinaryName),
 		"--bind", ProxyBind,
 		"--meta", ProxyMeta,
 		"--data", platform.GetRunDir(),
