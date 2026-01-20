@@ -81,79 +81,113 @@ func buildCommandLineForWindowsProcess(binaryPath string, args []string) *uint16
 	return cmdLinePtr
 }
 
-func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBlock *uint16) error {
+func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBlock *uint16) (string, error) {
+	var stdoutRead, stdoutWrite windows.Handle
+	sa := windows.SecurityAttributes{
+		Length:             uint32(unsafe.Sizeof(windows.SecurityAttributes{})),
+		InheritHandle:      1,
+		SecurityDescriptor: nil,
+	}
+	if err := windows.CreatePipe(&stdoutRead, &stdoutWrite, &sa, 0); err != nil {
+		return "", fmt.Errorf("CreatePipe failed: %v", err)
+	}
+	defer windows.CloseHandle(stdoutRead)
+
+	if err := windows.SetHandleInformation(stdoutRead, windows.HANDLE_FLAG_INHERIT, 0); err != nil {
+		windows.CloseHandle(stdoutWrite)
+		return "", fmt.Errorf("SetHandleInformation failed: %v", err)
+	}
+
 	var si windows.StartupInfo
 	si.Cb = uint32(unsafe.Sizeof(si))
 	si.Desktop, _ = windows.UTF16PtrFromString("winsta0\\default")
+	si.Flags = windows.STARTF_USESTDHANDLES
+	si.StdOutput = stdoutWrite
+	si.StdErr = stdoutWrite
 
 	var pi windows.ProcessInformation
 
-	if err := windows.CreateProcessAsUser(duplicatedToken, nil, cmdLinePtr, nil, nil, false, windows.CREATE_UNICODE_ENVIRONMENT, envBlock, nil, &si, &pi); err != nil {
-		return fmt.Errorf("CreateProcessAsUser failed: %v", err)
+	if err := windows.CreateProcessAsUser(duplicatedToken, nil, cmdLinePtr, nil, nil, true, windows.CREATE_UNICODE_ENVIRONMENT, envBlock, nil, &si, &pi); err != nil {
+		windows.CloseHandle(stdoutWrite)
+		return "", fmt.Errorf("CreateProcessAsUser failed: %v", err)
 	}
+
+	windows.CloseHandle(stdoutWrite)
 
 	defer windows.CloseHandle(pi.Thread)
 	defer windows.CloseHandle(pi.Process)
 
 	event, err := windows.WaitForSingleObject(pi.Process, PROCESS_TIMEOUT_MS)
 	if err != nil {
-		return fmt.Errorf("WaitForSingleObject failed: %v", err)
+		return "", fmt.Errorf("WaitForSingleObject failed: %v", err)
 	}
 	if event == uint32(windows.WAIT_TIMEOUT) {
-		return fmt.Errorf("process timed out after 1 minute")
+		return "", fmt.Errorf("process timed out after 1 minute")
 	}
 	if event != windows.WAIT_OBJECT_0 {
-		return fmt.Errorf("unexpected wait result: %d", event)
+		return "", fmt.Errorf("unexpected wait result: %d", event)
+	}
+
+	var output []byte
+	buf := make([]byte, 4096)
+	for {
+		var bytesRead uint32
+		err := windows.ReadFile(stdoutRead, buf, &bytesRead, nil)
+		if err != nil || bytesRead == 0 {
+			break
+		}
+		output = append(output, buf[:bytesRead]...)
 	}
 
 	var exitCode uint32
 	if err := windows.GetExitCodeProcess(pi.Process, &exitCode); err != nil {
-		return fmt.Errorf("GetExitCodeProcess failed: %v", err)
+		return "", fmt.Errorf("GetExitCodeProcess failed: %v", err)
 	}
 	if exitCode != 0 {
-		return fmt.Errorf("process exited with code %d", exitCode)
+		return "", fmt.Errorf("process exited with code %d", exitCode)
 	}
 
-	return nil
+	return string(output), nil
 }
 
-func runAsLoggedInUser(binaryPath string, args []string) error {
+func runAsLoggedInUser(binaryPath string, args []string) (string, error) {
 	sessionID, err := getActiveUserSessionID()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	log.Printf("Found active user session: %d", sessionID)
 
 	var userToken windows.Token
 	if err := windows.WTSQueryUserToken(sessionID, &userToken); err != nil {
-		return fmt.Errorf("WTSQueryUserToken failed: %v", err)
+		return "", fmt.Errorf("WTSQueryUserToken failed: %v", err)
 	}
 	defer userToken.Close()
 
 	var duplicatedToken windows.Token
 	if err := windows.DuplicateTokenEx(userToken, 0, nil, windows.SecurityImpersonation, windows.TokenPrimary, &duplicatedToken); err != nil {
-		return fmt.Errorf("DuplicateTokenEx failed: %v", err)
+		return "", fmt.Errorf("DuplicateTokenEx failed: %v", err)
 	}
 	defer duplicatedToken.Close()
 
 	var envBlock *uint16
 	if err := windows.CreateEnvironmentBlock(&envBlock, duplicatedToken, false); err != nil {
-		return fmt.Errorf("CreateEnvironmentBlock failed: %v", err)
+		return "", fmt.Errorf("CreateEnvironmentBlock failed: %v", err)
 	}
 	defer windows.DestroyEnvironmentBlock(envBlock)
 
 	cmdLinePtr := buildCommandLineForWindowsProcess(binaryPath, args)
 	if cmdLinePtr == nil {
-		return fmt.Errorf("failed to get command line for process")
+		return "", fmt.Errorf("failed to get command line for process")
 	}
 
-	if err := runProcessAsUser(duplicatedToken, cmdLinePtr, envBlock); err != nil {
-		return fmt.Errorf("runProcessAsUser failed: %v", err)
+	output, err := runProcessAsUser(duplicatedToken, cmdLinePtr, envBlock)
+	if err != nil {
+		return "", fmt.Errorf("runProcessAsUser failed: %v", err)
 	}
 
 	log.Printf("Process %s completed successfully as logged-in user", binaryPath)
-	return nil
+	return output, nil
 }
 
 type RegistryValue struct {

@@ -68,8 +68,9 @@ func GetActiveUserHomeDir() (string, error) {
 // such as modifying the PowerShell profile for shell integration.
 // As safe-chain will run as the current user, we need to set the PowerShell execution policy for the current user.
 func PrepareShellEnvironment(ctx context.Context) error {
-	return RunAsCurrentUser(ctx, "powershell", []string{"-Command",
+	_, err := RunAsCurrentUser(ctx, "powershell", []string{"-Command",
 		"Set-ExecutionPolicy", "-ExecutionPolicy", "RemoteSigned", "-Scope", "CurrentUser", "-Force"})
+	return err
 }
 
 type syncWriter struct {
@@ -265,10 +266,13 @@ func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
 	return svc.Run(serviceName, &windowsService{runner: runner})
 }
 
-func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) error {
+func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
 	if !IsWindowsService() {
-		_, err := utils.RunCommand(ctx, binaryPath, args...)
-		return err
+		output, err := utils.RunCommand(ctx, binaryPath, args...)
+		if err != nil {
+			return "", fmt.Errorf("failed to run command: %v", err)
+		}
+		return output, nil
 	}
 
 	return runAsLoggedInUser(binaryPath, args)
