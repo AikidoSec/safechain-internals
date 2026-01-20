@@ -187,11 +187,11 @@ func InstallProxyCA(ctx context.Context, caCertPath string) error {
 
 func IsProxyCAInstalled(ctx context.Context) error {
 	// certutil returns non-zero exit code if the certificate is not installed
-	return utils.RunCommand(ctx, "certutil", "-store", "Root", "aikido.dev")
+	return utils.RunCommand(ctx, "certutil", "-store", "Root", "aikidosafechain.com")
 }
 
 func UninstallProxyCA(ctx context.Context) error {
-	return utils.RunCommand(ctx, "certutil", "-delstore", "Root", "aikido.dev")
+	return utils.RunCommand(ctx, "certutil", "-delstore", "Root", "aikidosafechain.com")
 }
 
 type ServiceRunner interface {

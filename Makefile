@@ -1,4 +1,4 @@
-.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 clean test run help
+.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-sign-local install-pkg uninstall-pkg clean test run help
 
 BINARY_NAME=safechain-agent
 BINARY_NAME_UI=safechain-agent-ui
@@ -11,6 +11,8 @@ LDFLAGS=-X 'github.com/AikidoSec/safechain-agent/internal/version.Version=$(VERS
 RELEASE_LDFLAGS=$(LDFLAGS) -s -w
 
 BIN_DIR=bin
+DIST_DIR=dist
+PROXY_DIR=proxy
 
 UNAME_S := $(shell uname -s 2>/dev/null || echo Windows)
 UNAME_M := $(shell uname -m 2>/dev/null || echo x86_64)
@@ -86,6 +88,48 @@ build-windows-amd64:
 build-windows-arm64:
 	@$(MAKE) GOOS=windows GOARCH=arm64 build-release
 
+build-proxy:
+	@echo "Building safechain-proxy..."
+	@cd $(PROXY_DIR) && cargo build --release
+	@mkdir -p $(BIN_DIR)
+	@cp target/release/safechain-proxy $(BIN_DIR)/safechain-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)
+	@echo "Proxy built: $(BIN_DIR)/safechain-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)"
+
+build-pkg:
+ifeq ($(DETECTED_OS),darwin)
+	@echo "Building macOS PKG installer..."
+	@cd packaging/macos && ./build-distribution-pkg.sh -v $(VERSION) -a $(DETECTED_ARCH) -b ../../$(BIN_DIR) -o ../../$(DIST_DIR)
+	@echo "PKG built: $(DIST_DIR)/SafeChainAgent-$(VERSION)-$(DETECTED_ARCH).pkg"
+else
+	@echo "Error: PKG building is only supported on macOS"
+	@exit 1
+endif
+
+build-pkg-sign-local:
+ifeq ($(DETECTED_OS),darwin)
+	@echo "Building complete macOS package..."
+	@cd packaging/macos && ./build-and-sign-local.sh $(VERSION)
+else
+	@echo "Error: PKG building is only supported on macOS"
+	@exit 1
+endif
+
+install-pkg:
+ifeq ($(DETECTED_OS),darwin)
+	@cd packaging/macos && ./install-local.sh
+else
+	@echo "Error: PKG installation is only supported on macOS"
+	@exit 1
+endif
+
+uninstall-pkg:
+ifeq ($(DETECTED_OS),darwin)
+	@cd packaging/macos && ./uninstall-local.sh
+else
+	@echo "Error: PKG uninstallation is only supported on macOS"
+	@exit 1
+endif
+
 run: build
 	$(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)
 
@@ -93,5 +137,5 @@ test:
 	go test -v ./...
 
 clean:
-	rm -rf $(BIN_DIR)
+	rm -rf $(BIN_DIR) $(DIST_DIR)
 	@echo "Cleaned build artifacts"
