@@ -211,6 +211,9 @@ extract_application_identity() {
     # -v: Verbose output showing all identities
     # -p codesigning: Only show identities valid for code signing
     # awk: Extract the SHA hash from the first Developer ID Application line
+    log_debug "Searching for Developer ID Application certificates in keychain: $KEYCHAIN_PATH"
+    log_debug "All certificates in keychain:"
+    security find-identity -v "$KEYCHAIN_PATH" 2>/dev/null || log_debug "Failed to list certificates"
     DEV_ID_SHA=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk '/Developer ID Application:/ {print $2; exit}')
     
     if [ -z "${DEV_ID_SHA:-}" ]; then
