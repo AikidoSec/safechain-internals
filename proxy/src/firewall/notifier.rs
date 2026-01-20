@@ -5,8 +5,10 @@ use rama::{
     http::{Request, Response, Uri, service::client::HttpClientExt as _},
     telemetry::tracing,
 };
-use std::{str::FromStr as _, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::mpsc;
+
+const NOTIFIER_CHANNEL_CAPACITY: usize = 256;
 
 #[derive(Clone)]
 pub struct EventNotifier {
@@ -14,7 +16,7 @@ pub struct EventNotifier {
 }
 
 struct EventNotifierInner {
-    tx: mpsc::UnboundedSender<BlockedEvent>,
+    tx: mpsc::Sender<BlockedEvent>,
 }
 
 impl std::fmt::Debug for EventNotifier {
@@ -26,19 +28,9 @@ impl std::fmt::Debug for EventNotifier {
 }
 
 impl EventNotifier {
-    pub fn new(reporting_endpoint: Option<String>) -> Self {
-        let Some(endpoint) = reporting_endpoint else {
+    pub fn new(reporting_endpoint: Option<Uri>) -> Self {
+        let Some(endpoint_uri) = reporting_endpoint else {
             return Self::noop();
-        };
-
-        let endpoint_uri = match Uri::from_str(&endpoint) {
-            Ok(uri) => uri,
-            Err(err) => {
-                tracing::warn!(
-                    "invalid reporting endpoint URL for blocked events: '{endpoint}': {err}"
-                );
-                return Self::noop();
-            }
         };
 
         let client = match crate::client::new_web_client() {
@@ -52,7 +44,7 @@ impl EventNotifier {
             }
         };
 
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, rx) = mpsc::channel(NOTIFIER_CHANNEL_CAPACITY);
 
         tokio::spawn(notification_worker(endpoint_uri, client, rx));
 
@@ -74,11 +66,19 @@ impl EventNotifier {
             return;
         };
 
-        if let Err(e) = inner.tx.send(event) {
-            tracing::debug!(
-                "failed to send event notification (receiver dropped): {}",
-                e
-            );
+        match inner.tx.try_send(event) {
+            Ok(()) => {}
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                tracing::debug!(
+                    "dropping blocked-event notification: notifier queue is full (capacity = {})",
+                    NOTIFIER_CHANNEL_CAPACITY
+                );
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                tracing::debug!(
+                    "failed to send event notification (receiver dropped): channel closed"
+                );
+            }
         }
     }
 }
@@ -86,7 +86,7 @@ impl EventNotifier {
 async fn notification_worker<C>(
     reporting_endpoint: Uri,
     client: C,
-    mut rx: mpsc::UnboundedReceiver<BlockedEvent>,
+    mut rx: mpsc::Receiver<BlockedEvent>,
 ) where
     C: Service<Request, Output = Response, Error = OpaqueError> + 'static,
 {

@@ -46,7 +46,7 @@ impl Firewall {
     pub async fn try_new(
         guard: ShutdownGuard,
         data: SyncCompactDataStorage,
-        reporting_endpoint: Option<String>,
+        reporting_endpoint: Option<rama::http::Uri>,
     ) -> Result<Self, OpaqueError> {
         let inner_https_client = crate::client::new_web_client()?;
 

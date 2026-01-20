@@ -3,6 +3,7 @@ use std::{path::PathBuf, time::Duration};
 use rama::{
     error::{BoxError, ErrorContext, OpaqueError},
     graceful::{self, ShutdownGuard},
+    http::Uri,
     net::{address::SocketAddress, socket::Interface},
     telemetry::tracing::{self, Instrument as _},
     tls::boring::server::TlsAcceptorLayer,
@@ -93,8 +94,8 @@ pub struct Args {
     /// Optional endpoint URL to POST blocked-event notifications to.
     ///
     /// If omitted, blocked events are still recorded locally but not reported.
-    #[arg(long = "reporting-endpoint")]
-    pub reporting_endpoint: Option<String>,
+    #[arg(long = "reporting-endpoint", value_name = "URL")]
+    pub reporting_endpoint: Option<Uri>,
 }
 
 #[tokio::main]

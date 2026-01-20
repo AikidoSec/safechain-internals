@@ -56,7 +56,10 @@ async fn test_report_blocked_events_posts_json_to_endpoint() {
         "expected at least one blocked-event notification to be captured"
     );
 
-    let first = &captured[0];
+    // We currently expect at least one notification for the blocked request.
+    let first = captured
+        .first()
+        .expect("expected at least one blocked-event notification");
     let obj = first
         .as_object()
         .expect("blocked-event notification should be a JSON object");
