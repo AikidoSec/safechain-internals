@@ -163,8 +163,8 @@ type RegistryValue struct {
 }
 
 func setRegistryValue(ctx context.Context, path string, value RegistryValue) error {
-	// reg add with /f flag will overwrite the existing value if it exists
-	return utils.RunCommand(ctx, "reg", "add", path, "/v", value.Value, "/t", value.Type, "/d", value.Data, "/f")
+	_, err := utils.RunCommand(ctx, "reg", "add", path, "/v", value.Value, "/t", value.Type, "/d", value.Data, "/f")
+	return err
 }
 
 func registryValueContains(ctx context.Context, path string, value string, toContain string) bool {
@@ -177,5 +177,6 @@ func registryValueContains(ctx context.Context, path string, value string, toCon
 }
 
 func deleteRegistryValue(ctx context.Context, path string, value string) error {
-	return utils.RunCommand(ctx, "reg", "delete", path, "/v", value, "/f")
+	_, err := utils.RunCommand(ctx, "reg", "delete", path, "/v", value, "/f")
+	return err
 }

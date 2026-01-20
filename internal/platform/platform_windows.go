@@ -104,7 +104,7 @@ func SetupLogging() (io.Writer, error) {
 }
 
 func SetSystemProxy(ctx context.Context, proxyURL string) error {
-	if err := utils.RunCommand(ctx, "netsh", "winhttp", "set", "proxy", proxyURL); err != nil {
+	if _, err := utils.RunCommand(ctx, "netsh", "winhttp", "set", "proxy", proxyURL); err != nil {
 		return err
 	}
 
@@ -157,7 +157,7 @@ func IsSystemProxySet(ctx context.Context, proxyURL string) error {
 }
 
 func UnsetSystemProxy(ctx context.Context) error {
-	if err := utils.RunCommand(ctx, "netsh", "winhttp", "reset", "proxy"); err != nil {
+	if _, err := utils.RunCommand(ctx, "netsh", "winhttp", "reset", "proxy"); err != nil {
 		return err
 	}
 
@@ -182,16 +182,18 @@ func UnsetSystemProxy(ctx context.Context) error {
 }
 
 func InstallProxyCA(ctx context.Context, caCertPath string) error {
-	return utils.RunCommand(ctx, "certutil", "-addstore", "-f", "Root", caCertPath)
+	_, err := utils.RunCommand(ctx, "certutil", "-addstore", "-f", "Root", caCertPath)
+	return err
 }
 
 func IsProxyCAInstalled(ctx context.Context) error {
-	// certutil returns non-zero exit code if the certificate is not installed
-	return utils.RunCommand(ctx, "certutil", "-store", "Root", "aikido.dev")
+	_, err := utils.RunCommand(ctx, "certutil", "-store", "Root", "aikido.dev")
+	return err
 }
 
 func UninstallProxyCA(ctx context.Context) error {
-	return utils.RunCommand(ctx, "certutil", "-delstore", "Root", "aikido.dev")
+	_, err := utils.RunCommand(ctx, "certutil", "-delstore", "Root", "aikido.dev")
+	return err
 }
 
 type ServiceRunner interface {
@@ -265,7 +267,8 @@ func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
 
 func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) error {
 	if !IsWindowsService() {
-		return utils.RunCommand(ctx, binaryPath, args...)
+		_, err := utils.RunCommand(ctx, binaryPath, args...)
+		return err
 	}
 
 	return runAsLoggedInUser(binaryPath, args)

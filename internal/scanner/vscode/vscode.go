@@ -34,11 +34,11 @@ func (s *VSCodeScanner) Uninstall(ctx context.Context) error {
 	}
 }
 
-func (s *VSCodeScanner) IsInstalled(ctx context.Context) (bool, error) {
+func (s *VSCodeScanner) IsInstalled(ctx context.Context) bool {
 	select {
 	case <-ctx.Done():
-		return false, ctx.Err()
+		return false
 	default:
-		return false, nil
+		return false
 	}
 }
