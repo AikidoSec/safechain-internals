@@ -40,9 +40,9 @@ func initConfig() error {
 		}
 	}
 	safeChainHomeDir := filepath.Join(config.HomeDir, ".safe-chain")
-	config.BinaryDir = "/opt/homebrew/bin"
-	config.RunDir = filepath.Join(safeChainHomeDir, "run")
-	config.LogDir = filepath.Join(safeChainHomeDir, "logs")
+	config.BinaryDir = "/Library/Application Support/AikidoSecurity/SafeChainAgent/bin"
+	config.RunDir = "/Library/Application Support/AikidoSecurity/SafeChainAgent/run"
+	config.LogDir = "/Library/Logs/AikidoSecurity/SafeChainAgent"
 	config.SafeChainBinaryPath = filepath.Join(safeChainHomeDir, "bin", "safe-chain")
 	return nil
 }
@@ -177,15 +177,17 @@ func UnsetSystemProxy(ctx context.Context) error {
 func InstallProxyCA(ctx context.Context, certPath string) error {
 	// CA needs to be installed as current user, in order to be prompted for security permissions
 	return RunAsCurrentUser(ctx, "security", []string{"add-trusted-cert",
-		"-d",
+		"-d", // Add to admin cert store; default is user
 		"-r", "trustRoot",
 		"-k", "/Library/Keychains/System.keychain",
 		certPath})
 }
 
 func IsProxyCAInstalled(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "security", "find-certificate",
-		"-c", "aikido.dev",
+	cmd := exec.CommandContext(ctx,
+		"security",
+		"find-certificate",
+		"-c", "aikido.dev", // Search for certificate with common name "aikido.dev"
 		"/Library/Keychains/System.keychain")
 
 	err := cmd.Run()
@@ -196,9 +198,38 @@ func IsProxyCAInstalled(ctx context.Context) error {
 }
 
 func UninstallProxyCA(ctx context.Context) error {
-	return RunAsCurrentUser(ctx, "security", []string{"delete-certificate",
-		"-c", "aikido.dev",
-		"/Library/Keychains/System.keychain"})
+	output, err := exec.CommandContext(ctx,
+		"security",
+		"find-certificate",
+		"-a",               //Find all matching certificates, not just the first one
+		"-c", "aikido.dev", // Search for certificate with common name "aikido.dev"
+		"-Z", // Print SHA-256 (and SHA-1) hash of the certificate
+		"/Library/Keychains/System.keychain").Output()
+	if err == nil {
+		hashRegex := regexp.MustCompile(`SHA-1 hash:\s*([A-F0-9]+)`)
+		matches := hashRegex.FindAllStringSubmatch(string(output), -1)
+
+		for _, match := range matches {
+			if len(match) < 2 {
+				continue
+			}
+			hash := match[1]
+			err := RunAsCurrentUser(ctx, "security", []string{"delete-certificate",
+				"-Z", hash,
+				"/Library/Keychains/System.keychain"})
+			if err != nil {
+				return fmt.Errorf("failed to delete certificate with hash %s: %v", hash, err)
+			}
+		}
+	}
+
+	if err := RunAsCurrentUser(ctx, "security", []string{"delete-generic-password",
+		"-l", "tls-root-ca-key",
+		"/Library/Keychains/System.keychain"}); err != nil {
+		return fmt.Errorf("failed to delete generic password: %v", err)
+	}
+
+	return nil
 }
 
 type ServiceRunner interface {
@@ -235,14 +266,14 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) err
 		return utils.RunCommand(ctx, binaryPath, args...)
 	}
 
-	_, uid, err := getConsoleUser(ctx)
+	username, uid, err := getConsoleUser(ctx)
 	if err != nil {
 		return err
 	}
 
-	// launchtl asuser 123 <binary_path> args...
+	homeDir := filepath.Join("/Users", username)
 	launchctlArgs := append([]string{"asuser", uid, binaryPath}, args...)
-	return utils.RunCommand(ctx, "launchctl", launchctlArgs...)
+	return utils.RunCommandWithEnv(ctx, []string{fmt.Sprintf("HOME=%s", homeDir)}, "launchctl", launchctlArgs...)
 }
 
 func RunningAsRoot() bool {
