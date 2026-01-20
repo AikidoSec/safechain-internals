@@ -49,7 +49,8 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	defer cancel()
 
-	if err := platform.RunAsCurrentUser(ctx, binaryPath, args); err != nil {
+	_, err := platform.RunAsCurrentUser(ctx, binaryPath, args)
+	if err != nil {
 		log.Printf("Failed to show blocked modal: %v", err)
 	}
 }
