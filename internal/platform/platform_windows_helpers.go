@@ -197,6 +197,7 @@ type RegistryValue struct {
 }
 
 func setRegistryValue(ctx context.Context, path string, value RegistryValue) error {
+	// reg add with /f flag will overwrite the existing value if it exists
 	_, err := utils.RunCommand(ctx, "reg", "add", path, "/v", value.Value, "/t", value.Type, "/d", value.Data, "/f")
 	return err
 }
