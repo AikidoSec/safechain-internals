@@ -9,10 +9,7 @@
     <welcome file="welcome.html" mime-type="text/html" />
     <license file="license.txt" mime-type="text/plain" />
     <conclusion file="conclusion.html" mime-type="text/html" />
-    
-    <!-- Background image (optional, uncomment if you have one) -->
-    <!-- <background file="background.png" mime-type="image/png" alignment="topleft" scaling="none"/> -->
-    
+        
     <!-- Define the installer choices -->
     <choices-outline>
         <line choice="default">
