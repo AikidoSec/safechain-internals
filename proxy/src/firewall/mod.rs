@@ -17,6 +17,7 @@ use rama::{
     },
     layer::MapErrLayer,
     net::address::{Domain, SocketAddress},
+    telemetry::tracing,
     utils::{backoff::ExponentialBackoff, rng::HasherRng},
 };
 
@@ -38,8 +39,7 @@ pub struct Firewall {
     // e.g. removing/adding them, we can ArcSwap these and have
     // a background task update these when needed..
     block_rules: Arc<Vec<self::rule::DynRule>>,
-    blocked_events: Arc<self::events::BlockedEventsStore>,
-    notifier: self::notifier::EventNotifier,
+    notifier: Option<self::notifier::EventNotifier>,
 }
 
 impl Firewall {
@@ -70,6 +70,20 @@ impl Firewall {
             .into_layer(inner_https_client)
             .boxed();
 
+        let notifier = match reporting_endpoint {
+            Some(endpoint) => match self::notifier::EventNotifier::try_new(endpoint) {
+                Ok(notifier) => Some(notifier),
+                Err(err) => {
+                    tracing::warn!(
+                        error = %err,
+                        "failed to initialize blocked-event notifier; reporting disabled"
+                    );
+                    None
+                }
+            },
+            None => None,
+        };
+
         Ok(Self {
             block_rules: Arc::new(vec![
                 self::rule::vscode::RuleVSCode::try_new(
@@ -97,16 +111,16 @@ impl Firewall {
                     .context("create block rule: pypi")?
                     .into_dyn(),
             ]),
-            // Keep a small rolling window of the last N blocked events.
-            blocked_events: Arc::new(self::events::BlockedEventsStore::new(256)),
-            notifier: self::notifier::EventNotifier::new(reporting_endpoint),
+            notifier,
         })
     }
 
     #[inline]
     pub fn record_blocked_event(&self, info: self::events::BlockedEventInfo) {
-        let event = self.blocked_events.record(info);
-        self.notifier.notify(event);
+        if let Some(notifier) = self.notifier.as_ref() {
+            let event = self::events::BlockedEvent::from_info(info);
+            notifier.notify(event);
+        }
     }
 
     pub fn match_domain(&self, domain: &Domain) -> bool {

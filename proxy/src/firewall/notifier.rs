@@ -5,68 +5,34 @@ use rama::{
     http::{Request, Response, Uri, service::client::HttpClientExt as _},
     telemetry::tracing,
 };
-use std::sync::Arc;
 use tokio::sync::mpsc;
 
 const NOTIFIER_CHANNEL_CAPACITY: usize = 256;
 
 #[derive(Clone)]
 pub struct EventNotifier {
-    inner: Option<Arc<EventNotifierInner>>,
-}
-
-struct EventNotifierInner {
     tx: mpsc::Sender<BlockedEvent>,
 }
 
 impl std::fmt::Debug for EventNotifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EventNotifier")
-            .field("enabled", &self.inner.is_some())
-            .finish()
+        f.debug_struct("EventNotifier").finish()
     }
 }
 
 impl EventNotifier {
-    pub fn new(reporting_endpoint: Option<Uri>) -> Self {
-        let Some(endpoint_uri) = reporting_endpoint else {
-            return Self::noop();
-        };
-
-        let client = match crate::client::new_web_client() {
-            Ok(client) => client,
-            Err(err) => {
-                tracing::warn!(
-                    error = %err,
-                    "failed to create web client for blocked-event reporting; notifier disabled"
-                );
-                return Self::noop();
-            }
-        };
+    pub fn try_new(reporting_endpoint: Uri) -> Result<Self, OpaqueError> {
+        let client = crate::client::new_web_client()?;
 
         let (tx, rx) = mpsc::channel(NOTIFIER_CHANNEL_CAPACITY);
 
-        tokio::spawn(notification_worker(endpoint_uri, client, rx));
+        tokio::spawn(notification_worker(reporting_endpoint, client, rx));
 
-        Self {
-            inner: Some(Arc::new(EventNotifierInner { tx })),
-        }
-    }
-
-    pub fn noop() -> Self {
-        Self { inner: None }
-    }
-
-    pub fn is_enabled(&self) -> bool {
-        self.inner.is_some()
+        Ok(Self { tx })
     }
 
     pub fn notify(&self, event: BlockedEvent) {
-        let Some(inner) = &self.inner else {
-            return;
-        };
-
-        match inner.tx.try_send(event) {
+        match self.tx.try_send(event) {
             Ok(()) => {}
             Err(mpsc::error::TrySendError::Full(_)) => {
                 tracing::debug!(

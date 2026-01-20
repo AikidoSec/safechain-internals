@@ -18,107 +18,19 @@ fn blocked_event_serializes_with_expected_keys() {
     assert_eq!(json["artifact"]["product"], "npm");
     assert_eq!(json["artifact"]["identifier"], "foo");
     assert_eq!(json["artifact"]["version"], "1.3.0");
-
-    // Ensure legacy key names are not emitted.
-    assert!(json.get("unix_ts_ms").is_none());
 }
 
 #[test]
-fn store_enforces_max_events_min_1() {
-    let store = BlockedEventsStore::new(0);
-
-    store.record(BlockedEventInfo {
-        artifact: BlockedArtifact {
-            product: arcstr!("pypi"),
-            identifier: arcstr!("a"),
-            version: Some(arcstr!("1.0.0")),
-        },
-    });
-
-    store.record(BlockedEventInfo {
-        artifact: BlockedArtifact {
-            product: arcstr!("pypi"),
-            identifier: arcstr!("b"),
-            version: Some(arcstr!("2.0.0")),
-        },
-    });
-
-    let snapshot = store.snapshot_for_tests();
-    assert_eq!(snapshot.len(), 1);
-    assert_eq!(snapshot[0].artifact.identifier.as_ref() as &str, "b");
-}
-
-#[test]
-fn store_prunes_by_max_events_keeps_most_recent() {
-    let store = BlockedEventsStore::new(2);
-
-    store.record(BlockedEventInfo {
+fn blocked_event_from_info_sets_timestamp_and_copies_artifact() {
+    let event = BlockedEvent::from_info(BlockedEventInfo {
         artifact: BlockedArtifact {
             product: arcstr!("npm"),
-            identifier: arcstr!("a"),
-            version: Some(arcstr!("1")),
-        },
-    });
-
-    store.record(BlockedEventInfo {
-        artifact: BlockedArtifact {
-            product: arcstr!("npm"),
-            identifier: arcstr!("b"),
-            version: Some(arcstr!("1")),
-        },
-    });
-
-    store.record(BlockedEventInfo {
-        artifact: BlockedArtifact {
-            product: arcstr!("npm"),
-            identifier: arcstr!("c"),
-            version: Some(arcstr!("1")),
-        },
-    });
-
-    let snapshot = store.snapshot_for_tests();
-    assert_eq!(snapshot.len(), 2);
-    assert_eq!(snapshot[0].artifact.identifier.as_ref() as &str, "b");
-    assert_eq!(snapshot[1].artifact.identifier.as_ref() as &str, "c");
-}
-
-#[test]
-fn store_keeps_most_recent_events_with_timestamps() {
-    let store = BlockedEventsStore::new(2);
-
-    store.record(BlockedEventInfo {
-        artifact: BlockedArtifact {
-            product: arcstr!("npm"),
-            identifier: arcstr!("a"),
-            version: None,
-        },
-    });
-    store.record(BlockedEventInfo {
-        artifact: BlockedArtifact {
-            product: arcstr!("npm"),
-            identifier: arcstr!("b"),
-            version: None,
-        },
-    });
-    store.record(BlockedEventInfo {
-        artifact: BlockedArtifact {
-            product: arcstr!("npm"),
-            identifier: arcstr!("c"),
-            version: None,
-        },
-    });
-    store.record(BlockedEventInfo {
-        artifact: BlockedArtifact {
-            product: arcstr!("npm"),
-            identifier: arcstr!("d"),
+            identifier: arcstr!("foo"),
             version: None,
         },
     });
 
-    let snapshot = store.snapshot_for_tests();
-    assert_eq!(snapshot.len(), 2);
-    // Capacity=2 keeps the most recent two events.
-    assert_eq!(snapshot[0].artifact.identifier.as_ref() as &str, "c");
-    assert_eq!(snapshot[1].artifact.identifier.as_ref() as &str, "d");
-    assert!(snapshot[0].ts_ms <= snapshot[1].ts_ms);
+    assert!(event.ts_ms > 0);
+    assert_eq!(event.artifact.product.as_ref() as &str, "npm");
+    assert_eq!(event.artifact.identifier.as_ref() as &str, "foo");
 }
