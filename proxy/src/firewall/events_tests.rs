@@ -1,5 +1,7 @@
 use super::*;
 use rama::utils::str::arcstr::arcstr;
+use std::str::FromStr;
+use crate::firewall::malware_list::PackageVersion;
 
 #[test]
 fn blocked_event_serializes_with_expected_keys() {
@@ -8,7 +10,7 @@ fn blocked_event_serializes_with_expected_keys() {
         artifact: BlockedArtifact {
             product: arcstr!("npm"),
             identifier: arcstr!("foo"),
-            version: Some(arcstr!("1.3.0")),
+            version: Some(PackageVersion::from_str("1.3.0").unwrap()),
         },
     };
 

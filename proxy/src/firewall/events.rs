@@ -1,6 +1,7 @@
 use rama::utils::str::arcstr::ArcStr;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
+use crate::firewall::malware_list::PackageVersion;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockedArtifact {
@@ -9,7 +10,7 @@ pub struct BlockedArtifact {
     /// The name or identifier of the artifact
     pub identifier: ArcStr,
     /// Optional version
-    pub version: Option<ArcStr>,
+    pub version: Option<PackageVersion>,
 }
 
 #[derive(Debug, Clone)]

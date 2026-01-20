@@ -183,21 +183,13 @@ impl Rule for RulePyPI {
         if self.is_blocked(&package_info)? {
             tracing::debug!(package = %package_info.name, version = ?package_info.version, "blocked PyPI package download");
 
-            let name = package_info.name.to_string();
-            let version = match &package_info.version {
-                PackageVersion::Semver(v) => Some(ArcStr::from(v.to_string())),
-                PackageVersion::Any => Some(arcstr!("*")),
-                PackageVersion::None => None,
-                PackageVersion::Unknown(v) => Some(v.clone()),
-            };
-
             return Ok(RequestAction::Block(BlockedRequest {
                 response: generate_generic_blocked_response_for_req(req),
                 info: BlockedEventInfo {
                     artifact: BlockedArtifact {
                         product: arcstr!("pypi"),
-                        identifier: ArcStr::from(name),
-                        version,
+                        identifier: ArcStr::from(package_info.name.as_str()),
+                        version: Some(package_info.version.clone()),
                     },
                 },
             }));

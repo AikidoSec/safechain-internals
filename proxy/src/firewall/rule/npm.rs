@@ -13,7 +13,7 @@ use rama::{
 use crate::{
     firewall::{
         events::{BlockedArtifact, BlockedEventInfo},
-        malware_list::{MalwareEntry, RemoteMalwareList},
+        malware_list::{MalwareEntry, PackageVersion, RemoteMalwareList},
         pac::PacScriptGenerator,
     },
     http::response::generate_generic_blocked_response_for_req,
@@ -113,7 +113,7 @@ impl Rule for RuleNpm {
                 && entries.iter().any(|entry| package.matches(entry))
             {
                 let package_name = package.fully_qualified_name.to_string();
-                let package_version = package.version.to_string();
+                let package_version = package.version.clone();
                 tracing::warn!("Blocked malware from {package_name}");
                 return Ok(RequestAction::Block(BlockedRequest {
                     response: generate_generic_blocked_response_for_req(req),
@@ -121,7 +121,7 @@ impl Rule for RuleNpm {
                         artifact: BlockedArtifact {
                             product: arcstr!("npm"),
                             identifier: ArcStr::from(package_name),
-                            version: Some(ArcStr::from(package_version)),
+                            version: Some(PackageVersion::Semver(package_version)),
                         },
                     },
                 }));
