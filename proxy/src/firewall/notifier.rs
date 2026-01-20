@@ -1,7 +1,7 @@
 use super::events::BlockedEvent;
 use rama::{
     Service,
-    error::{ErrorContext as _, OpaqueError},
+    error::OpaqueError,
     http::{Request, Response, Uri, service::client::HttpClientExt as _},
     telemetry::tracing,
 };
@@ -88,7 +88,7 @@ async fn notification_worker<C>(
     client: C,
     mut rx: mpsc::Receiver<BlockedEvent>,
 ) where
-    C: Service<Request, Output = Response, Error = OpaqueError> + 'static,
+    C: Service<Request, Output = Response, Error = OpaqueError>,
 {
     tracing::info!(
         "event notifier worker started, sending events to {}",
@@ -106,13 +106,7 @@ async fn notification_worker<C>(
             .post(reporting_endpoint.clone())
             .json(&event)
             .send()
-            .await
-            .with_context(|| {
-                format!(
-                    "send blocked-event notification to reporting endpoint '{}'",
-                    reporting_endpoint
-                )
-            });
+            .await;
 
         match resp {
             Ok(resp) if resp.status().is_success() => {
