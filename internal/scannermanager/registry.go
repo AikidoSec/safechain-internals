@@ -44,22 +44,26 @@ func (r *Registry) List() []string {
 
 func (r *Registry) InstallAll(ctx context.Context) error {
 	for name, s := range r.scanners {
-		log.Printf("Installing scanner '%s'...", name)
-		if err := s.Install(ctx); err != nil {
-			return fmt.Errorf("failed to install scanner '%s': %w", name, err)
+		if !s.IsInstalled(ctx) {
+			log.Printf("Installing scanner '%s'...", name)
+			if err := s.Install(ctx); err != nil {
+				return fmt.Errorf("failed to install scanner '%s': %w", name, err)
+			}
+			log.Printf("Scanner '%s' installed successfully!", name)
 		}
-		log.Printf("Scanner '%s' installed successfully!", name)
 	}
 	return nil
 }
 
 func (r *Registry) UninstallAll(ctx context.Context) error {
 	for name, s := range r.scanners {
-		log.Printf("Uninstalling scanner '%s'...", name)
-		if err := s.Uninstall(ctx); err != nil {
-			return fmt.Errorf("failed to uninstall scanner '%s': %w", name, err)
+		if s.IsInstalled(ctx) {
+			log.Printf("Uninstalling scanner '%s'...", name)
+			if err := s.Uninstall(ctx); err != nil {
+				return fmt.Errorf("failed to uninstall scanner '%s': %w", name, err)
+			}
+			log.Printf("Scanner '%s' uninstalled successfully!", name)
 		}
-		log.Printf("Scanner '%s' uninstalled successfully!", name)
 	}
 	return nil
 }

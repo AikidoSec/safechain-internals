@@ -104,15 +104,14 @@ func DownloadBinary(ctx context.Context, url, destPath string) error {
 	return nil
 }
 
-func RunCommand(ctx context.Context, command string, args ...string) error {
+func RunCommand(ctx context.Context, command string, args ...string) (string, error) {
 	return RunCommandWithEnv(ctx, []string{}, command, args...)
 }
 
-func RunCommandWithEnv(ctx context.Context, env []string, command string, args ...string) error {
+func RunCommandWithEnv(ctx context.Context, env []string, command string, args ...string) (string, error) {
 	log.Printf("Running command: %s %s", command, strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, command, args...)
 	cmd.Env = append(os.Environ(), env...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	return string(output), err
 }

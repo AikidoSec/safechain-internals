@@ -90,10 +90,6 @@ func (d *Daemon) Stop(ctx context.Context) error {
 	d.stopOnce.Do(func() {
 		log.Println("Stopping SafeChain Daemon...")
 
-		if err := d.registry.UninstallAll(ctx); err != nil {
-			log.Printf("Error uninstalling scanners: %v", err)
-		}
-
 		if err := setup.Teardown(ctx); err != nil {
 			log.Printf("Error teardown setup: %v", err)
 		}
@@ -180,6 +176,10 @@ func (d *Daemon) run(ctx context.Context) error {
 
 func (d *Daemon) Uninstall(ctx context.Context) error {
 	log.Println("Uninstalling the SafeChain Agent...")
+
+	if err := d.registry.UninstallAll(ctx); err != nil {
+		log.Printf("Error uninstalling scanners: %v", err)
+	}
 
 	if err := proxy.UninstallProxyCA(ctx); err != nil {
 		return fmt.Errorf("failed to uninstall proxy CA: %v", err)

@@ -34,11 +34,11 @@ func (s *GitHookScanner) Uninstall(ctx context.Context) error {
 	}
 }
 
-func (s *GitHookScanner) IsInstalled(ctx context.Context) (bool, error) {
+func (s *GitHookScanner) IsInstalled(ctx context.Context) bool {
 	select {
 	case <-ctx.Done():
-		return false, ctx.Err()
+		return false
 	default:
-		return false, nil
+		return false
 	}
 }
