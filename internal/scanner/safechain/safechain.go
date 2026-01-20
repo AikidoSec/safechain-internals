@@ -17,6 +17,7 @@ const (
 )
 
 type SafechainScanner struct {
+	version string
 }
 
 func New() scanner.Scanner {
@@ -30,7 +31,13 @@ func (s *SafechainScanner) Name() string {
 func (s *SafechainScanner) Install(ctx context.Context) error {
 	log.Printf("Installing safe-chain via install script...")
 
-	scriptURL := repoURL + "/releases/latest/download/install-safe-chain.sh"
+	version, err := utils.FetchLatestVersion(ctx, repoURL, "install-safe-chain.sh")
+	if err != nil {
+		return fmt.Errorf("failed to fetch latest version: %w", err)
+	}
+	log.Printf("Latest safe-chain version: %s", version)
+
+	scriptURL := fmt.Sprintf("%s/releases/download/%s/install-safe-chain.sh", repoURL, version)
 	scriptPath := filepath.Join(os.TempDir(), "install-safe-chain.sh")
 
 	log.Printf("Downloading install script from %s...", scriptURL)
@@ -43,13 +50,18 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 		return fmt.Errorf("failed to run install script: %w", err)
 	}
 
+	s.version = version
 	return nil
 }
 
 func (s *SafechainScanner) Uninstall(ctx context.Context) error {
 	log.Printf("Uninstalling safe-chain via uninstall script...")
 
-	scriptURL := repoURL + "/releases/latest/download/uninstall-safe-chain.sh"
+	if s.version == "" {
+		return fmt.Errorf("safe-chain version not set, cannot uninstall")
+	}
+
+	scriptURL := fmt.Sprintf("%s/releases/download/%s/uninstall-safe-chain.sh", repoURL, s.version)
 	scriptPath := filepath.Join(os.TempDir(), "uninstall-safe-chain.sh")
 
 	log.Printf("Downloading uninstall script from %s...", scriptURL)
