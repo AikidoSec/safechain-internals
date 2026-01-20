@@ -84,7 +84,7 @@ func buildCommandLineForWindowsProcess(binaryPath string, args []string) *uint16
 func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBlock *uint16) (string, error) {
 	var stdoutRead, stdoutWrite windows.Handle
 	sa := windows.SecurityAttributes{
-		Length:             uint32(unsafe.Sizeof(windows.SecurityAttributes{})),
+		Length:             uint32(unsafe.Sizeof(windows.SecurityAttributes{})), // The size, in bytes, of this structure -> https://learn.microsoft.com/en-us/windows/win32/api/wtypesbase/ns-wtypesbase-security_attributes
 		InheritHandle:      1,
 		SecurityDescriptor: nil,
 	}
@@ -92,9 +92,13 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 		return "", fmt.Errorf("CreatePipe failed: %v", err)
 	}
 	defer windows.CloseHandle(stdoutRead)
+	defer func() {
+		if stdoutWrite != 0 {
+			windows.CloseHandle(stdoutWrite)
+		}
+	}()
 
 	if err := windows.SetHandleInformation(stdoutRead, windows.HANDLE_FLAG_INHERIT, 0); err != nil {
-		windows.CloseHandle(stdoutWrite)
 		return "", fmt.Errorf("SetHandleInformation failed: %v", err)
 	}
 
@@ -108,11 +112,8 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 	var pi windows.ProcessInformation
 
 	if err := windows.CreateProcessAsUser(duplicatedToken, nil, cmdLinePtr, nil, nil, true, windows.CREATE_UNICODE_ENVIRONMENT, envBlock, nil, &si, &pi); err != nil {
-		windows.CloseHandle(stdoutWrite)
 		return "", fmt.Errorf("CreateProcessAsUser failed: %v", err)
 	}
-
-	windows.CloseHandle(stdoutWrite)
 
 	defer windows.CloseHandle(pi.Thread)
 	defer windows.CloseHandle(pi.Process)
@@ -127,6 +128,10 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 	if event != windows.WAIT_OBJECT_0 {
 		return "", fmt.Errorf("unexpected wait result: %d", event)
 	}
+
+	// Need to close this earlier so the pipe is fully closed and flushed before reading the output
+	windows.CloseHandle(stdoutWrite)
+	stdoutWrite = 0
 
 	var output []byte
 	buf := make([]byte, 4096)
