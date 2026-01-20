@@ -32,7 +32,9 @@ echo ""
 echo "Building safechain-agent..."
 cd "$PROJECT_DIR"
 go build -o "bin/safechain-agent-darwin-$ARCH" cmd/daemon/main.go
+go build -o "bin/safechain-agent-ui-darwin-$ARCH" ./cmd/ui
 echo "✓ Agent built: bin/safechain-agent-darwin-$ARCH"
+echo "✓ Agent UI built: bin/safechain-agent-ui-darwin-$ARCH"
 
 # Build Rust proxy
 echo "Building safechain-proxy..."
