@@ -107,7 +107,7 @@ chmod 644 "$LOGS_DIR/.keep"
 # Copy binaries
 echo "Copying binaries..."
 cp "$AGENT_BIN" "$INSTALL_DIR/bin/safechain-agent"
-cp "$AGENT_BIN" "$INSTALL_DIR/bin/safechain-agent-ui"
+cp "$AGENT_UI_BIN" "$INSTALL_DIR/bin/safechain-agent-ui"
 cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-proxy"
 chmod 755 "$INSTALL_DIR/bin/safechain-agent"
 chmod 755 "$INSTALL_DIR/bin/safechain-agent-ui"
