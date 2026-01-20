@@ -18,6 +18,7 @@ import (
 )
 
 const (
+	SafeChainUIBinaryName    = "safechain-agent-ui"
 	SafeChainProxyBinaryName = "safechain-proxy"
 	SafeChainProxyLogName    = "safechain-proxy.log"
 )

@@ -12,10 +12,6 @@ import (
 	"github.com/AikidoSec/safechain-agent/internal/platform"
 )
 
-const (
-	BlockedModalBinaryName = "safechain-agent-ui"
-)
-
 func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 	var event BlockEvent
 	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
@@ -34,7 +30,7 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 // showBlockedModal launches the ui binary as the current user to display the UI.
 func showBlockedModal(event BlockEvent, ingressAddress string) {
 	cfg := platform.GetConfig()
-	binaryPath := filepath.Join(cfg.BinaryDir, BlockedModalBinaryName)
+	binaryPath := filepath.Join(cfg.BinaryDir, platform.SafeChainUIBinaryName)
 
 	title := "SafeChain Ultimate"
 	text := buildBlockedText(event)
