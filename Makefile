@@ -1,4 +1,4 @@
-.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-full install-pkg uninstall-pkg clean test run help
+.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-sign-local install-pkg uninstall-pkg clean test run help
 
 BINARY_NAME=safechain-agent
 VERSION?=dev
@@ -57,38 +57,38 @@ help:
 	@echo 'Available targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-25s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-build: ## Build agent binary for current platform
+build:
 	@echo "Building $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT) ./cmd/daemon
 	@echo "Binary built: $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)"
 
-build-release: ## Build release agent binary for current platform
+build-release:
 	@echo "Building release $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/daemon
 	@echo "Binary built: $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
 
-build-darwin-amd64: ## Build release agent for macOS Intel (amd64)
+build-darwin-amd64:
 	@$(MAKE) GOOS=darwin GOARCH=amd64 build-release
 
-build-darwin-arm64: ## Build release agent for macOS Apple Silicon (arm64)
+build-darwin-arm64:
 	@$(MAKE) GOOS=darwin GOARCH=arm64 build-release
 
-build-windows-amd64: ## Build release agent for Windows Intel (amd64)
+build-windows-amd64:
 	@$(MAKE) GOOS=windows GOARCH=amd64 build-release
 
-build-windows-arm64: ## Build release agent for Windows ARM64
+build-windows-arm64:
 	@$(MAKE) GOOS=windows GOARCH=arm64 build-release
 
-build-proxy: ## Build the Rust proxy binary
+build-proxy:
 	@echo "Building safechain-proxy..."
 	@cd $(PROXY_DIR) && cargo build --release
 	@mkdir -p $(BIN_DIR)
 	@cp target/release/safechain-proxy $(BIN_DIR)/safechain-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)
 	@echo "Proxy built: $(BIN_DIR)/safechain-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)"
 
-build-pkg: ## Build macOS PKG installer (requires binaries to exist)
+build-pkg:
 ifeq ($(DETECTED_OS),darwin)
 	@echo "Building macOS PKG installer..."
 	@cd packaging/macos && ./build-distribution-pkg.sh -v $(VERSION) -a $(DETECTED_ARCH) -b ../../$(BIN_DIR) -o ../../$(DIST_DIR)
@@ -98,7 +98,7 @@ else
 	@exit 1
 endif
 
-build-pkg-full: ## Build binaries, proxy, and macOS PKG installer with signing
+build-pkg-sign-local:
 ifeq ($(DETECTED_OS),darwin)
 	@echo "Building complete macOS package..."
 	@cd packaging/macos && ./build-and-sign-local.sh $(VERSION)
@@ -107,7 +107,7 @@ else
 	@exit 1
 endif
 
-install-pkg: ## Install the local macOS PKG
+install-pkg:
 ifeq ($(DETECTED_OS),darwin)
 	@cd packaging/macos && ./install-local.sh
 else
@@ -115,7 +115,7 @@ else
 	@exit 1
 endif
 
-uninstall-pkg: ## Uninstall the macOS PKG
+uninstall-pkg:
 ifeq ($(DETECTED_OS),darwin)
 	@cd packaging/macos && ./uninstall-local.sh
 else
@@ -123,12 +123,12 @@ else
 	@exit 1
 endif
 
-run: build ## Run the agent binary
+run: build
 	$(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)
 
-test: ## Run Go tests
+test:
 	go test -v ./...
 
-clean: ## Clean build artifacts
+clean:
 	rm -rf $(BIN_DIR) $(DIST_DIR)
 	@echo "Cleaned build artifacts"
