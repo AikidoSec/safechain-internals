@@ -5,17 +5,24 @@ use rama::{
     http::{Request, Response, service::web::extract::Query},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
-    utils::str::{arcstr::ArcStr, starts_with_ignore_ascii_case},
+    utils::str::{
+        arcstr::{ArcStr, arcstr},
+        starts_with_ignore_ascii_case,
+    },
 };
 
 use serde::Deserialize;
 
 use crate::{
-    firewall::pac::PacScriptGenerator, http::response::generate_generic_blocked_response_for_req,
+    firewall::{
+        events::{BlockedArtifact, BlockedEventInfo},
+        pac::PacScriptGenerator,
+    },
+    http::response::generate_generic_blocked_response_for_req,
     storage::SyncCompactDataStorage,
 };
 
-use super::{RequestAction, Rule};
+use super::{BlockedRequest, RequestAction, Rule};
 
 pub(in crate::firewall) struct RuleChrome {
     target_domains: DomainTrie<()>,
@@ -96,9 +103,16 @@ impl Rule for RuleChrome {
             );
             // NOTE: in case you wish to customise the response,
             // you can do so by defining your own function / logic and using it here.
-            return Ok(RequestAction::Block(
-                generate_generic_blocked_response_for_req(req),
-            ));
+            return Ok(RequestAction::Block(BlockedRequest {
+                response: generate_generic_blocked_response_for_req(req),
+                info: BlockedEventInfo {
+                    artifact: BlockedArtifact {
+                        product: arcstr!("chrome"),
+                        identifier: product_id,
+                        version: None,
+                    },
+                },
+            }));
         }
 
         tracing::trace!(

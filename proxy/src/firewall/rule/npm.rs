@@ -7,18 +7,20 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
+    utils::str::arcstr::{ArcStr, arcstr},
 };
 
 use crate::{
     firewall::{
-        malware_list::{MalwareEntry, RemoteMalwareList},
+        events::{BlockedArtifact, BlockedEventInfo},
+        malware_list::{MalwareEntry, PackageVersion, RemoteMalwareList},
         pac::PacScriptGenerator,
     },
     http::response::generate_generic_blocked_response_for_req,
     storage::SyncCompactDataStorage,
 };
 
-use super::{RequestAction, Rule};
+use super::{BlockedRequest, RequestAction, Rule};
 
 pub(in crate::firewall) struct RuleNpm {
     target_domains: DomainTrie<()>,
@@ -110,11 +112,19 @@ impl Rule for RuleNpm {
                 .entries()
                 && entries.iter().any(|entry| package.matches(entry))
             {
-                let package_name = package.fully_qualified_name;
+                let package_name = package.fully_qualified_name.to_string();
+                let package_version = package.version.clone();
                 tracing::warn!("Blocked malware from {package_name}");
-                return Ok(RequestAction::Block(
-                    generate_generic_blocked_response_for_req(req),
-                ));
+                return Ok(RequestAction::Block(BlockedRequest {
+                    response: generate_generic_blocked_response_for_req(req),
+                    info: BlockedEventInfo {
+                        artifact: BlockedArtifact {
+                            product: arcstr!("npm"),
+                            identifier: ArcStr::from(package_name),
+                            version: Some(PackageVersion::Semver(package_version)),
+                        },
+                    },
+                }));
             } else {
                 tracing::debug!("Npm url: {path} does not contain malware: passthrough");
                 return Ok(RequestAction::Allow(req));

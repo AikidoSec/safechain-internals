@@ -16,7 +16,10 @@ use rama::{
     },
 };
 
+use rama::utils::str::arcstr::{ArcStr, arcstr};
+
 use crate::{
+    firewall::events::{BlockedArtifact, BlockedEventInfo},
     firewall::{
         malware_list::{MalwareEntry, PackageVersion, RemoteMalwareList},
         pac::PacScriptGenerator,
@@ -25,7 +28,7 @@ use crate::{
     storage::SyncCompactDataStorage,
 };
 
-use super::{RequestAction, Rule};
+use super::{BlockedRequest, RequestAction, Rule};
 
 struct PackageInfo {
     name: SmolStr,
@@ -180,9 +183,16 @@ impl Rule for RulePyPI {
         if self.is_blocked(&package_info)? {
             tracing::debug!(package = %package_info.name, version = ?package_info.version, "blocked PyPI package download");
 
-            return Ok(RequestAction::Block(
-                generate_generic_blocked_response_for_req(req),
-            ));
+            return Ok(RequestAction::Block(BlockedRequest {
+                response: generate_generic_blocked_response_for_req(req),
+                info: BlockedEventInfo {
+                    artifact: BlockedArtifact {
+                        product: arcstr!("pypi"),
+                        identifier: ArcStr::from(package_info.name.as_str()),
+                        version: Some(package_info.version.clone()),
+                    },
+                },
+            }));
         }
 
         Ok(RequestAction::Allow(req))

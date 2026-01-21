@@ -301,10 +301,53 @@ pub(super) async fn get() -> Runtime {
     runtime
 }
 
+pub(super) async fn spawn_with_args(extra_args: &[&str]) -> Runtime {
+    let data_dir = spawn_safechain_proxy_app_with_args(extra_args);
+    let app = App { data_dir };
+
+    let (meta_addr, proxy_addr) = tokio::try_join!(
+        tokio::time::timeout(
+            Duration::from_secs(180),
+            read_file_or_wait(app.data_dir.join("meta.addr.txt"))
+        ),
+        tokio::time::timeout(
+            Duration::from_secs(180),
+            read_file_or_wait(app.data_dir.join("proxy.addr.txt"))
+        ),
+    )
+    .unwrap();
+
+    let runtime = Runtime {
+        _app: app,
+        meta_addr,
+        proxy_addr,
+    };
+
+    assert!(runtime.meta_socket_addr().ip_addr.is_loopback());
+    assert!(runtime.proxy_socket_addr().ip_addr.is_loopback());
+    assert_ne!(runtime.meta_socket_addr(), runtime.proxy_socket_addr());
+
+    runtime
+}
+
 async fn read_file_or_wait(path: PathBuf) -> SocketAddress {
     loop {
         match tokio::fs::read_to_string(&path).await {
-            Ok(s) => return s.parse().unwrap(),
+            Ok(s) => {
+                let s = s.trim();
+                if s.is_empty() {
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    continue;
+                }
+                match s.parse() {
+                    Ok(addr) => return addr,
+                    Err(err) => {
+                        eprintln!("unexpected error parsing socket addr (content={s:?}): {err}");
+                        tokio::time::sleep(Duration::from_millis(200)).await;
+                        continue;
+                    }
+                }
+            }
             Err(err) => {
                 if err.kind() == ErrorKind::NotFound {
                     tokio::time::sleep(Duration::from_millis(200)).await;
@@ -325,12 +368,16 @@ impl App {
 }
 
 fn spawn_safechain_proxy_app() -> PathBuf {
+    spawn_safechain_proxy_app_with_args(&[])
+}
+
+fn spawn_safechain_proxy_app_with_args(extra_args: &[&str]) -> PathBuf {
     let data_dir = crate::test::tmp_dir::try_new("safechain_proxy_app_e2e").unwrap();
     eprintln!("safechain_proxy_app_e2e all data stored under: {data_dir:?}");
 
     let data_dir_str = data_dir.display().to_string().leak();
 
-    let args = Args::try_parse_from([
+    let mut argv: Vec<&str> = vec![
         crate::utils::env::project_name(),
         "--bind",
         "127.0.0.1:0",
@@ -343,8 +390,10 @@ fn spawn_safechain_proxy_app() -> PathBuf {
         "--graceful",
         "0.42",
         "--all",
-    ])
-    .unwrap();
+    ];
+    argv.extend(extra_args);
+
+    let args = Args::try_parse_from(argv).unwrap();
 
     let wait_server_ready = Arc::new(OnceLock::new());
     let notify_server_ready = wait_server_ready.clone();
