@@ -23,12 +23,14 @@ jobs:
     uses: ./.github/workflows/build-macos-pkg.yml
     with:
       version: ${{ needs.extract-version.outputs.version }}
+    secrets: inherit
 
   build-windows:
     needs: extract-version
     uses: ./.github/workflows/build-windows.yml
     with:
       version: ${{ needs.extract-version.outputs.version }}
+    secrets: inherit
 
   release:
     needs: [extract-version, build-unix, build-windows]
