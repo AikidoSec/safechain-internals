@@ -12,21 +12,26 @@ import (
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/unit"
+
+	"github.com/AikidoSec/safechain-internals/internal/ui/theme"
+	"github.com/AikidoSec/safechain-internals/internal/ui/views"
 )
 
-type ModalApp struct {
-	theme *AikidoTheme
-	modal *Modal
+type BlockedModalApp struct {
+	theme          *theme.AikidoTheme
+	blockedView    *views.BlockedView
+	bypassView     *views.RequestBypassView
+	showBypassView bool
+	close          func()
 }
 
-// RunModalApp creates and runs a Gio application with the given modal
-func RunModalApp(modal *Modal, title string, width, height unit.Dp) error {
+func RunBlockedModal(title, subtitle, packageId, windowTitle string, width, height unit.Dp, onBypass func()) error {
 	go func() {
 		w := new(app.Window)
-		w.Option(app.Title(title))
+		w.Option(app.Title(windowTitle))
 		w.Option(app.Size(width, height))
 
-		if err := runModal(w, modal); err != nil {
+		if err := runBlockedModal(w, title, subtitle, packageId, onBypass); err != nil {
 			log.Fatal(err)
 		}
 		os.Exit(0)
@@ -35,15 +40,44 @@ func RunModalApp(modal *Modal, title string, width, height unit.Dp) error {
 	return nil
 }
 
-func runModal(w *app.Window, modal *Modal) error {
-	a := &ModalApp{
-		theme: NewAikidoTheme(),
-		modal: modal,
-	}
+func runBlockedModal(w *app.Window, title, subtitle, packageId string, onBypass func()) error {
+	th := theme.NewAikidoTheme()
 
-	modal.Close = func() {
+	closeWindow := func() {
 		w.Perform(system.ActionClose)
 	}
+
+	a := &BlockedModalApp{
+		theme: th,
+		close: closeWindow,
+	}
+
+	var bypassCallback func()
+	if onBypass != nil {
+		bypassCallback = func() {
+			a.showBypassView = true
+		}
+	}
+
+	a.blockedView = views.NewBlockedView(
+		title,
+		subtitle,
+		packageId,
+		closeWindow,
+		bypassCallback,
+	)
+
+	a.bypassView = views.NewRequestBypassView(
+		func() {
+			a.showBypassView = false
+		},
+		func() {
+			if onBypass != nil {
+				onBypass()
+			}
+			closeWindow()
+		},
+	)
 
 	var ops op.Ops
 
@@ -60,49 +94,32 @@ func runModal(w *app.Window, modal *Modal) error {
 	}
 }
 
-func (a *ModalApp) Layout(gtx layout.Context) layout.Dimensions {
-	// Fill background with a slightly darker background than the modal.
-	paint.Fill(gtx.Ops, darken(a.theme.Bg, 0.95))
+func (a *BlockedModalApp) Layout(gtx layout.Context) layout.Dimensions {
+	paint.Fill(gtx.Ops, a.theme.FooterBg)
 
-	// Center content
-	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{
-			Axis:      layout.Vertical,
-			Alignment: layout.Middle,
-		}.Layout(gtx,
-			// SVG Image
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return layoutAikidoLogo(gtx, unit.Dp(64))
-			}),
-			// Spacing
-			layout.Rigid(layout.Spacer{Height: unit.Dp(5)}.Layout),
-			// Modal with rounded corners
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return a.layoutRoundedModal(gtx)
-			}),
-		)
-	})
+	return a.layoutRoundedModal(gtx)
 }
 
-func (a *ModalApp) layoutRoundedModal(gtx layout.Context) layout.Dimensions {
-	// Create a macro to capture the modal layout
+func (a *BlockedModalApp) layoutRoundedModal(gtx layout.Context) layout.Dimensions {
+	gtx.Constraints.Min.Y = 0
+
 	macro := op.Record(gtx.Ops)
-	dims := a.modal.Layout(gtx, a.theme)
+	var dims layout.Dimensions
+	if a.showBypassView {
+		dims = a.bypassView.Layout(gtx, a.theme)
+	} else {
+		dims = a.blockedView.Layout(gtx, a.theme)
+	}
 	call := macro.Stop()
 
-	// Draw rounded rectangle background
-	rr := image.Rectangle{
-		Max: dims.Size,
-	}
-
+	rr := image.Rectangle{Max: dims.Size}
 	radius := 12
 	clip.RRect{
 		Rect: rr,
 		NE:   radius, NW: radius, SE: radius, SW: radius,
 	}.Push(gtx.Ops)
 
-	paint.Fill(gtx.Ops, a.theme.Theme.Bg)
-
+	paint.Fill(gtx.Ops, a.theme.Background)
 	call.Add(gtx.Ops)
 
 	return dims
