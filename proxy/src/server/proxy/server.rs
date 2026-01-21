@@ -6,12 +6,13 @@ use rama::{
     extensions::ExtensionsMut,
     graceful::ShutdownGuard,
     http::{
-        Body,
+        Body, Response, StatusCode,
         layer::{
             compression::CompressionLayer, map_response_body::MapResponseBodyLayer,
             trace::TraceLayer,
         },
         server::HttpServer,
+        service::web::response::IntoResponse,
     },
     layer::ConsumeErrLayer,
     net::{proxy::ProxyTarget, tls::server::TlsPeekRouter},
@@ -41,6 +42,17 @@ pub(super) struct MitmServer<S> {
     forwarder: DefaultForwarder,
 }
 
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+struct StaticHttpProxyError;
+
+impl From<StaticHttpProxyError> for Response {
+    fn from(_: StaticHttpProxyError) -> Self {
+        // ensures ingress clients are aware this is a proxy/middlebox issue
+        StatusCode::BAD_GATEWAY.into_response()
+    }
+}
+
 pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
     guard: ShutdownGuard,
     mitm_all: bool,
@@ -50,7 +62,7 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
 ) -> Result<MitmServer<impl Service<S, Output = (), Error = BoxError> + Clone>, OpaqueError> {
     let https_svc = (
         TraceLayer::new_for_http(),
-        ConsumeErrLayer::trace(Level::DEBUG),
+        ConsumeErrLayer::trace(Level::DEBUG).with_response(StaticHttpProxyError),
         #[cfg(feature = "har")]
         (
             AddInputExtensionLayer::new(RequestComment(arcstr!("http(s) MITM server"))),
