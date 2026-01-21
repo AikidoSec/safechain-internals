@@ -17,6 +17,7 @@ use rama::{
     },
     layer::MapErrLayer,
     net::address::{Domain, SocketAddress},
+    rt::Executor,
     telemetry::tracing,
     utils::{backoff::ExponentialBackoff, rng::HasherRng},
 };
@@ -71,7 +72,10 @@ impl Firewall {
             .boxed();
 
         let notifier = match reporting_endpoint {
-            Some(endpoint) => match self::notifier::EventNotifier::try_new(endpoint) {
+            Some(endpoint) => match self::notifier::EventNotifier::try_new(
+                Executor::graceful(guard.clone()),
+                endpoint,
+            ) {
                 Ok(notifier) => Some(notifier),
                 Err(err) => {
                     tracing::warn!(
@@ -116,10 +120,10 @@ impl Firewall {
     }
 
     #[inline]
-    pub fn record_blocked_event(&self, info: self::events::BlockedEventInfo) {
+    pub async fn record_blocked_event(&self, info: self::events::BlockedEventInfo) {
         if let Some(notifier) = self.notifier.as_ref() {
             let event = self::events::BlockedEvent::from_info(info);
-            notifier.notify(event);
+            notifier.notify(event).await;
         }
     }
 
@@ -144,7 +148,7 @@ impl Firewall {
             match rule.evaluate_request(mod_req).await? {
                 RequestAction::Allow(new_mod_req) => mod_req = new_mod_req,
                 RequestAction::Block(blocked) => {
-                    self.record_blocked_event(blocked.info.clone());
+                    self.record_blocked_event(blocked.info.clone()).await;
                     return Ok(RequestAction::Block(blocked));
                 }
             }
