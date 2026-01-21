@@ -20,7 +20,7 @@ jobs:
 
   build-unix:
     needs: extract-version
-    uses: ./.github/workflows/build-unix.yml
+    uses: ./.github/workflows/build-macos-pkg.yml
     with:
       version: ${{ needs.extract-version.outputs.version }}
 
@@ -49,7 +49,7 @@ jobs:
         run: |
           mv artifacts/safechain-agent-darwin-amd64/safechain-agent-darwin-amd64 .
           mv artifacts/safechain-agent-darwin-arm64/safechain-agent-darwin-arm64 .
-          
+
           mv artifacts/safechain-proxy-darwin-amd64/safechain-proxy-darwin-amd64 .
           mv artifacts/safechain-proxy-darwin-arm64/safechain-proxy-darwin-arm64 .
 
@@ -58,6 +58,9 @@ jobs:
 
           mv artifacts/SafeChainAgent.amd64.msi/SafeChainAgent.amd64.msi ./SafeChainAgent-windows-amd64.msi
           mv artifacts/SafeChainAgent.arm64.msi/SafeChainAgent.arm64.msi ./SafeChainAgent-windows-arm64.msi
+
+          mv artifacts/SafeChainAgent-amd64.pkg/SafeChainAgent-amd64.pkg ./SafeChainAgent-darwin-amd64.pkg
+          mv artifacts/SafeChainAgent-arm64.pkg/SafeChainAgent-arm64.pkg ./SafeChainAgent-darwin-arm64.pkg
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -71,6 +74,8 @@ jobs:
             safechain-proxy-linux-arm64
             SafeChainAgent-windows-amd64.msi
             SafeChainAgent-windows-arm64.msi
+            SafeChainAgent-darwin-amd64.pkg
+            SafeChainAgent-darwin-arm64.pkg
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
