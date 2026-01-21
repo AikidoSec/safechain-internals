@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use rama::{
     Layer as _, Service,
@@ -20,6 +20,9 @@ mod assert_endpoint;
 mod malware_list;
 mod vscode_marketplace;
 
+static ASSERT_ENDPOINT_STATE: LazyLock<assert_endpoint::MockState> =
+    LazyLock::new(assert_endpoint::MockState::new);
+
 pub fn new_mock_client()
 -> Result<impl Service<Request, Output = Response, Error = OpaqueError> + Clone, OpaqueError> {
     let echo_svc_builder = EchoServiceBuilder::default();
@@ -40,7 +43,7 @@ pub fn new_mock_client()
         )
         .with_matcher(
             HttpMatcher::domain(Domain::from_static("assert-test.internal")),
-            self::assert_endpoint::web_svc(),
+            self::assert_endpoint::web_svc(ASSERT_ENDPOINT_STATE.clone()),
         )
         // echo all non-blocked requests back
         .with_not_found(not_found_svc);

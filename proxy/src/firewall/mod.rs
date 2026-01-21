@@ -17,11 +17,14 @@ use rama::{
     },
     layer::MapErrLayer,
     net::address::{Domain, SocketAddress},
+    telemetry::tracing,
     utils::{backoff::ExponentialBackoff, rng::HasherRng},
 };
 
+pub mod events;
 pub mod layer;
 pub mod malware_list;
+pub mod notifier;
 pub mod rule;
 
 mod pac;
@@ -36,12 +39,14 @@ pub struct Firewall {
     // e.g. removing/adding them, we can ArcSwap these and have
     // a background task update these when needed..
     block_rules: Arc<Vec<self::rule::DynRule>>,
+    notifier: Option<self::notifier::EventNotifier>,
 }
 
 impl Firewall {
     pub async fn try_new(
         guard: ShutdownGuard,
         data: SyncCompactDataStorage,
+        reporting_endpoint: Option<rama::http::Uri>,
     ) -> Result<Self, OpaqueError> {
         let inner_https_client = crate::client::new_web_client()?;
 
@@ -64,6 +69,20 @@ impl Firewall {
         )
             .into_layer(inner_https_client)
             .boxed();
+
+        let notifier = match reporting_endpoint {
+            Some(endpoint) => match self::notifier::EventNotifier::try_new(endpoint) {
+                Ok(notifier) => Some(notifier),
+                Err(err) => {
+                    tracing::warn!(
+                        error = %err,
+                        "failed to initialize blocked-event notifier; reporting disabled"
+                    );
+                    None
+                }
+            },
+            None => None,
+        };
 
         Ok(Self {
             block_rules: Arc::new(vec![
@@ -92,7 +111,16 @@ impl Firewall {
                     .context("create block rule: pypi")?
                     .into_dyn(),
             ]),
+            notifier,
         })
+    }
+
+    #[inline]
+    pub fn record_blocked_event(&self, info: self::events::BlockedEventInfo) {
+        if let Some(notifier) = self.notifier.as_ref() {
+            let event = self::events::BlockedEvent::from_info(info);
+            notifier.notify(event);
+        }
     }
 
     pub fn match_domain(&self, domain: &Domain) -> bool {
@@ -115,8 +143,9 @@ impl Firewall {
         for rule in self.block_rules.iter() {
             match rule.evaluate_request(mod_req).await? {
                 RequestAction::Allow(new_mod_req) => mod_req = new_mod_req,
-                RequestAction::Block(resp) => {
-                    return Ok(RequestAction::Block(resp));
+                RequestAction::Block(blocked) => {
+                    self.record_blocked_event(blocked.info.clone());
+                    return Ok(RequestAction::Block(blocked));
                 }
             }
         }

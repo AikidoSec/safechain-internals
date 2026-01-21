@@ -3,6 +3,7 @@ use std::{path::PathBuf, time::Duration};
 use rama::{
     error::{BoxError, ErrorContext, OpaqueError},
     graceful::{self, ShutdownGuard},
+    http::Uri,
     net::{address::SocketAddress, socket::Interface},
     telemetry::tracing::{self, Instrument as _},
     tls::boring::server::TlsAcceptorLayer,
@@ -89,6 +90,12 @@ pub struct Args {
     #[arg(long, value_name = "SECONDS", default_value_t = 1.)]
     /// the graceful shutdown timeout (<= 0.0 = no timeout)
     pub graceful: f64,
+
+    /// Optional endpoint URL to POST blocked-event notifications to.
+    ///
+    /// If omitted, blocked events are still recorded locally but not reported.
+    #[arg(long = "reporting-endpoint", value_name = "URL")]
+    pub reporting_endpoint: Option<Uri>,
 }
 
 #[tokio::main]
@@ -143,7 +150,11 @@ where
     // this can happen for example in case remote lists need to be fetched and the
     // something on the network on either side is not working
     let firewall = tokio::select! {
-        result = self::firewall::Firewall::try_new(graceful.guard(), data_storage) => {
+        result = self::firewall::Firewall::try_new(
+            graceful.guard(),
+            data_storage,
+            args.reporting_endpoint.clone(),
+        ) => {
             result?
         }
 
