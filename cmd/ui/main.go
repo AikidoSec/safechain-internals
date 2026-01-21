@@ -9,18 +9,20 @@ import (
 	"github.com/AikidoSec/safechain-agent/internal/ui"
 )
 
+const WindowTitle = "SafeChain Ultimate"
+
 func main() {
 	var (
-		title         = flag.String("title", "SafeChain Ultimate", "Modal title")
-		text          = flag.String("text", "", "Modal text content")
+		title         = flag.String("title", "", "Modal title")
+		subtitle      = flag.String("subtitle", "", "Modal subtitle")
 		packageId     = flag.String("package-id", "", "Package identifier to display")
 		ingress       = flag.String("ingress", "", "Daemon ingress address, to report back when bypass requested.")
 		bypassEnabled = flag.Bool("bypass-enabled", false, "Enable bypass requested.")
 	)
 	flag.Parse()
 
-	if *title == "" || *text == "" || *ingress == "" {
-		fmt.Fprintln(os.Stderr, "Usage: safechain-ui --title <title> --text <text> --package-id <id> --ingress <ingress>")
+	if *title == "" || *subtitle == "" || *ingress == "" {
+		fmt.Fprintln(os.Stderr, "Usage: safechain-ui --title <title> --subtitle <subtitle> --package-id <id> --ingress <ingress>")
 		os.Exit(1)
 	}
 
@@ -35,7 +37,7 @@ func main() {
 		bypassTrigger = nil
 	}
 
-	if err := ui.ShowBlockedModal(*text, *packageId, *title, bypassTrigger); err != nil {
+	if err := ui.ShowBlockedModal(*title, *subtitle, *packageId, WindowTitle, bypassTrigger); err != nil {
 		log.Fatalf("Failed to show blocked modal: %v", err)
 	}
 }

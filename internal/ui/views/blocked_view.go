@@ -26,10 +26,10 @@ type BlockedView struct {
 	bypassBtn widget.Clickable
 }
 
-func NewBlockedView(text, packageId string, onOK, onBypass func()) *BlockedView {
+func NewBlockedView(title, subtitle, packageId string, onOK, onBypass func()) *BlockedView {
 	return &BlockedView{
-		Title:     "SafeChain blocked a potentially malicious npm package:",
-		Subtitle:  text,
+		Title:     title,
+		Subtitle:  subtitle,
 		PackageId: packageId,
 		OnOK:      onOK,
 		OnBypass:  onBypass,

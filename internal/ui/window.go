@@ -18,20 +18,20 @@ import (
 )
 
 type BlockedModalApp struct {
-	theme         *theme.AikidoTheme
-	blockedView   *views.BlockedView
-	bypassView    *views.RequestBypassView
+	theme          *theme.AikidoTheme
+	blockedView    *views.BlockedView
+	bypassView     *views.RequestBypassView
 	showBypassView bool
-	close         func()
+	close          func()
 }
 
-func RunBlockedModal(text, packageId, title string, width, height unit.Dp, onBypass func()) error {
+func RunBlockedModal(title, subtitle, packageId, windowTitle string, width, height unit.Dp, onBypass func()) error {
 	go func() {
 		w := new(app.Window)
-		w.Option(app.Title(title))
+		w.Option(app.Title(windowTitle))
 		w.Option(app.Size(width, height))
 
-		if err := runBlockedModal(w, text, packageId, onBypass); err != nil {
+		if err := runBlockedModal(w, title, subtitle, packageId, onBypass); err != nil {
 			log.Fatal(err)
 		}
 		os.Exit(0)
@@ -40,7 +40,7 @@ func RunBlockedModal(text, packageId, title string, width, height unit.Dp, onByp
 	return nil
 }
 
-func runBlockedModal(w *app.Window, text, packageId string, onBypass func()) error {
+func runBlockedModal(w *app.Window, title, subtitle, packageId string, onBypass func()) error {
 	th := theme.NewAikidoTheme()
 
 	closeWindow := func() {
@@ -60,7 +60,8 @@ func runBlockedModal(w *app.Window, text, packageId string, onBypass func()) err
 	}
 
 	a.blockedView = views.NewBlockedView(
-		text,
+		title,
+		subtitle,
 		packageId,
 		closeWindow,
 		bypassCallback,
