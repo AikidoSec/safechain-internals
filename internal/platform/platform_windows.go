@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	SafeChainUIBinaryName          = "SafeChainAgentUI.exe"
+	SafeChainUIBinaryName          = "SafeChainUltimateUI.exe"
 	SafeChainProxyBinaryName       = "SafeChainProxy.exe"
 	SafeChainProxyLogName          = "SafeChainProxy.log"
 	registryInternetSettingsSuffix = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
