@@ -19,7 +19,7 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Received block event: product=%s package=%s", event.Product, event.PackageName)
+	log.Printf("Received block event: product=%s package=%s", event.Artifact.Product, event.Artifact)
 
 	// Show UI modal in a goroutine to not block the HTTP response
 	go showBlockedModal(event, s.Addr())
@@ -56,33 +56,33 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 }
 
 func buildBlockedText(event BlockEvent) string {
-	if event.PackageVersion != "" {
+	if event.Artifact.PackageVersion != "" {
 		return fmt.Sprintf(
 			"SafeChain blocked a potentially malicious %s package:\n\n%s@%s",
-			event.Product,
-			event.PackageName,
-			event.PackageVersion,
+			event.Artifact.Product,
+			event.Artifact.PackageName,
+			event.Artifact.PackageVersion,
 		)
 	}
 	return fmt.Sprintf(
 		"SafeChain blocked a potentially malicious %s package:\n\n%s",
-		event.Product,
-		event.PackageName,
+		event.Artifact.Product,
+		event.Artifact.PackageName,
 	)
 }
 
 func buildKey(event BlockEvent) string {
-	if event.PackageVersion != "" {
+	if event.Artifact.PackageVersion != "" {
 		return fmt.Sprintf(
 			"%s{%s@%s}",
-			event.Product,
-			event.PackageName,
-			event.PackageVersion,
+			event.Artifact.Product,
+			event.Artifact.PackageName,
+			event.Artifact.PackageVersion,
 		)
 	}
 	return fmt.Sprintf(
 		"%s{%s}",
-		event.Product,
-		event.PackageName,
+		event.Artifact.Product,
+		event.Artifact.PackageName,
 	)
 }

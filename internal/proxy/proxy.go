@@ -56,6 +56,7 @@ func (p *Proxy) Start(ctx context.Context, proxyIngressAddr string) error {
 		"--data", platform.GetRunDir(),
 		"--output", filepath.Join(config.LogDir, platform.SafeChainProxyLogName),
 		"--secrets", "keyring",
+		"--reporting-endpoint", fmt.Sprintf("http://%s/block", proxyIngressAddr),
 	)
 
 	log.Println("Starting SafeChain Proxy with command:", p.cmd.String())
