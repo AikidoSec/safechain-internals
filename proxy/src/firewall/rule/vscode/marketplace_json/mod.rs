@@ -28,7 +28,7 @@ impl RuleVSCode {
 
         let ac = AC.get_or_init(|| {
             AhoCorasickBuilder::new()
-                // .ascii_case_insensitive(true) // can be anabled if we also do so in json parsing
+                // .ascii_case_insensitive(true) // can be enabled if we also do so in json parsing
                 .build(PATTERNS)
                 .expect("valid aho corasick patterns")
         });
