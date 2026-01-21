@@ -11,7 +11,7 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
-	"github.com/AikidoSec/safechain-agent/internal/ui/theme"
+	"github.com/AikidoSec/safechain-internals/internal/ui/theme"
 )
 
 func layoutWithBackground(gtx layout.Context, bg, border color.NRGBA, borderBottom bool, content layout.Widget) layout.Dimensions {

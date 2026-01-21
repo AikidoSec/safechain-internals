@@ -13,8 +13,8 @@ import (
 	"gioui.org/op/paint"
 	"gioui.org/unit"
 
-	"github.com/AikidoSec/safechain-agent/internal/ui/theme"
-	"github.com/AikidoSec/safechain-agent/internal/ui/views"
+	"github.com/AikidoSec/safechain-internals/internal/ui/theme"
+	"github.com/AikidoSec/safechain-internals/internal/ui/views"
 )
 
 type BlockedModalApp struct {

@@ -12,8 +12,8 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 
-	"github.com/AikidoSec/safechain-agent/internal/ui/icons"
-	"github.com/AikidoSec/safechain-agent/internal/ui/theme"
+	"github.com/AikidoSec/safechain-internals/internal/ui/icons"
+	"github.com/AikidoSec/safechain-internals/internal/ui/theme"
 )
 
 type BlockedView struct {
