@@ -1,7 +1,8 @@
-package ui
+package icons
 
 import (
 	"image"
+	"image/color"
 
 	"gioui.org/f32"
 	"gioui.org/layout"
@@ -10,13 +11,9 @@ import (
 	"gioui.org/unit"
 )
 
-func layoutAikidoLogo(gtx layout.Context, size unit.Dp) layout.Dimensions {
-	// Scale factor based on desired size vs viewBox (24x24)
+func LayoutAikidoLogo(gtx layout.Context, size unit.Dp, logoColor color.NRGBA) layout.Dimensions {
 	scale := float32(gtx.Dp(size)) / 24.0
 
-	logoColor := rgb(0x6551F3) // #6551F3
-
-	// Create the logo paths
 	var path clip.Path
 	path.Begin(gtx.Ops)
 
@@ -33,14 +30,11 @@ func layoutAikidoLogo(gtx layout.Context, size unit.Dp) layout.Dimensions {
 	// M5 13.736C8.95729 10.0744 14.9529 10.0743 18.9102 13.736V19.9972L18.9075 20L11.9551 12.787L5.00273 20L5 19.9972V13.736Z
 	path.Begin(gtx.Ops)
 	path.MoveTo(f32.Pt(5*scale, 13.736*scale))
-
-	// This is simplified - for perfect accuracy you'd need to properly convert the curve
 	path.CubeTo(
 		f32.Pt(8.95729*scale, 10.0744*scale),
 		f32.Pt(14.9529*scale, 10.0743*scale),
 		f32.Pt(18.9102*scale, 13.736*scale),
 	)
-
 	path.LineTo(f32.Pt(18.9102*scale, 19.9972*scale))
 	path.LineTo(f32.Pt(18.9075*scale, 20*scale))
 	path.LineTo(f32.Pt(11.9551*scale, 12.787*scale))
@@ -52,7 +46,5 @@ func layoutAikidoLogo(gtx layout.Context, size unit.Dp) layout.Dimensions {
 	paint.FillShape(gtx.Ops, logoColor, clip.Outline{Path: path.End()}.Op())
 
 	dim := gtx.Dp(size)
-	return layout.Dimensions{
-		Size: image.Point{X: dim, Y: dim},
-	}
+	return layout.Dimensions{Size: image.Point{X: dim, Y: dim}}
 }
