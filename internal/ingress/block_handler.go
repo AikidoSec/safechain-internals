@@ -32,14 +32,12 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 	cfg := platform.GetConfig()
 	binaryPath := filepath.Join(cfg.BinaryDir, platform.SafeChainUIBinaryName)
 
-	title := "SafeChain Ultimate"
 	text := buildBlockedText(event)
 	key := buildKey(event)
 
 	args := []string{
-		"--package-key", key,
-		"--title", title,
-		"--text", text,
+		"--package-id", key,
+		"--title", text,
 		"--ingress", ingressAddress,
 		"--bypass-enabled", "true",
 	}
@@ -58,31 +56,26 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 func buildBlockedText(event BlockEvent) string {
 	if event.Artifact.PackageVersion != "" {
 		return fmt.Sprintf(
-			"SafeChain blocked a potentially malicious %s package:\n\n%s@%s",
+			"SafeChain blocked a potentially malicious %s package:",
 			event.Artifact.Product,
-			event.Artifact.PackageName,
-			event.Artifact.PackageVersion,
 		)
 	}
 	return fmt.Sprintf(
-		"SafeChain blocked a potentially malicious %s package:\n\n%s",
+		"SafeChain blocked a potentially malicious %s package:",
 		event.Artifact.Product,
-		event.Artifact.PackageName,
 	)
 }
 
 func buildKey(event BlockEvent) string {
 	if event.Artifact.PackageVersion != "" {
 		return fmt.Sprintf(
-			"%s{%s@%s}",
-			event.Artifact.Product,
+			"%s@%s",
 			event.Artifact.PackageName,
 			event.Artifact.PackageVersion,
 		)
 	}
 	return fmt.Sprintf(
-		"%s{%s}",
-		event.Artifact.Product,
+		"%s",
 		event.Artifact.PackageName,
 	)
 }
