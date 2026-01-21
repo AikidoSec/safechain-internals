@@ -1,6 +1,6 @@
-# Contributing to SafeChain Agent
+# Contributing to SafeChain Ultimate
 
-Thank you for your interest in contributing to SafeChain Agent! This guide will help you get started with setting up your development environment, running tests, and building the project.
+Thank you for your interest in contributing to SafeChain Ultimate! This guide will help you get started with setting up your development environment, running tests, and building the project.
 
 ## Prerequisites
 
@@ -11,7 +11,7 @@ Before you begin, ensure you have the following installed:
 - **Make**: Typically pre-installed on Unix-like systems, used for building.
 - **Just**: You can install it via a package manager of choice: <https://just.systems/man/en/packages.html>
 
-Requirementsd to build the (Rust) proxy:
+Requirements to build the (Rust) proxy:
 
 - **CMake**: Required for certain builds and dependencies. You can install it via your package manager or download it from the [CMake website](https://cmake.org/download/).
 - Unix-only dependencies:
@@ -55,7 +55,7 @@ The proxy is written in Rust.
 Learn more about the Proxy, what it is and how to use it,
 in the Proxy README: [../docs/proxy.md](../docs/proxy.md).
 
-Using `just` you can using a single command: format code,
+With `just` you can use a single command: format code,
 sort `Cargo.toml` dependencies, lint (`clippy`), check code can compile
 and run all tests as follows:
 
@@ -63,7 +63,7 @@ and run all tests as follows:
 just rust-qa
 ```
 
-It's recommended to run the `rust-qa` target locally prior to comitting to github,
+It's recommended to run the `rust-qa` target locally prior to comitting to GitHub,
 as it will catch 99% of the reasons why your CI might fail otherwise.
 
 If you also wish to _also_ run the ignored tests (which include slower tests,
@@ -74,7 +74,7 @@ just rust-qa-full
 ```
 
 These ignored tests are on top of all other `rust-qa` checks all run
-in the Github CI as well.
+in the GitHub CI as well.
 
 #### Proxy: run
 
@@ -84,7 +84,7 @@ Using `just`:
 just run-proxy
 ```
 
-You can using the same `justfile` also toggle the [HAR](https://en.wikipedia.org/wiki/HAR_(file_format))
+You can use the same `justfile` to also toggle the [HAR](https://en.wikipedia.org/wiki/HAR_(file_format))
 recording on and off:
 
 ```sh

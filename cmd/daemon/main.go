@@ -10,17 +10,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/AikidoSec/safechain-agent/internal/daemon"
-	"github.com/AikidoSec/safechain-agent/internal/platform"
-	"github.com/AikidoSec/safechain-agent/internal/version"
+	"github.com/AikidoSec/safechain-internals/internal/daemon"
+	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/version"
 )
 
-const serviceName = "SafeChainAgent"
+const serviceName = "SafeChainUltimate"
 
 func main() {
 	var (
 		showVersion = flag.Bool("version", false, "Show version information")
-		teardown    = flag.Bool("teardown", false, "Teardown the SafeChain Agent")
+		teardown    = flag.Bool("teardown", false, "Teardown SafeChain Ultimate")
 	)
 	flag.Parse()
 

@@ -7,12 +7,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AikidoSec/safechain-agent/internal/constants"
-	"github.com/AikidoSec/safechain-agent/internal/platform"
-	"github.com/AikidoSec/safechain-agent/internal/proxy"
-	"github.com/AikidoSec/safechain-agent/internal/scannermanager"
-	"github.com/AikidoSec/safechain-agent/internal/setup"
-	"github.com/AikidoSec/safechain-agent/internal/version"
+	"github.com/AikidoSec/safechain-internals/internal/constants"
+	"github.com/AikidoSec/safechain-internals/internal/ingress"
+	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/proxy"
+	"github.com/AikidoSec/safechain-internals/internal/scannermanager"
+	"github.com/AikidoSec/safechain-internals/internal/setup"
+	"github.com/AikidoSec/safechain-internals/internal/version"
 )
 
 type Config struct {
@@ -28,6 +29,7 @@ type Daemon struct {
 	stopOnce sync.Once
 	proxy    *proxy.Proxy
 	registry *scannermanager.Registry
+	ingress  *ingress.Server
 }
 
 func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
@@ -37,6 +39,7 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 		config:   config,
 		proxy:    proxy.New(),
 		registry: scannermanager.NewRegistry(),
+		ingress:  ingress.New(),
 	}
 
 	if err := platform.Init(); err != nil {
@@ -95,6 +98,10 @@ func (d *Daemon) Stop(ctx context.Context) error {
 			log.Printf("Error stopping proxy: %v", err)
 		}
 
+		if err := d.ingress.Stop(); err != nil {
+			log.Printf("Error stopping ingress server: %v", err)
+		}
+
 		d.cancel()
 
 		done := make(chan struct{})
@@ -122,7 +129,28 @@ func (d *Daemon) run(ctx context.Context) error {
 
 	log.Println("Daemon is running...")
 
-	if err := d.proxy.Start(ctx); err != nil {
+	if !proxy.ProxyCAInstalled() {
+		log.Println("First time we setup the proxy, uninstall previous setups...")
+		if err := d.Uninstall(ctx); err != nil {
+			log.Printf("Error uninstalling previous setup: %v", err)
+		}
+	}
+
+	// Start ingress server first (proxy needs its address for callbacks)
+	go func() {
+		if err := d.ingress.Start(ctx); err != nil {
+			log.Printf("Ingress server error: %v", err)
+		}
+	}()
+
+	// Wait briefly for ingress server to bind
+	time.Sleep(100 * time.Millisecond)
+	ingressAddr := d.ingress.Addr()
+	if ingressAddr == "" {
+		return fmt.Errorf("ingress server failed to start")
+	}
+
+	if err := d.proxy.Start(ctx, ingressAddr); err != nil {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
@@ -154,7 +182,7 @@ func (d *Daemon) run(ctx context.Context) error {
 }
 
 func (d *Daemon) Uninstall(ctx context.Context) error {
-	log.Println("Uninstalling the SafeChain Agent...")
+	log.Println("Uninstalling the SafeChain Ultimate...")
 
 	if err := d.registry.UninstallAll(ctx); err != nil {
 		log.Printf("Error uninstalling scanners: %v", err)

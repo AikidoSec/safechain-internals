@@ -41,14 +41,21 @@ jobs:
 
       - name: Prepare artifacts
         run: |
-          mv bin/safechain-agent-darwin-${{ matrix.arch }} safechain-agent-darwin-${{ matrix.arch }}
+          mv bin/safechain-ultimate-darwin-${{ matrix.arch }} safechain-ultimate-darwin-${{ matrix.arch }}
+          mv bin/safechain-ultimate-ui-darwin-${{ matrix.arch }} safechain-ultimate-ui-darwin-${{ matrix.arch }}
 
-      - name: Upload artifacts
+      - name: Upload safechain-ultimate artifact
         uses: actions/upload-artifact@v4
         with:
-          name: safechain-agent-darwin-${{ matrix.arch }}
+          name: safechain-ultimate-darwin-${{ matrix.arch }}
           path: |
-            safechain-agent-darwin-${{ matrix.arch }}
+            safechain-ultimate-darwin-${{ matrix.arch }}
+      - name: Upload safechain-ultimate-ui artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: safechain-ultimate-ui-darwin-${{ matrix.arch }}
+          path: |
+            safechain-ultimate-ui-darwin-${{ matrix.arch }}
 
   build-unix-proxy:
     strategy:

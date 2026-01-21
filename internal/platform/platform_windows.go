@@ -13,20 +13,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AikidoSec/safechain-agent/internal/utils"
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 )
 
 const (
+	SafeChainUIBinaryName          = "SafeChainUltimateUI.exe"
 	SafeChainProxyBinaryName       = "SafeChainProxy.exe"
 	SafeChainProxyLogName          = "SafeChainProxy.log"
+	SafeChainProxyErrLogName       = "SafeChainProxy.err"
 	registryInternetSettingsSuffix = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
 )
 
 func initConfig() error {
-	programDataDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent")
-	config.BinaryDir = `C:\Program Files\AikidoSecurity\SafeChainAgent\bin`
+	programDataDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainUltimate")
+	config.BinaryDir = `C:\Program Files\AikidoSecurity\SafeChainUltimate\bin`
 	config.LogDir = filepath.Join(programDataDir, "logs")
 	config.RunDir = filepath.Join(programDataDir, "run")
 
@@ -90,7 +92,7 @@ func SetupLogging() (io.Writer, error) {
 		return os.Stdout, err
 	}
 
-	logPath := filepath.Join(config.LogDir, "SafeChainAgent.log")
+	logPath := filepath.Join(config.LogDir, "SafeChainUltimate.log")
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return os.Stdout, err
