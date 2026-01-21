@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
-  <Package Name="SafeChain Agent"
+  <Package Name="SafeChain Ultimate"
            Manufacturer="Aikido Security BV"
            Version="$(var.Version)"
            ProductCode="*"
            UpgradeCode="adb9d7b9-de00-4953-af0e-9c1e9ec15c81"
            Scope="perMachine">
 
-    <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="A newer version of SafeChain Agent is already installed." />
+    <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="A newer version of SafeChain Ultimate is already installed." />
     
-    <Media Id="1" Cabinet="SafeChainAgent.cab" EmbedCab="yes" />
+    <Media Id="1" Cabinet="SafeChainUltimate.cab" EmbedCab="yes" />
 
     <!-- Define installation directory structure -->
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLDIR" Name="AikidoSecurity">
-        <Directory Id="AGENTDIR" Name="SafeChainAgent">
+        <Directory Id="AGENTDIR" Name="SafeChainUltimate">
           <Directory Id="BINDIR" Name="bin" />
         </Directory>
       </Directory>
@@ -24,7 +24,7 @@
     <!-- ProgramData directory for cleanup on uninstall -->
     <StandardDirectory Id="CommonAppDataFolder">
       <Directory Id="APPDATAAIKIDO" Name="AikidoSecurity">
-        <Directory Id="APPDATAAGENT" Name="SafeChainAgent">
+        <Directory Id="APPDATAAGENT" Name="SafeChainUltimate">
           <Directory Id="APPDATALOGSDIR" Name="logs" />
           <Directory Id="APPDATARUNDIR" Name="run" />
           <Directory Id="APPDATABINDIR" Name="bin" />
@@ -33,7 +33,7 @@
     </StandardDirectory>
 
     <!-- Main feature -->
-    <Feature Id="MainFeature" Title="Aikido Agent" Level="1">
+    <Feature Id="MainFeature" Title="SafeChain Ultimate" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
       <ComponentRef Id="PathComponent" />
       <ComponentRef Id="CleanupProgramData" />
@@ -42,21 +42,24 @@
     <!-- Components -->
     <ComponentGroup Id="ProductComponents" Directory="BINDIR">
       <Component Id="AikidoAgentExe" Guid="3a2f5c8e-e57f-4ce4-ab7f-fa89e94c48cb">
-        <File Id="AikidoAgentExeFile" Source="$(var.BinDir)\SafeChainAgent.exe" KeyPath="yes" />
-        <ServiceInstall Id="SafeChainAgentService"
-                        Name="SafeChainAgent"
-                        DisplayName="SafeChain Agent"
-                        Description="Aikido Security SafeChain Agent - monitors and secures the software supply chain"
+        <File Id="AikidoAgentExeFile" Source="$(var.BinDir)\SafeChainUltimate.exe" KeyPath="yes" />
+        <ServiceInstall Id="SafeChainUltimateService"
+                        Name="SafeChainUltimate"
+                        DisplayName="SafeChain Ultimate"
+                        Description="Aikido Security SafeChain Ultimate - monitors and secures the software supply chain"
                         Start="auto"
                         Type="ownProcess"
                         ErrorControl="normal"
                         Account="LocalSystem" />
-        <ServiceControl Id="SafeChainAgentServiceControl"
-                        Name="SafeChainAgent"
+        <ServiceControl Id="SafeChainUltimateServiceControl"
+                        Name="SafeChainUltimate"
                         Start="install"
                         Stop="both"
                         Remove="uninstall"
                         Wait="yes" />
+      </Component>
+      <Component Id="SafeChainUltimateUIExe" Guid="ceafd8b2-da4d-4c92-ace7-8736cdd67162">
+        <File Id="SafeChainUltimateUIExe" Source="$(var.BinDir)\SafeChainUltimateUI.exe" KeyPath="yes" />
       </Component>
       <Component Id="SafeChainProxyExe" Guid="8a745110-05f7-4bb8-8013-5fca733409ef">
         <File Id="SafeChainProxyExeFile" Source="$(var.BinDir)\SafeChainProxy.exe" KeyPath="yes" />
@@ -69,6 +72,17 @@
         <Environment Id="PATH" Name="PATH" Value="[BINDIR]" Permanent="no" Part="last" Action="set" System="yes" />
       </Component>
     </DirectoryRef>
+
+    <!-- Custom action to run teardown on uninstall -->
+    <CustomAction Id="RunTeardown"
+                  Directory="BINDIR"
+                  ExeCommand="[BINDIR]SafeChainUltimate.exe --teardown"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="RunTeardown" Before="StopServices" Condition="REMOVE=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
 
     <!-- Cleanup ProgramData on uninstall -->
     <DirectoryRef Id="APPDATAAGENT">

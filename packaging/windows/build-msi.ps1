@@ -1,4 +1,4 @@
-# Build MSI installer for Aikido Agent
+# Build MSI installer for SafeChain Ultimate
 # Requires: WiX Toolset v4+ (dotnet tool install -g wix)
 
 param(
@@ -29,19 +29,25 @@ if (-not (Test-Path $OutputDir)) {
 }
 
 $ProjectDir = (Get-Item (Split-Path -Parent $MyInvocation.MyCommand.Path)).Parent.Parent.FullName
-$WxsFile = Join-Path $ProjectDir "packaging\windows\SafeChainAgent.wxs"
+$WxsFile = Join-Path $ProjectDir "packaging\windows\SafeChainUltimate.wxs"
 
-Write-Host "Building MSI installer for Aikido SafeChain Agent v$Version (WiX version: $WixVersion)"
+Write-Host "Building MSI installer for Aikido SafeChain Ultimate v$Version (WiX version: $WixVersion)"
 Write-Host "  Binary directory: $BinDir"
 Write-Host "  Output directory: $OutputDir"
 Write-Host "  Project directory: $ProjectDir"
 
 # Verify required binaries exist
-$AgentExe = Join-Path $BinDir "SafeChainAgent.exe"
+$AgentExe = Join-Path $BinDir "SafeChainUltimate.exe"
+$AgentUIExe = Join-Path $BinDir "SafeChainUltimateUI.exe"
 $ProxyExe = Join-Path $BinDir "SafeChainProxy.exe"
 
 if (-not (Test-Path $AgentExe)) {
-    Write-Host "Error: SafeChainAgent.exe not found at $AgentExe" -ForegroundColor Red
+    Write-Host "Error: SafeChainUltimate.exe not found at $AgentExe" -ForegroundColor Red
+    exit 1
+}
+
+if (-not (Test-Path $AgentUIExe)) {
+    Write-Host "Error: SafeChainUltimateUI.exe not found at $AgentUIExe" -ForegroundColor Red
     exit 1
 }
 
@@ -51,7 +57,7 @@ if (-not (Test-Path $ProxyExe)) {
 }
 
 # Build the MSI
-$OutputMsi = Join-Path $OutputDir "SafeChainAgent.$Arch.msi"
+$OutputMsi = Join-Path $OutputDir "SafeChainUltimate.$Arch.msi"
 $WixArch = if ($Arch -eq "arm64") { "arm64" } else { "x64" }
 
 wix build $WxsFile `

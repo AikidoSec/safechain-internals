@@ -13,20 +13,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AikidoSec/safechain-agent/internal/utils"
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 )
 
 const (
+	SafeChainUIBinaryName          = "SafeChainUltimateUI.exe"
 	SafeChainProxyBinaryName       = "SafeChainProxy.exe"
 	SafeChainProxyLogName          = "SafeChainProxy.log"
+	SafeChainProxyErrLogName       = "SafeChainProxy.err"
 	registryInternetSettingsSuffix = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
 )
 
 func initConfig() error {
-	programDataDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainAgent")
-	config.BinaryDir = `C:\Program Files\AikidoSecurity\SafeChainAgent\bin`
+	programDataDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainUltimate")
+	config.BinaryDir = `C:\Program Files\AikidoSecurity\SafeChainUltimate\bin`
 	config.LogDir = filepath.Join(programDataDir, "logs")
 	config.RunDir = filepath.Join(programDataDir, "run")
 
@@ -90,7 +92,7 @@ func SetupLogging() (io.Writer, error) {
 		return os.Stdout, err
 	}
 
-	logPath := filepath.Join(config.LogDir, "SafeChainAgent.log")
+	logPath := filepath.Join(config.LogDir, "SafeChainUltimate.log")
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return os.Stdout, err
@@ -189,13 +191,18 @@ func InstallProxyCA(ctx context.Context, caCertPath string) error {
 
 func IsProxyCAInstalled(ctx context.Context) error {
 	// certutil returns non-zero exit code if the certificate is not installed
-	_, err := utils.RunCommand(ctx, "certutil", "-store", "Root", "aikido.dev")
+	_, err := utils.RunCommand(ctx, "certutil", "-store", "Root", "aikidosafechain.com")
 	return err
 }
 
 func UninstallProxyCA(ctx context.Context) error {
-	_, err := utils.RunCommand(ctx, "certutil", "-delstore", "Root", "aikido.dev")
-	return err
+	if _, err := utils.RunCommand(ctx, "certutil", "-delstore", "Root", "aikidosafechain.com"); err != nil {
+		return err
+	}
+	if _, err := utils.RunCommand(ctx, "cmdkey", "/delete:safechain-proxy.tls-root-ca-key"); err != nil {
+		return err
+	}
+	return nil
 }
 
 type ServiceRunner interface {
@@ -273,4 +280,26 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (st
 	}
 
 	return runAsLoggedInUser(binaryPath, args)
+}
+
+func InstallSafeChain(ctx context.Context, repoURL, version string) error {
+	scriptURL := fmt.Sprintf("%s/releases/download/%s/install-safe-chain.ps1", repoURL, version)
+	cmd := fmt.Sprintf(`iex (iwr "%s" -UseBasicParsing)`, scriptURL)
+
+	log.Printf("Running PowerShell install script from %s...", scriptURL)
+	if _, err := RunAsCurrentUser(ctx, "powershell", []string{"-Command", cmd}); err != nil {
+		return fmt.Errorf("failed to run install script: %w", err)
+	}
+	return nil
+}
+
+func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
+	scriptURL := fmt.Sprintf("%s/releases/download/%s/uninstall-safe-chain.ps1", repoURL, version)
+	cmd := fmt.Sprintf(`iex (iwr "%s" -UseBasicParsing)`, scriptURL)
+
+	log.Printf("Running PowerShell uninstall script from %s...", scriptURL)
+	if _, err := RunAsCurrentUser(ctx, "powershell", []string{"-Command", cmd}); err != nil {
+		return fmt.Errorf("failed to run uninstall script: %w", err)
+	}
+	return nil
 }

@@ -24,7 +24,7 @@ set -euo pipefail
 
 # Configuration
 BINARY_PATH=$1
-ENTITLEMENTS_PATH="$(dirname "${BASH_SOURCE[0]}")/safechain-agent.entitlements"
+ENTITLEMENTS_PATH="$(dirname "${BASH_SOURCE[0]}")/safechain-ultimate.entitlements"
 
 # Source shared utilities for logging and validation functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

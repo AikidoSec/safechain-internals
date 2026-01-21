@@ -1,23 +1,23 @@
-# SafeChain Agent
+# SafeChain Ultimate
 
-A lightweight background agent that provides real-time security scanning for your development environment. The SafeChain Agent runs as a daemon, integrates and manages the security tooling seamlessly into your workflow.
+A lightweight background agent that provides real-time security scanning for your development environment. The SafeChain Ultimate runs as a daemon, integrates and manages the security tooling seamlessly into your workflow.
 
 ## Installation
 
 ### macOS (Homebrew)
 
 ```bash
-brew tap AikidoSec/safechain-agent
-brew install safechain-agent
-sudo brew services start safechain-agent
+brew tap AikidoSec/safechain-ultimate
+brew install safechain-ultimate
+sudo brew services start safechain-ultimate
 ```
 
 ### Windows
 
 Start PowerShell as Administrator and run:
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/AikidoSec/safechain-agent/releases/latest/download/SafeChainAgent-windows-amd64.msi" -OutFile "SafeChainAgent.msi"
-msiexec /i SafeChainAgent.msi /qn /norestart
+Invoke-WebRequest -Uri "https://github.com/AikidoSec/safechain-internals/releases/latest/download/SafeChainUltimate-windows-amd64.msi" -OutFile "SafeChainUltimate.msi"
+msiexec /i SafeChainUltimate.msi /qn /norestart
 ```
 
 ## Uninstall
@@ -25,15 +25,15 @@ msiexec /i SafeChainAgent.msi /qn /norestart
 ### macOS (Homebrew)
 
 ```bash
-sudo brew services stop safechain-agent
-brew uninstall safechain-agent
+sudo brew services stop safechain-ultimate
+brew uninstall safechain-ultimate
 ```
 
 ### Windows
 
 Start PowerShell as Administrator and run:
 ```powershell
-msiexec /x SafeChainAgent.msi /qn /norestart
+msiexec /x SafeChainUltimate.msi /qn /norestart
 ```
 
 ## Proxy

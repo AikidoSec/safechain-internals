@@ -1,25 +1,25 @@
 #!/bin/bash
 
 # =============================================================================
-# SafeChain Agent - Local Uninstallation Helper
+# SafeChain Ultimate - Local Uninstallation Helper
 # =============================================================================
-# This script completely removes SafeChain Agent from the system
+# This script completely removes SafeChain Ultimate from the system
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PREUNINSTALL_SCRIPT="$SCRIPT_DIR/scripts/preuninstall"
 
 echo "========================================="
-echo "SafeChain Agent - Uninstallation"
+echo "SafeChain Ultimate - Uninstallation"
 echo "========================================="
 echo ""
 
 echo "This will remove:"
-echo "  - Stop and unload the SafeChain Agent daemon"
-echo "  - Run SafeChain Agent teardown"
-echo "  - /Library/Application Support/AikidoSecurity/SafeChainAgent/"
-echo "  - /Library/LaunchDaemons/com.aikidosecurity.safechainagent.plist"
-echo "  - /Library/Logs/AikidoSecurity/SafeChainAgent/"
+echo "  - Stop and unload the SafeChain Ultimate daemon"
+echo "  - Run SafeChain Ultimate teardown"
+echo "  - /Library/Application Support/AikidoSecurity/SafeChainUltimate/"
+echo "  - /Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist"
+echo "  - /Library/Logs/AikidoSecurity/SafeChainUltimate/"
 echo ""
 
 read -p "Continue with uninstallation? (y/N) " -n 1 -r
@@ -41,10 +41,10 @@ else
 fi
 
 echo "Removing files..."
-sudo rm -rf "/Library/Application Support/AikidoSecurity/SafeChainAgent"
+sudo rm -rf "/Library/Application Support/AikidoSecurity/SafeChainUltimate"
 echo "✓ Removed application files"
 
-sudo rm -rf /Library/Logs/AikidoSecurity/SafeChainAgent
+sudo rm -rf /Library/Logs/AikidoSecurity/SafeChainUltimate
 echo "✓ Removed log files"
 
 echo ""

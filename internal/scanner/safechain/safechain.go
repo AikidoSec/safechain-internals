@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 
-	"github.com/AikidoSec/safechain-agent/internal/platform"
-	"github.com/AikidoSec/safechain-agent/internal/scanner"
-	"github.com/AikidoSec/safechain-agent/internal/utils"
+	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/scanner"
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
 const (
@@ -28,7 +26,7 @@ func (s *SafechainScanner) Name() string {
 }
 
 func (s *SafechainScanner) Version(ctx context.Context) string {
-	output, err := platform.RunAsCurrentUser(ctx, "safe-chain", []string{"-v"})
+	output, err := platform.RunAsCurrentUser(ctx, platform.GetConfig().SafeChainBinaryPath, []string{"-v"})
 	if err != nil {
 		return ""
 	}
@@ -51,22 +49,10 @@ func (s *SafechainScanner) Install(ctx context.Context) error {
 	}
 	log.Printf("Latest safe-chain version: %s", version)
 
-	scriptURL := fmt.Sprintf("%s/releases/download/%s/install-safe-chain.sh", repoURL, version)
-	scriptPath := filepath.Join(os.TempDir(), "install-safe-chain.sh")
-
-	log.Printf("Downloading install script from %s...", scriptURL)
-	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath); err != nil {
-		return fmt.Errorf("failed to download install script: %w", err)
-	}
-	defer os.Remove(scriptPath)
-
-	if _, err := platform.RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
-		return fmt.Errorf("failed to run install script: %w", err)
+	if err := platform.InstallSafeChain(ctx, repoURL, version); err != nil {
+		return fmt.Errorf("failed to install safe-chain: %w", err)
 	}
 
-	if s.Version(ctx) == "" {
-		return fmt.Errorf("failed to get safe-chain version")
-	}
 	return nil
 }
 
@@ -78,17 +64,8 @@ func (s *SafechainScanner) Uninstall(ctx context.Context) error {
 		return fmt.Errorf("safe-chain version not set, cannot uninstall")
 	}
 
-	scriptURL := fmt.Sprintf("%s/releases/download/%s/uninstall-safe-chain.sh", repoURL, version)
-	scriptPath := filepath.Join(os.TempDir(), "uninstall-safe-chain.sh")
-
-	log.Printf("Downloading uninstall script from %s...", scriptURL)
-	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath); err != nil {
-		return fmt.Errorf("failed to download uninstall script: %w", err)
-	}
-	defer os.Remove(scriptPath)
-
-	if _, err := platform.RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
-		return fmt.Errorf("failed to run uninstall script: %w", err)
+	if err := platform.UninstallSafeChain(ctx, repoURL, version); err != nil {
+		return fmt.Errorf("failed to uninstall safe-chain: %w", err)
 	}
 
 	return nil

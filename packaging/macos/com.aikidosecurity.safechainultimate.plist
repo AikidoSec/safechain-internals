@@ -5,7 +5,7 @@
         <key>KeepAlive</key>
         <true/>
         <key>Label</key>
-        <string>com.aikidosecurity.safechainagent</string>
+        <string>com.aikidosecurity.safechainultimate</string>
         <key>LimitLoadToSessionType</key>
         <array>
                 <string>Aqua</string>
@@ -16,15 +16,15 @@
         </array>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Library/Application Support/AikidoSecurity/SafeChainAgent/bin/safechain-agent</string>
+		<string>/Library/Application Support/AikidoSecurity/SafeChainUltimate/bin/safechain-ultimate</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
 	<key>StandardErrorPath</key>
-	<string>/Library/Logs/AikidoSecurity/SafeChainAgent/safechain-agent.error.log</string>
+	<string>/Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.error.log</string>
 	<key>StandardOutPath</key>
-	<string>/Library/Logs/AikidoSecurity/SafeChainAgent/safechain-agent.log</string>
+	<string>/Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.log</string>
 	<key>WorkingDirectory</key>
-	<string>/Library/Application Support/AikidoSecurity/SafeChainAgent</string>
+	<string>/Library/Application Support/AikidoSecurity/SafeChainUltimate</string>
 </dict>
 </plist>

@@ -1,17 +1,17 @@
 #!/bin/bash
 
 # =============================================================================
-# SafeChain Agent - Local Installation Helper
+# SafeChain Ultimate - Local Installation Helper
 # =============================================================================
 # This script helps install the unsigned local PKG build
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-PKG_FILE="$PROJECT_DIR/dist/SafeChainAgent-dev-arm64.pkg"
+PKG_FILE="$PROJECT_DIR/dist/SafeChainUltimate-dev-arm64.pkg"
 
 echo "========================================="
-echo "SafeChain Agent - Local Installation"
+echo "SafeChain Ultimate - Local Installation"
 echo "========================================="
 echo ""
 
@@ -34,9 +34,9 @@ if pkgutil --check-signature "$PKG_FILE" 2>&1 | grep -q "no signature"; then
 fi
 
 # Install using sudo installer (bypasses Gatekeeper)
-echo "Installing SafeChain Agent..."
+echo "Installing SafeChain Ultimate..."
 echo "This will:"
-echo "  - Install binaries to /Library/Application Support/AikidoSecurity/SafeChainAgent/"
+echo "  - Install binaries to /Library/Application Support/AikidoSecurity/SafeChainUltimate/"
 echo "  - Install LaunchDaemon to /Library/LaunchDaemons/"
 echo "  - Start the agent service"
 echo ""
@@ -57,16 +57,16 @@ if [ $? -eq 0 ]; then
     echo "✓ Installation Complete!"
     echo "========================================="
     echo ""
-    echo "The SafeChain Agent has been installed and started."
+    echo "SafeChain Ultimate has been installed and started."
     echo ""
     echo "Service management:"
-    echo "  Check status:  sudo launchctl list | grep safechainagent"
-    echo "  Stop service:  sudo launchctl bootout system/com.aikidosecurity.safechainagent"
-    echo "  Start service: sudo launchctl bootstrap system /Library/LaunchDaemons/com.aikidosecurity.safechainagent.plist"
+    echo "  Check status:  sudo launchctl list | grep safechainultimate"
+    echo "  Stop service:  sudo launchctl bootout system/com.aikidosecurity.safechainultimate"
+    echo "  Start service: sudo launchctl bootstrap system /Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist"
     echo ""
     echo "View logs:"
-    echo "  tail -f /Library/Logs/AikidoSecurity/SafeChainAgent/safechain-agent.log"
-    echo "  tail -f /Library/Logs/AikidoSecurity/SafeChainAgent/safechain-agent.error.log"
+    echo "  tail -f /Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.log"
+    echo "  tail -f /Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.error.log"
     echo ""
     echo "To uninstall, run: packaging/macos/uninstall-local.sh"
     echo ""

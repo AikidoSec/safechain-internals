@@ -14,12 +14,14 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/AikidoSec/safechain-agent/internal/utils"
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
 const (
+	SafeChainUIBinaryName    = "safechain-ultimate-ui"
 	SafeChainProxyBinaryName = "safechain-proxy"
 	SafeChainProxyLogName    = "safechain-proxy.log"
+	SafeChainProxyErrLogName = "safechain-proxy.err"
 )
 
 var serviceRegex = regexp.MustCompile(`^\((\d+)\)\s+(.+)$`)
@@ -40,9 +42,9 @@ func initConfig() error {
 		}
 	}
 	safeChainHomeDir := filepath.Join(config.HomeDir, ".safe-chain")
-	config.BinaryDir = "/Library/Application Support/AikidoSecurity/SafeChainAgent/bin"
-	config.RunDir = "/Library/Application Support/AikidoSecurity/SafeChainAgent/run"
-	config.LogDir = "/Library/Logs/AikidoSecurity/SafeChainAgent"
+	config.BinaryDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/bin"
+	config.RunDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/run"
+	config.LogDir = "/Library/Logs/AikidoSecurity/SafeChainUltimate"
 	config.SafeChainBinaryPath = filepath.Join(safeChainHomeDir, "bin", "safe-chain")
 	return nil
 }
@@ -279,4 +281,35 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (st
 
 func RunningAsRoot() bool {
 	return os.Getuid() == 0
+}
+
+func InstallSafeChain(ctx context.Context, repoURL, version string) error {
+	scriptURL := fmt.Sprintf("%s/releases/download/%s/install-safe-chain.sh", repoURL, version)
+	scriptPath := filepath.Join(os.TempDir(), "install-safe-chain.sh")
+
+	log.Printf("Downloading install script from %s...", scriptURL)
+	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath); err != nil {
+		return fmt.Errorf("failed to download install script: %w", err)
+	}
+	defer os.Remove(scriptPath)
+	if _, err := RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
+		return fmt.Errorf("failed to run uninstall script: %w", err)
+	}
+	return nil
+}
+
+func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
+	scriptURL := fmt.Sprintf("%s/releases/download/%s/uninstall-safe-chain.sh", repoURL, version)
+	scriptPath := filepath.Join(os.TempDir(), "uninstall-safe-chain.sh")
+
+	log.Printf("Downloading uninstall script from %s...", scriptURL)
+	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath); err != nil {
+		return fmt.Errorf("failed to download uninstall script: %w", err)
+	}
+	defer os.Remove(scriptPath)
+
+	if _, err := RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
+		return fmt.Errorf("failed to run uninstall script: %w", err)
+	}
+	return nil
 }
