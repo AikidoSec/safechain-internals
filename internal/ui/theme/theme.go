@@ -24,6 +24,8 @@ type AikidoTheme struct {
 	ShieldIconColor    color.NRGBA
 	AlertTriangleColor color.NRGBA
 	ButtonRadius       unit.Dp
+	ButtonPaddingX     unit.Dp
+	ButtonPaddingY     unit.Dp
 }
 
 func NewAikidoTheme() *AikidoTheme {
@@ -46,6 +48,8 @@ func NewAikidoTheme() *AikidoTheme {
 		ShieldIconColor:    rgb(0xCC3B32),
 		AlertTriangleColor: rgb(0xFF9715),
 		ButtonRadius:       unit.Dp(16),
+		ButtonPaddingX:     unit.Dp(16),
+		ButtonPaddingY:     unit.Dp(8),
 	}
 
 	th.Palette.Bg = aikidoTheme.Background

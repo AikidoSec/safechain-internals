@@ -121,6 +121,10 @@ func (v *BlockedView) layoutFooter(gtx layout.Context, th *theme.AikidoTheme) la
 					btn := material.Button(th.Theme, &v.okBtn, "OK")
 					btn.Background = th.Primary
 					btn.CornerRadius = th.ButtonRadius
+					btn.Inset = layout.Inset{
+						Top: th.ButtonPaddingY, Bottom: th.ButtonPaddingY,
+						Left: th.ButtonPaddingX, Right: th.ButtonPaddingX,
+					}
 					return btn.Layout(gtx)
 				}),
 			)

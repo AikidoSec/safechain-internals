@@ -97,6 +97,10 @@ func (v *RequestBypassView) layoutFooter(gtx layout.Context, th *theme.AikidoThe
 					btn.Background = th.SecondaryBtnBg
 					btn.Color = th.TextSecondary
 					btn.CornerRadius = th.ButtonRadius
+					btn.Inset = layout.Inset{
+						Top: th.ButtonPaddingY, Bottom: th.ButtonPaddingY,
+						Left: th.ButtonPaddingX, Right: th.ButtonPaddingX,
+					}
 					return btn.Layout(gtx)
 				}),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(12)}.Layout),
@@ -104,6 +108,10 @@ func (v *RequestBypassView) layoutFooter(gtx layout.Context, th *theme.AikidoThe
 					btn := material.Button(th.Theme, &v.confirmBtn, "I understand the Risks")
 					btn.Background = th.Danger
 					btn.CornerRadius = th.ButtonRadius
+					btn.Inset = layout.Inset{
+						Top: th.ButtonPaddingY, Bottom: th.ButtonPaddingY,
+						Left: th.ButtonPaddingX, Right: th.ButtonPaddingX,
+					}
 					return btn.Layout(gtx)
 				}),
 			)
