@@ -1,0 +1,120 @@
+use std::{path::PathBuf, time::Duration};
+
+use rama::{
+    error::{BoxError, OpaqueError},
+    graceful,
+    telemetry::tracing,
+};
+
+use clap::{Parser, Subcommand};
+
+pub mod cmd;
+pub mod utils;
+
+#[cfg(target_family = "unix")]
+#[global_allocator]
+static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
+#[cfg(target_os = "windows")]
+#[global_allocator]
+static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+/// CLI arguments for configuring netbench behavior.
+#[derive(Debug, Clone, Parser)]
+#[command(name = " netbench")]
+#[command(bin_name = "netbench")]
+#[command(version, about, long_about = None)]
+pub struct Args {
+    #[command(subcommand)]
+    cmds: CliCommands,
+
+    /// debug logging as default instead of Info; use RUST_LOG env for more options
+    #[arg(long, short = 'v', default_value_t = false, global = true)]
+    pub verbose: bool,
+
+    /// enable pretty logging (format for humans)
+    #[arg(long, default_value_t = false, global = true)]
+    pub pretty: bool,
+
+    /// write the tracing output to the provided (log) file instead of stderr
+    #[arg(long, short = 'o', global = true)]
+    pub output: Option<PathBuf>,
+
+    #[arg(long, value_name = "SECONDS", default_value_t = 1., global = true)]
+    /// the graceful shutdown timeout (<= 0.0 = no timeout)
+    pub graceful: f64,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+#[allow(clippy::large_enum_variant)]
+enum CliCommands {
+    Run(self::cmd::run::RunCommand),
+    Mock(self::cmd::mock::MockCommand),
+}
+
+#[tokio::main]
+async fn main() -> Result<(), BoxError> {
+    let args = Args::parse();
+
+    self::utils::telemetry::init_tracing(&args)?;
+
+    let base_shutdown_signal = graceful::default_signal();
+    if let Err(err) = run_with_args(base_shutdown_signal, args).await {
+        eprintln!("🚩 exit with error: {err}");
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+/// run a netbench cmd with the given args
+async fn run_with_args<F>(base_shutdown_signal: F, args: Args) -> Result<(), BoxError>
+where
+    F: Future<Output: Send + 'static> + Send + 'static,
+{
+    let graceful_timeout = (args.graceful > 0.).then(|| Duration::from_secs_f64(args.graceful));
+
+    let (error_tx, error_rx) = tokio::sync::oneshot::channel::<OpaqueError>();
+    let graceful = graceful::Shutdown::new(new_shutdown_signal(error_rx, base_shutdown_signal));
+
+    graceful.spawn_task(async move {
+        let result = match args.cmds {
+            CliCommands::Run(args) => self::cmd::run::exec(args).await,
+            CliCommands::Mock(args) => self::cmd::mock::exec(args).await,
+        };
+        if let Err(err) = result {
+            let _ = error_tx.send(err);
+        }
+    });
+
+    let delay = match graceful_timeout {
+        Some(duration) => graceful.shutdown_with_limit(duration).await?,
+        None => graceful.shutdown().await,
+    };
+
+    tracing::debug!("gracefully shutdown with a delay of: {delay:?}");
+    Ok(())
+}
+
+fn new_shutdown_signal(
+    error_rx: tokio::sync::oneshot::Receiver<OpaqueError>,
+    base_shutdown_signal: impl Future<Output: Send + 'static> + Send + 'static,
+) -> impl Future + Send + 'static {
+    async move {
+        tokio::select! {
+            _ = base_shutdown_signal => {
+                tracing::debug!("default signal triggered: init graceful shutdown");
+            }
+            result = error_rx => {
+                match result {
+                    Ok(err) => {
+                        tracing::error!("fatal err received: {err}; abort");
+                    },
+                    Err(_) => {
+                        tracing::debug!("command is finished without error, return control");
+                    },
+                }
+            }
+        }
+    }
+}
