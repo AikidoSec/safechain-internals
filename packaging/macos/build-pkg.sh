@@ -64,10 +64,16 @@ echo "  Project directory: $PROJECT_DIR"
 
 # Verify binaries exist
 AGENT_BIN="$BIN_DIR/safechain-ultimate-darwin-$ARCH"
+AGENT_UI_BIN="$BIN_DIR/safechain-ultimate-ui-darwin-$ARCH"
 PROXY_BIN="$BIN_DIR/safechain-proxy-darwin-$ARCH"
 
 if [ ! -f "$AGENT_BIN" ]; then
     echo "Error: safechain-ultimate binary not found at $AGENT_BIN" >&2
+    exit 1
+fi
+
+if [ ! -f "$AGENT_UI_BIN" ]; then
+    echo "Error: safechain-ultimate-ui binary not found at $AGENT_UI_BIN" >&2
     exit 1
 fi
 
@@ -101,8 +107,10 @@ chmod 644 "$LOGS_DIR/.keep"
 # Copy binaries
 echo "Copying binaries..."
 cp "$AGENT_BIN" "$INSTALL_DIR/bin/safechain-ultimate"
+cp "$AGENT_UI_BIN" "$INSTALL_DIR/bin/safechain-ultimate-ui"
 cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-proxy"
 chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
+chmod 755 "$INSTALL_DIR/bin/safechain-ultimate-ui"
 chmod 755 "$INSTALL_DIR/bin/safechain-proxy"
 
 # Copy LaunchDaemon plist

@@ -32,10 +32,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download ultimate artifact
+      - name: Download agent artifact
         uses: actions/download-artifact@v4
         with:
           name: safechain-ultimate-darwin-${{ matrix.arch }}
+          path: bin
+
+      - name: Download agent ui artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: safechain-ultimate-ui-darwin-${{ matrix.arch }}
           path: bin
 
       - name: Download proxy artifact
@@ -48,6 +54,7 @@ jobs:
         run: |
           ls -lh bin/
           ls -lh bin/safechain-ultimate-darwin-${{ matrix.arch }}
+          ls -lh bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}
           ls -lh bin/safechain-proxy-darwin-${{ matrix.arch }}
 
       - name: Make scripts executable
@@ -61,11 +68,17 @@ jobs:
           MACOS_INSTALLER_CERTIFICATE_P12: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_P12 }}
         run: .github/scripts/macos/core/import-certificate.sh
 
-      - name: Sign macOS ultimate binary
+      - name: Sign macOS agent binary
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: .github/scripts/macos/core/sign-binary.sh bin/safechain-ultimate-darwin-${{ matrix.arch }}
+
+      - name: Sign macOS agent ui binary
+        env:
+          DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}
 
       - name: Sign macOS proxy binary
         env:

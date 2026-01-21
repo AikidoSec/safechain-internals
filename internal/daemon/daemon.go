@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/AikidoSec/safechain-ultimate/internal/constants"
+	"github.com/AikidoSec/safechain-ultimate/internal/ingress"
 	"github.com/AikidoSec/safechain-ultimate/internal/platform"
 	"github.com/AikidoSec/safechain-ultimate/internal/proxy"
 	"github.com/AikidoSec/safechain-ultimate/internal/scannermanager"
@@ -28,6 +29,7 @@ type Daemon struct {
 	stopOnce sync.Once
 	proxy    *proxy.Proxy
 	registry *scannermanager.Registry
+	ingress  *ingress.Server
 }
 
 func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
@@ -37,6 +39,7 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 		config:   config,
 		proxy:    proxy.New(),
 		registry: scannermanager.NewRegistry(),
+		ingress:  ingress.New(),
 	}
 
 	if err := platform.Init(); err != nil {
@@ -95,6 +98,10 @@ func (d *Daemon) Stop(ctx context.Context) error {
 			log.Printf("Error stopping proxy: %v", err)
 		}
 
+		if err := d.ingress.Stop(); err != nil {
+			log.Printf("Error stopping ingress server: %v", err)
+		}
+
 		d.cancel()
 
 		done := make(chan struct{})
@@ -122,7 +129,21 @@ func (d *Daemon) run(ctx context.Context) error {
 
 	log.Println("Daemon is running...")
 
-	if err := d.proxy.Start(ctx); err != nil {
+	// Start ingress server first (proxy needs its address for callbacks)
+	go func() {
+		if err := d.ingress.Start(ctx); err != nil {
+			log.Printf("Ingress server error: %v", err)
+		}
+	}()
+
+	// Wait briefly for ingress server to bind
+	time.Sleep(100 * time.Millisecond)
+	ingressAddr := d.ingress.Addr()
+	if ingressAddr == "" {
+		return fmt.Errorf("ingress server failed to start")
+	}
+
+	if err := d.proxy.Start(ctx, ingressAddr); err != nil {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 

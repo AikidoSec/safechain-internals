@@ -41,14 +41,20 @@ jobs:
 
       - name: Rename binary for artifact
         run: |
-          mv bin/safechain-ultimate-windows-${{ matrix.arch }}.exe bin/SafeChainUltimate.${{ matrix.arch }}.exe
+          mv bin/safechain-ultimate-windows-${{ matrix.arch }}.exe bin/SafeChainAgent.${{ matrix.arch }}.exe
+          mv bin/safechain-ultimate-ui-windows-${{ matrix.arch }}.exe bin/SafeChainAgentUI.${{ matrix.arch }}.exe
         shell: bash
 
       - name: Upload Windows ultimate artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SafeChainUltimate.${{ matrix.arch }}.exe
-          path: bin/SafeChainUltimate.${{ matrix.arch }}.exe
+          name: SafeChainAgent.${{ matrix.arch }}.exe
+          path: bin/SafeChainAgent.${{ matrix.arch }}.exe
+      - name: Upload Windows agent UI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SafeChainAgentUI.${{ matrix.arch }}.exe
+          path: bin/SafeChainAgentUI.${{ matrix.arch }}.exe
 
   build-windows-proxy:
     strategy:
@@ -123,10 +129,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download SafeChainUltimate artifact
+      - name: Download SafeChainAgent artifact
         uses: actions/download-artifact@v4
         with:
-          name: SafeChainUltimate.${{ matrix.arch }}.exe
+          name: SafeChainAgent.${{ matrix.arch }}.exe
+          path: bin
+
+      - name: Download SafeChainAgent UI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SafeChainAgentUI.${{ matrix.arch }}.exe
           path: bin
 
       - name: Download SafeChainProxy artifact
@@ -137,14 +149,16 @@ jobs:
 
       - name: Rename binaries for packaging
         run: |
-          mv bin/SafeChainUltimate.${{ matrix.arch }}.exe bin/SafeChainUltimate.exe
+          mv bin/SafeChainAgent.${{ matrix.arch }}.exe bin/SafeChainAgent.exe
+          mv bin/SafeChainAgentUI.${{ matrix.arch }}.exe bin/SafeChainAgentUI.exe
           mv bin/SafeChainProxy.${{ matrix.arch }}.exe bin/SafeChainProxy.exe
         shell: bash
 
       - name: Sign binaries
         run: |
           dotnet tool install --global AzureSignTool --version 6.0.1
-          AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "bin/SafeChainUltimate.exe"
+          AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "bin/SafeChainAgent.exe"
+          AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "bin/SafeChainAgentUI.exe"
           AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "bin/SafeChainProxy.exe"
         shell: bash
 

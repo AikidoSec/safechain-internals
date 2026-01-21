@@ -37,11 +37,17 @@ Write-Host "  Output directory: $OutputDir"
 Write-Host "  Project directory: $ProjectDir"
 
 # Verify required binaries exist
-$AgentExe = Join-Path $BinDir "SafeChainUltimate.exe"
+$AgentExe = Join-Path $BinDir "SafeChainAgent.exe"
+$AgentUIExe = Join-Path $BinDir "SafeChainAgentUI.exe"
 $ProxyExe = Join-Path $BinDir "SafeChainProxy.exe"
 
 if (-not (Test-Path $AgentExe)) {
-    Write-Host "Error: SafeChainUltimate.exe not found at $AgentExe" -ForegroundColor Red
+    Write-Host "Error: SafeChainAgent.exe not found at $AgentExe" -ForegroundColor Red
+    exit 1
+}
+
+if (-not (Test-Path $AgentUIExe)) {
+    Write-Host "Error: SafeChainAgentUI.exe not found at $AgentUIExe" -ForegroundColor Red
     exit 1
 }
 

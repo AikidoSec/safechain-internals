@@ -16,6 +16,7 @@ chmod 755 "$LOGS_DIR"
 # Set proper permissions on binaries
 echo "Setting permissions on binaries..."
 chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
+chmod 755 "$INSTALL_DIR/bin/safechain-ultimate-ui"
 chmod 755 "$INSTALL_DIR/bin/safechain-proxy"
 
 # Set proper ownership (root:wheel for system daemon)
