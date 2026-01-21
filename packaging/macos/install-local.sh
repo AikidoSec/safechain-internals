@@ -57,7 +57,7 @@ if [ $? -eq 0 ]; then
     echo "✓ Installation Complete!"
     echo "========================================="
     echo ""
-    echo "The SafeChain Ultimate has been installed and started."
+    echo "SafeChain Ultimate has been installed and started."
     echo ""
     echo "Service management:"
     echo "  Check status:  sudo launchctl list | grep safechainultimate"
