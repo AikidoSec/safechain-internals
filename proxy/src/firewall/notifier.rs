@@ -1,17 +1,22 @@
+use std::{sync::Arc, time::Duration};
+
 use super::events::BlockedEvent;
 use rama::{
     Service,
-    error::OpaqueError,
+    error::{ErrorContext as _, OpaqueError},
     http::{Request, Response, Uri, service::client::HttpClientExt as _},
+    rt::Executor,
+    service::BoxService,
     telemetry::tracing,
 };
-use tokio::sync::mpsc;
-
-const NOTIFIER_CHANNEL_CAPACITY: usize = 256;
+use tokio::sync::{Semaphore, SemaphorePermit};
 
 #[derive(Clone)]
 pub struct EventNotifier {
-    tx: mpsc::Sender<BlockedEvent>,
+    exec: Executor,
+    client: BoxService<Request, Response, OpaqueError>,
+    reporting_endpoint: Uri,
+    limit: Arc<Semaphore>,
 }
 
 impl std::fmt::Debug for EventNotifier {
@@ -21,82 +26,93 @@ impl std::fmt::Debug for EventNotifier {
 }
 
 impl EventNotifier {
-    pub fn try_new(reporting_endpoint: Uri) -> Result<Self, OpaqueError> {
-        let client = crate::client::new_web_client()?;
-
-        let (tx, rx) = mpsc::channel(NOTIFIER_CHANNEL_CAPACITY);
-
-        tokio::spawn(notification_worker(reporting_endpoint, client, rx));
-
-        Ok(Self { tx })
+    pub fn try_new(exec: Executor, reporting_endpoint: Uri) -> Result<Self, OpaqueError> {
+        let client = crate::client::new_web_client()?.boxed();
+        let limit = Arc::new(Semaphore::const_new(compute_concurrent_request_count()));
+        Ok(Self {
+            exec,
+            client,
+            reporting_endpoint,
+            limit,
+        })
     }
 
-    pub fn notify(&self, event: BlockedEvent) {
-        match self.tx.try_send(event) {
-            Ok(()) => {}
-            Err(mpsc::error::TrySendError::Full(_)) => {
-                tracing::debug!(
-                    "dropping blocked-event notification: notifier queue is full (capacity = {})",
-                    NOTIFIER_CHANNEL_CAPACITY
-                );
-            }
-            Err(mpsc::error::TrySendError::Closed(_)) => {
-                tracing::debug!(
-                    "failed to send event notification (receiver dropped): channel closed"
-                );
-            }
-        }
+    pub async fn notify(&self, event: BlockedEvent) {
+        let client = self.client.clone();
+        let reporting_endpoint = self.reporting_endpoint.clone();
+        let limits = self.limit.clone();
+
+        self.exec.spawn_task(async move {
+            let _guard = match acquire_concurrency_guard(&limits).await {
+                Ok(guard) => guard,
+                Err(err) => {
+                    tracing::debug!("failed to send event notification (dropping it): {err}");
+                    return;
+                }
+            };
+            send_blocked_event(client, reporting_endpoint, event).await;
+        });
     }
 }
 
-async fn notification_worker<C>(
+fn compute_concurrent_request_count() -> usize {
+    std::env::var("MAX_CONCURRENT_REQUESTS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or_else(|| {
+            let cpus = std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1);
+            cpus * 64
+        })
+}
+
+async fn acquire_concurrency_guard<'a>(
+    limits: &'a Semaphore,
+) -> Result<SemaphorePermit<'a>, OpaqueError> {
+    tokio::time::timeout(Duration::from_millis(500), limits.acquire())
+        .await
+        .context("concurrency guard acquisition timeout")?
+        .context("concurrency guard acquisition via semaphore")
+}
+
+async fn send_blocked_event(
+    client: BoxService<Request, Response, OpaqueError>,
     reporting_endpoint: Uri,
-    client: C,
-    mut rx: mpsc::Receiver<BlockedEvent>,
-) where
-    C: Service<Request, Output = Response, Error = OpaqueError>,
-{
-    tracing::info!(
-        "event notifier worker started, sending events to {}",
-        reporting_endpoint
+    event: BlockedEvent,
+) {
+    tracing::debug!(
+        "sending event notification: product={} artifact={:?}",
+        event.artifact.product,
+        event.artifact
     );
 
-    while let Some(event) = rx.recv().await {
-        tracing::debug!(
-            "sending event notification: product={} artifact={:?}",
-            event.artifact.product,
-            event.artifact
-        );
-
-        let resp = match client
-            .post(reporting_endpoint.clone())
-            .json(&event)
-            .send()
-            .await
-        {
-            Ok(resp) => resp,
-            Err(err) => {
-                tracing::warn!(
-                    error = %err,
-                    endpoint = %reporting_endpoint,
-                    "failed to send blocked-event notification"
-                );
-                continue;
-            }
-        };
-
-        if !resp.status().is_success() {
-            let status = resp.status();
+    let resp = match client
+        .post(reporting_endpoint.clone())
+        .json(&event)
+        .send()
+        .await
+    {
+        Ok(resp) => resp,
+        Err(err) => {
             tracing::warn!(
-                status = %status,
+                error = %err,
                 endpoint = %reporting_endpoint,
-                "blocked-event notification endpoint returned non-success status"
+                "failed to send blocked-event notification"
             );
-            continue;
+            return;
         }
+    };
 
-        tracing::debug!("event notification sent successfully");
+    if !resp.status().is_success() {
+        let status = resp.status();
+        tracing::warn!(
+            status = %status,
+            endpoint = %reporting_endpoint,
+            "blocked-event notification endpoint returned non-success status"
+        );
+        return;
     }
 
-    tracing::debug!("event notifier worker shutting down");
+    tracing::debug!("event notification sent successfully");
 }
