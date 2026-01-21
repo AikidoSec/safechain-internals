@@ -55,9 +55,9 @@ func NewAikidoTheme() *AikidoTheme {
 		IndicatorBg:          rgba(0xFF6E65, 0x1A),
 		IndicatorBorder:      rgba(0xCC3B32, 0x4D),
 		RequestBypassColor:   rgb(0xCC3B32),
-		ButtonRadius:         unit.Dp(50),
-		ButtonPaddingX:       unit.Dp(12),
-		ButtonPaddingY:       unit.Dp(6),
+		ButtonRadius:         unit.Dp(16),
+		ButtonPaddingX:       unit.Dp(16),
+		ButtonPaddingY:       unit.Dp(8),
 	}
 
 	th.Palette.Bg = aikidoTheme.Background
