@@ -22,6 +22,7 @@ const (
 	SafeChainUIBinaryName          = "SafeChainUltimateUI.exe"
 	SafeChainProxyBinaryName       = "SafeChainProxy.exe"
 	SafeChainProxyLogName          = "SafeChainProxy.log"
+	SafeChainProxyStderrLogName    = "SafeChainProxy-stderr.log"
 	registryInternetSettingsSuffix = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
 )
 
