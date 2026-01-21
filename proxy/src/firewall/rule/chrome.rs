@@ -1,8 +1,10 @@
 use std::{borrow::Cow, fmt};
 
 use rama::{
+    Service,
     error::OpaqueError,
-    http::{Request, Response, service::web::extract::Query},
+    graceful::ShutdownGuard,
+    http::{Request, Response, Uri, service::web::extract::Query},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
     utils::str::{
@@ -16,6 +18,7 @@ use serde::Deserialize;
 use crate::{
     firewall::{
         events::{BlockedArtifact, BlockedEventInfo},
+        malware_list::RemoteMalwareList,
         pac::PacScriptGenerator,
     },
     http::response::generate_generic_blocked_response_for_req,
@@ -26,17 +29,30 @@ use super::{BlockedRequest, RequestAction, Rule};
 
 pub(in crate::firewall) struct RuleChrome {
     target_domains: DomainTrie<()>,
+    malware_list: RemoteMalwareList,
 }
 
 impl RuleChrome {
-    pub(in crate::firewall) async fn try_new(
-        _data: SyncCompactDataStorage, // NOTE data will be used to backup malware list once you use a remote list here
-    ) -> Result<Self, OpaqueError> {
+    pub(in crate::firewall) async fn try_new<S>(
+        guard: ShutdownGuard,
+        remote_malware_list_https_client: S,
+        data: SyncCompactDataStorage,
+    ) -> Result<Self, OpaqueError>
+    where
+        S: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
+    {
         Ok(Self {
             target_domains: ["clients2.google.com"]
                 .into_iter()
                 .map(|domain| (Domain::from_static(domain), ()))
                 .collect(),
+            malware_list: RemoteMalwareList::try_new(
+                guard,
+                Uri::from_static("https://malware-list.aikido.dev/malware_chrome_extensions.json"),
+                data.clone(),
+                remote_malware_list_https_client,
+            )
+            .await?,
         })
     }
 }
@@ -51,8 +67,6 @@ impl fmt::Debug for RuleChrome {
 //
 // Once there is a chrome malware list you'll
 // want to fetch this package info from the (remote) Malware list
-
-const CHROME_BLOCKED_EXT_LIST: &[&str] = &["lajondecmobodlejlcjllhojikagldgd"];
 
 impl Rule for RuleChrome {
     #[inline(always)]
@@ -84,31 +98,39 @@ impl Rule for RuleChrome {
             return Ok(RequestAction::Allow(req));
         };
 
+        // Note: product_id extraction logic might include version info after ampersand
+        // We need to clean it up before checking against malware list
+        let clean_product_id = match product_id.split('&').next() {
+            Some(id) => id,
+            None => product_id.as_str(),
+        };
+
         tracing::trace!(
             http.url.full = %req.uri(),
             http.host = %domain,
             http.request.method = %req.method(),
-            "inspect chrome extension product id: {product_id}",
+            "inspect chrome extension product id: {clean_product_id} (original: {product_id})",
         );
 
-        if CHROME_BLOCKED_EXT_LIST
-            .iter()
-            .any(|c| c.eq_ignore_ascii_case(&product_id))
+        if self
+            .malware_list
+            .find_entries(clean_product_id)
+            .entries()
+            .is_some()
         {
             tracing::debug!(
                 http.url.full = %req.uri(),
                 http.host = %domain,
                 http.request.method = %req.method(),
-                "blocked Chrome extension: {product_id}",
+                "blocked Chrome extension: {clean_product_id}",
             );
-            // NOTE: in case you wish to customise the response,
-            // you can do so by defining your own function / logic and using it here.
+
             return Ok(RequestAction::Block(BlockedRequest {
                 response: generate_generic_blocked_response_for_req(req),
                 info: BlockedEventInfo {
                     artifact: BlockedArtifact {
                         product: arcstr!("chrome"),
-                        identifier: product_id,
+                        identifier: ArcStr::from(clean_product_id),
                         version: None,
                     },
                 },
@@ -119,7 +141,7 @@ impl Rule for RuleChrome {
             http.url.full = %req.uri(),
             http.host = %domain,
             http.request.method = %req.method(),
-            "chrome rule: extension can pass through: {product_id}",
+            "chrome rule: extension can pass through: {clean_product_id}",
         );
 
         Ok(RequestAction::Allow(req))
