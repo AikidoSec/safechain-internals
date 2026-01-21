@@ -60,7 +60,7 @@ if [ $? -eq 0 ]; then
     echo "The SafeChain Ultimate has been installed and started."
     echo ""
     echo "Service management:"
-    echo "  Check status:  sudo launchctl list | grep safechainagent"
+    echo "  Check status:  sudo launchctl list | grep safechainultimate"
     echo "  Stop service:  sudo launchctl bootout system/com.aikidosecurity.safechainultimate"
     echo "  Start service: sudo launchctl bootstrap system /Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist"
     echo ""

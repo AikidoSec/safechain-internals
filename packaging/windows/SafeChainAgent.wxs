@@ -43,10 +43,10 @@
     <ComponentGroup Id="ProductComponents" Directory="BINDIR">
       <Component Id="AikidoAgentExe" Guid="3a2f5c8e-e57f-4ce4-ab7f-fa89e94c48cb">
         <File Id="AikidoAgentExeFile" Source="$(var.BinDir)\SafeChainUltimate.exe" KeyPath="yes" />
-        <ServiceInstall Id="SafeChainAgentService"
+        <ServiceInstall Id="SafeChainUltimateService"
                         Name="SafeChainUltimate"
                         DisplayName="SafeChain Ultimate"
-                        Description="Aikido Security SafeChain Ultimate - monitors and secures the software supply chain"
+                        Description="SafeChain Ultimate - monitors and secures the software supply chain"
                         Start="auto"
                         Type="ownProcess"
                         ErrorControl="normal"

@@ -14,7 +14,7 @@ on:
         type: string
 
 jobs:
-  build-windows-agent:
+  build-windows-ultimate:
     strategy:
       matrix:
         include:
@@ -44,7 +44,7 @@ jobs:
           mv bin/safechain-ultimate-windows-${{ matrix.arch }}.exe bin/SafeChainUltimate.${{ matrix.arch }}.exe
         shell: bash
 
-      - name: Upload Windows agent artifact
+      - name: Upload Windows ultimate artifact
         uses: actions/upload-artifact@v4
         with:
           name: SafeChainUltimate.${{ matrix.arch }}.exe
@@ -111,7 +111,7 @@ jobs:
             SafeChainProxy.${{ matrix.arch }}.exe
 
   build-msi:
-    needs: [build-windows-agent, build-windows-proxy]
+    needs: [build-windows-ultimate, build-windows-proxy]
     strategy:
       matrix:
         include:
