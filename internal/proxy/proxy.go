@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/AikidoSec/safechain-agent/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
 
 const (

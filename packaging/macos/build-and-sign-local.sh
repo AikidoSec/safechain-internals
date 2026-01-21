@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 echo "==================================="
-echo "SafeChain Agent - Local PKG Builder"
+echo "SafeChain Ultimate - Local PKG Builder"
 echo "==================================="
 echo "Version: $VERSION"
 echo "Architecture: $ARCH"
@@ -29,12 +29,12 @@ echo "Step 1: Building binaries..."
 echo ""
 
 # Build Go agent
-echo "Building safechain-agent..."
+echo "Building safechain-ultimate..."
 cd "$PROJECT_DIR"
-go build -o "bin/safechain-agent-darwin-$ARCH" cmd/daemon/main.go
-go build -o "bin/safechain-agent-ui-darwin-$ARCH" ./cmd/ui
-echo "✓ Agent built: bin/safechain-agent-darwin-$ARCH"
-echo "✓ Agent UI built: bin/safechain-agent-ui-darwin-$ARCH"
+go build -o "bin/safechain-ultimate-darwin-$ARCH" cmd/daemon/main.go
+go build -o "bin/safechain-ultimate-ui-darwin-$ARCH" ./cmd/ui
+echo "✓ Agent built: bin/safechain-ultimate-darwin-$ARCH"
+echo "✓ Agent UI built: bin/safechain-ultimate-ui-darwin-$ARCH"
 
 # Build Rust proxy
 echo "Building safechain-proxy..."
@@ -69,14 +69,14 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
              --force \
              --timestamp \
              --options runtime \
-             "$PROJECT_DIR/bin/safechain-agent-darwin-$ARCH"
+             "$PROJECT_DIR/bin/safechain-ultimate-darwin-$ARCH"
     echo "✓ Agent signed"
 
     codesign --sign "$CERT_IDENTITY" \
              --force \
              --timestamp \
              --options runtime \
-             "$PROJECT_DIR/bin/safechain-agent-ui-darwin-$ARCH"
+             "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-$ARCH"
     echo "✓ Agent UI signed"
 
     codesign --sign "$CERT_IDENTITY" \
@@ -89,8 +89,8 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
     
     # Verify signatures
     echo "Verifying binary signatures..."
-    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-agent-darwin-$ARCH"
-    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-agent-ui-darwin-$ARCH"
+    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-darwin-$ARCH"
+    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-$ARCH"
     codesign --verify --verbose "$PROJECT_DIR/bin/safechain-proxy-darwin-$ARCH"
     echo "✓ Binary signatures verified"
     echo ""
@@ -110,7 +110,7 @@ echo ""
 cd "$SCRIPT_DIR"
 ./build-distribution-pkg.sh -v "$VERSION" -a "$ARCH" -b "$PROJECT_DIR/bin" -o "$PROJECT_DIR/dist"
 
-PKG_FILE="$PROJECT_DIR/dist/SafeChainAgent-$VERSION-$ARCH.pkg"
+PKG_FILE="$PROJECT_DIR/dist/SafeChainUltimate-$VERSION-$ARCH.pkg"
 
 if [ ! -f "$PKG_FILE" ]; then
     echo "✗ PKG file not created"
@@ -136,7 +136,7 @@ if security find-identity -v -p basic | grep "Developer ID Installer" > /dev/nul
     echo ""
     
     echo "Signing PKG..."
-    SIGNED_PKG="$PROJECT_DIR/dist/SafeChainAgent-$VERSION-$ARCH-signed.pkg"
+    SIGNED_PKG="$PROJECT_DIR/dist/SafeChainUltimate-$VERSION-$ARCH-signed.pkg"
     
     productsign --sign "$INSTALLER_CERT_IDENTITY" \
                 --timestamp \

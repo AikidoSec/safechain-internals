@@ -2,11 +2,11 @@
 
 set -e
 
-echo "SafeChain Agent Installer - Post-installation"
+echo "SafeChain Ultimate Installer - Post-installation"
 
-INSTALL_DIR="/Library/Application Support/AikidoSecurity/SafeChainAgent"
-LOGS_DIR="/Library/Logs/AikidoSecurity/SafeChainAgent"
-LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.safechainagent.plist"
+INSTALL_DIR="/Library/Application Support/AikidoSecurity/SafeChainUltimate"
+LOGS_DIR="/Library/Logs/AikidoSecurity/SafeChainUltimate"
+LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist"
 
 # Ensure logs directory exists and has proper permissions
 echo "Setting up logs directory..."
@@ -15,8 +15,8 @@ chmod 755 "$LOGS_DIR"
 
 # Set proper permissions on binaries
 echo "Setting permissions on binaries..."
-chmod 755 "$INSTALL_DIR/bin/safechain-agent"
-chmod 755 "$INSTALL_DIR/bin/safechain-agent-ui"
+chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
+chmod 755 "$INSTALL_DIR/bin/safechain-ultimate-ui"
 chmod 755 "$INSTALL_DIR/bin/safechain-proxy"
 
 # Set proper ownership (root:wheel for system daemon)
@@ -32,14 +32,14 @@ if [ -f "$LAUNCHDAEMON_PLIST" ]; then
         echo "LaunchDaemon bootstrap failed, trying load..."
         launchctl load "$LAUNCHDAEMON_PLIST" || true
     }
-    echo "SafeChain Agent daemon installed and started"
+    echo "SafeChain Ultimate daemon installed and started"
 else
     echo "Warning: LaunchDaemon plist not found at $LAUNCHDAEMON_PLIST"
 fi
 
 echo "Post-installation completed"
 echo ""
-echo "SafeChain Agent has been installed successfully!"
+echo "SafeChain Ultimate has been installed successfully!"
 echo "  Binaries: $INSTALL_DIR/bin"
 echo "  Logs: $LOGS_DIR"
 echo ""
