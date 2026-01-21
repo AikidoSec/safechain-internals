@@ -2914,6 +2914,7 @@ checksum = "a50f4cf475b65d88e057964e0e9bb1f0aa9bbb2036dc65c64596b42932536984"
 name = "safechain-proxy"
 version = "0.1.0"
 dependencies = [
+ "aho-corasick",
  "apple-native-keyring-store",
  "arc-swap",
  "clap",
@@ -2921,7 +2922,6 @@ dependencies = [
  "keyring-core",
  "linux-keyutils-keyring-store",
  "lz4_flex",
- "memchr",
  "mimalloc",
  "parking_lot",
  "postcard",
