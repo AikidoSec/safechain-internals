@@ -135,7 +135,8 @@ fn test_extract_chrome_ext_info_from_req_no_match_path() {
 
 #[tokio::test]
 async fn test_evaluate_request_blocks_when_malware() {
-    let rule = RuleChrome::new_test(["abcdefghijklmnop"]);
+    // Use the actual Chrome malware list format: "Title - Chrome Web Store@<id>"
+    let rule = RuleChrome::new_test(["Malicious Extension - Chrome Web Store@abcdefghijklmnop"]);
 
     let req = Request::builder()
         .uri(Uri::from_static(

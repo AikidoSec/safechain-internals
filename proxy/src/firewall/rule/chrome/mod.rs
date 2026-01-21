@@ -15,6 +15,8 @@ use rama::{
 
 use serde::Deserialize;
 
+use radix_trie::TrieCommon;
+
 use crate::{
     firewall::{
         events::{BlockedArtifact, BlockedEventInfo},
@@ -143,21 +145,14 @@ struct ChromeExtensionRequestInfo {
 impl RuleChrome {
     fn is_extension_id_malware(&self, extension_id: &str) -> bool {
         // Chrome malware list format: "Full Title - Chrome Web Store@<extension-id>"
-        // The Trie is keyed by the full package_name string
-        //
-        // Try direct match first (in case list format changes to use just IDs)
-        if self
-            .remote_malware_list
-            .find_entries(extension_id)
-            .entries()
-            .is_some()
-        {
-            return true;
-        }
-
-        // Check if any entry ends with @<extension_id> (current format)
+        // We need to do suffix matching since the extension ID is at the end.
         let suffix = format!("@{}", extension_id);
-        self.remote_malware_list.has_entry_ending_with(&suffix)
+        let suffix_lower = suffix.to_ascii_lowercase();
+
+        let guard = self.remote_malware_list.find_entries("").guard;
+        guard
+            .iter()
+            .any(|(key, _): (&String, _)| key.to_ascii_lowercase().ends_with(&suffix_lower))
     }
 
     fn extract_chrome_ext_info_from_req(
