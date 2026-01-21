@@ -21,11 +21,15 @@ type AikidoTheme struct {
 	SecondaryBtnBorder color.NRGBA
 	TextPrimary        color.NRGBA
 	TextSecondary      color.NRGBA
-	ShieldIconColor    color.NRGBA
-	AlertTriangleColor color.NRGBA
-	ButtonRadius       unit.Dp
-	ButtonPaddingX     unit.Dp
-	ButtonPaddingY     unit.Dp
+	TextLogo           color.NRGBA
+	ShieldIconColor      color.NRGBA
+	AlertTriangleColor   color.NRGBA
+	IndicatorBg          color.NRGBA
+	IndicatorBorder      color.NRGBA
+	RequestBypassColor   color.NRGBA
+	ButtonRadius         unit.Dp
+	ButtonPaddingX       unit.Dp
+	ButtonPaddingY       unit.Dp
 }
 
 func NewAikidoTheme() *AikidoTheme {
@@ -45,11 +49,15 @@ func NewAikidoTheme() *AikidoTheme {
 		SecondaryBtnBorder: rgb(0xD6D6DC),
 		TextPrimary:        rgb(0x010024),
 		TextSecondary:      rgb(0x37364D),
-		ShieldIconColor:    rgb(0xCC3B32),
-		AlertTriangleColor: rgb(0xFF9715),
-		ButtonRadius:       unit.Dp(16),
-		ButtonPaddingX:     unit.Dp(16),
-		ButtonPaddingY:     unit.Dp(8),
+		TextLogo:           rgb(0x24104F),
+		ShieldIconColor:      rgb(0xCC3B32),
+		AlertTriangleColor:   rgb(0xFF9715),
+		IndicatorBg:          rgba(0xFF6E65, 0x1A),
+		IndicatorBorder:      rgba(0xCC3B32, 0x4D),
+		RequestBypassColor:   rgb(0xCC3B32),
+		ButtonRadius:         unit.Dp(50),
+		ButtonPaddingX:       unit.Dp(12),
+		ButtonPaddingY:       unit.Dp(6),
 	}
 
 	th.Palette.Bg = aikidoTheme.Background
@@ -66,5 +74,14 @@ func rgb(c uint32) color.NRGBA {
 		G: uint8(c >> 8),
 		B: uint8(c),
 		A: 0xFF,
+	}
+}
+
+func rgba(c uint32, a uint8) color.NRGBA {
+	return color.NRGBA{
+		R: uint8(c >> 16),
+		G: uint8(c >> 8),
+		B: uint8(c),
+		A: a,
 	}
 }
