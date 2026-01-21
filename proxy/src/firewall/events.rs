@@ -1,7 +1,11 @@
 use crate::firewall::malware_list::PackageVersion;
 use rama::utils::str::arcstr::ArcStr;
 use serde::{Deserialize, Serialize};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    sync::OnceLock,
+    time::{SystemTime, UNIX_EPOCH},
+};
+use tokio::time::Instant;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockedArtifact {
@@ -34,10 +38,19 @@ impl BlockedEvent {
 }
 
 fn now_unix_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("SystemTime before UNIX EPOCH")
-        .as_millis() as u64
+    // Cache the initial unix instance,
+    // as making this syscall for each call is pretty expensive
+    static START: OnceLock<(Instant, u64)> = OnceLock::new();
+
+    let (start_instant, start_unix_ms) = START.get_or_init(|| {
+        let unix_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        (Instant::now(), unix_ms)
+    });
+
+    start_unix_ms + start_instant.elapsed().as_millis() as u64
 }
 
 #[cfg(test)]

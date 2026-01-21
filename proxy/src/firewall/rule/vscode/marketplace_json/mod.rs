@@ -1,4 +1,6 @@
-use memchr::memmem;
+use std::sync::OnceLock;
+
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
 use rama::bytes::Bytes;
 use rama::telemetry::tracing;
 use rama::utils::str::smol_str::{SmolStr, format_smolstr};
@@ -15,19 +17,23 @@ impl RuleVSCode {
         &self,
         body_bytes: &[u8],
     ) -> Option<Bytes> {
-        memmem::find(body_bytes, br#""displayName""#)?;
+        const PATTERNS: [&[u8]; 5] = [
+            br#""displayName""#,
+            br#""publisherName""#,
+            br#""publisher""#,
+            br#""extensionName""#,
+            br#""name""#,
+        ];
+        static AC: OnceLock<AhoCorasick> = OnceLock::new();
 
-        if memmem::find(body_bytes, br#""publisherName""#).is_none()
-            && memmem::find(body_bytes, br#""publisher""#).is_none()
-        {
-            return None;
-        }
+        let ac = AC.get_or_init(|| {
+            AhoCorasickBuilder::new()
+                // .ascii_case_insensitive(true) // can be enabled if we also do so in json parsing
+                .build(PATTERNS)
+                .expect("valid aho corasick patterns")
+        });
 
-        if memmem::find(body_bytes, br#""extensionName""#).is_none()
-            && memmem::find(body_bytes, br#""name""#).is_none()
-        {
-            return None;
-        }
+        ac.find(body_bytes)?;
 
         let mut value: Value = match sonic_rs::from_slice(body_bytes) {
             Ok(val) => val,
@@ -97,36 +103,27 @@ impl RuleVSCode {
     ///
     /// Returns `true` if the object was rewritten.
     fn mark_extension_if_malware(&self, value: &mut Value) -> bool {
-        let (malware_display, extension_id) = {
-            let Some(obj) = value.as_object() else {
-                return false;
-            };
-
-            let display_name = match obj.get(&"displayName").and_then(|v| v.as_str()) {
-                Some(name) => name,
-                None => return false,
-            };
-
-            let extension_id = match Self::extract_extension_id(obj) {
-                Some(id) => id,
-                None => return false,
-            };
-
-            if !self.is_extension_id_malware(extension_id.as_str()) {
-                return false;
-            }
-
-            (format!("⛔ MALWARE: {display_name}"), extension_id)
+        let Some(obj) = value.as_object_mut() else {
+            return false;
         };
+        let Some(display_name) = obj.get(&"displayName").and_then(|v| v.as_str()) else {
+            return false;
+        };
+        let Some(extension_id) = Self::extract_extension_id(obj) else {
+            return false;
+        };
+        if !self.is_extension_id_malware(extension_id.as_str()) {
+            return false;
+        }
 
-        tracing::info!(
+        tracing::debug!(
             package = %extension_id,
             "marked malware VSCode extension as blocked in API response"
         );
 
-        if let Some(obj_mut) = value.as_object_mut() {
-            Self::rewrite_extension_object(obj_mut, &malware_display);
-        }
+        let malware_display = format_smolstr!("⛔ MALWARE: {display_name}");
+        Self::rewrite_extension_object(obj, &malware_display);
+
         true
     }
 
@@ -152,7 +149,7 @@ impl RuleVSCode {
     }
 
     fn rewrite_extension_object(obj: &mut sonic_rs::Object, malware_display: &str) {
-        obj.insert("displayName", Value::from(malware_display));
+        obj.insert("displayName", malware_display);
 
         const BLOCK_MSG: &str = "This extension has been marked as malware by Aikido safe-chain. Installation will be blocked.";
 

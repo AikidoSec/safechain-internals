@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use rama::{
     Layer,
@@ -87,13 +87,14 @@ pub async fn run_meta_https_server(
     )
         .into_layer(http_router);
 
-    let http_server = HttpServer::auto(Executor::graceful(guard.clone())).service(http_svc);
+    let exec = Executor::graceful(guard.clone());
+    let http_server = HttpServer::auto(exec.clone()).service(Arc::new(http_svc));
 
     let tcp_svc = TimeoutLayer::new(Duration::from_secs(60)).into_layer(
         TlsPeekRouter::new(tls_acceptor.into_layer(http_server.clone())).with_fallback(http_server),
     );
 
-    let tcp_listener = TcpListener::bind(args.meta_bind)
+    let tcp_listener = TcpListener::bind(args.meta_bind, exec)
         .await
         .map_err(OpaqueError::from_boxed)
         .context("bind proxy meta http(s) server")?;
@@ -106,7 +107,7 @@ pub async fn run_meta_https_server(
     crate::server::write_server_socket_address_as_file(&args.data, "meta", meta_addr.into())
         .await?;
 
-    tcp_listener.serve_graceful(guard, tcp_svc).await;
+    tcp_listener.serve(tcp_svc).await;
 
     Ok(())
 }

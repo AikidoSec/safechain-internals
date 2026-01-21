@@ -12,10 +12,7 @@ use rama::{
     },
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
-    utils::{
-        collections::smallvec::SmallVec,
-        str::smol_str::{SmolStr, format_smolstr},
-    },
+    utils::str::smol_str::{SmolStr, format_smolstr},
 };
 
 use rama::http::body::util::BodyExt;
@@ -256,59 +253,72 @@ impl RuleVSCode {
     }
 
     fn is_extension_install_asset_path(path: &str) -> bool {
-        let path_without_query = path.split('?').next().unwrap_or(path);
-        let path_without_query = path_without_query.trim_end_matches('/');
+        let path = path.trim_end_matches('/');
 
-        Self::ends_with_ignore_ascii_case(path_without_query, ".vsix")
+        Self::ends_with_ignore_ascii_case(path, ".vsix")
             || Self::ends_with_ignore_ascii_case(
-                path_without_query,
+                path,
                 "/Microsoft.VisualStudio.Services.VSIXPackage",
             )
-            || Self::ends_with_ignore_ascii_case(path_without_query, "/vspackage")
+            || Self::ends_with_ignore_ascii_case(path, "/vspackage")
     }
 
     /// Parse extension ID (publisher.name) from .vsix download URL path.
     fn parse_extension_id_from_path(path: &str) -> Option<SmolStr> {
-        let path = path.trim_start_matches('/');
-        let parts: SmallVec<[&str; 8]> = path.splitn(8, '/').collect();
+        let mut it = path.trim_start_matches('/').split('/');
+
+        let first = it.next()?;
 
         // Pattern: files/<publisher>/<extension>/<version>/...
-        if parts.len() >= 4 && parts[0].eq_ignore_ascii_case("files") {
-            return Some(format_smolstr!("{}.{}", parts[1], parts[2]));
+        if first.eq_ignore_ascii_case("files") {
+            let publisher = it.next()?;
+            let extension = it.next()?;
+            let _ = it.next()?; // we require at least a fourth path
+            return Some(format_smolstr!("{publisher}.{extension}"));
         }
 
         // Pattern: extensions/<publisher>/<extension>/...
-        if parts.len() >= 3 && parts[0].eq_ignore_ascii_case("extensions") {
-            return Some(format_smolstr!("{}.{}", parts[1], parts[2]));
+        if first.eq_ignore_ascii_case("extensions") {
+            let publisher = it.next()?;
+            let extension = it.next()?;
+            return Some(format_smolstr!("{publisher}.{extension}"));
         }
 
         // Pattern: _apis/public/gallery/publishers/<publisher>/vsextensions/<extension>/...
-        if parts.len() >= 7
-            && parts[0].eq_ignore_ascii_case("_apis")
-            && parts[1].eq_ignore_ascii_case("public")
-            && parts[2].eq_ignore_ascii_case("gallery")
-            && parts[3].eq_ignore_ascii_case("publishers")
-            && (parts[5].eq_ignore_ascii_case("vsextensions")
-                || parts[5].eq_ignore_ascii_case("extensions"))
-        {
-            return Some(format_smolstr!("{}.{}", parts[4], parts[6]));
-        }
+        if first.eq_ignore_ascii_case("_apis") {
+            let second = it.next()?;
+            let third = it.next()?;
+            let fourth = it.next()?;
 
-        // Pattern: _apis/public/gallery/publisher/<publisher>/<extension>/...
-        // Pattern: _apis/public/gallery/publisher/<publisher>/extension/<extension>/...
-        if parts.len() >= 6
-            && parts[0].eq_ignore_ascii_case("_apis")
-            && parts[1].eq_ignore_ascii_case("public")
-            && parts[2].eq_ignore_ascii_case("gallery")
-            && parts[3].eq_ignore_ascii_case("publisher")
-        {
-            let publisher = parts[4];
+            if second.eq_ignore_ascii_case("public")
+                && third.eq_ignore_ascii_case("gallery")
+                && fourth.eq_ignore_ascii_case("publishers")
+            {
+                let publisher = it.next()?;
+                let fifth = it.next()?;
+                if fifth.eq_ignore_ascii_case("vsextensions")
+                    || fifth.eq_ignore_ascii_case("extensions")
+                {
+                    let extension = it.next()?;
+                    return Some(format_smolstr!("{publisher}.{extension}"));
+                }
+            }
 
-            // Check if there's a literal "extension" segment
-            if parts[5].eq_ignore_ascii_case("extension") && parts.len() >= 7 {
-                return Some(format_smolstr!("{}.{}", publisher, parts[6]));
-            } else {
-                return Some(format_smolstr!("{}.{}", publisher, parts[5]));
+            // Pattern: _apis/public/gallery/publisher/<publisher>/<extension>/...
+            // Pattern: _apis/public/gallery/publisher/<publisher>/extension/<extension>/...
+            if second.eq_ignore_ascii_case("public")
+                && third.eq_ignore_ascii_case("gallery")
+                && fourth.eq_ignore_ascii_case("publisher")
+            {
+                let publisher = it.next()?;
+                let next = it.next()?;
+
+                if next.eq_ignore_ascii_case("extension") {
+                    let extension = it.next()?;
+                    return Some(format_smolstr!("{publisher}.{extension}"));
+                }
+
+                return Some(format_smolstr!("{publisher}.{next}"));
             }
         }
 
