@@ -42,13 +42,20 @@ jobs:
       - name: Prepare artifacts
         run: |
           mv bin/safechain-agent-darwin-${{ matrix.arch }} safechain-agent-darwin-${{ matrix.arch }}
+          mv bin/safechain-agent-ui-darwin-${{ matrix.arch }} safechain-agent-ui-darwin-${{ matrix.arch }}
 
-      - name: Upload artifacts
+      - name: Upload safechain-agent artifact
         uses: actions/upload-artifact@v4
         with:
           name: safechain-agent-darwin-${{ matrix.arch }}
           path: |
             safechain-agent-darwin-${{ matrix.arch }}
+      - name: Upload safechain-agent-ui artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: safechain-agent-ui-darwin-${{ matrix.arch }}
+          path: |
+            safechain-agent-ui-darwin-${{ matrix.arch }}
 
   build-unix-proxy:
     strategy:

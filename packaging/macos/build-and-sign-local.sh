@@ -32,7 +32,9 @@ echo ""
 echo "Building safechain-agent..."
 cd "$PROJECT_DIR"
 go build -o "bin/safechain-agent-darwin-$ARCH" cmd/daemon/main.go
+go build -o "bin/safechain-agent-ui-darwin-$ARCH" ./cmd/ui
 echo "✓ Agent built: bin/safechain-agent-darwin-$ARCH"
+echo "✓ Agent UI built: bin/safechain-agent-ui-darwin-$ARCH"
 
 # Build Rust proxy
 echo "Building safechain-proxy..."
@@ -69,7 +71,14 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
              --options runtime \
              "$PROJECT_DIR/bin/safechain-agent-darwin-$ARCH"
     echo "✓ Agent signed"
-    
+
+    codesign --sign "$CERT_IDENTITY" \
+             --force \
+             --timestamp \
+             --options runtime \
+             "$PROJECT_DIR/bin/safechain-agent-ui-darwin-$ARCH"
+    echo "✓ Agent UI signed"
+
     codesign --sign "$CERT_IDENTITY" \
              --force \
              --timestamp \
@@ -81,6 +90,7 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
     # Verify signatures
     echo "Verifying binary signatures..."
     codesign --verify --verbose "$PROJECT_DIR/bin/safechain-agent-darwin-$ARCH"
+    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-agent-ui-darwin-$ARCH"
     codesign --verify --verbose "$PROJECT_DIR/bin/safechain-proxy-darwin-$ARCH"
     echo "✓ Binary signatures verified"
     echo ""

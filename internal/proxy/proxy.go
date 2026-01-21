@@ -46,7 +46,7 @@ func (p *Proxy) WaitForProxyToBeReady() error {
 	}
 }
 
-func (p *Proxy) Start(ctx context.Context) error {
+func (p *Proxy) Start(ctx context.Context, proxyIngressAddr string) error {
 	config := platform.GetConfig()
 	p.ctx, p.cancel = context.WithCancel(ctx)
 	p.cmd = exec.CommandContext(p.ctx,
@@ -56,6 +56,7 @@ func (p *Proxy) Start(ctx context.Context) error {
 		"--data", platform.GetRunDir(),
 		"--output", filepath.Join(config.LogDir, platform.SafeChainProxyLogName),
 		"--secrets", "keyring",
+		"--reporting-endpoint", fmt.Sprintf("http://%s/block", proxyIngressAddr),
 	)
 
 	log.Println("Starting SafeChain Proxy with command:", p.cmd.String())

@@ -58,6 +58,9 @@
                         Remove="uninstall"
                         Wait="yes" />
       </Component>
+      <Component Id="SafeChainAgentUIExe" Guid="ceafd8b2-da4d-4c92-ace7-8736cdd67162">
+        <File Id="SafeChainAgentUIExe" Source="$(var.BinDir)\SafeChainAgentUI.exe" KeyPath="yes" />
+      </Component>
       <Component Id="SafeChainProxyExe" Guid="8a745110-05f7-4bb8-8013-5fca733409ef">
         <File Id="SafeChainProxyExeFile" Source="$(var.BinDir)\SafeChainProxy.exe" KeyPath="yes" />
       </Component>

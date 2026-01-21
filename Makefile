@@ -1,6 +1,7 @@
 .PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-sign-local install-pkg uninstall-pkg clean test run help
 
 BINARY_NAME=safechain-agent
+BINARY_NAME_UI=safechain-agent-ui
 VERSION?=dev
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -61,13 +62,19 @@ build:
 	@echo "Building $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT) ./cmd/daemon
-	@echo "Binary built: $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)"
+	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME_UI)$(BINARY_EXT) ./cmd/ui
+	@echo "Binaries built:"
+	@echo "$(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)"
+	@echo "$(BIN_DIR)/$(BINARY_NAME_UI)$(BINARY_EXT)"
 
 build-release:
 	@echo "Building release $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/daemon
-	@echo "Binary built: $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
+	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/ui
+	@echo "Binaries built:"
+	@echo "$(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
+	@echo "$(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
 
 build-darwin-amd64:
 	@$(MAKE) GOOS=darwin GOARCH=amd64 build-release

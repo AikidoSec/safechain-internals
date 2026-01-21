@@ -70,6 +70,8 @@ jobs:
           files: |
             safechain-agent-darwin-amd64
             safechain-agent-darwin-arm64
+            safechain-agent-ui-darwin-amd64
+            safechain-agent-ui-darwin-arm64
             safechain-proxy-darwin-amd64
             safechain-proxy-darwin-arm64
             safechain-proxy-linux-amd64
