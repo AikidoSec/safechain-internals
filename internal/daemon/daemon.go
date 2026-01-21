@@ -129,6 +129,13 @@ func (d *Daemon) run(ctx context.Context) error {
 
 	log.Println("Daemon is running...")
 
+	if !proxy.ProxyCAInstalled() {
+		log.Println("First time we setup the proxy, uninstall previous setups...")
+		if err := d.Uninstall(ctx); err != nil {
+			log.Printf("Error uninstalling previous setup: %v", err)
+		}
+	}
+
 	// Start ingress server first (proxy needs its address for callbacks)
 	go func() {
 		if err := d.ingress.Start(ctx); err != nil {

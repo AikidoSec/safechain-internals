@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
@@ -58,6 +59,14 @@ func (p *Proxy) Start(ctx context.Context, proxyIngressAddr string) error {
 		"--secrets", "keyring",
 		"--reporting-endpoint", fmt.Sprintf("http://%s/block", proxyIngressAddr),
 	)
+
+	stderrLogPath := filepath.Join(config.LogDir, platform.SafeChainProxyErrLogName)
+	stderrFile, err := os.OpenFile(stderrLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open stderr log file: %v", err)
+	}
+	p.cmd.Stdout = stderrFile
+	p.cmd.Stderr = stderrFile
 
 	log.Println("Starting SafeChain Proxy with command:", p.cmd.String())
 

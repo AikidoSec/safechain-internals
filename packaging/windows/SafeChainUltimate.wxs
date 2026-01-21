@@ -73,6 +73,17 @@
       </Component>
     </DirectoryRef>
 
+    <!-- Custom action to run teardown on uninstall -->
+    <CustomAction Id="RunTeardown"
+                  Directory="BINDIR"
+                  ExeCommand="[BINDIR]SafeChainUltimate.exe --teardown"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="RunTeardown" Before="StopServices" Condition="REMOVE=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
+
     <!-- Cleanup ProgramData on uninstall -->
     <DirectoryRef Id="APPDATAAGENT">
       <Component Id="CleanupProgramData" Guid="c7e8f9a1-2b3c-4d5e-6f7a-8b9c0d1e2f3a">
