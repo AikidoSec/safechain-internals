@@ -95,7 +95,7 @@ func runBlockedModal(w *app.Window, title, subtitle, packageId string, onBypass 
 }
 
 func (a *BlockedModalApp) Layout(gtx layout.Context) layout.Dimensions {
-	paint.Fill(gtx.Ops, a.theme.Background)
+	paint.Fill(gtx.Ops, a.theme.FooterBg)
 
 	return a.layoutRoundedModal(gtx)
 }

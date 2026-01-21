@@ -22,11 +22,13 @@ type AikidoTheme struct {
 	TextPrimary        color.NRGBA
 	TextSecondary      color.NRGBA
 	TextLogo           color.NRGBA
-	ShieldIconColor      color.NRGBA
-	AlertTriangleColor   color.NRGBA
-	IndicatorBg          color.NRGBA
-	IndicatorBorder      color.NRGBA
-	RequestBypassColor   color.NRGBA
+	ShieldIconColor        color.NRGBA
+	AlertTriangleColor     color.NRGBA
+	IndicatorBg            color.NRGBA
+	IndicatorBorder        color.NRGBA
+	IndicatorWarningBg     color.NRGBA
+	IndicatorWarningBorder color.NRGBA
+	RequestBypassColor     color.NRGBA
 	ButtonRadius         unit.Dp
 	ButtonPaddingX       unit.Dp
 	ButtonPaddingY       unit.Dp
@@ -50,11 +52,13 @@ func NewAikidoTheme() *AikidoTheme {
 		TextPrimary:        rgb(0x010024),
 		TextSecondary:      rgb(0x37364D),
 		TextLogo:           rgb(0x24104F),
-		ShieldIconColor:      rgb(0xCC3B32),
-		AlertTriangleColor:   rgb(0xFF9715),
-		IndicatorBg:          rgba(0xFF6E65, 0x1A),
-		IndicatorBorder:      rgba(0xCC3B32, 0x4D),
-		RequestBypassColor:   rgb(0xCC3B32),
+		ShieldIconColor:        rgb(0xCC3B32),
+		AlertTriangleColor:     rgb(0xCC7911),
+		IndicatorBg:            rgba(0xFF6E65, 0x1A),
+		IndicatorBorder:        rgba(0xCC3B32, 0x4D),
+		IndicatorWarningBg:     rgba(0xFFAC44, 0x1A),
+		IndicatorWarningBorder: rgba(0xCC7911, 0x4D),
+		RequestBypassColor:     rgb(0xCC3B32),
 		ButtonRadius:         unit.Dp(16),
 		ButtonPaddingX:       unit.Dp(16),
 		ButtonPaddingY:       unit.Dp(8),

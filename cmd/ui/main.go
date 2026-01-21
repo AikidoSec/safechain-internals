@@ -14,7 +14,7 @@ const WindowTitle = "SafeChain Ultimate"
 func main() {
 	var (
 		title         = flag.String("title", "", "Modal title")
-		subtitle      = flag.String("subtitle", "", "Modal subtitle")
+		subtitle      = flag.String("subtitle", "Installing this package has been blocked because it looks malicious.", "Modal subtitle")
 		packageId     = flag.String("package-id", "", "Package identifier to display")
 		ingress       = flag.String("ingress", "", "Daemon ingress address, to report back when bypass requested.")
 		bypassEnabled = flag.Bool("bypass-enabled", false, "Enable bypass requested.")

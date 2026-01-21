@@ -5,5 +5,5 @@ import (
 )
 
 func ShowBlockedModal(title, subtitle, packageId, windowTitle string, onBypass func()) error {
-	return RunBlockedModal(title, subtitle, packageId, title, unit.Dp(550), unit.Dp(350), onBypass)
+	return RunBlockedModal(title, subtitle, packageId, windowTitle, unit.Dp(600), unit.Dp(380), onBypass)
 }

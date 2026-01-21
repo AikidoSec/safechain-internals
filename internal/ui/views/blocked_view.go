@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 
+	"gioui.org/font"
 	"gioui.org/layout"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
@@ -59,7 +60,7 @@ func (v *BlockedView) Layout(gtx layout.Context, th *theme.AikidoTheme) layout.D
 
 func (v *BlockedView) layoutHeader(gtx layout.Context, th *theme.AikidoTheme) layout.Dimensions {
 	return layout.Inset{
-		Top: unit.Dp(20), Bottom: unit.Dp(16),
+		Top: unit.Dp(20), Bottom: unit.Dp(0),
 		Left: unit.Dp(22), Right: unit.Dp(22),
 	}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
@@ -80,25 +81,24 @@ func (v *BlockedView) layoutHeader(gtx layout.Context, th *theme.AikidoTheme) la
 
 func (v *BlockedView) layoutContent(gtx layout.Context, th *theme.AikidoTheme) layout.Dimensions {
 	return layout.Inset{
-		Top: unit.Dp(16), Bottom: unit.Dp(24),
+		Top: unit.Dp(18), Bottom: unit.Dp(24),
 		Left: unit.Dp(22), Right: unit.Dp(22),
 	}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return icons.LayoutIndicator(gtx, unit.Dp(40), th.IndicatorBg, th.IndicatorBorder, th.ShieldIconColor)
 			}),
-			layout.Rigid(layout.Spacer{Height: unit.Dp(24)}.Layout),
+			layout.Rigid(layout.Spacer{Height: unit.Dp(18)}.Layout),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				label := material.Body1(th.Theme, v.Title)
+				label := material.Label(th.Theme, unit.Sp(18), v.Title)
 				label.Color = th.TextPrimary
-				label.TextSize = unit.Sp(16)
+				label.Font.Weight = font.Medium
 				return label.Layout(gtx)
 			}),
 			layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				label := material.Body2(th.Theme, v.Subtitle)
+				label := material.Label(th.Theme, unit.Sp(14), v.Subtitle)
 				label.Color = th.TextSecondary
-				label.TextSize = unit.Sp(12)
 				return label.Layout(gtx)
 			}),
 			layout.Rigid(layout.Spacer{Height: unit.Dp(16)}.Layout),
@@ -110,7 +110,7 @@ func (v *BlockedView) layoutContent(gtx layout.Context, th *theme.AikidoTheme) l
 }
 
 func (v *BlockedView) layoutPackageBox(gtx layout.Context, th *theme.AikidoTheme) layout.Dimensions {
-	return layoutRoundedBox(gtx, th.PackageBoxBg, th.PackageBoxBorder, 8, func(gtx layout.Context) layout.Dimensions {
+	return layoutRoundedBox(gtx, th.PackageBoxBg, th.PackageBoxBorder, 12, func(gtx layout.Context) layout.Dimensions {
 		return layout.Inset{
 			Top: unit.Dp(16), Bottom: unit.Dp(16),
 			Left: unit.Dp(18), Right: unit.Dp(18),

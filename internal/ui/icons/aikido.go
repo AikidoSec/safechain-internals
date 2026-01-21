@@ -266,8 +266,3 @@ func drawLetterO(_ layout.Context, path *clip.Path, scale float32) {
 	path.CubeTo(f32.Pt(78.3161*scale, 13.8824*scale), f32.Pt(77.6835*scale, 14.2014*scale), f32.Pt(76.8334*scale, 14.2014*scale))
 	path.Close()
 }
-
-// LayoutAikidoText is kept for backwards compatibility but now unused
-func LayoutAikidoText(gtx layout.Context, height unit.Dp, textColor color.NRGBA, th *material.Theme) layout.Dimensions {
-	return LayoutAikidoLogoFull(gtx, height, textColor, textColor, th)
-}

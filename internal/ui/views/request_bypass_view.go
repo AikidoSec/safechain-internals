@@ -1,7 +1,12 @@
 package views
 
 import (
+	"image"
+
+	"gioui.org/font"
 	"gioui.org/layout"
+	"gioui.org/op/clip"
+	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
@@ -47,61 +52,64 @@ func (v *RequestBypassView) Layout(gtx layout.Context, th *theme.AikidoTheme) la
 }
 
 func (v *RequestBypassView) layoutHeader(gtx layout.Context, th *theme.AikidoTheme) layout.Dimensions {
-	return layoutWithBackground(gtx, th.HeaderBg, th.HeaderBorder, true, func(gtx layout.Context) layout.Dimensions {
-		return layout.Inset{
-			Top: unit.Dp(20), Bottom: unit.Dp(20),
-			Left: unit.Dp(24), Right: unit.Dp(24),
-		}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return icons.LayoutAlertTriangle(gtx, unit.Dp(20), th.AlertTriangleColor)
-				}),
-				layout.Rigid(layout.Spacer{Width: unit.Dp(12)}.Layout),
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					label := material.Body1(th.Theme, "Are you sure you want to bypass?")
-					label.Color = th.TextPrimary
-					label.TextSize = unit.Sp(18)
-					return label.Layout(gtx)
-				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return icons.LayoutAikidoLogo(gtx, unit.Dp(20), th.Primary)
-				}),
-			)
-		})
+	return layout.Inset{
+		Top: unit.Dp(20), Bottom: unit.Dp(0),
+		Left: unit.Dp(22), Right: unit.Dp(22),
+	}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return icons.LayoutAikidoLogoFull(gtx, unit.Dp(20), th.Primary, th.TextLogo, th.Theme)
+			}),
+			layout.Rigid(layout.Spacer{Height: unit.Dp(16)}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				// Separator line
+				height := gtx.Dp(unit.Dp(1))
+				rect := image.Rectangle{Max: image.Point{X: gtx.Constraints.Max.X, Y: height}}
+				paint.FillShape(gtx.Ops, th.HeaderBorder, clip.Rect(rect).Op())
+				return layout.Dimensions{Size: image.Point{X: gtx.Constraints.Max.X, Y: height}}
+			}),
+		)
 	})
 }
 
 func (v *RequestBypassView) layoutContent(gtx layout.Context, th *theme.AikidoTheme) layout.Dimensions {
 	return layout.Inset{
-		Top: unit.Dp(24), Bottom: unit.Dp(24),
-		Left: unit.Dp(24), Right: unit.Dp(24),
+		Top: unit.Dp(18), Bottom: unit.Dp(24),
+		Left: unit.Dp(22), Right: unit.Dp(22),
 	}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		label := material.Body1(th.Theme, "Are you sure you want to bypass SafeChain Ultimate and risk installing malware?")
-		label.Color = th.TextSecondary
-		return label.Layout(gtx)
+		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return icons.LayoutWarningIndicator(gtx, unit.Dp(40), th.IndicatorWarningBg, th.IndicatorWarningBorder, th.AlertTriangleColor)
+			}),
+			layout.Rigid(layout.Spacer{Height: unit.Dp(18)}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				label := material.Label(th.Theme, unit.Sp(18), "Are you sure you want to bypass?")
+				label.Color = th.TextPrimary
+				label.Font.Weight = font.Medium
+				return label.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				label := material.Label(th.Theme, unit.Sp(14), "Are you sure you want to bypass SafeChain Ultimate and risk installing malware?")
+				label.Color = th.TextSecondary
+				return label.Layout(gtx)
+			}),
+		)
 	})
 }
 
 func (v *RequestBypassView) layoutFooter(gtx layout.Context, th *theme.AikidoTheme) layout.Dimensions {
 	return layoutWithBackground(gtx, th.FooterBg, th.HeaderBorder, false, func(gtx layout.Context) layout.Dimensions {
 		return layout.Inset{
-			Top: unit.Dp(16), Bottom: unit.Dp(16),
-			Left: unit.Dp(24), Right: unit.Dp(24),
+			Top: unit.Dp(14), Bottom: unit.Dp(14),
+			Left: unit.Dp(22), Right: unit.Dp(22),
 		}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Spacing: layout.SpaceStart}.Layout(gtx,
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 					return layout.Dimensions{}
 				}),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					btn := material.Button(th.Theme, &v.cancelBtn, "Cancel")
-					btn.Background = th.SecondaryBtnBg
-					btn.Color = th.TextSecondary
-					btn.CornerRadius = th.ButtonRadius
-					btn.Inset = layout.Inset{
-						Top: th.ButtonPaddingY, Bottom: th.ButtonPaddingY,
-						Left: th.ButtonPaddingX, Right: th.ButtonPaddingX,
-					}
-					return btn.Layout(gtx)
+					return layoutSecondaryButton(gtx, th, &v.cancelBtn, "Cancel", th.TextSecondary)
 				}),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(12)}.Layout),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
