@@ -46,7 +46,7 @@
         <ServiceInstall Id="SafeChainUltimateService"
                         Name="SafeChainUltimate"
                         DisplayName="SafeChain Ultimate"
-                        Description="SafeChain Ultimate - monitors and secures the software supply chain"
+                        Description="Aikido Security SafeChain Ultimate - monitors and secures the software supply chain"
                         Start="auto"
                         Type="ownProcess"
                         ErrorControl="normal"
