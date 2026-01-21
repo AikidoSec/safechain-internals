@@ -14,7 +14,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/AikidoSec/safechain-agent/internal/utils"
+	"github.com/AikidoSec/safechain-ultimate/internal/utils"
 )
 
 const (
@@ -40,9 +40,9 @@ func initConfig() error {
 		}
 	}
 	safeChainHomeDir := filepath.Join(config.HomeDir, ".safe-chain")
-	config.BinaryDir = "/Library/Application Support/AikidoSecurity/SafeChainAgent/bin"
-	config.RunDir = "/Library/Application Support/AikidoSecurity/SafeChainAgent/run"
-	config.LogDir = "/Library/Logs/AikidoSecurity/SafeChainAgent"
+	config.BinaryDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/bin"
+	config.RunDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/run"
+	config.LogDir = "/Library/Logs/AikidoSecurity/SafeChainUltimate"
 	config.SafeChainBinaryPath = filepath.Join(safeChainHomeDir, "bin", "safe-chain")
 	return nil
 }

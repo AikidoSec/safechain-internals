@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/AikidoSec/safechain-agent/internal/platform"
+	"github.com/AikidoSec/safechain-ultimate/internal/platform"
 )
 
 var (

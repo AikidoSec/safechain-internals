@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
-    <title>SafeChain Agent</title>
+    <title>SafeChain Ultimate</title>
     <organization>com.aikidosecurity</organization>
     <domains enable_localSystem="true"/>
     <options customize="never" require-scripts="true" rootVolumeOnly="true" />
@@ -13,16 +13,16 @@
     <!-- Define the installer choices -->
     <choices-outline>
         <line choice="default">
-            <line choice="com.aikidosecurity.safechainagent"/>
+            <line choice="com.aikidosecurity.safechainultimate"/>
         </line>
     </choices-outline>
     
     <choice id="default"/>
-    <choice id="com.aikidosecurity.safechainagent" visible="false">
-        <pkg-ref id="com.aikidosecurity.safechainagent"/>
+    <choice id="com.aikidosecurity.safechainultimate" visible="false">
+        <pkg-ref id="com.aikidosecurity.safechainultimate"/>
     </choice>
     
-    <pkg-ref id="com.aikidosecurity.safechainagent" version="VERSION_PLACEHOLDER" onConclusion="none">SafeChainAgent.ARCH_PLACEHOLDER.pkg</pkg-ref>
+    <pkg-ref id="com.aikidosecurity.safechainultimate" version="VERSION_PLACEHOLDER" onConclusion="none">SafeChainUltimate.ARCH_PLACEHOLDER.pkg</pkg-ref>
     
     <!-- Requirements -->
     <installation-check script="pm_install_check();"/>
@@ -31,7 +31,7 @@
         function pm_install_check() {
             if(!(system.compareVersions(system.version.ProductVersion, '10.15') >= 0)) {
                 my.result.title = 'Unable to install';
-                my.result.message = 'SafeChain Agent requires macOS 10.15 or later.';
+                my.result.message = 'SafeChain Ultimate requires macOS 10.15 or later.';
                 my.result.type = 'Fatal';
                 return false;
             }

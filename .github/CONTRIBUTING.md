@@ -1,6 +1,6 @@
-# Contributing to SafeChain Agent
+# Contributing to SafeChain Ultimate
 
-Thank you for your interest in contributing to SafeChain Agent! This guide will help you get started with setting up your development environment, running tests, and building the project.
+Thank you for your interest in contributing to SafeChain Ultimate! This guide will help you get started with setting up your development environment, running tests, and building the project.
 
 ## Prerequisites
 

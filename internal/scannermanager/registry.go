@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/AikidoSec/safechain-agent/internal/scanner"
-	"github.com/AikidoSec/safechain-agent/internal/scanner/safechain"
+	"github.com/AikidoSec/safechain-ultimate/internal/scanner"
+	"github.com/AikidoSec/safechain-ultimate/internal/scanner/safechain"
 )
 
 type Registry struct {

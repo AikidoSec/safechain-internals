@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/AikidoSec/safechain-agent/internal/platform"
-	"github.com/AikidoSec/safechain-agent/internal/proxy"
+	"github.com/AikidoSec/safechain-ultimate/internal/platform"
+	"github.com/AikidoSec/safechain-ultimate/internal/proxy"
 )
 
 type Step struct {

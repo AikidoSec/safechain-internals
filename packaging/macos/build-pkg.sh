@@ -2,7 +2,7 @@
 
 set -e
 
-# Build macOS .pkg installer for SafeChain Agent
+# Build macOS .pkg installer for SafeChain Ultimate
 # Usage: ./build-pkg.sh -v VERSION -a ARCH [-b BIN_DIR] [-o OUTPUT_DIR]
 
 VERSION=""
@@ -56,18 +56,18 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BIN_DIR="$(cd "$BIN_DIR" 2>/dev/null && pwd || echo "$PROJECT_DIR/$BIN_DIR")"
 OUTPUT_DIR="$(mkdir -p "$OUTPUT_DIR" && cd "$OUTPUT_DIR" && pwd)"
 
-echo "Building macOS .pkg installer for SafeChain Agent v$VERSION"
+echo "Building macOS .pkg installer for SafeChain Ultimate v$VERSION"
 echo "  Architecture: $ARCH"
 echo "  Binary directory: $BIN_DIR"
 echo "  Output directory: $OUTPUT_DIR"
 echo "  Project directory: $PROJECT_DIR"
 
 # Verify binaries exist
-AGENT_BIN="$BIN_DIR/safechain-agent-darwin-$ARCH"
+AGENT_BIN="$BIN_DIR/safechain-ultimate-darwin-$ARCH"
 PROXY_BIN="$BIN_DIR/safechain-proxy-darwin-$ARCH"
 
 if [ ! -f "$AGENT_BIN" ]; then
-    echo "Error: safechain-agent binary not found at $AGENT_BIN" >&2
+    echo "Error: safechain-ultimate binary not found at $AGENT_BIN" >&2
     exit 1
 fi
 
@@ -85,9 +85,9 @@ echo "Using temporary build directory: $BUILD_DIR"
 # Create package directory structure
 PKG_ROOT="$BUILD_DIR/pkg_root"
 PKG_SCRIPTS="$BUILD_DIR/scripts"
-INSTALL_DIR="$PKG_ROOT/Library/Application Support/AikidoSecurity/SafeChainAgent"
+INSTALL_DIR="$PKG_ROOT/Library/Application Support/AikidoSecurity/SafeChainUltimate"
 LAUNCHDAEMONS_DIR="$PKG_ROOT/Library/LaunchDaemons"
-LOGS_DIR="$PKG_ROOT/Library/Logs/AikidoSecurity/SafeChainAgent"
+LOGS_DIR="$PKG_ROOT/Library/Logs/AikidoSecurity/SafeChainUltimate"
 
 mkdir -p "$INSTALL_DIR/bin"
 mkdir -p "$LAUNCHDAEMONS_DIR"
@@ -100,15 +100,15 @@ chmod 644 "$LOGS_DIR/.keep"
 
 # Copy binaries
 echo "Copying binaries..."
-cp "$AGENT_BIN" "$INSTALL_DIR/bin/safechain-agent"
+cp "$AGENT_BIN" "$INSTALL_DIR/bin/safechain-ultimate"
 cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-proxy"
-chmod 755 "$INSTALL_DIR/bin/safechain-agent"
+chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
 chmod 755 "$INSTALL_DIR/bin/safechain-proxy"
 
 # Copy LaunchDaemon plist
 echo "Copying LaunchDaemon plist..."
-cp "$SCRIPT_DIR/com.aikidosecurity.safechainagent.plist" "$LAUNCHDAEMONS_DIR/"
-chmod 644 "$LAUNCHDAEMONS_DIR/com.aikidosecurity.safechainagent.plist"
+cp "$SCRIPT_DIR/com.aikidosecurity.safechainultimate.plist" "$LAUNCHDAEMONS_DIR/"
+chmod 644 "$LAUNCHDAEMONS_DIR/com.aikidosecurity.safechainultimate.plist"
 
 # Copy scripts and set permissions
 echo "Copying installer scripts..."
@@ -118,8 +118,8 @@ chmod 755 "$PKG_SCRIPTS/preinstall"
 chmod 755 "$PKG_SCRIPTS/postinstall"
 
 # Build the package
-OUTPUT_PKG="$OUTPUT_DIR/SafeChainAgent.$ARCH.pkg"
-IDENTIFIER="com.aikidosecurity.safechainagent"
+OUTPUT_PKG="$OUTPUT_DIR/SafeChainUltimate.$ARCH.pkg"
+IDENTIFIER="com.aikidosecurity.safechainultimate"
 
 echo "Building package..."
 pkgbuild \
