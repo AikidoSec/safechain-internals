@@ -280,3 +280,34 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (st
 func RunningAsRoot() bool {
 	return os.Getuid() == 0
 }
+
+func InstallSafeChain(ctx context.Context, repoURL, version string) error {
+	scriptURL := fmt.Sprintf("%s/releases/download/%s/install-safe-chain.sh", repoURL, version)
+	scriptPath := filepath.Join(os.TempDir(), "install-safe-chain.sh")
+
+	log.Printf("Downloading install script from %s...", scriptURL)
+	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath); err != nil {
+		return fmt.Errorf("failed to download install script: %w", err)
+	}
+	defer os.Remove(scriptPath)
+	if _, err := RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
+		return fmt.Errorf("failed to run uninstall script: %w", err)
+	}
+	return nil
+}
+
+func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
+	scriptURL := fmt.Sprintf("%s/releases/download/%s/uninstall-safe-chain.sh", repoURL, version)
+	scriptPath := filepath.Join(os.TempDir(), "uninstall-safe-chain.sh")
+
+	log.Printf("Downloading uninstall script from %s...", scriptURL)
+	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath); err != nil {
+		return fmt.Errorf("failed to download uninstall script: %w", err)
+	}
+	defer os.Remove(scriptPath)
+
+	if _, err := RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
+		return fmt.Errorf("failed to run uninstall script: %w", err)
+	}
+	return nil
+}

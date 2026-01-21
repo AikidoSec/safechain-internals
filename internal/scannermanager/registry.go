@@ -47,7 +47,8 @@ func (r *Registry) InstallAll(ctx context.Context) error {
 		if !s.IsInstalled(ctx) {
 			log.Printf("Installing scanner '%s'...", name)
 			if err := s.Install(ctx); err != nil {
-				return fmt.Errorf("failed to install scanner '%s': %w", name, err)
+				log.Printf("Failed to install scanner '%s': %v", name, err)
+				continue
 			}
 			log.Printf("Scanner '%s' installed successfully!", name)
 		}
@@ -60,7 +61,8 @@ func (r *Registry) UninstallAll(ctx context.Context) error {
 		if s.IsInstalled(ctx) {
 			log.Printf("Uninstalling scanner '%s'...", name)
 			if err := s.Uninstall(ctx); err != nil {
-				return fmt.Errorf("failed to uninstall scanner '%s': %w", name, err)
+				log.Printf("Failed to uninstall scanner '%s': %v", name, err)
+				continue
 			}
 			log.Printf("Scanner '%s' uninstalled successfully!", name)
 		}
