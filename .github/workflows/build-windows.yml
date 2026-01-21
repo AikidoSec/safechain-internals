@@ -41,19 +41,20 @@ jobs:
 
       - name: Rename binary for artifact
         run: |
-          mv bin/safechain-ultimate-windows-${{ matrix.arch }}.exe bin/SafeChainAgent.${{ matrix.arch }}.exe
-          mv bin/safechain-ultimate-ui-windows-${{ matrix.arch }}.exe bin/SafeChainAgentUI.${{ matrix.arch }}.exe
+          mv bin/safechain-ultimate-windows-${{ matrix.arch }}.exe bin/SafeChainUltimate.${{ matrix.arch }}.exe
+          mv bin/safechain-ultimate-ui-windows-${{ matrix.arch }}.exe bin/SafeChainUltimateUI.${{ matrix.arch }}.exe
         shell: bash
 
       - name: Upload Windows ultimate artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SafeChainAgent.${{ matrix.arch }}.exe
-          path: bin/SafeChainAgent.${{ matrix.arch }}.exe
+          name: SafeChainUltimate.${{ matrix.arch }}.exe
+          path: bin/SafeChainUltimate.${{ matrix.arch }}.exe
+
       - name: Upload Windows agent UI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SafeChainAgentUI.${{ matrix.arch }}.exe
+          name: SafeChainUltimateUI.${{ matrix.arch }}.exe
           path: bin/SafeChainAgentUI.${{ matrix.arch }}.exe
 
   build-windows-proxy:
