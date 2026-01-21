@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use rama::{
     Layer,
     error::{ErrorContext as _, OpaqueError},
@@ -61,7 +63,9 @@ pub async fn run_proxy_server(
     firewall: Firewall,
     #[cfg(feature = "har")] har_export_layer: HARExportLayer,
 ) -> Result<(), OpaqueError> {
-    let tcp_service = TcpListener::build()
+    let exec = Executor::graceful(guard.clone());
+
+    let tcp_service = TcpListener::build(exec.clone())
         .bind(args.bind)
         .await
         .map_err(OpaqueError::from_boxed)
@@ -91,44 +95,43 @@ pub async fn run_proxy_server(
     )?;
 
     let socks5_proxy_router = Socks5PeekRouter::new(
-        Socks5Acceptor::new()
+        Socks5Acceptor::new(exec.clone())
             .with_auth_optional(true)
             .with_authorizer(self::auth::ZeroAuthority::new())
             .with_connector(socks5::server::LazyConnector::new(socks5_proxy_mitm_server)),
     );
 
-    let exec = Executor::graceful(guard.clone());
-    let http_service = HttpServer::auto(exec.clone()).service(
+    let http_inner_svc = (
+        TraceLayer::new_for_http(),
+        ConsumeErrLayer::trace(Level::DEBUG),
+        #[cfg(feature = "har")]
         (
-            TraceLayer::new_for_http(),
-            ConsumeErrLayer::trace(Level::DEBUG),
-            #[cfg(feature = "har")]
-            (
-                AddInputExtensionLayer::new(RequestComment(arcstr!("http(s) proxy connect"))),
-                har_export_layer,
-            ),
-            ProxyAuthLayer::new(self::auth::ZeroAuthority::new())
-                .with_allow_anonymous(true)
-                // The use of proxy authentication is a common practice for
-                // proxy users to pass configs via a concept called username labels.
-                // See `docs/proxy/auth-flow.md` for more informtion.
-                //
-                // We make use use the void trailer parser to ensure we drop any ignored label.
-                .with_labels::<((), self::auth::FirewallUserConfigParser)>(),
-            UpgradeLayer::new(
-                exec,
-                MethodMatcher::CONNECT,
-                service_fn(http_connect_accept),
-                http_proxy_mitm_server,
-            ),
-            // =============================================
-            // HTTP (plain-text) (proxy) connections
-            MapResponseBodyLayer::new(Body::new),
-            CompressionLayer::new(),
-            // =============================================
-        )
-            .into_layer(https_client),
-    );
+            AddInputExtensionLayer::new(RequestComment(arcstr!("http(s) proxy connect"))),
+            har_export_layer,
+        ),
+        ProxyAuthLayer::new(self::auth::ZeroAuthority::new())
+            .with_allow_anonymous(true)
+            // The use of proxy authentication is a common practice for
+            // proxy users to pass configs via a concept called username labels.
+            // See `docs/proxy/auth-flow.md` for more informtion.
+            //
+            // We make use use the void trailer parser to ensure we drop any ignored label.
+            .with_labels::<((), self::auth::FirewallUserConfigParser)>(),
+        UpgradeLayer::new(
+            exec.clone(),
+            MethodMatcher::CONNECT,
+            service_fn(http_connect_accept),
+            http_proxy_mitm_server,
+        ),
+        // =============================================
+        // HTTP (plain-text) (proxy) connections
+        MapResponseBodyLayer::new(Body::new),
+        CompressionLayer::new(),
+        // =============================================
+    )
+        .into_layer(https_client);
+
+    let http_service = HttpServer::auto(exec).service(Arc::new(http_inner_svc));
 
     let tcp_inner_svc = socks5_proxy_router.with_fallback(http_service);
 
@@ -144,10 +147,7 @@ pub async fn run_proxy_server(
     // sent proxy addr to firewall
 
     tcp_service
-        .serve_graceful(
-            guard,
-            BodyLimitLayer::symmetric(MAX_BODY_SIZE).into_layer(tcp_inner_svc),
-        )
+        .serve(BodyLimitLayer::symmetric(MAX_BODY_SIZE).into_layer(tcp_inner_svc))
         .await;
 
     Ok(())

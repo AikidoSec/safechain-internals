@@ -1,4 +1,4 @@
-use std::convert::Infallible;
+use std::{convert::Infallible, sync::Arc};
 
 use rama::{
     Layer as _, Service,
@@ -63,7 +63,7 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
 
     let exec = Executor::graceful(guard);
 
-    let http_server = HttpServer::auto(exec.clone()).service(https_svc);
+    let http_server = HttpServer::auto(exec.clone()).service(Arc::new(https_svc));
 
     let inner = TlsPeekRouter::new((tls_acceptor).into_layer(http_server.clone()))
         .with_fallback(http_server);
