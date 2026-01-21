@@ -21,7 +21,7 @@ func main() {
 	)
 	flag.Parse()
 
-	if *title == "" || *subtitle == "" || *ingress == "" {
+	if *title == "" || *subtitle == "" || *ingress == "" || *packageId == "" {
 		fmt.Fprintln(os.Stderr, "Usage: safechain-ui --title <title> --subtitle <subtitle> --package-id <id> --ingress <ingress>")
 		os.Exit(1)
 	}
