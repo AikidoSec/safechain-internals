@@ -20,7 +20,7 @@ const serviceName = "SafeChainUltimate"
 func main() {
 	var (
 		showVersion = flag.Bool("version", false, "Show version information")
-		teardown    = flag.Bool("teardown", false, "Teardown the SafeChain Ultimate")
+		teardown    = flag.Bool("teardown", false, "Teardown SafeChain Ultimate")
 	)
 	flag.Parse()
 
