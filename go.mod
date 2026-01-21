@@ -1,4 +1,4 @@
-module github.com/AikidoSec/safechain-agent
+module github.com/AikidoSec/safechain-internals
 
 go 1.25
 

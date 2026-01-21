@@ -35,13 +35,13 @@ jobs:
       - name: Download agent artifact
         uses: actions/download-artifact@v4
         with:
-          name: safechain-agent-darwin-${{ matrix.arch }}
+          name: safechain-ultimate-darwin-${{ matrix.arch }}
           path: bin
 
       - name: Download agent ui artifact
         uses: actions/download-artifact@v4
         with:
-          name: safechain-agent-ui-darwin-${{ matrix.arch }}
+          name: safechain-ultimate-ui-darwin-${{ matrix.arch }}
           path: bin
 
       - name: Download proxy artifact
@@ -53,8 +53,8 @@ jobs:
       - name: Verify binaries exist
         run: |
           ls -lh bin/
-          ls -lh bin/safechain-agent-darwin-${{ matrix.arch }}
-          ls -lh bin/safechain-agent-ui-darwin-${{ matrix.arch }}
+          ls -lh bin/safechain-ultimate-darwin-${{ matrix.arch }}
+          ls -lh bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}
           ls -lh bin/safechain-proxy-darwin-${{ matrix.arch }}
 
       - name: Make scripts executable
@@ -72,13 +72,13 @@ jobs:
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-agent-darwin-${{ matrix.arch }}
+        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-ultimate-darwin-${{ matrix.arch }}
 
       - name: Sign macOS agent ui binary
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-agent-ui-darwin-${{ matrix.arch }}
+        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}
 
       - name: Sign macOS proxy binary
         env:
@@ -93,7 +93,7 @@ jobs:
 
       - name: Rename package
         run: |
-          mv dist/SafeChainAgent-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.pkg dist/SafeChainAgent-${{ matrix.arch }}.pkg
+          mv dist/SafeChainUltimate-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.pkg dist/SafeChainUltimate-${{ matrix.arch }}.pkg
 
       - name: Create and notarize macOS packages
         env:
@@ -105,16 +105,16 @@ jobs:
           KEYCHAIN_PATH: ${{ env.KEYCHAIN_PATH }}
           VERSION: ${{ inputs.version }}
           BUILD_NUMBER: ${{ github.run_number }}
-        run: .github/scripts/macos/packages/sign-and-notarize-package.sh dist/SafeChainAgent-${{ matrix.arch }}.pkg
+        run: .github/scripts/macos/packages/sign-and-notarize-package.sh dist/SafeChainUltimate-${{ matrix.arch }}.pkg
 
       - name: Upload .pkg artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SafeChainAgent-${{ matrix.arch }}.pkg
-          path: dist/SafeChainAgent-${{ matrix.arch }}.pkg
+          name: SafeChainUltimate-${{ matrix.arch }}.pkg
+          path: dist/SafeChainUltimate-${{ matrix.arch }}.pkg
 
       - name: Upload .pkg checksum
         uses: actions/upload-artifact@v4
         with:
-          name: SafeChainAgent-${{ matrix.arch }}.pkg.sha256
-          path: dist/SafeChainAgent-${{ matrix.arch }}.pkg.sha256
+          name: SafeChainUltimate-${{ matrix.arch }}.pkg.sha256
+          path: dist/SafeChainUltimate-${{ matrix.arch }}.pkg.sha256

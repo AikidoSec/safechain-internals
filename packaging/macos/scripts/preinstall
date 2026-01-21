@@ -2,18 +2,18 @@
 
 set -e
 
-echo "SafeChain Agent Installer - Pre-installation"
+echo "SafeChain Ultimate Installer - Pre-installation"
 
 # Stop the daemon if it's running
-if launchctl list | grep -q "com.aikidosecurity.safechainagent"; then
-    echo "Stopping existing SafeChain Agent daemon..."
-    launchctl bootout system/com.aikidosecurity.safechainagent 2>/dev/null || true
+if launchctl list | grep -q "com.aikidosecurity.safechainultimate"; then
+    echo "Stopping existing SafeChain Ultimate daemon..."
+    launchctl bootout system/com.aikidosecurity.safechainultimate 2>/dev/null || true
 fi
 
 # Remove old LaunchDaemon plist if it exists
-if [ -f "/Library/LaunchDaemons/com.aikidosecurity.safechainagent.plist" ]; then
+if [ -f "/Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist" ]; then
     echo "Removing old LaunchDaemon configuration..."
-    rm -f "/Library/LaunchDaemons/com.aikidosecurity.safechainagent.plist"
+    rm -f "/Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist"
 fi
 
 echo "Pre-installation completed"

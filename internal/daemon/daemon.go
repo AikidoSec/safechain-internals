@@ -7,13 +7,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AikidoSec/safechain-agent/internal/constants"
-	"github.com/AikidoSec/safechain-agent/internal/ingress"
-	"github.com/AikidoSec/safechain-agent/internal/platform"
-	"github.com/AikidoSec/safechain-agent/internal/proxy"
-	"github.com/AikidoSec/safechain-agent/internal/scannermanager"
-	"github.com/AikidoSec/safechain-agent/internal/setup"
-	"github.com/AikidoSec/safechain-agent/internal/version"
+	"github.com/AikidoSec/safechain-internals/internal/constants"
+	"github.com/AikidoSec/safechain-internals/internal/ingress"
+	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/proxy"
+	"github.com/AikidoSec/safechain-internals/internal/scannermanager"
+	"github.com/AikidoSec/safechain-internals/internal/setup"
+	"github.com/AikidoSec/safechain-internals/internal/version"
 )
 
 type Config struct {
@@ -175,7 +175,7 @@ func (d *Daemon) run(ctx context.Context) error {
 }
 
 func (d *Daemon) Uninstall(ctx context.Context) error {
-	log.Println("Uninstalling the SafeChain Agent...")
+	log.Println("Uninstalling the SafeChain Ultimate...")
 
 	if err := d.registry.UninstallAll(ctx); err != nil {
 		log.Printf("Error uninstalling scanners: %v", err)

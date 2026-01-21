@@ -1,13 +1,13 @@
 .PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-sign-local install-pkg uninstall-pkg clean test run help
 
-BINARY_NAME=safechain-agent
-BINARY_NAME_UI=safechain-agent-ui
+BINARY_NAME=safechain-ultimate
+BINARY_NAME_UI=safechain-ultimate-ui
 VERSION?=dev
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LDFLAGS=-X 'github.com/AikidoSec/safechain-agent/internal/version.Version=$(VERSION)' \
-		-X 'github.com/AikidoSec/safechain-agent/internal/version.BuildTime=$(BUILD_TIME)' \
-		-X 'github.com/AikidoSec/safechain-agent/internal/version.GitCommit=$(GIT_COMMIT)'
+LDFLAGS=-X 'github.com/AikidoSec/safechain-internals/internal/version.Version=$(VERSION)' \
+		-X 'github.com/AikidoSec/safechain-internals/internal/version.BuildTime=$(BUILD_TIME)' \
+		-X 'github.com/AikidoSec/safechain-internals/internal/version.GitCommit=$(GIT_COMMIT)'
 RELEASE_LDFLAGS=$(LDFLAGS) -s -w
 
 BIN_DIR=bin
@@ -99,7 +99,7 @@ build-pkg:
 ifeq ($(DETECTED_OS),darwin)
 	@echo "Building macOS PKG installer..."
 	@cd packaging/macos && ./build-distribution-pkg.sh -v $(VERSION) -a $(DETECTED_ARCH) -b ../../$(BIN_DIR) -o ../../$(DIST_DIR)
-	@echo "PKG built: $(DIST_DIR)/SafeChainAgent-$(VERSION)-$(DETECTED_ARCH).pkg"
+	@echo "PKG built: $(DIST_DIR)/SafeChainUltimate-$(VERSION)-$(DETECTED_ARCH).pkg"
 else
 	@echo "Error: PKG building is only supported on macOS"
 	@exit 1
