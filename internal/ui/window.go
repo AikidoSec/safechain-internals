@@ -52,15 +52,18 @@ func runBlockedModal(w *app.Window, text, packageId string, onBypass func()) err
 		close: closeWindow,
 	}
 
+	var bypassCallback func()
+	if onBypass != nil {
+		bypassCallback = func() {
+			a.showBypassView = true
+		}
+	}
+
 	a.blockedView = views.NewBlockedView(
 		text,
 		packageId,
 		closeWindow,
-		func() {
-			if onBypass != nil {
-				a.showBypassView = true
-			}
-		},
+		bypassCallback,
 	)
 
 	a.bypassView = views.NewRequestBypassView(

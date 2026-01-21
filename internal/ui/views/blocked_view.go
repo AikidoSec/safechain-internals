@@ -5,7 +5,6 @@ import (
 	"image/color"
 
 	"gioui.org/layout"
-	"gioui.org/op"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/unit"
@@ -17,7 +16,8 @@ import (
 )
 
 type BlockedView struct {
-	Text      string
+	Title     string
+	Subtitle  string
 	PackageId string
 	OnOK      func()
 	OnBypass  func()
@@ -28,7 +28,8 @@ type BlockedView struct {
 
 func NewBlockedView(text, packageId string, onOK, onBypass func()) *BlockedView {
 	return &BlockedView{
-		Text:      text,
+		Title:     "SafeChain blocked a potentially malicious npm package:",
+		Subtitle:  text,
 		PackageId: packageId,
 		OnOK:      onOK,
 		OnBypass:  onBypass,
@@ -88,14 +89,14 @@ func (v *BlockedView) layoutContent(gtx layout.Context, th *theme.AikidoTheme) l
 			}),
 			layout.Rigid(layout.Spacer{Height: unit.Dp(24)}.Layout),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				label := material.Body1(th.Theme, "SafeChain blocked a potentially malicious npm package:")
+				label := material.Body1(th.Theme, v.Title)
 				label.Color = th.TextPrimary
 				label.TextSize = unit.Sp(16)
 				return label.Layout(gtx)
 			}),
 			layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				label := material.Body2(th.Theme, v.Text)
+				label := material.Body2(th.Theme, v.Subtitle)
 				label.Color = th.TextSecondary
 				label.TextSize = unit.Sp(12)
 				return label.Layout(gtx)
@@ -128,15 +129,21 @@ func (v *BlockedView) layoutFooter(gtx layout.Context, th *theme.AikidoTheme) la
 			Top: unit.Dp(14), Bottom: unit.Dp(14),
 			Left: unit.Dp(22), Right: unit.Dp(22),
 		}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+			return layout.Flex{Axis: layout.Horizontal, Spacing: layout.SpaceStart}.Layout(gtx,
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					return layout.Dimensions{}
+				}),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					if v.OnBypass == nil {
 						return layout.Dimensions{}
 					}
 					return v.layoutBypassButton(gtx, th)
 				}),
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					return layout.Dimensions{}
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					if v.OnBypass == nil {
+						return layout.Dimensions{}
+					}
+					return layout.Spacer{Width: unit.Dp(12)}.Layout(gtx)
 				}),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					btn := material.Button(th.Theme, &v.okBtn, "OK")
@@ -144,7 +151,7 @@ func (v *BlockedView) layoutFooter(gtx layout.Context, th *theme.AikidoTheme) la
 					btn.CornerRadius = th.ButtonRadius
 					btn.Inset = layout.Inset{
 						Top: th.ButtonPaddingY, Bottom: th.ButtonPaddingY,
-						Left: th.ButtonPaddingX, Right: th.ButtonPaddingX,
+						Left: unit.Dp(24), Right: unit.Dp(24),
 					}
 					return btn.Layout(gtx)
 				}),
@@ -154,35 +161,7 @@ func (v *BlockedView) layoutFooter(gtx layout.Context, th *theme.AikidoTheme) la
 }
 
 func (v *BlockedView) layoutBypassButton(gtx layout.Context, th *theme.AikidoTheme) layout.Dimensions {
-	macro := op.Record(gtx.Ops)
-	dims := layout.Inset{
-		Top: th.ButtonPaddingY, Bottom: th.ButtonPaddingY,
-		Left: th.ButtonPaddingX, Right: th.ButtonPaddingX,
-	}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		label := material.Body2(th.Theme, "Request ByPass")
-		label.Color = th.RequestBypassColor
-		label.TextSize = unit.Sp(12)
-		return label.Layout(gtx)
-	})
-	call := macro.Stop()
-
-	// Draw button background and border
-	rr := clip.RRect{
-		Rect: image.Rectangle{Max: dims.Size},
-		NE:   gtx.Dp(th.ButtonRadius), NW: gtx.Dp(th.ButtonRadius),
-		SE:   gtx.Dp(th.ButtonRadius), SW: gtx.Dp(th.ButtonRadius),
-	}
-	paint.FillShape(gtx.Ops, th.SecondaryBtnBg, rr.Op(gtx.Ops))
-	paint.FillShape(gtx.Ops, th.SecondaryBtnBorder, clip.Stroke{Path: rr.Path(gtx.Ops), Width: 1}.Op())
-
-	// Register click area
-	defer clip.Rect(image.Rectangle{Max: dims.Size}).Push(gtx.Ops).Pop()
-	v.bypassBtn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Dimensions{Size: dims.Size}
-	})
-
-	call.Add(gtx.Ops)
-	return dims
+	return layoutSecondaryButton(gtx, th, &v.bypassBtn, "Request Bypass", th.RequestBypassColor)
 }
 
 // Suppress unused import warning
