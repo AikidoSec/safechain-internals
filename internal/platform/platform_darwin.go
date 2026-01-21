@@ -14,7 +14,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/AikidoSec/safechain-ultimate/internal/utils"
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
 const (

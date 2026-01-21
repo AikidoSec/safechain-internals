@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/AikidoSec/safechain-ultimate/internal/ui"
+	"github.com/AikidoSec/safechain-internals/internal/ui"
 )
 
 func main() {

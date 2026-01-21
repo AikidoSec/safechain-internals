@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/AikidoSec/safechain-ultimate/internal/daemon"
-	"github.com/AikidoSec/safechain-ultimate/internal/platform"
-	"github.com/AikidoSec/safechain-ultimate/internal/version"
+	"github.com/AikidoSec/safechain-internals/internal/daemon"
+	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/version"
 )
 
 const serviceName = "SafeChainUltimate"

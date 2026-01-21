@@ -7,13 +7,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AikidoSec/safechain-ultimate/internal/constants"
-	"github.com/AikidoSec/safechain-ultimate/internal/ingress"
-	"github.com/AikidoSec/safechain-ultimate/internal/platform"
-	"github.com/AikidoSec/safechain-ultimate/internal/proxy"
-	"github.com/AikidoSec/safechain-ultimate/internal/scannermanager"
-	"github.com/AikidoSec/safechain-ultimate/internal/setup"
-	"github.com/AikidoSec/safechain-ultimate/internal/version"
+	"github.com/AikidoSec/safechain-internals/internal/constants"
+	"github.com/AikidoSec/safechain-internals/internal/ingress"
+	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/proxy"
+	"github.com/AikidoSec/safechain-internals/internal/scannermanager"
+	"github.com/AikidoSec/safechain-internals/internal/setup"
+	"github.com/AikidoSec/safechain-internals/internal/version"
 )
 
 type Config struct {

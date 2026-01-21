@@ -16,7 +16,7 @@ sudo brew services start safechain-ultimate
 
 Start PowerShell as Administrator and run:
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/AikidoSec/safechain-ultimate/releases/latest/download/SafeChainUltimate-windows-amd64.msi" -OutFile "SafeChainUltimate.msi"
+Invoke-WebRequest -Uri "https://github.com/AikidoSec/safechain-internals/releases/latest/download/SafeChainUltimate-windows-amd64.msi" -OutFile "SafeChainUltimate.msi"
 msiexec /i SafeChainUltimate.msi /qn /norestart
 ```
 

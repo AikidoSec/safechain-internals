@@ -5,9 +5,9 @@ BINARY_NAME_UI=safechain-ultimate-ui
 VERSION?=dev
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LDFLAGS=-X 'github.com/AikidoSec/safechain-ultimate/internal/version.Version=$(VERSION)' \
-		-X 'github.com/AikidoSec/safechain-ultimate/internal/version.BuildTime=$(BUILD_TIME)' \
-		-X 'github.com/AikidoSec/safechain-ultimate/internal/version.GitCommit=$(GIT_COMMIT)'
+LDFLAGS=-X 'github.com/AikidoSec/safechain-internals/internal/version.Version=$(VERSION)' \
+		-X 'github.com/AikidoSec/safechain-internals/internal/version.BuildTime=$(BUILD_TIME)' \
+		-X 'github.com/AikidoSec/safechain-internals/internal/version.GitCommit=$(GIT_COMMIT)'
 RELEASE_LDFLAGS=$(LDFLAGS) -s -w
 
 BIN_DIR=bin

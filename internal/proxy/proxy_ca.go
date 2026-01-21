@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/AikidoSec/safechain-ultimate/internal/platform"
-	"github.com/AikidoSec/safechain-ultimate/internal/utils"
+	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
 func GetProxyCAInstalledMarker() string {

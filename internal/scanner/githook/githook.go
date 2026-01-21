@@ -3,7 +3,7 @@ package githook
 import (
 	"context"
 
-	"github.com/AikidoSec/safechain-ultimate/internal/scanner"
+	"github.com/AikidoSec/safechain-internals/internal/scanner"
 )
 
 type GitHookScanner struct{}

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/AikidoSec/safechain-ultimate/internal/platform"
-	"github.com/AikidoSec/safechain-ultimate/internal/scanner"
-	"github.com/AikidoSec/safechain-ultimate/internal/utils"
+	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/scanner"
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
 const (

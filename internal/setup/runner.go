@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	set_system_proxy "github.com/AikidoSec/safechain-ultimate/internal/setup/steps/01_set_system_proxy"
+	set_system_proxy "github.com/AikidoSec/safechain-internals/internal/setup/steps/01_set_system_proxy"
 )
 
 type Runner struct {

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/AikidoSec/safechain-ultimate/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
 
 func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {

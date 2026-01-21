@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AikidoSec/safechain-ultimate/internal/utils"
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 )
