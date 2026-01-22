@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use rama::{
-    Layer,
+    Layer, Service,
     error::{ErrorContext as _, OpaqueError},
     extensions::ExtensionsMut,
     graceful::ShutdownGuard,
@@ -19,13 +19,13 @@ use rama::{
     },
     layer::ConsumeErrLayer,
     net::{
-        address::SocketAddress, http::RequestContext, proxy::ProxyTarget,
+        address::SocketAddress, http::RequestContext, proxy::ProxyTarget, socket::Interface,
         stream::layer::http::BodyLimitLayer,
     },
     proxy::socks5::{self, Socks5Acceptor, server::Socks5PeekRouter},
     rt::Executor,
     service::service_fn,
-    tcp::server::TcpListener,
+    tcp::{TcpStream, server::TcpListener},
     telemetry::tracing::{self, Level},
     tls::boring::server::TlsAcceptorLayer,
 };
@@ -36,7 +36,7 @@ use rama::{
     utils::str::arcstr::arcstr,
 };
 
-use crate::{Args, firewall::Firewall};
+use crate::firewall::Firewall;
 
 #[cfg(feature = "har")]
 use crate::diagnostics::har::HARExportLayer;
@@ -52,21 +52,52 @@ pub use self::auth::{FirewallUserConfig, HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG}
 /// Protects against memory exhaustion from excessively large payloads.
 const MAX_BODY_SIZE: usize = 500 * 1024 * 1024; // 500 MB
 
-/// Runs the MITM HTTP(S)/SOCKS(5) Proxy server,
+#[derive(Debug)]
+/// The MITM HTTP(S)/SOCKS(5) Proxy server,
 /// including the firewall for blocking relevant requests
 /// and modifying responses.
-pub async fn run_proxy_server(
-    args: Args,
+///
+/// You can create it using [`build_proxy_server`]
+/// or build and run it directly using [`run_proxy_server`].
+///
+/// The first is useful for lib usage, while the latter is mostly
+/// for the proxycli use-case.
+pub struct ProxyServer<S> {
+    service: S,
+    socket_address: SocketAddress,
+    listener: TcpListener,
+}
+
+impl<S> ProxyServer<S>
+where
+    S: Service<TcpStream> + Clone,
+{
+    /// The (local) address this proxy server is bound to.
+    pub fn socket_address(&self) -> SocketAddress {
+        self.socket_address
+    }
+
+    /// proxy connections from this (proxy) server.
+    pub async fn serve(self) -> Result<(), OpaqueError> {
+        self.listener
+            .serve(BodyLimitLayer::symmetric(MAX_BODY_SIZE).into_layer(self.service))
+            .await;
+        Ok(())
+    }
+}
+
+pub async fn build_proxy_server(
+    bind: Interface,
+    mitm_all: bool,
     guard: ShutdownGuard,
     tls_acceptor: TlsAcceptorLayer,
-    proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
     firewall: Firewall,
     #[cfg(feature = "har")] har_export_layer: HARExportLayer,
-) -> Result<(), OpaqueError> {
+) -> Result<ProxyServer<impl Service<TcpStream> + Clone>, OpaqueError> {
     let exec = Executor::graceful(guard.clone());
 
     let tcp_service = TcpListener::build(exec.clone())
-        .bind(args.bind)
+        .bind(bind)
         .await
         .map_err(OpaqueError::from_boxed)
         .context("bind TCP network interface for proxy")?;
@@ -79,7 +110,7 @@ pub async fn run_proxy_server(
 
     let http_proxy_mitm_server = self::server::new_mitm_server(
         guard.clone(),
-        args.mitm_all,
+        mitm_all,
         tls_acceptor.clone(),
         firewall.clone(),
         #[cfg(feature = "har")]
@@ -87,7 +118,7 @@ pub async fn run_proxy_server(
     )?;
     let socks5_proxy_mitm_server = self::server::new_mitm_server(
         guard.clone(),
-        args.mitm_all,
+        mitm_all,
         tls_acceptor,
         firewall,
         #[cfg(feature = "har")]
@@ -136,21 +167,46 @@ pub async fn run_proxy_server(
     let tcp_inner_svc = socks5_proxy_router.with_fallback(http_service);
 
     tracing::info!(proxy.address = %proxy_addr, "local HTTP(S)/SOCKS5 proxy ready");
-    crate::server::write_server_socket_address_as_file(&args.data, "proxy", proxy_addr.into())
-        .await?;
-    if proxy_addr_tx.send(proxy_addr.into()).is_err() {
+
+    Ok(ProxyServer {
+        service: tcp_inner_svc,
+        socket_address: proxy_addr.into(),
+        listener: tcp_service,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn run_proxy_server(
+    bind: Interface,
+    data: &Path,
+    mitm_all: bool,
+    guard: ShutdownGuard,
+    tls_acceptor: TlsAcceptorLayer,
+    proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
+    firewall: Firewall,
+    #[cfg(feature = "har")] har_export_layer: HARExportLayer,
+) -> Result<(), OpaqueError> {
+    let proxy_server = build_proxy_server(
+        bind,
+        mitm_all,
+        guard,
+        tls_acceptor,
+        firewall,
+        #[cfg(feature = "har")]
+        har_export_layer,
+    )
+    .await?;
+
+    let proxy_addr = proxy_server.socket_address();
+
+    crate::server::write_server_socket_address_as_file(data, "proxy", proxy_addr).await?;
+    if proxy_addr_tx.send(proxy_addr).is_err() {
         return Err(OpaqueError::from_display(
             "failed to send proxy addr to meta server task",
         ));
     }
 
-    // sent proxy addr to firewall
-
-    tcp_service
-        .serve(BodyLimitLayer::symmetric(MAX_BODY_SIZE).into_layer(tcp_inner_svc))
-        .await;
-
-    Ok(())
+    proxy_server.serve().await
 }
 
 async fn http_connect_accept(mut req: Request) -> Result<(Response, Request), Response> {

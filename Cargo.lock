@@ -1579,7 +1579,7 @@ checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
 
 [[package]]
 name = "netbench"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "clap",
  "mimalloc",
@@ -2809,7 +2809,20 @@ checksum = "a50f4cf475b65d88e057964e0e9bb1f0aa9bbb2036dc65c64596b42932536984"
 
 [[package]]
 name = "safechain-proxy"
-version = "0.1.0"
+version = "0.2.1"
+dependencies = [
+ "clap",
+ "mimalloc",
+ "rama",
+ "safechain-proxy-lib",
+ "static_vcruntime",
+ "tikv-jemallocator",
+ "tokio",
+]
+
+[[package]]
+name = "safechain-proxy-lib"
+version = "0.2.1"
 dependencies = [
  "apple-native-keyring-store",
  "arc-swap",
@@ -2818,7 +2831,6 @@ dependencies = [
  "keyring-core",
  "linux-keyutils-keyring-store",
  "lz4_flex",
- "mimalloc",
  "parking_lot",
  "postcard",
  "radix_trie",
@@ -2832,7 +2844,6 @@ dependencies = [
  "serde_test",
  "static_vcruntime",
  "sudo",
- "tikv-jemallocator",
  "tokio",
  "tracing-test",
  "windows-native-keyring-store",
