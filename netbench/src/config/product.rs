@@ -167,6 +167,8 @@ async fn generate_random_uri(product: Product) -> Result<Uri, OpaqueError> {
                 .choose(&mut rng())
                 .context("select random pypi path template")?;
 
+            // TODO: make this configurable via cli arg
+
             if rand::random_bool(0.1) {
                 let entry = entries
                     .choose(&mut rng())
@@ -247,7 +249,7 @@ fn shared_download_client() -> BoxService<Request, Response, OpaqueError> {
             MapResponseBodyLayer::new(Body::new),
             DecompressionLayer::new(),
             MapErrLayer::new(OpaqueError::from_std),
-            TimeoutLayer::new(Duration::from_secs(60)), // NOTE: if you have slow servers this might need to be more
+            TimeoutLayer::new(Duration::from_secs(60)),
             RetryLayer::new(
                 ManagedPolicy::default().with_backoff(
                     ExponentialBackoff::new(
