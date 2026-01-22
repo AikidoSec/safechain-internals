@@ -1,0 +1,94 @@
+#!/bin/bash
+
+# =============================================================================
+# SafeChain Ultimate - Uninstall Script
+# =============================================================================
+# This script completely removes SafeChain Ultimate from the system.
+# It is intended to be shipped within the .pkg installer and installed to:
+# /Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall
+# =============================================================================
+
+set -e
+
+INSTALL_DIR="/Library/Application Support/AikidoSecurity/SafeChainUltimate"
+LOGS_DIR="/Library/Logs/AikidoSecurity/SafeChainUltimate"
+LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist"
+DAEMON_LABEL="com.aikidosecurity.safechainultimate"
+BINARY="$INSTALL_DIR/bin/safechain-ultimate"
+
+echo "========================================="
+echo "SafeChain Ultimate - Uninstaller"
+echo "========================================="
+echo ""
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Error: This script must be run as root (use sudo)"
+    exit 1
+fi
+
+echo "Stopping SafeChain Ultimate processes..."
+
+if launchctl list | grep -q "$DAEMON_LABEL"; then
+    echo "  Stopping daemon via launchctl..."
+    launchctl bootout system/"$DAEMON_LABEL" 2>/dev/null || {
+        echo "  Trying alternative unload method..."
+        launchctl unload "$LAUNCHDAEMON_PLIST" 2>/dev/null || true
+    }
+    echo "  ✓ Daemon stopped"
+else
+    echo "  Daemon not running"
+fi
+
+pkill -f "safechain-ultimate-ui" 2>/dev/null && echo "  ✓ UI process stopped" || echo "  UI process not running"
+pkill -f "safechain-proxy" 2>/dev/null && echo "  ✓ Proxy process stopped" || echo "  Proxy process not running"
+pkill -f "safechain-ultimate" 2>/dev/null && echo "  ✓ Daemon process stopped" || echo "  Daemon process not running"
+
+echo ""
+
+if [ -f "$BINARY" ]; then
+    echo "Running teardown..."
+    "$BINARY" --teardown || {
+        echo "  Warning: Teardown command failed (may already be torn down)"
+    }
+    echo "  ✓ Teardown complete"
+else
+    echo "Warning: Binary not found at $BINARY, skipping teardown"
+fi
+
+echo ""
+echo "Removing installed files..."
+
+if [ -f "$LAUNCHDAEMON_PLIST" ]; then
+    rm -f "$LAUNCHDAEMON_PLIST"
+    echo "  ✓ Removed LaunchDaemon plist"
+fi
+
+if [ -d "$INSTALL_DIR" ]; then
+    rm -rf "$INSTALL_DIR"
+    echo "  ✓ Removed application files"
+fi
+
+if [ -d "$LOGS_DIR" ]; then
+    rm -rf "$LOGS_DIR"
+    echo "  ✓ Removed log files"
+fi
+
+AIKIDO_DIR="/Library/Application Support/AikidoSecurity"
+if [ -d "$AIKIDO_DIR" ] && [ -z "$(ls -A "$AIKIDO_DIR" 2>/dev/null)" ]; then
+    rmdir "$AIKIDO_DIR" 2>/dev/null || true
+    echo "  ✓ Removed empty AikidoSecurity directory"
+fi
+
+AIKIDO_LOGS_DIR="/Library/Logs/AikidoSecurity"
+if [ -d "$AIKIDO_LOGS_DIR" ] && [ -z "$(ls -A "$AIKIDO_LOGS_DIR" 2>/dev/null)" ]; then
+    rmdir "$AIKIDO_LOGS_DIR" 2>/dev/null || true
+    echo "  ✓ Removed empty AikidoSecurity logs directory"
+fi
+
+echo ""
+echo "========================================="
+echo "✓ SafeChain Ultimate has been uninstalled"
+echo "========================================="
+echo ""
+
+exit 0
