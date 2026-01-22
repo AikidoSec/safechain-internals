@@ -4,12 +4,14 @@ A lightweight background agent that provides real-time security scanning for you
 
 ## Installation
 
-### macOS (Homebrew)
+### macOS
 
+Download and run the latest PKG installer from the [releases page](https://github.com/AikidoSec/safechain-internals/releases).
+
+Or install via command line:
 ```bash
-brew tap AikidoSec/safechain-ultimate
-brew install safechain-ultimate
-sudo brew services start safechain-ultimate
+curl -LO "https://github.com/AikidoSec/safechain-internals/releases/latest/download/SafeChainUltimate-macos-arm64.pkg"
+sudo installer -pkg SafeChainUltimate-macos-arm64.pkg -target /
 ```
 
 ### Windows
@@ -22,11 +24,11 @@ msiexec /i SafeChainUltimate.msi /qn /norestart
 
 ## Uninstall
 
-### macOS (Homebrew)
+### macOS
 
+Run the uninstall script that was installed with the package:
 ```bash
-sudo brew services stop safechain-ultimate
-brew uninstall safechain-ultimate
+sudo "/Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall"
 ```
 
 ### Windows
