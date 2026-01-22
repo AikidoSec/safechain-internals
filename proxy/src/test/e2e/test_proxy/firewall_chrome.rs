@@ -1,4 +1,8 @@
-use rama::{Service, http::StatusCode, telemetry::tracing};
+use rama::{
+    Service,
+    http::{StatusCode, service::client::HttpClientExt as _},
+    telemetry::tracing,
+};
 
 use crate::test::e2e;
 
@@ -34,21 +38,11 @@ async fn test_chrome_blocks_extension_with_version() {
     let runtime = e2e::runtime::get().await;
     let client = runtime.client_with_http_proxy().await;
 
-    let req = e2e::har::parse_har_request(
-        r##"{
-    "method": "GET",
-    "url": "https://clients2.google.com/service/update2/crx?x=id%3Dlajondecmobodlejlcjllhojikagldgd%26v%3D1.0.0&response=redirect",
-    "httpVersion": "2",
-    "cookies": [],
-    "headers": [],
-    "queryString": [],
-    "postData": null,
-    "headersSize": 4075,
-    "bodySize": 0
-}"##,
-    );
-
-    let resp = client.serve(req).await.unwrap();
+    let resp = client
+        .get("https://clients2.google.com/service/update2/crx?x=id%3Dlajondecmobodlejlcjllhojikagldgd%26v%3D1.0.0&response=redirect")
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(StatusCode::FORBIDDEN, resp.status());
 }
@@ -59,22 +53,12 @@ async fn test_chrome_case_insensitive_blocking() {
     let runtime = e2e::runtime::get().await;
     let client = runtime.client_with_http_proxy().await;
 
-    // Extension ID in uppercase - should still be blocked (case-insensitive)
-    let req = e2e::har::parse_har_request(
-        r##"{
-    "method": "GET",
-    "url": "https://clients2.google.com/service/update2/crx?x=id%3DLAJONDECMOBODLEJLCJLLHOJIKAGLDGD",
-    "httpVersion": "2",
-    "cookies": [],
-    "headers": [],
-    "queryString": [],
-    "postData": null,
-    "headersSize": 4075,
-    "bodySize": 0
-}"##,
-    );
-
-    let resp = client.serve(req).await.unwrap();
+    // Extension ID in uppercase - should still be blocked
+    let resp = client
+        .get("https://clients2.google.com/service/update2/crx?x=id%3DLAJONDECMOBODLEJLCJLLHOJIKAGLDGD")
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(StatusCode::FORBIDDEN, resp.status());
 }
@@ -86,21 +70,11 @@ async fn test_chrome_allows_non_malware_extension() {
     let client = runtime.client_with_http_proxy().await;
 
     // A safe extension ID that's not in the malware list
-    let req = e2e::har::parse_har_request(
-        r##"{
-    "method": "GET",
-    "url": "https://clients2.google.com/service/update2/crx?x=id%3Dsafeextension12345",
-    "httpVersion": "2",
-    "cookies": [],
-    "headers": [],
-    "queryString": [],
-    "postData": null,
-    "headersSize": 4075,
-    "bodySize": 0
-}"##,
-    );
-
-    let resp = client.serve(req).await.unwrap();
+    let resp = client
+        .get("https://clients2.google.com/service/update2/crx?x=id%3Dsafeextension12345")
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(StatusCode::OK, resp.status());
 }

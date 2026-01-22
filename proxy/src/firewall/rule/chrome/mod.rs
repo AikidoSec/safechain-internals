@@ -115,7 +115,7 @@ impl Rule for RuleChrome {
         );
 
         if self.is_extension_id_malware(product_id.as_str()) {
-            tracing::trace!(
+            tracing::debug!(
                 http.url.full = %req.uri(),
                 http.request.method = %req.method(),
                 "blocked Chrome extension: {product_id}, version: {:?}",
@@ -144,6 +144,7 @@ struct ChromeExtensionRequestInfo {
 
 impl RuleChrome {
     fn is_extension_id_malware(&self, extension_id: &str) -> bool {
+
         // Chrome malware list format: "Full Title - Chrome Web Store@<extension-id>"
         let suffix = format!("@{}", extension_id);
         let suffix_lower = suffix.to_ascii_lowercase();
@@ -159,11 +160,6 @@ impl RuleChrome {
         req: &Request,
     ) -> Option<ChromeExtensionRequestInfo> {
         if !starts_with_ignore_ascii_case(req.uri().path(), "/service/update2/crx") {
-            tracing::trace!(
-                http.url.full = %req.uri(),
-                http.request.method = %req.method(),
-                "chrome rule: no matching path found; req can passthrough",
-            );
             return None;
         }
 
@@ -178,32 +174,22 @@ impl RuleChrome {
         }
 
         let Ok(Query(QueryParameters { x, v })) = Query::parse_query_str(req.uri().query()?) else {
-            tracing::trace!(
-                http.url.full = %req.uri(),
-                http.request.method = %req.method(),
-                "chrome rule: query empty or failed to parse into a known value; req can passthrough",
-            );
             return None;
         };
 
         let Some(product_id) = x.strip_prefix("id=").map(|s| s.trim()) else {
-            tracing::trace!(
-                http.url.full = %req.uri(),
-                http.request.method = %req.method(),
-                "chrome rule: failed to extract product id from parsed query, req can passthrough",
-            );
             return None;
         };
 
-        // Extract version from either:
-        // 1. Separate query parameter: ?x=id=<id>&v=<version>
-        // 2. Embedded in x parameter (URL encoded): ?x=id%3D<id>%26v%3D<version>
         let (product_id, version) = if let Some(version_param) = v {
             // Case 1: Version in separate query parameter
+            // Example: ?x=id=abcdefghijklmnop&v=1.2.3
             let parsed_version = PackageVersion::from_str(version_param.as_ref()).ok();
             (product_id, parsed_version)
         } else if let Some((id, rest)) = product_id.split_once('&') {
-            // Case 2: Version embedded in x parameter after &
+            // Case 2: Version embedded inside the x parameter (URL-encoded in original request)
+            // Example: ?x=id%3Dabcdefghijklmnop%26v%3D1.2.3
+            // After URL decoding, x becomes: "id=abcdefghijklmnop&v=1.2.3"
             let parsed_version = rest
                 .strip_prefix("v=")
                 .and_then(|v| PackageVersion::from_str(v.trim()).ok());
