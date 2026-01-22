@@ -178,3 +178,36 @@ async fn test_evaluate_request_allows_when_not_malware() {
         RequestAction::Block(_) => panic!("expected request to be allowed"),
     }
 }
+
+#[test]
+fn test_is_extension_id_malware_exact_match() {
+    let rule = RuleChrome::new_test(["Malware - Chrome Web Store@testid123"]);
+    assert!(rule.is_extension_id_malware("testid123"));
+}
+
+#[test]
+fn test_is_extension_id_malware_no_match() {
+    let rule = RuleChrome::new_test(["Malware - Chrome Web Store@testid123"]);
+    assert!(!rule.is_extension_id_malware("differentid456"));
+}
+
+#[test]
+fn test_is_extension_id_malware_case_insensitive() {
+    let rule = RuleChrome::new_test(["Malware - Chrome Web Store@TestID123"]);
+    assert!(rule.is_extension_id_malware("testid123"));
+    assert!(rule.is_extension_id_malware("TESTID123"));
+    assert!(rule.is_extension_id_malware("TeStId123"));
+}
+
+#[test]
+fn test_is_extension_id_malware_multiple_entries() {
+    let rule = RuleChrome::new_test([
+        "Malware A - Chrome Web Store@malware-a",
+        "Malware B - Chrome Web Store@malware-b",
+        "Malware C - Chrome Web Store@malware-c",
+    ]);
+    assert!(rule.is_extension_id_malware("malware-a"));
+    assert!(rule.is_extension_id_malware("malware-b"));
+    assert!(rule.is_extension_id_malware("malware-c"));
+    assert!(!rule.is_extension_id_malware("safe-extension"));
+}

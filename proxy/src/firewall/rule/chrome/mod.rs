@@ -145,16 +145,15 @@ struct ChromeExtensionRequestInfo {
 impl RuleChrome {
     fn is_extension_id_malware(&self, extension_id: &str) -> bool {
         // Chrome malware list format: "Full Title - Chrome Web Store@<extension-id>"
-        // We need to do suffix matching since the extension ID is at the end.
         let suffix = format!("@{}", extension_id);
         let suffix_lower = suffix.to_ascii_lowercase();
 
         let guard = self.remote_malware_list.find_entries("").guard;
+
         guard
             .iter()
-            .any(|(key, _): (&String, _)| key.to_ascii_lowercase().ends_with(&suffix_lower))
+            .any(|(key, _)| key.to_ascii_lowercase().ends_with(&suffix_lower))
     }
-
     fn extract_chrome_ext_info_from_req(
         &self,
         req: &Request,
@@ -200,18 +199,18 @@ impl RuleChrome {
         // 1. Separate query parameter: ?x=id=<id>&v=<version>
         // 2. Embedded in x parameter (URL encoded): ?x=id%3D<id>%26v%3D<version>
         let (product_id, version) = if let Some(version_param) = v {
-            let parsed = PackageVersion::from_str(version_param.as_ref()).ok();
-            (product_id, parsed)
+            // Case 1: Version in separate query parameter
+            let parsed_version = PackageVersion::from_str(version_param.as_ref()).ok();
+            (product_id, parsed_version)
+        } else if let Some((id, rest)) = product_id.split_once('&') {
+            // Case 2: Version embedded in x parameter after &
+            let parsed_version = rest
+                .strip_prefix("v=")
+                .and_then(|v| PackageVersion::from_str(v.trim()).ok());
+            (id, parsed_version)
         } else {
-            product_id
-                .split_once('&')
-                .map(|(id, rest)| {
-                    let version = rest
-                        .strip_prefix("v=")
-                        .and_then(|v| PackageVersion::from_str(v.trim()).ok());
-                    (id, version)
-                })
-                .unwrap_or((product_id, None))
+            // No version found
+            (product_id, None)
         };
 
         let product_id = ArcStr::from(product_id);

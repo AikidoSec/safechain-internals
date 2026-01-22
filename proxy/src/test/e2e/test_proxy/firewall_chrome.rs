@@ -27,3 +27,80 @@ async fn test_google_har_replay_blocked_plugin() {
 
     assert_eq!(StatusCode::FORBIDDEN, resp.status());
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_chrome_blocks_extension_with_version() {
+    let runtime = e2e::runtime::get().await;
+    let client = runtime.client_with_http_proxy().await;
+
+    let req = e2e::har::parse_har_request(
+        r##"{
+    "method": "GET",
+    "url": "https://clients2.google.com/service/update2/crx?x=id%3Dlajondecmobodlejlcjllhojikagldgd%26v%3D1.0.0&response=redirect",
+    "httpVersion": "2",
+    "cookies": [],
+    "headers": [],
+    "queryString": [],
+    "postData": null,
+    "headersSize": 4075,
+    "bodySize": 0
+}"##,
+    );
+
+    let resp = client.serve(req).await.unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_chrome_case_insensitive_blocking() {
+    let runtime = e2e::runtime::get().await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // Extension ID in uppercase - should still be blocked (case-insensitive)
+    let req = e2e::har::parse_har_request(
+        r##"{
+    "method": "GET",
+    "url": "https://clients2.google.com/service/update2/crx?x=id%3DLAJONDECMOBODLEJLCJLLHOJIKAGLDGD",
+    "httpVersion": "2",
+    "cookies": [],
+    "headers": [],
+    "queryString": [],
+    "postData": null,
+    "headersSize": 4075,
+    "bodySize": 0
+}"##,
+    );
+
+    let resp = client.serve(req).await.unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_chrome_allows_non_malware_extension() {
+    let runtime = e2e::runtime::get().await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // A safe extension ID that's not in the malware list
+    let req = e2e::har::parse_har_request(
+        r##"{
+    "method": "GET",
+    "url": "https://clients2.google.com/service/update2/crx?x=id%3Dsafeextension12345",
+    "httpVersion": "2",
+    "cookies": [],
+    "headers": [],
+    "queryString": [],
+    "postData": null,
+    "headersSize": 4075,
+    "bodySize": 0
+}"##,
+    );
+
+    let resp = client.serve(req).await.unwrap();
+
+    assert_eq!(StatusCode::OK, resp.status());
+}
