@@ -7,7 +7,7 @@ Thank you for your interest in contributing to SafeChain Ultimate! This guide wi
 Before you begin, ensure you have the following installed:
 
 - **Go**: Version 1.25 or higher. You can download it from [golang.org](https://golang.org/).
-- **Rust**: Version 1.91 or higher. You can install it using [rustup](https://rustup.rs/).
+- **Rust**: Version 1.93 or higher. You can install it using [rustup](https://rustup.rs/).
 - **Make**: Typically pre-installed on Unix-like systems, used for building.
 - **Just**: You can install it via a package manager of choice: <https://just.systems/man/en/packages.html>
 
