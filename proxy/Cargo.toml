@@ -4,7 +4,7 @@ description = "Core library for safechain-proxy (cli)"
 version = { workspace = true }
 edition = "2024"
 publish = false
-rust-version = "1.91"
+rust-version = "1.93"
 readme = "../docs/proxy.md"
 resolver = "3"
 
