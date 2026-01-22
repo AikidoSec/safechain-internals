@@ -2,9 +2,9 @@
 name = "safechain-proxy"
 description = "MITM SafeChain HTTP(S)/SOCKS5 Proxy for Developer Security"
 version = { workspace = true }
-edition = "2024"
+edition = { workspace = true }
+rust-version = { workspace = true }
 publish = false
-rust-version = "1.91"
 readme = "../docs/proxy.md"
 resolver = "3"
 
