@@ -12,6 +12,10 @@
     
     <Media Id="1" Cabinet="SafeChainUltimate.cab" EmbedCab="yes" />
 
+    <!-- Application icon for Add/Remove Programs -->
+    <Icon Id="ProductIcon" SourceFile="$(var.ProjectDir)\packaging\shared\icons\SafeChain.ico" />
+    <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
+
     <!-- Define installation directory structure -->
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLDIR" Name="AikidoSecurity">

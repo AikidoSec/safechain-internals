@@ -99,6 +99,13 @@ cp "$SCRIPT_DIR/welcome.html" "$RESOURCES_DIR/"
 cp "$SCRIPT_DIR/conclusion.html" "$RESOURCES_DIR/"
 cp "$SCRIPT_DIR/license.txt" "$RESOURCES_DIR/"
 
+# Copy background image if available
+BACKGROUND_PNG="$PROJECT_DIR/packaging/shared/icons/SafeChain-128.png"
+if [ -f "$BACKGROUND_PNG" ]; then
+    cp "$BACKGROUND_PNG" "$RESOURCES_DIR/background.png"
+    echo "Using background image for installer"
+fi
+
 # Build the distribution package
 OUTPUT_DIST_PKG="$OUTPUT_DIR/SafeChainUltimate-$VERSION-$ARCH.pkg"
 
@@ -112,6 +119,34 @@ productbuild \
 if [ $? -eq 0 ]; then
     echo ""
     echo "✓ Distribution package built successfully: $OUTPUT_DIST_PKG"
+    
+    # Set custom icon on the .pkg file (Finder display)
+    ICON_FILE="$PROJECT_DIR/packaging/shared/icons/SafeChain.icns"
+    if [ -f "$ICON_FILE" ]; then
+        echo ""
+        echo "Setting custom icon on package..."
+        # Use sips and DeRez/Rez to set custom icon (macOS native approach)
+        if command -v DeRez &> /dev/null && command -v Rez &> /dev/null && command -v SetFile &> /dev/null; then
+            TMP_RSRC=$(mktemp)
+            # Extract icon resource from .icns
+            DeRez -only icns "$ICON_FILE" > "$TMP_RSRC" 2>/dev/null || true
+            if [ -s "$TMP_RSRC" ]; then
+                # Modify resource ID for custom icon (-16455 is the custom icon ID)
+                sed -i '' 's/data .icns. ([^)]*)/data '\''icns'\'' (-16455)/g' "$TMP_RSRC"
+                # Apply the icon resource to the .pkg file
+                Rez -append "$TMP_RSRC" -o "$OUTPUT_DIST_PKG" 2>/dev/null && \
+                SetFile -a C "$OUTPUT_DIST_PKG" 2>/dev/null && \
+                echo "✓ Custom icon set on package" || \
+                echo "Note: Could not set custom icon (this is optional)"
+            fi
+            rm -f "$TMP_RSRC"
+        else
+            echo "Note: DeRez/Rez/SetFile not available, skipping custom icon (this is optional)"
+        fi
+    else
+        echo "Note: Icon file not found at $ICON_FILE, skipping custom icon"
+    fi
+    
     echo ""
     
     # Calculate checksum

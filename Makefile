@@ -1,4 +1,4 @@
-.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-sign-local install-pkg uninstall-pkg clean test run help
+.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-sign-local install-pkg uninstall-pkg clean test run help generate-winres
 
 BINARY_NAME=safechain-ultimate
 BINARY_NAME_UI=safechain-ultimate-ui
@@ -82,11 +82,18 @@ build-darwin-amd64:
 build-darwin-arm64:
 	@$(MAKE) GOOS=darwin GOARCH=arm64 build-release
 
-build-windows-amd64:
+build-windows-amd64: generate-winres
 	@$(MAKE) GOOS=windows GOARCH=amd64 build-release
 
-build-windows-arm64:
+build-windows-arm64: generate-winres
 	@$(MAKE) GOOS=windows GOARCH=arm64 build-release
+
+generate-winres:
+	@echo "Generating Windows resources..."
+	@command -v go-winres >/dev/null 2>&1 || go install github.com/tc-hib/go-winres@latest
+	@cd cmd/daemon && go-winres make --in winres/winres.json --out rsrc
+	@cd cmd/ui && go-winres make --in winres/winres.json --out rsrc
+	@echo "Windows resources generated"
 
 build-proxy:
 	@echo "Building safechain-proxy..."
@@ -138,4 +145,5 @@ test:
 
 clean:
 	rm -rf $(BIN_DIR) $(DIST_DIR)
+	rm -f cmd/daemon/rsrc_*.syso cmd/ui/rsrc_*.syso
 	@echo "Cleaned build artifacts"

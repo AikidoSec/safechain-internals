@@ -47,6 +47,7 @@ mimalloc = { version = "0.1", default-features = false }
 
 [target.'cfg(target_os = "windows")'.build-dependencies]
 static_vcruntime = "3.0"
+winresource = "0.1"
 
 [dependencies.rama]
 workspace = true

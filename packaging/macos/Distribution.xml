@@ -5,6 +5,10 @@
     <domains enable_localSystem="true"/>
     <options customize="never" require-scripts="true" rootVolumeOnly="true" />
     
+    <!-- Background image for installer window (optional) -->
+    <background file="background.png" mime-type="image/png" alignment="bottomleft" scaling="none" />
+    <background-darkAqua file="background.png" mime-type="image/png" alignment="bottomleft" scaling="none" />
+    
     <!-- Define documents displayed at various steps -->
     <welcome file="welcome.html" mime-type="text/html" />
     <license file="license.txt" mime-type="text/plain" />
