@@ -113,6 +113,12 @@ chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
 chmod 755 "$INSTALL_DIR/bin/safechain-ultimate-ui"
 chmod 755 "$INSTALL_DIR/bin/safechain-proxy"
 
+# Copy scripts
+echo "Copying scripts..."
+mkdir -p "$INSTALL_DIR/scripts"
+cp "$SCRIPT_DIR/scripts/uninstall" "$INSTALL_DIR/scripts/uninstall"
+chmod 755 "$INSTALL_DIR/scripts/uninstall"
+
 # Copy LaunchDaemon plist
 echo "Copying LaunchDaemon plist..."
 cp "$SCRIPT_DIR/com.aikidosecurity.safechainultimate.plist" "$LAUNCHDAEMONS_DIR/"
