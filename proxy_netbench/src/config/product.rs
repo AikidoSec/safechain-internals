@@ -8,7 +8,7 @@ use rama::{
     Layer as _, Service as _,
     error::{ErrorContext as _, OpaqueError},
     http::{
-        Body, BodyExtractExt, Request, Response, Uri,
+        Body, Request, Response, Uri,
         client::EasyHttpWebClient,
         headers::specifier::{Quality, QualityValue},
         layer::{
@@ -18,7 +18,6 @@ use rama::{
             retry::{ManagedPolicy, RetryLayer},
             timeout::TimeoutLayer,
         },
-        service::client::HttpClientExt as _,
     },
     layer::MapErrLayer,
     service::BoxService,
@@ -34,7 +33,7 @@ use rand::{
     rng,
     seq::IndexedRandom,
 };
-use serde::Deserialize;
+use safechain_proxy_lib::{firewall::malware_list, storage};
 use tokio::sync::Mutex;
 
 rama::utils::macros::enums::enum_builder! {
@@ -53,6 +52,7 @@ rama::utils::macros::enums::enum_builder! {
 
 /// Generate N random requests for the given product ratio
 pub async fn rand_requests(
+    sync_storage: &storage::SyncCompactDataStorage,
     request_count: usize,
     products: Option<ProductValues>,
 ) -> Result<Vec<Request>, OpaqueError> {
@@ -64,7 +64,7 @@ pub async fn rand_requests(
     let dist = WeightedIndex::new(&weights).unwrap();
     for _ in 0..request_count {
         let product = products[dist.sample(&mut rand::rng())].value.clone();
-        let uri = generate_random_uri(product).await?;
+        let uri = generate_random_uri(sync_storage, product).await?;
 
         let mut req = Request::new(Body::empty());
         *req.uri_mut() = uri;
@@ -95,16 +95,11 @@ fn default_product_values() -> ProductValues {
     ]
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct ListDataEntry {
-    pub package_name: String,
-    pub version: Option<String>,
-}
-
-// TODO: move malware download to other module and cache it in tmp fs file
-
-async fn generate_random_uri(product: Product) -> Result<Uri, OpaqueError> {
-    static LISTS: LazyLock<Mutex<HashMap<Product, Vec<ListDataEntry>>>> =
+async fn generate_random_uri(
+    sync_storage: &storage::SyncCompactDataStorage,
+    product: Product,
+) -> Result<Uri, OpaqueError> {
+    static LISTS: LazyLock<Mutex<HashMap<Product, Vec<malware_list::ListDataEntry>>>> =
         LazyLock::new(Default::default);
     let mut lists = LISTS.lock().await;
     let list = lists.entry(product.clone());
@@ -115,12 +110,14 @@ async fn generate_random_uri(product: Product) -> Result<Uri, OpaqueError> {
                 Product::None | Product::Unknown(_) => vec![],
                 Product::VSCode => {
                     download_malware_list_for_uri(
+                        sync_storage.clone(),
                         "https://malware-list.aikido.dev/malware_vscode.json",
                     )
                     .await?
                 }
                 Product::PyPI => {
                     download_malware_list_for_uri(
+                        sync_storage.clone(),
                         "https://malware-list.aikido.dev/malware_pypi.json",
                     )
                     .await?
@@ -180,7 +177,7 @@ async fn generate_random_uri(product: Product) -> Result<Uri, OpaqueError> {
                 let path = path_template
                     .replace("<publisher>", publisher)
                     .replace("<extension>", extension)
-                    .replace("<version>", entry.version.as_deref().unwrap_or("any"));
+                    .replace("<version>", &entry.version.to_string());
                 format!("https://{domain}{path}")
                     .parse()
                     .context("parse pypi uri")
@@ -215,7 +212,7 @@ async fn generate_random_uri(product: Product) -> Result<Uri, OpaqueError> {
                     .context("select random vscode malware")?;
                 template
                     .replace("<PACKAGE_NAME>", &entry.package_name)
-                    .replace("<VERSION>", entry.version.as_deref().unwrap_or("any"))
+                    .replace("<VERSION>", &entry.version.to_string())
                     .parse()
                     .context("parse vscode uri")
             } else {
@@ -229,17 +226,17 @@ async fn generate_random_uri(product: Product) -> Result<Uri, OpaqueError> {
     }
 }
 
-async fn download_malware_list_for_uri(uri: &str) -> Result<Vec<ListDataEntry>, OpaqueError> {
-    shared_download_client()
-        .get(uri)
-        .send()
-        .await
-        .context("send malware list download req")?
-        .error_for_status()
-        .context("unexpected http status")?
-        .try_into_json()
-        .await
-        .context("deserialize malware list json payload")
+async fn download_malware_list_for_uri(
+    sync_storage: storage::SyncCompactDataStorage,
+    uri: &'static str,
+) -> Result<Vec<malware_list::ListDataEntry>, OpaqueError> {
+    let client = shared_download_client();
+    malware_list::RemoteMalwareList::download_data_entry_list(
+        Uri::from_static(uri),
+        sync_storage,
+        client,
+    )
+    .await
 }
 
 fn shared_download_client() -> BoxService<Request, Response, OpaqueError> {
