@@ -5,13 +5,14 @@ use rama::{
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
-    net::address::{Domain, DomainTrie},
+    net::address::Domain,
     telemetry::tracing,
     utils::str::arcstr::{ArcStr, arcstr},
 };
 
 use crate::{
     firewall::{
+        DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
         malware_list::{MalwareEntry, PackageVersion, RemoteMalwareList},
         pac::PacScriptGenerator,
@@ -23,7 +24,7 @@ use crate::{
 use super::{BlockedRequest, RequestAction, Rule};
 
 pub(in crate::firewall) struct RuleNpm {
-    target_domains: DomainTrie<()>,
+    target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
 }
 
@@ -57,7 +58,6 @@ impl RuleNpm {
                 "registry.yarnpkg.com",
             ]
             .into_iter()
-            .map(|domain| (Domain::from_static(domain), ()))
             .collect(),
             remote_malware_list,
         })
@@ -78,12 +78,12 @@ impl Rule for RuleNpm {
 
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
-        self.target_domains.is_match_parent(domain)
+        self.target_domains.is_match(domain)
     }
 
     #[inline(always)]
     fn collect_pac_domains(&self, generator: &mut PacScriptGenerator) {
-        for (domain, _) in self.target_domains.iter() {
+        for domain in self.target_domains.iter() {
             generator.write_domain(&domain);
         }
     }

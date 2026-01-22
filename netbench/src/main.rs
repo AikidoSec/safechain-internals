@@ -9,6 +9,7 @@ use rama::{
 use clap::{Parser, Subcommand};
 
 pub mod cmd;
+pub mod config;
 pub mod utils;
 
 #[cfg(target_family = "unix")]
@@ -40,7 +41,7 @@ pub struct Args {
     #[arg(long, short = 'o', global = true)]
     pub output: Option<PathBuf>,
 
-    #[arg(long, value_name = "SECONDS", default_value_t = 1., global = true)]
+    #[arg(long, value_name = "SECONDS", default_value_t = 0., global = true)]
     /// the graceful shutdown timeout (<= 0.0 = no timeout)
     pub graceful: f64,
 }

@@ -3,7 +3,7 @@ use std::{borrow::Cow, fmt};
 use rama::{
     error::OpaqueError,
     http::{Request, Response, service::web::extract::Query},
-    net::address::{Domain, DomainTrie},
+    net::address::Domain,
     telemetry::tracing,
     utils::str::{
         arcstr::{ArcStr, arcstr},
@@ -15,6 +15,7 @@ use serde::Deserialize;
 
 use crate::{
     firewall::{
+        DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
         pac::PacScriptGenerator,
     },
@@ -25,7 +26,7 @@ use crate::{
 use super::{BlockedRequest, RequestAction, Rule};
 
 pub(in crate::firewall) struct RuleChrome {
-    target_domains: DomainTrie<()>,
+    target_domains: DomainMatcher,
 }
 
 impl RuleChrome {
@@ -33,10 +34,7 @@ impl RuleChrome {
         _data: SyncCompactDataStorage, // NOTE data will be used to backup malware list once you use a remote list here
     ) -> Result<Self, OpaqueError> {
         Ok(Self {
-            target_domains: ["clients2.google.com"]
-                .into_iter()
-                .map(|domain| (Domain::from_static(domain), ()))
-                .collect(),
+            target_domains: ["clients2.google.com"].into_iter().collect(),
         })
     }
 }
@@ -62,12 +60,12 @@ impl Rule for RuleChrome {
 
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
-        self.target_domains.is_match_parent(domain)
+        self.target_domains.is_match(domain)
     }
 
     #[inline(always)]
     fn collect_pac_domains(&self, generator: &mut PacScriptGenerator) {
-        for (domain, _) in self.target_domains.iter() {
+        for domain in self.target_domains.iter() {
             generator.write_domain(&domain);
         }
     }

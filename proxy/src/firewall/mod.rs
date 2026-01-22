@@ -29,7 +29,10 @@ pub mod malware_list;
 pub mod notifier;
 pub mod rule;
 
+mod domain_matcher;
 mod pac;
+
+use self::domain_matcher::DomainMatcher;
 
 use crate::storage::SyncCompactDataStorage;
 
