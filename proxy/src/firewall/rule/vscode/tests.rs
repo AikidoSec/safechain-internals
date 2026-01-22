@@ -1,30 +1,4 @@
 use super::*;
-use crate::firewall::malware_list::{MalwareEntry, PackageVersion, Reason};
-use radix_trie::Trie;
-
-impl RuleVSCode {
-    /// Create a test instance with custom malware extension IDs
-    pub(crate) fn new_test<I, S>(malware_extension_ids: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
-    {
-        let mut trie = Trie::new();
-        for id in malware_extension_ids {
-            let entry = MalwareEntry {
-                version: PackageVersion::Any,
-                reason: Reason::Malware,
-            };
-            trie.insert(id.into(), vec![entry]);
-        }
-
-        Self {
-            target_domains: Default::default(),
-            remote_malware_list:
-                crate::firewall::malware_list::RemoteMalwareList::from_trie_for_test(trie),
-        }
-    }
-}
 
 #[test]
 fn test_is_extension_install_asset_path() {

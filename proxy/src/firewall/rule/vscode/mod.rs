@@ -3,35 +3,23 @@ use std::fmt;
 use rama::{
     Service,
     error::{ErrorContext as _, OpaqueError},
-    extensions::ExtensionsRef as _,
     graceful::ShutdownGuard,
-    http::{
-        Body, Request, Response, StatusCode, Uri,
-        headers::{ContentLength, HeaderMapExt as _},
-        service::web::response::IntoResponse,
-    },
+    http::{Request, Response, Uri},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
     utils::str::smol_str::{SmolStr, format_smolstr},
 };
 
-use rama::http::body::util::BodyExt;
-
 use rama::utils::str::arcstr::{ArcStr, arcstr};
 
 use crate::{
     firewall::events::{BlockedArtifact, BlockedEventInfo},
-    firewall::layer::evaluate_resp::ResponseRequestDomain,
     firewall::{malware_list::RemoteMalwareList, pac::PacScriptGenerator},
-    http::{
-        KnownContentType, remove_cache_headers, response::generate_malware_blocked_response_for_req,
-    },
+    http::response::generate_malware_blocked_response_for_req,
     storage::SyncCompactDataStorage,
 };
 
 use super::{BlockedRequest, RequestAction, Rule};
-
-mod marketplace_json;
 
 pub(in crate::firewall) struct RuleVSCode {
     target_domains: DomainTrie<()>,
@@ -108,10 +96,6 @@ impl Rule for RuleVSCode {
         let path = req.uri().path();
 
         // Check for direct .vsix file downloads from the CDN
-        // VS Code can install extensions via:
-        // 1. Gallery API (handled in evaluate_response) - queries extension metadata
-        // 2. Direct .vsix downloads - can skip the API query entirely
-        // Safe-chain handles both paths
         if !Self::is_extension_install_asset_path(path) {
             tracing::trace!(
                 http.url.path = %path,
@@ -162,59 +146,7 @@ impl Rule for RuleVSCode {
     }
 
     async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
-        if !resp
-            .extensions()
-            .get::<ResponseRequestDomain>()
-            .map(|domain| self.match_domain(&domain.0))
-            .unwrap_or_default()
-        {
-            tracing::trace!("VSCode rule did not match response domain: passthrough");
-            return Ok(resp);
-        }
-
-        // Check content type; JSON responses from gallery API will be inspected for blocked extensions.
-        let is_json = resp
-            .headers()
-            .typed_get()
-            .and_then(KnownContentType::detect_from_content_type_header)
-            == Some(KnownContentType::Json);
-
-        if !is_json {
-            tracing::trace!("VSCode response is not JSON: passthrough");
-            return Ok(resp);
-        }
-
-        let (mut parts, body) = resp.into_parts();
-
-        let body_bytes = match body.collect().await {
-            Ok(collected) => collected.to_bytes(),
-            Err(err) => {
-                tracing::debug!(
-                    error = %err,
-                    "VSCode response: failed to collect body bytes; returning 502"
-                );
-                return Ok(StatusCode::BAD_GATEWAY.into_response());
-            }
-        };
-
-        // Attempt to rewrite Marketplace JSON to mark malware extensions.
-        if let Some(modified_body) =
-            self.rewrite_marketplace_json_response_body(body_bytes.as_ref())
-        {
-            tracing::debug!("VSCode response modified to mark blocked extensions");
-
-            remove_cache_headers(&mut parts.headers);
-
-            parts
-                .headers
-                .typed_insert(ContentLength(modified_body.len() as u64));
-
-            return Ok(Response::from_parts(parts, Body::from(modified_body)));
-        }
-
-        tracing::trace!("VSCode response does not contain blocked extensions: passthrough");
-
-        Ok(Response::from_parts(parts, Body::from(body_bytes)))
+        Ok(resp)
     }
 }
 
