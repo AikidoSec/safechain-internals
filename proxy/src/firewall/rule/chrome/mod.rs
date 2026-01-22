@@ -3,6 +3,7 @@ use std::{borrow::Cow, fmt, str::FromStr};
 use rama::{
     Service,
     error::{ErrorContext as _, OpaqueError},
+    extensions::ExtensionsRef,
     graceful::ShutdownGuard,
     http::{Request, Response, Uri, service::web::extract::Query},
     net::address::{Domain, DomainTrie},
@@ -20,6 +21,7 @@ use radix_trie::TrieCommon;
 use crate::{
     firewall::{
         events::{BlockedArtifact, BlockedEventInfo},
+        layer::evaluate_resp::ResponseRequestDomain,
         malware_list::{PackageVersion, RemoteMalwareList},
         pac::PacScriptGenerator,
     },
@@ -53,7 +55,7 @@ impl RuleChrome {
         .context("create remote malware list for chrome block rule")?;
 
         Ok(Self {
-            target_domains: ["clients2.google.com"]
+            target_domains: ["clients2.google.com", "update.googleapis.com"]
                 .into_iter()
                 .map(|domain| (Domain::from_static(domain), ()))
                 .collect(),
@@ -87,6 +89,16 @@ impl Rule for RuleChrome {
     }
 
     async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+        let is_update_domain = resp
+            .extensions()
+            .get::<ResponseRequestDomain>()
+            .is_some_and(|domain| domain.0.to_string() == "update.googleapis.com");
+
+        if is_update_domain {
+            // TODO: Parse Omaha JSON response for extension version info.
+            tracing::trace!("Chrome rule: update.googleapis.com response observed");
+        }
+
         Ok(resp)
     }
 
@@ -144,7 +156,6 @@ struct ChromeExtensionRequestInfo {
 
 impl RuleChrome {
     fn is_extension_id_malware(&self, extension_id: &str) -> bool {
-
         // Chrome malware list format: "Full Title - Chrome Web Store@<extension-id>"
         let suffix = format!("@{}", extension_id);
         let suffix_lower = suffix.to_ascii_lowercase();

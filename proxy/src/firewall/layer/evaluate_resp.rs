@@ -1,6 +1,7 @@
 use rama::{
     Layer, Service,
     error::{BoxError, OpaqueError},
+    extensions::ExtensionsMut as _,
     http::{Request, Response},
     telemetry::tracing,
 };
@@ -14,6 +15,9 @@ pub struct EvaluateResponseService<S> {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct ResponseRequestDomain(pub rama::net::address::Domain);
+
+#[derive(Debug, Clone)]
 /// Created using [`Firewall::into_evaluate_response_layer`].
 pub struct EvaluateResponseLayer(pub(in crate::firewall) Firewall);
 
@@ -25,11 +29,19 @@ where
     type Error = OpaqueError;
 
     async fn serve(&self, req: Request) -> Result<Self::Output, Self::Error> {
-        let resp = self
+        // Capture request context before moving the request into the inner service.
+        // This allows rules to inspect response origin (e.g. domain) in `evaluate_response`.
+        let domain = crate::http::try_get_domain_for_req(&req).map(|d| d.into_owned());
+
+        let mut resp = self
             .inner
             .serve(req)
             .await
             .map_err(|err| OpaqueError::from_boxed(err.into()))?;
+
+        if let Some(domain) = domain {
+            resp.extensions_mut().insert(ResponseRequestDomain(domain));
+        }
 
         tracing::trace!("EvaluateResponseService: evaluating response");
         self.firewall.evaluate_response(resp).await
