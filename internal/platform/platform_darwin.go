@@ -181,6 +181,7 @@ func InstallProxyCA(ctx context.Context, certPath string) error {
 	_, err := RunAsCurrentUser(ctx, "security", []string{"add-trusted-cert",
 		"-d", // Add to admin cert store; default is user
 		"-r", "trustRoot",
+		"-p", "SafeChain Ultimate",
 		"-k", "/Library/Keychains/System.keychain",
 		certPath})
 	return err
