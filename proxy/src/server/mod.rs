@@ -17,7 +17,7 @@ pub mod proxy;
 // but instead operate from within inside the proxy.
 pub mod connectivity;
 
-async fn write_server_socket_address_as_file(
+pub async fn write_server_socket_address_as_file(
     dir: &Path,
     name: &str,
     addr: SocketAddress,

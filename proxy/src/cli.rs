@@ -75,9 +75,7 @@ pub struct Args {
     pub graceful: f64,
 
     /// Optional endpoint URL to POST blocked-event notifications to.
-    ///
-    /// If omitted, blocked events are still recorded locally but not reported.
-    #[arg(long = "reporting-endpoint", value_name = "URL")]
+    #[arg(long, value_name = "URL")]
     pub reporting_endpoint: Option<Uri>,
 }
 

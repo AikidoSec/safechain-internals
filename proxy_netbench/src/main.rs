@@ -7,10 +7,10 @@ use rama::{
 };
 
 use clap::{Parser, Subcommand};
+use safechain_proxy_lib::{storage, utils};
 
 pub mod cmd;
 pub mod config;
-pub mod utils;
 
 #[cfg(target_family = "unix")]
 #[global_allocator]
@@ -41,6 +41,27 @@ pub struct Args {
     #[arg(long, short = 'o', global = true)]
     pub output: Option<PathBuf>,
 
+    /// directory in which data will be stored on the filesystem
+    #[arg(
+            long,
+            default_value = {
+                #[cfg(not(target_os = "windows"))]
+                { ".aikido/safechain-netbench" }
+                #[cfg(target_os = "windows")]
+                { ".aikido\\safechain-netbench" }
+            },
+            global = true,
+        )]
+    pub data: PathBuf,
+
+    /// secrets storage to use (e.g. for root CA)
+    #[arg(
+        long,
+        value_name = "keyring | memory | <dir>",
+        default_value = "keyring"
+    )]
+    pub secrets: storage::SyncSecrets,
+
     #[arg(long, value_name = "SECONDS", default_value_t = 0., global = true)]
     /// the graceful shutdown timeout (<= 0.0 = no timeout)
     pub graceful: f64,
@@ -51,13 +72,18 @@ pub struct Args {
 enum CliCommands {
     Run(self::cmd::run::RunCommand),
     Mock(self::cmd::mock::MockCommand),
+    Proxy(self::cmd::proxy::ProxyCommand),
 }
 
 #[tokio::main]
 async fn main() -> Result<(), BoxError> {
     let args = Args::parse();
 
-    self::utils::telemetry::init_tracing(&args)?;
+    utils::telemetry::init_tracing(Some(utils::telemetry::TelemetryConfig {
+        verbose: args.verbose,
+        pretty: args.pretty,
+        output: args.output.as_deref(),
+    }))?;
 
     let base_shutdown_signal = graceful::default_signal();
     if let Err(err) = run_with_args(base_shutdown_signal, args).await {
@@ -78,10 +104,13 @@ where
     let (error_tx, error_rx) = tokio::sync::oneshot::channel::<OpaqueError>();
     let graceful = graceful::Shutdown::new(new_shutdown_signal(error_rx, base_shutdown_signal));
 
-    graceful.spawn_task(async move {
+    graceful.spawn_task_fn(async move |guard| {
         let result = match args.cmds {
-            CliCommands::Run(args) => self::cmd::run::exec(args).await,
-            CliCommands::Mock(args) => self::cmd::mock::exec(args).await,
+            CliCommands::Run(run_args) => self::cmd::run::exec(run_args).await,
+            CliCommands::Mock(mock_args) => self::cmd::mock::exec(mock_args).await,
+            CliCommands::Proxy(proxy_args) => {
+                self::cmd::proxy::exec(args.data, guard, args.secrets, proxy_args).await
+            }
         };
         if let Err(err) = result {
             let _ = error_tx.send(err);

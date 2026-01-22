@@ -1,5 +1,5 @@
 use clap::Args;
-use rama::{error::OpaqueError, telemetry::tracing};
+use rama::{error::OpaqueError, net::socket::Interface, telemetry::tracing};
 
 use crate::config::{Scenario, ServerConfig};
 
@@ -13,6 +13,15 @@ pub struct MockCommand {
     /// Scenario to run,
     /// manually defined parameters overwrite scenario parameters.
     scenario: Option<Scenario>,
+
+    /// network interface to bind to
+    #[arg(
+        long,
+        short = 'b',
+        value_name = "INTERFACE",
+        default_value = "127.0.0.1:0"
+    )]
+    pub bind: Interface,
 }
 
 pub async fn exec(args: MockCommand) -> Result<(), OpaqueError> {
