@@ -106,7 +106,7 @@ pub async fn build_proxy_server(
         .local_addr()
         .context("fetch local addr of bound TCP port for proxy")?;
 
-    let https_client = self::client::new_https_client(firewall.clone())?;
+    let https_client = self::client::new_https_client(exec.clone(), firewall.clone())?;
 
     let http_proxy_mitm_server = self::server::new_mitm_server(
         guard.clone(),

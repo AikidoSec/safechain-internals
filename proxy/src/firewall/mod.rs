@@ -53,7 +53,8 @@ impl Firewall {
         data: SyncCompactDataStorage,
         reporting_endpoint: Option<rama::http::Uri>,
     ) -> Result<Self, OpaqueError> {
-        let inner_https_client = crate::client::new_web_client()?;
+        let exec = Executor::graceful(guard.clone());
+        let inner_https_client = crate::client::new_web_client(exec.clone())?;
 
         let shared_remote_malware_client = (
             MapResponseBodyLayer::new(Body::new),
@@ -77,10 +78,7 @@ impl Firewall {
             .boxed();
 
         let notifier = match reporting_endpoint {
-            Some(endpoint) => match self::notifier::EventNotifier::try_new(
-                Executor::graceful(guard.clone()),
-                endpoint,
-            ) {
+            Some(endpoint) => match self::notifier::EventNotifier::try_new(exec, endpoint) {
                 Ok(notifier) => Some(notifier),
                 Err(err) => {
                     tracing::warn!(

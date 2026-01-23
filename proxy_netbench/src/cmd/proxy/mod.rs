@@ -4,16 +4,21 @@ use rama::{
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
     http::Uri,
-    net::socket::Interface,
+    net::{address::SocketAddress, socket::Interface},
     telemetry::tracing,
 };
 
 use clap::Args;
-use safechain_proxy_lib::{diagnostics, firewall, server, storage, tls};
+use safechain_proxy_lib::{client, diagnostics, firewall, server, storage, tls};
 
 #[derive(Debug, Clone, Args)]
 /// run proxy in function of benchmarker
 pub struct ProxyCommand {
+    /// socket address of the mock server to be used
+    /// by proxy for all egress connections
+    #[arg(value_name = "ADDRESS", required = true)]
+    pub mock: SocketAddress,
+
     /// network interface to bind to
     #[arg(
         long,
@@ -35,9 +40,11 @@ pub struct ProxyCommand {
 pub async fn exec(
     data: PathBuf,
     guard: ShutdownGuard,
-    secrets: storage::SyncSecrets,
     args: ProxyCommand,
 ) -> Result<(), OpaqueError> {
+    tracing::info!(mock = %args.mock, "set mock server as egress address overwrite");
+    client::set_egress_address_overwrite(args.mock);
+
     tokio::fs::create_dir_all(&data)
         .await
         .with_context(|| format!("create data directory at path '{}'", data.display()))?;
@@ -50,8 +57,12 @@ pub async fn exec(
         })?;
     tracing::info!(path = ?data, "data directory ready to be used");
 
-    let (tls_acceptor, _root_ca) =
+    let secrets = storage::SyncSecrets::new_in_memory();
+
+    let (tls_acceptor, root_ca) =
         tls::new_tls_acceptor_layer(&secrets, &data_storage).context("prepare TLS acceptor")?;
+    tracing::info!(path = ?data, "write new (tmp) root CA to disk");
+    server::write_root_ca_as_file(&data, &root_ca).await?;
 
     // ensure to not wait for firewall creation in case shutdown was initiated,
     // this can happen for example in case remote lists need to be fetched and the

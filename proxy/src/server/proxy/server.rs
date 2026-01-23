@@ -60,6 +60,8 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
     firewall: Firewall,
     #[cfg(feature = "har")] har_export_layer: HARExportLayer,
 ) -> Result<MitmServer<impl Service<S, Output = (), Error = BoxError> + Clone>, OpaqueError> {
+    let exec = Executor::graceful(guard);
+
     let https_svc = (
         TraceLayer::new_for_http(),
         ConsumeErrLayer::trace(Level::DEBUG).with_response(StaticHttpProxyError),
@@ -71,9 +73,10 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
         MapResponseBodyLayer::new(Body::new),
         CompressionLayer::new(),
     )
-        .into_layer(super::client::new_https_client(firewall.clone())?);
-
-    let exec = Executor::graceful(guard);
+        .into_layer(super::client::new_https_client(
+            exec.clone(),
+            firewall.clone(),
+        )?);
 
     let http_server = HttpServer::auto(exec.clone()).service(Arc::new(https_svc));
 

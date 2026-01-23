@@ -7,7 +7,7 @@ use rama::{
 };
 
 use clap::{Parser, Subcommand};
-use safechain_proxy_lib::{storage, utils};
+use safechain_proxy_lib::utils;
 
 pub mod cmd;
 pub mod config;
@@ -53,14 +53,6 @@ pub struct Args {
             global = true,
         )]
     pub data: PathBuf,
-
-    /// secrets storage to use (e.g. for root CA)
-    #[arg(
-        long,
-        value_name = "keyring | memory | <dir>",
-        default_value = "keyring"
-    )]
-    pub secrets: storage::SyncSecrets,
 
     #[arg(long, value_name = "SECONDS", default_value_t = 0., global = true)]
     /// the graceful shutdown timeout (<= 0.0 = no timeout)
@@ -109,7 +101,7 @@ where
             CliCommands::Run(run_args) => self::cmd::run::exec(args.data, run_args).await,
             CliCommands::Mock(mock_args) => self::cmd::mock::exec(mock_args).await,
             CliCommands::Proxy(proxy_args) => {
-                self::cmd::proxy::exec(args.data, guard, args.secrets, proxy_args).await
+                self::cmd::proxy::exec(args.data, guard, proxy_args).await
             }
         };
         if let Err(err) = result {

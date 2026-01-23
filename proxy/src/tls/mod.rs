@@ -28,6 +28,11 @@ struct PemKeyCrtPair {
 pub struct RootCA(Arc<SecretBox<String>>);
 
 impl RootCA {
+    pub fn as_str(&self) -> &str {
+        let ca = self.0.expose_secret();
+        ca.as_str()
+    }
+
     pub fn as_http_response(&self) -> Response {
         let ca = self.0.expose_secret();
         ca.clone().into_response()
