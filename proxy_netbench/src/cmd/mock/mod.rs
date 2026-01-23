@@ -3,6 +3,7 @@ use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
 use rama::{
     Layer as _, Service,
     error::{ErrorContext as _, OpaqueError},
+    extensions::ExtensionsRef,
     graceful::ShutdownGuard,
     http::{
         Body, HeaderValue, Request, Response, StatusCode,
@@ -11,7 +12,7 @@ use rama::{
         server::HttpServer,
         service::web::response::{Headers, IntoResponse},
     },
-    layer::TimeoutLayer,
+    layer::{AbortableLayer, TimeoutLayer, abort::AbortController},
     net::{
         socket::Interface,
         tls::{
@@ -27,7 +28,6 @@ use rama::{
 
 use clap::Args;
 use safechain_proxy_lib::{server, utils};
-use tokio::sync::mpsc;
 
 use crate::config::{Scenario, ServerConfig};
 
@@ -69,27 +69,25 @@ pub async fn exec(
 
     let merged_cfg = merge_server_cfg(args);
 
-    // TODO: use + perhaps something better than mpsc unbounded??
-
-    let (drop_tcp_connection_tx, drop_tcp_connection_rx) = mpsc::unbounded_channel();
-
     let http_svc = (
         TraceLayer::new_for_http(),
         AddRequiredResponseHeadersLayer::new()
             .with_server_header_value(HeaderValue::from_static(utils::env::project_name())),
     )
-        .into_layer(Arc::new(MockHttpServer::try_new(
-            merged_cfg,
-            drop_tcp_connection_tx,
-        )?));
+        .into_layer(Arc::new(MockHttpServer::try_new(merged_cfg)?));
 
     let http_server = HttpServer::auto(exec).service(Arc::new(http_svc));
 
     let tls_acceptor = TlsAcceptorLayer::new(try_new_tls_self_signed_server_data()?);
 
-    let tcp_svc = TimeoutLayer::new(Duration::from_secs(60)).into_layer(
-        TlsPeekRouter::new(tls_acceptor.into_layer(http_server.clone())).with_fallback(http_server),
-    );
+    let tcp_svc = (
+        AbortableLayer::new(),
+        TimeoutLayer::new(Duration::from_secs(60)),
+    )
+        .into_layer(
+            TlsPeekRouter::new(tls_acceptor.into_layer(http_server.clone()))
+                .with_fallback(http_server),
+        );
 
     let server_addr = tcp_listener
         .local_addr()
@@ -124,14 +122,10 @@ struct MockHttpServer {
     error_rate: f32,
     drop_rate: f32,
     timeout_rate: f32,
-    drop_tcp_connection: mpsc::UnboundedSender<()>,
 }
 
 impl MockHttpServer {
-    fn try_new(
-        cfg: ServerConfig,
-        drop_tcp_connection: mpsc::UnboundedSender<()>,
-    ) -> Result<Self, OpaqueError> {
+    fn try_new(cfg: ServerConfig) -> Result<Self, OpaqueError> {
         let base_latency = cfg.base_latency.unwrap_or_default();
         let jitter = cfg.jitter.unwrap_or_default();
         let error_rate = cfg.error_rate.unwrap_or_default();
@@ -151,7 +145,6 @@ impl MockHttpServer {
             error_rate,
             drop_rate,
             timeout_rate,
-            drop_tcp_connection,
         })
     }
 
@@ -243,9 +236,10 @@ impl Service<Request> for MockHttpServer {
 
         Ok(match self.pick_outcome() {
             MockOutcome::Drop => {
-                if let Err(err) = self.drop_tcp_connection.send(()) {
-                    tracing::error!("failed to send MockFail::DropConnection: {err}");
+                if let Some(controller) = req.extensions().get::<AbortController>() {
+                    controller.abort().await;
                 }
+                tracing::error!("failed to abort connection via controller");
                 StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
             MockOutcome::Timeout => StatusCode::REQUEST_TIMEOUT.into_response(),
@@ -253,12 +247,6 @@ impl Service<Request> for MockHttpServer {
             MockOutcome::Ok => Self::random_ok_response(&req),
         })
     }
-}
-
-#[derive(Debug)]
-struct MockTcpServer<S> {
-    inner: S,
-    drop_tcp_connection: mpsc::UnboundedReceiver<()>,
 }
 
 fn merge_server_cfg(args: MockCommand) -> ServerConfig {
