@@ -25,8 +25,6 @@ where
     type Error = OpaqueError;
 
     async fn serve(&self, req: Request) -> Result<Self::Output, Self::Error> {
-        // Capture request context before moving the request into the inner service.
-
         let resp = self
             .inner
             .serve(req)

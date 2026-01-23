@@ -98,7 +98,7 @@ impl Rule for RuleChrome {
             return Ok(RequestAction::Allow(req));
         }
 
-        if let Some((extension_id, version)) = self.parse_crx_download_url(&req) {
+        if let Some((extension_id, version)) = Self::parse_crx_download_url(&req) {
             tracing::debug!(
                 http.url.full = %req.uri(),
                 http.request.method = %req.method(),
@@ -157,7 +157,7 @@ impl RuleChrome {
         matches!(entry_version, PackageVersion::Any) || entry_version == observed_version
     }
 
-    fn parse_crx_download_url(&self, req: &Request) -> Option<(ArcStr, PackageVersion)> {
+    fn parse_crx_download_url(req: &Request) -> Option<(ArcStr, PackageVersion)> {
         let path = req.uri().path();
 
         let base = path.rsplit_once('/')?.1.strip_suffix(".crx")?;
