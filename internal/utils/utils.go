@@ -125,7 +125,7 @@ func RunCommands(ctx context.Context, commands []Command) ([]string, error) {
 		outputs = append(outputs, output)
 	}
 	if len(errs) > 0 {
-		return outputs, fmt.Errorf("failed to run commands: %v", errs)
+		return outputs, fmt.Errorf("failed to run commands")
 	}
 	return outputs, nil
 }
@@ -135,5 +135,9 @@ func RunCommandWithEnv(ctx context.Context, env []string, command string, args .
 	cmd := exec.CommandContext(ctx, command, args...)
 	cmd.Env = append(os.Environ(), env...)
 	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Command error: %v", err)
+		log.Printf("Command output: %s", string(output))
+	}
 	return string(output), err
 }
