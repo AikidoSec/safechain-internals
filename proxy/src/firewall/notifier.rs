@@ -1,5 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
+use crate::utils::env;
+
 use super::events::BlockedEvent;
 use rama::{
     Service,
@@ -27,8 +29,8 @@ impl std::fmt::Debug for EventNotifier {
 
 impl EventNotifier {
     pub fn try_new(exec: Executor, reporting_endpoint: Uri) -> Result<Self, OpaqueError> {
-        let client = crate::client::new_web_client()?.boxed();
-        let limit = Arc::new(Semaphore::const_new(compute_concurrent_request_count()));
+        let client = crate::client::new_web_client(exec.clone())?.boxed();
+        let limit = Arc::new(Semaphore::const_new(env::compute_concurrent_request_count()));
         Ok(Self {
             exec,
             client,
@@ -53,18 +55,6 @@ impl EventNotifier {
             send_blocked_event(client, reporting_endpoint, event).await;
         });
     }
-}
-
-fn compute_concurrent_request_count() -> usize {
-    std::env::var("MAX_CONCURRENT_REQUESTS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or_else(|| {
-            let cpus = std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1);
-            cpus * 64
-        })
 }
 
 async fn acquire_concurrency_guard<'a>(

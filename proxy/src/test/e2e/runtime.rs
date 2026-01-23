@@ -37,7 +37,7 @@ use rama::{
 };
 
 use crate::{
-    Args,
+    cli::Args,
     server::proxy::{FirewallUserConfig, HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG},
 };
 
@@ -404,7 +404,7 @@ fn spawn_safechain_proxy_app_with_args(extra_args: &[&str]) -> PathBuf {
             .build()
             .unwrap();
 
-        let server_future = crate::run_with_args(std::future::pending::<()>(), args);
+        let server_future = crate::cli::run_with_args(std::future::pending::<()>(), args);
 
         notify_server_ready.set(()).expect("waiter to be nofified");
 

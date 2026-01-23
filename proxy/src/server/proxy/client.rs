@@ -19,6 +19,7 @@ use rama::{
         tls::{SecureTransport, client::ClientConfig},
         user::UserId,
     },
+    rt::Executor,
     telemetry::tracing::{self, Instrument as _},
     tls::boring::client::TlsConnectorDataBuilder,
 };
@@ -31,6 +32,7 @@ pub(super) struct HttpClient<S> {
 }
 
 pub(super) fn new_https_client(
+    exec: Executor,
     firewall: Firewall,
 ) -> Result<HttpClient<impl Service<Request, Output = Response, Error = OpaqueError>>, OpaqueError>
 {
@@ -46,7 +48,7 @@ pub(super) fn new_https_client(
             crate::server::connectivity::new_connectivity_http_svc(),
         ),
     )
-        .into_layer(crate::client::new_web_client()?);
+        .into_layer(crate::client::new_web_client(exec)?);
 
     Ok(HttpClient { inner })
 }

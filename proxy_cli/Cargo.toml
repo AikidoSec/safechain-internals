@@ -1,0 +1,28 @@
+[package]
+name = "safechain-proxy"
+description = "MITM SafeChain HTTP(S)/SOCKS5 Proxy for Developer Security"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+publish = false
+readme = "../docs/proxy.md"
+resolver = "3"
+
+[features]
+har = []
+
+[dependencies]
+rama = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+safechain-proxy-lib = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+
+
+[target.'cfg(target_family = "unix")'.dependencies]
+jemallocator = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+mimalloc = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.build-dependencies]
+static_vcruntime = { workspace = true }

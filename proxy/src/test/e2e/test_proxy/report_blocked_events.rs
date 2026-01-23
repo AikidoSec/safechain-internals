@@ -1,5 +1,6 @@
 use rama::{
     http::{BodyExtractExt as _, StatusCode, service::client::HttpClientExt as _},
+    rt::Executor,
     telemetry::tracing,
 };
 
@@ -9,7 +10,7 @@ use crate::test::e2e;
 #[tokio::test]
 #[tracing_test::traced_test]
 async fn test_report_blocked_events_posts_json_to_endpoint() {
-    let capture_client = crate::client::new_web_client().unwrap();
+    let capture_client = crate::client::new_web_client(Executor::default()).unwrap();
 
     let resp = capture_client
         .get("http://assert-test.internal/blocked-events/clear")

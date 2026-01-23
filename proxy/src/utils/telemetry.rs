@@ -1,4 +1,4 @@
-use std::io::IsTerminal as _;
+use std::{io::IsTerminal as _, path::Path};
 
 use rama::{
     error::{BoxError, ErrorContext as _},
@@ -9,21 +9,31 @@ use rama::{
     },
 };
 
-use crate::Args;
+#[derive(Debug, Default)]
+pub struct TelemetryConfig<'a> {
+    /// Log verbose (for more control use `RUST_LOG` env var)
+    pub verbose: bool,
+    /// Enable pretty logging (human-friendly, not for computer integestion)
+    pub pretty: bool,
+    /// Log to a file instead of stderr.
+    pub output: Option<&'a Path>,
+}
 
 /// Configures structured logging with runtime control via `RUST_LOG` environment variable.
 ///
 /// Defaults to INFO level to balance visibility with performance.
 /// Use `RUST_LOG=debug` or `RUST_LOG=trace` for troubleshooting.
-pub fn init_tracing(args: &Args) -> Result<(), BoxError> {
-    let directive = if args.verbose {
+pub fn init_tracing(cfg: Option<TelemetryConfig<'_>>) -> Result<(), BoxError> {
+    let cfg = cfg.unwrap_or_default();
+
+    let directive = if cfg.verbose {
         LevelFilter::DEBUG
     } else {
         LevelFilter::INFO
     }
     .into();
 
-    let make_writer = match args.output.as_deref() {
+    let make_writer = match cfg.output {
         Some(path) => {
             let file = std::fs::OpenOptions::new()
                 .append(true)
@@ -37,7 +47,7 @@ pub fn init_tracing(args: &Args) -> Result<(), BoxError> {
     };
 
     let subscriber = tracing::subscriber::fmt()
-        .with_ansi(args.output.is_none() && std::io::stderr().is_terminal())
+        .with_ansi(cfg.output.is_none() && std::io::stderr().is_terminal())
         .with_env_filter(
             EnvFilter::builder()
                 .with_default_directive(directive)
@@ -45,7 +55,7 @@ pub fn init_tracing(args: &Args) -> Result<(), BoxError> {
         )
         .with_writer(make_writer);
 
-    if args.pretty {
+    if cfg.pretty {
         subscriber.pretty().try_init()?;
     } else {
         subscriber.try_init()?;
