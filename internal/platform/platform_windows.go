@@ -160,8 +160,9 @@ func IsSystemProxySet(ctx context.Context, proxyURL string) error {
 }
 
 func UnsetSystemProxy(ctx context.Context) error {
+	errs := []error{}
 	if _, err := utils.RunCommand(ctx, "netsh", "winhttp", "reset", "proxy"); err != nil {
-		return err
+		errs = append(errs, err)
 	}
 
 	sids, err := getLoggedInUserSIDs(ctx)
@@ -177,9 +178,12 @@ func UnsetSystemProxy(ctx context.Context) error {
 		}
 		for _, regValue := range regValueToDelete {
 			if err := deleteRegistryValue(ctx, regPath, regValue); err != nil {
-				return err
+				errs = append(errs, err)
 			}
 		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to unset system proxy: %v", errs)
 	}
 	return nil
 }
@@ -200,7 +204,7 @@ func UninstallProxyCA(ctx context.Context) error {
 		{Command: "certutil", Args: []string{"-delstore", "Root", "aikidosafechain.com"}},
 		{Command: "cmdkey", Args: []string{"/delete:safechain-proxy.tls-root-ca-key"}},
 	}
-	_, err := utils.RunCommands(ctx, commandsToExecute)
+	_, err := utils.RunAllCommands(ctx, commandsToExecute)
 	if err != nil {
 		return err
 	}
