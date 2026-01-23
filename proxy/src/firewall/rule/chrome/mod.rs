@@ -160,7 +160,6 @@ impl RuleChrome {
 
         let base = path.rsplit_once('/')?.1.strip_suffix(".crx")?;
 
-        // Split by underscore: {EXTENSION_ID}_{v1}_{v2}_{v3}_{v4}
         let (extension_id, version_raw) = base.split_once('_')?;
 
         if extension_id.is_empty() || version_raw.is_empty() {
