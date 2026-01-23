@@ -1,3 +1,5 @@
+use safechain_proxy_lib::utils;
+
 use super::{ClientConfig, ServerConfig};
 
 /// High level benchmark scenarios.
@@ -25,9 +27,10 @@ impl Scenario {
         match self {
             Scenario::Baseline => {
                 // Smooth request generation with no randomness.
+                let concurrency = utils::env::compute_concurrent_request_count() as u32;
                 ClientConfig {
-                    target_rps: Some(1000),
-                    concurrency: Some(10),
+                    target_rps: Some(50 * concurrency),
+                    concurrency: Some(concurrency),
                     jitter: None,
                     burst_size: Some(1),
                 }
@@ -37,8 +40,8 @@ impl Scenario {
                 // Requests are sent at an uneven pace.
                 // This introduces burstiness and queue formation.
                 ClientConfig {
-                    target_rps: Some(1000),
-                    concurrency: Some(20),
+                    target_rps: Some(5000),
+                    concurrency: Some(100),
                     jitter: Some(0.005),
                     burst_size: Some(2),
                 }
@@ -47,8 +50,8 @@ impl Scenario {
             Scenario::FlakyUpstream => {
                 // Client side jitter is higher to simulate unstable producers.
                 ClientConfig {
-                    target_rps: Some(600),
-                    concurrency: Some(25),
+                    target_rps: Some(2500),
+                    concurrency: Some(50),
                     jitter: Some(0.01),
                     burst_size: Some(2),
                 }
