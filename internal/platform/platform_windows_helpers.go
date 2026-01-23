@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os/exec"
 	"strings"
 	"unsafe"
 
@@ -41,10 +40,9 @@ func getActiveUserSessionID() (uint32, error) {
 }
 
 func getLoggedInUserSIDs(ctx context.Context) ([]string, error) {
-	cmd := exec.CommandContext(ctx, "reg", "query", "HKU")
-	output, err := cmd.Output()
+	output, err := utils.RunCommand(ctx, "reg", "query", "HKU")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query HKU: %v", err)
 	}
 
 	var sids []string
@@ -149,7 +147,10 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 		return "", fmt.Errorf("GetExitCodeProcess failed: %v", err)
 	}
 	if exitCode != 0 {
-		return "", fmt.Errorf("process exited with code %d", exitCode)
+		err := fmt.Errorf("process exited with code %d", exitCode)
+		log.Printf("\t- Command error: %v", err)
+		log.Printf("\t- Command output: %s", string(output))
+		return "", err
 	}
 
 	return string(output), nil
@@ -208,8 +209,7 @@ func setRegistryValue(ctx context.Context, path string, value RegistryValue) err
 }
 
 func registryValueContains(ctx context.Context, path string, value string, toContain string) bool {
-	cmd := exec.CommandContext(ctx, "reg", "query", path, "/v", value)
-	output, err := cmd.Output()
+	output, err := utils.RunCommand(ctx, "reg", "query", path, "/v", value)
 	if err != nil {
 		return false
 	}

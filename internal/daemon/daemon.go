@@ -132,7 +132,7 @@ func (d *Daemon) run(ctx context.Context) error {
 	if !proxy.ProxyCAInstalled() {
 		log.Println("First time we setup the proxy, uninstall previous setups...")
 		if err := d.Uninstall(ctx); err != nil {
-			log.Printf("Error uninstalling previous setup: %v", err)
+			log.Printf("Error uninstalling previous setup (might not exist): %v", err)
 		}
 	}
 
