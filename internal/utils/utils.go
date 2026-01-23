@@ -13,6 +13,12 @@ import (
 	"strings"
 )
 
+type Command struct {
+	Command string
+	Args    []string
+	Env     []string
+}
+
 func FetchLatestVersion(ctx context.Context, repoURL, binaryName string) (string, error) {
 	latestURL := fmt.Sprintf("%s/releases/latest/download/%s", repoURL, binaryName)
 
@@ -108,10 +114,30 @@ func RunCommand(ctx context.Context, command string, args ...string) (string, er
 	return RunCommandWithEnv(ctx, []string{}, command, args...)
 }
 
+func RunCommands(ctx context.Context, commands []Command) ([]string, error) {
+	outputs := []string{}
+	errs := []error{}
+	for _, command := range commands {
+		output, err := RunCommandWithEnv(ctx, command.Env, command.Command, command.Args...)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		outputs = append(outputs, output)
+	}
+	if len(errs) > 0 {
+		return outputs, fmt.Errorf("failed to run commands")
+	}
+	return outputs, nil
+}
+
 func RunCommandWithEnv(ctx context.Context, env []string, command string, args ...string) (string, error) {
 	log.Printf("Running command: %s %s", command, strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, command, args...)
 	cmd.Env = append(os.Environ(), env...)
 	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("\t- Command error: %v", err)
+		log.Printf("\t- Command output: %s", string(output))
+	}
 	return string(output), err
 }
