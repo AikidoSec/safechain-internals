@@ -1586,7 +1586,6 @@ dependencies = [
  "rama",
  "rand",
  "safechain-proxy-lib",
- "serde",
  "tikv-jemallocator",
  "tokio",
 ]
