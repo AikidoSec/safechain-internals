@@ -10,8 +10,6 @@ use rama::{
     utils::str::arcstr::{ArcStr, arcstr},
 };
 
-use radix_trie::TrieCommon;
-
 use crate::{
     firewall::{
         events::{BlockedArtifact, BlockedEventInfo},
@@ -136,8 +134,8 @@ impl RuleChrome {
         let suffix = format!("@{}", extension_id);
         let suffix_lower = suffix.to_ascii_lowercase();
 
-        let guard = self.remote_malware_list.find_entries("").guard;
-        for (key, entries) in guard.iter() {
+        let entries_result = self.remote_malware_list.find_entries("");
+        for (key, entries) in entries_result.iter_all() {
             if !key.to_ascii_lowercase().ends_with(&suffix_lower) {
                 continue;
             }

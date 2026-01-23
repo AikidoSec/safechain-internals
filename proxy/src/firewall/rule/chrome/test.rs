@@ -22,7 +22,6 @@ fn test_parse_crx_download_url() {
 
 #[test]
 fn test_version_matches() {
-
     assert!(RuleChrome::version_matches(
         &PackageVersion::Any,
         &PackageVersion::Unknown("1.0.0".into())
