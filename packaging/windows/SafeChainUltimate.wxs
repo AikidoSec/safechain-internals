@@ -75,10 +75,9 @@
 
     <!-- Custom action to run teardown on uninstall (runs after service is stopped) -->
     <CustomAction Id="RunTeardown"
-                  Directory="BINDIR"
-                  ExeCommand="[BINDIR]SafeChainUltimate.exe --teardown"
-                  Execute="deferred"
-                  Impersonate="no"
+                  FileRef="AikidoAgentExeFile"
+                  ExeCommand="--teardown"
+                  Execute="immediate"
                   Return="ignore" />
     <InstallExecuteSequence>
       <Custom Action="RunTeardown" After="StopServices" Condition="REMOVE=&quot;ALL&quot;" />
