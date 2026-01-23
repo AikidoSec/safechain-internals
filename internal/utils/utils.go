@@ -114,7 +114,7 @@ type Command struct {
 	Env     []string
 }
 
-func RunAllCommands(ctx context.Context, commands []Command) ([]string, error) {
+func RunCommands(ctx context.Context, commands []Command) ([]string, error) {
 	outputs := []string{}
 	errs := []error{}
 	for _, command := range commands {
