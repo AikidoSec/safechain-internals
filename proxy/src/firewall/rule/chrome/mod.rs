@@ -107,7 +107,7 @@ impl Rule for RuleChrome {
             );
 
             if self.matches_malware_entry(extension_id.as_str(), &version) {
-                tracing::debug!(
+                tracing::info!(
                     http.url.full = %req.uri(),
                     http.request.method = %req.method(),
                     "blocked Chrome extension from CRX URL: {extension_id}, version: {:?}",
