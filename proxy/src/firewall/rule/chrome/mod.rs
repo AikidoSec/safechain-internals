@@ -169,13 +169,7 @@ impl RuleChrome {
 
         let version_string = version_raw.replace('_', ".");
 
-        let version = PackageVersion::from_str(&version_string)
-            .inspect_err(|err| {
-                tracing::debug!(
-                    "failed to parse Chrome extension version (raw = {version_string}): err = {err}"
-                );
-            })
-            .ok()?;
+        let version = PackageVersion::from_str(&version_string).unwrap_or(PackageVersion::None);
 
         Some((ArcStr::from(extension_id), version))
     }
