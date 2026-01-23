@@ -8,7 +8,7 @@ use crate::test::e2e;
 
 #[tokio::test]
 #[tracing_test::traced_test]
-async fn test_google_har_replay_update2_allowed() {
+async fn test_google_har_replay_blocked_plugin() {
     let runtime = e2e::runtime::get().await;
     let client = runtime.client_with_http_proxy().await;
 
