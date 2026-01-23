@@ -1,27 +1,20 @@
-use std::{borrow::Cow, fmt, str::FromStr};
+use std::{fmt, str::FromStr};
 
 use rama::{
     Service,
     error::{ErrorContext as _, OpaqueError},
-    extensions::ExtensionsRef,
     graceful::ShutdownGuard,
-    http::{Request, Response, Uri, service::web::extract::Query},
+    http::{Request, Response, Uri},
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
-    utils::str::{
-        arcstr::{ArcStr, arcstr},
-        starts_with_ignore_ascii_case,
-    },
+    utils::str::arcstr::{ArcStr, arcstr},
 };
-
-use serde::Deserialize;
 
 use radix_trie::TrieCommon;
 
 use crate::{
     firewall::{
         events::{BlockedArtifact, BlockedEventInfo},
-        layer::evaluate_resp::ResponseRequestDomain,
         malware_list::{PackageVersion, RemoteMalwareList},
         pac::PacScriptGenerator,
     },
@@ -55,10 +48,14 @@ impl RuleChrome {
         .context("create remote malware list for chrome block rule")?;
 
         Ok(Self {
-            target_domains: ["clients2.google.com", "update.googleapis.com"]
-                .into_iter()
-                .map(|domain| (Domain::from_static(domain), ()))
-                .collect(),
+            target_domains: [
+                "clients2.google.com",
+                "update.googleapis.com",
+                "clients2.googleusercontent.com",
+            ]
+            .into_iter()
+            .map(|domain| (Domain::from_static(domain), ()))
+            .collect(),
             remote_malware_list,
         })
     }
@@ -89,16 +86,6 @@ impl Rule for RuleChrome {
     }
 
     async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
-        let is_update_domain = resp
-            .extensions()
-            .get::<ResponseRequestDomain>()
-            .is_some_and(|domain| domain.0.to_string() == "update.googleapis.com");
-
-        if is_update_domain {
-            // TODO: Parse Omaha JSON response for extension version info.
-            tracing::trace!("Chrome rule: update.googleapis.com response observed");
-        }
-
         Ok(resp)
     }
 
@@ -111,111 +98,88 @@ impl Rule for RuleChrome {
             return Ok(RequestAction::Allow(req));
         }
 
-        let Some(ChromeExtensionRequestInfo {
-            product_id,
-            version,
-        }) = self.extract_chrome_ext_info_from_req(&req)
-        else {
-            return Ok(RequestAction::Allow(req));
-        };
-
-        tracing::debug!(
-            http.url.full = %req.uri(),
-            http.request.method = %req.method(),
-            "inspect chrome extension product id: {product_id}, version: {:?}",
-            version
-        );
-
-        if self.is_extension_id_malware(product_id.as_str()) {
+        if let Some((extension_id, version)) = self.parse_crx_download_url(&req) {
             tracing::debug!(
                 http.url.full = %req.uri(),
                 http.request.method = %req.method(),
-                "blocked Chrome extension: {product_id}, version: {:?}",
+                "CRX download - extension id: {extension_id}, version: {:?}",
                 version
             );
 
-            return Ok(RequestAction::Block(BlockedRequest {
-                response: generate_generic_blocked_response_for_req(req),
-                info: BlockedEventInfo {
-                    artifact: BlockedArtifact {
-                        product: arcstr!("chrome"),
-                        identifier: product_id,
-                        version,
+            if self.matches_malware_entry(extension_id.as_str(), &version) {
+                tracing::debug!(
+                    http.url.full = %req.uri(),
+                    http.request.method = %req.method(),
+                    "blocked Chrome extension from CRX URL: {extension_id}, version: {:?}",
+                    version
+                );
+
+                return Ok(RequestAction::Block(BlockedRequest {
+                    response: generate_generic_blocked_response_for_req(req),
+                    info: BlockedEventInfo {
+                        artifact: BlockedArtifact {
+                            product: arcstr!("chrome"),
+                            identifier: extension_id,
+                            version: Some(version),
+                        },
                     },
-                },
-            }));
+                }));
+            }
         }
+
         Ok(RequestAction::Allow(req))
     }
 }
 
-struct ChromeExtensionRequestInfo {
-    product_id: ArcStr,
-    version: Option<PackageVersion>,
-}
-
 impl RuleChrome {
-    fn is_extension_id_malware(&self, extension_id: &str) -> bool {
-        // Chrome malware list format: "Full Title - Chrome Web Store@<extension-id>"
+    fn matches_malware_entry(&self, extension_id: &str, version: &PackageVersion) -> bool {
         let suffix = format!("@{}", extension_id);
         let suffix_lower = suffix.to_ascii_lowercase();
 
         let guard = self.remote_malware_list.find_entries("").guard;
+        for (key, entries) in guard.iter() {
+            if !key.to_ascii_lowercase().ends_with(&suffix_lower) {
+                continue;
+            }
 
-        guard
-            .iter()
-            .any(|(key, _)| key.to_ascii_lowercase().ends_with(&suffix_lower))
+            if entries
+                .iter()
+                .any(|e| Self::version_matches(&e.version, version))
+            {
+                return true;
+            }
+        }
+
+        false
     }
-    fn extract_chrome_ext_info_from_req(
-        &self,
-        req: &Request,
-    ) -> Option<ChromeExtensionRequestInfo> {
-        if !starts_with_ignore_ascii_case(req.uri().path(), "/service/update2/crx") {
+
+    fn version_matches(entry_version: &PackageVersion, observed_version: &PackageVersion) -> bool {
+        matches!(entry_version, PackageVersion::Any) || entry_version == observed_version
+    }
+
+    fn parse_crx_download_url(&self, req: &Request) -> Option<(ArcStr, PackageVersion)> {
+        let path = req.uri().path();
+
+        let base = path.rsplit_once('/')?.1.strip_suffix(".crx")?;
+
+        // Split by underscore: {EXTENSION_ID}_{v1}_{v2}_{v3}_{v4}
+        let (extension_id, version_raw) = base.split_once('_')?;
+
+        if extension_id.is_empty() || version_raw.is_empty() {
             return None;
         }
 
-        // Example URLs we handle:
-        // 1. Unencoded: https://clients2.google.com/service/update2/crx?x=id=abcdefghijklmnop&v=1.2.3
-        // 2. URL-encoded: https://clients2.google.com/service/update2/crx?x=id%3Dabcdefghijklmnop%26v%3D1.2.3
-        #[derive(Deserialize)]
-        struct QueryParameters<'q> {
-            x: Cow<'q, str>,
-            #[serde(default)]
-            v: Option<Cow<'q, str>>,
-        }
+        let version_string = version_raw.replace('_', ".");
 
-        let Ok(Query(QueryParameters { x, v })) = Query::parse_query_str(req.uri().query()?) else {
-            return None;
-        };
+        let version = PackageVersion::from_str(&version_string)
+            .inspect_err(|err| {
+                tracing::debug!(
+                    "failed to parse Chrome extension version (raw = {version_string}): err = {err}"
+                );
+            })
+            .ok()?;
 
-        let Some(product_id) = x.strip_prefix("id=").map(|s| s.trim()) else {
-            return None;
-        };
-
-        let (product_id, version) = if let Some(version_param) = v {
-            // Case 1: Version in separate query parameter
-            // Example: ?x=id=abcdefghijklmnop&v=1.2.3
-            let parsed_version = PackageVersion::from_str(version_param.as_ref()).ok();
-            (product_id, parsed_version)
-        } else if let Some((id, rest)) = product_id.split_once('&') {
-            // Case 2: Version embedded inside the x parameter (URL-encoded in original request)
-            // Example: ?x=id%3Dabcdefghijklmnop%26v%3D1.2.3
-            // After URL decoding, x becomes: "id=abcdefghijklmnop&v=1.2.3"
-            let parsed_version = rest
-                .strip_prefix("v=")
-                .and_then(|v| PackageVersion::from_str(v.trim()).ok());
-            (id, parsed_version)
-        } else {
-            // No version found
-            (product_id, None)
-        };
-
-        let product_id = ArcStr::from(product_id);
-
-        Some(ChromeExtensionRequestInfo {
-            product_id,
-            version,
-        })
+        Some((ArcStr::from(extension_id), version))
     }
 }
 

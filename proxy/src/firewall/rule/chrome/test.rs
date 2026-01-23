@@ -1,7 +1,6 @@
+use crate::firewall::malware_list::{MalwareEntry, PackageVersion, Reason};
 use radix_trie::Trie;
 use rama::http::{Body, Request, Uri};
-
-use crate::firewall::malware_list::{MalwareEntry, PackageVersion, Reason};
 
 use super::*;
 
@@ -23,10 +22,14 @@ impl RuleChrome {
         }
 
         Self {
-            target_domains: ["clients2.google.com"]
-                .into_iter()
-                .map(|domain| (Domain::from_static(domain), ()))
-                .collect(),
+            target_domains: [
+                "clients2.google.com",
+                "update.googleapis.com",
+                "clients2.googleusercontent.com",
+            ]
+            .into_iter()
+            .map(|domain| (Domain::from_static(domain), ()))
+            .collect(),
             remote_malware_list:
                 crate::firewall::malware_list::RemoteMalwareList::from_trie_for_test(trie),
         }
@@ -34,70 +37,22 @@ impl RuleChrome {
 }
 
 #[test]
-fn test_extract_chrome_ext_info_from_req_parses_product_id() {
+fn test_parse_crx_download_url() {
     let rule = RuleChrome::new_test::<[&str; 0], _>([]);
 
     let req = Request::builder()
         .uri(Uri::from_static(
-            "https://clients2.google.com/service/update2/crx?x=id=abcdefghijklmnop",
+            "https://clients2.googleusercontent.com/crx/blobs/AV8Xwo6UfyG1svQNvX84OhvpXB-Xw-uQDkg-cYbGRZ1gTKj4oShAxmclsKXkB0kLKqSPOZKKKAM2nElpPWIO-TMWGIZoe0XewyHPPrbTLd4pehbXVSMHQGUvXt6EYD_UJ_XoAMZSmuU75EcMvYc0IzAknEyj-bKQuwE5Rw/GLNPJGLILKICBCKJPBGCFKOGEBGLLEMB_6_45_0_0.crx",
         ))
         .body(Body::empty())
         .unwrap();
 
-    let info = rule
-        .extract_chrome_ext_info_from_req(&req)
-        .expect("expected chrome extension request info");
+    let result = rule.parse_crx_download_url(&req);
+    assert!(result.is_some());
 
-    assert_eq!(info.product_id.as_str(), "abcdefghijklmnop");
-    assert_eq!(info.version, None);
-}
-
-#[test]
-fn test_extract_chrome_ext_info_from_req_parses_version_unencoded() {
-    let rule = RuleChrome::new_test::<[&str; 0], _>([]);
-
-    let req = Request::builder()
-        .uri(Uri::from_static(
-            "https://clients2.google.com/service/update2/crx?x=id=abcdefghijklmnop&v=2.0.1",
-        ))
-        .body(Body::empty())
-        .unwrap();
-
-    let info = rule
-        .extract_chrome_ext_info_from_req(&req)
-        .expect("expected chrome extension request info");
-
-    assert_eq!(info.product_id.as_str(), "abcdefghijklmnop");
-    assert_eq!(
-        info.version,
-        Some(PackageVersion::Semver(
-            semver::Version::parse("2.0.1").unwrap()
-        ))
-    );
-}
-
-#[test]
-fn test_extract_chrome_ext_info_from_req_strips_encoded_ampersand_suffix() {
-    let rule = RuleChrome::new_test::<[&str; 0], _>([]);
-
-    let req = Request::builder()
-        .uri(Uri::from_static(
-            "https://clients2.google.com/service/update2/crx?x=id%3Dabcdefghijklmnop%26v%3D1.2.3",
-        ))
-        .body(Body::empty())
-        .unwrap();
-
-    let info = rule
-        .extract_chrome_ext_info_from_req(&req)
-        .expect("expected chrome extension request info");
-
-    assert_eq!(info.product_id.as_str(), "abcdefghijklmnop");
-    assert_eq!(
-        info.version,
-        Some(PackageVersion::Semver(
-            semver::Version::parse("1.2.3").unwrap()
-        ))
-    );
+    let (extension_id, version) = result.unwrap();
+    assert_eq!(extension_id.as_str(), "GLNPJGLILKICBCKJPBGCFKOGEBGLLEMB");
+    assert_eq!(version, PackageVersion::Unknown("6.45.0.0".into()));
 }
 
 #[tokio::test]
@@ -119,28 +74,13 @@ async fn test_evaluate_request_no_match_domain() {
     }
 }
 
-#[test]
-fn test_extract_chrome_ext_info_from_req_no_match_path() {
-    let rule = RuleChrome::new_test::<[&str; 0], _>([]);
-
-    let req = Request::builder()
-        .uri(Uri::from_static(
-            "https://clients2.google.com/service/not_update2/crx?x=id=abcdefghijklmnop",
-        ))
-        .body(Body::empty())
-        .unwrap();
-
-    assert!(rule.extract_chrome_ext_info_from_req(&req).is_none());
-}
-
 #[tokio::test]
-async fn test_evaluate_request_blocks_when_malware() {
-    // Use the actual Chrome malware list format: "Title - Chrome Web Store@<id>"
-    let rule = RuleChrome::new_test(["Malicious Extension - Chrome Web Store@abcdefghijklmnop"]);
+async fn test_evaluate_request_blocks_crx_crx_when_malware() {
+    let rule = RuleChrome::new_test(["Malicious Extension - Chrome Web Store@ABCDEFGHIJKLMNOP"]);
 
     let req = Request::builder()
         .uri(Uri::from_static(
-            "https://clients2.google.com/service/update2/crx?x=id=abcdefghijklmnop",
+            "https://clients2.googleusercontent.com/crx/blobs/somehash/ABCDEFGHIJKLMNOP_1_0_0_0.crx",
         ))
         .body(Body::empty())
         .unwrap();
@@ -152,9 +92,9 @@ async fn test_evaluate_request_blocks_when_malware() {
             assert_eq!(blocked.info.artifact.product.as_str(), "chrome");
             assert_eq!(
                 blocked.info.artifact.identifier.as_str(),
-                "abcdefghijklmnop"
+                "ABCDEFGHIJKLMNOP"
             );
-            assert!(blocked.info.artifact.version.is_none());
+            assert!(blocked.info.artifact.version.is_some());
         }
         RequestAction::Allow(_) => panic!("expected request to be blocked"),
     }
@@ -166,7 +106,7 @@ async fn test_evaluate_request_allows_when_not_malware() {
 
     let req = Request::builder()
         .uri(Uri::from_static(
-            "https://clients2.google.com/service/update2/crx?x=id=abcdefghijklmnop",
+            "https://clients2.googleusercontent.com/crx/blobs/somehash/ABCDEFGHIJKLMNOP_1_0_0_0.crx",
         ))
         .body(Body::empty())
         .unwrap();
@@ -180,34 +120,21 @@ async fn test_evaluate_request_allows_when_not_malware() {
 }
 
 #[test]
-fn test_is_extension_id_malware_exact_match() {
-    let rule = RuleChrome::new_test(["Malware - Chrome Web Store@testid123"]);
-    assert!(rule.is_extension_id_malware("testid123"));
-}
-
-#[test]
-fn test_is_extension_id_malware_no_match() {
-    let rule = RuleChrome::new_test(["Malware - Chrome Web Store@testid123"]);
-    assert!(!rule.is_extension_id_malware("differentid456"));
-}
-
-#[test]
-fn test_is_extension_id_malware_case_insensitive() {
+fn test_chrome_matches_malware_entry_case_insensitive() {
     let rule = RuleChrome::new_test(["Malware - Chrome Web Store@TestID123"]);
-    assert!(rule.is_extension_id_malware("testid123"));
-    assert!(rule.is_extension_id_malware("TESTID123"));
-    assert!(rule.is_extension_id_malware("TeStId123"));
+    assert!(rule.matches_malware_entry("testid123", &PackageVersion::None));
+    assert!(rule.matches_malware_entry("TESTID123", &PackageVersion::None));
 }
 
 #[test]
-fn test_is_extension_id_malware_multiple_entries() {
+fn test_chrome_matches_malware_entry_multiple_entries() {
     let rule = RuleChrome::new_test([
         "Malware A - Chrome Web Store@malware-a",
         "Malware B - Chrome Web Store@malware-b",
         "Malware C - Chrome Web Store@malware-c",
     ]);
-    assert!(rule.is_extension_id_malware("malware-a"));
-    assert!(rule.is_extension_id_malware("malware-b"));
-    assert!(rule.is_extension_id_malware("malware-c"));
-    assert!(!rule.is_extension_id_malware("safe-extension"));
+    assert!(rule.matches_malware_entry("malware-a", &PackageVersion::None));
+    assert!(rule.matches_malware_entry("malware-b", &PackageVersion::None));
+    assert!(rule.matches_malware_entry("malware-c", &PackageVersion::None));
+    assert!(!rule.matches_malware_entry("safe-extension", &PackageVersion::None));
 }
