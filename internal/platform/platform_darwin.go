@@ -161,18 +161,22 @@ func UnsetSystemProxy(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	errs := []error{}
 	for _, service := range services {
 		log.Println("Unsetting system proxy for service:", service)
 
 		if err := exec.CommandContext(ctx, "networksetup", "-setwebproxystate", service, "off").Run(); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 
 		if err := exec.CommandContext(ctx, "networksetup", "-setsecurewebproxystate", service, "off").Run(); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
-
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to unset system proxy: %v", errs)
+	}
 	return nil
 }
 
@@ -208,6 +212,8 @@ func UninstallProxyCA(ctx context.Context) error {
 		"-c", "aikidosafechain.com", // Search for certificate with common name "aikidosafechain.com"
 		"-Z", // Print SHA-256 (and SHA-1) hash of the certificate
 		"/Library/Keychains/System.keychain").Output()
+
+	errs := []error{}
 	if err == nil {
 		hashRegex := regexp.MustCompile(`SHA-1 hash:\s*([A-F0-9]+)`)
 		matches := hashRegex.FindAllStringSubmatch(string(output), -1)
@@ -221,7 +227,7 @@ func UninstallProxyCA(ctx context.Context) error {
 				"-Z", hash,
 				"/Library/Keychains/System.keychain"})
 			if err != nil {
-				return fmt.Errorf("failed to delete certificate with hash %s: %v", hash, err)
+				errs = append(errs, err)
 			}
 		}
 	}
@@ -229,9 +235,12 @@ func UninstallProxyCA(ctx context.Context) error {
 	if _, err := RunAsCurrentUser(ctx, "security", []string{"delete-generic-password",
 		"-l", "tls-root-ca-key",
 		"/Library/Keychains/System.keychain"}); err != nil {
-		return fmt.Errorf("failed to delete generic password: %v", err)
+		errs = append(errs, err)
 	}
 
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to uninstall proxy CA: %v", errs)
+	}
 	return nil
 }
 
