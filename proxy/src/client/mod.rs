@@ -12,8 +12,11 @@
 #[cfg(all(not(test), feature = "bench"))]
 use ::{
     parking_lot::Mutex,
-    rama::{combinators::Either, net::address::SocketAddress},
-    std::sync::LazyLock,
+    rama::{
+        combinators::Either, net::address::SocketAddress, net::tls::client::ServerVerifyMode,
+        tls::boring::client::TlsConnectorDataBuilder,
+    },
+    std::sync::{Arc, LazyLock},
 };
 #[cfg(not(test))]
 use ::{
@@ -60,13 +63,20 @@ pub fn new_web_client(
         None => tcp_connector.with_connector(Either::B(())),
     };
 
+    #[cfg(not(all(not(test), feature = "bench")))]
+    let tls_config = None;
+    #[cfg(all(not(test), feature = "bench"))]
+    let tls_config = Some(Arc::new(
+        TlsConnectorDataBuilder::new_http_auto().with_server_verify_mode(ServerVerifyMode::Disable),
+    ));
+
     Ok(EasyHttpWebClient::connector_builder()
         .with_custom_transport_connector(tcp_connector)
         .without_tls_proxy_support()
         .without_proxy_support()
         // fallback to HTTP/1.1 as default HTTP version in case
         // no protocol negotation happens on layers such as TLS (e.g. ALPN)
-        .with_tls_support_using_boringssl_and_default_http_version(None, Version::HTTP_11)
+        .with_tls_support_using_boringssl_and_default_http_version(tls_config, Version::HTTP_11)
         .with_default_http_connector(Executor::default())
         .try_with_connection_pool(HttpPooledConnectorConfig {
             max_total,
