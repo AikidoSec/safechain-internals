@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -132,8 +131,7 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 }
 
 func IsSystemProxySet(ctx context.Context, proxyURL string) error {
-	cmd := exec.CommandContext(ctx, "netsh", "winhttp", "show", "proxy")
-	output, err := cmd.Output()
+	output, err := utils.RunCommand(ctx, "netsh", "winhttp", "show", "proxy")
 	if err != nil {
 		return fmt.Errorf("failed to show winhttp proxy: %v", err)
 	}
