@@ -266,3 +266,54 @@ fn shared_download_client() -> BoxService<Request, Response, OpaqueError> {
 
     CLIENT.clone()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_product_values() {
+        for (input, expected) in [
+            (
+                "",
+                Some(non_empty_vec![QualityValue::new_value(Product::Unknown(
+                    "".to_owned()
+                ))]),
+            ),
+            (
+                ";q=0.42",
+                Some(non_empty_vec![QualityValue::new(
+                    Product::Unknown("".to_owned()),
+                    Quality::new_clamped(420)
+                )]),
+            ),
+            (
+                "-",
+                Some(non_empty_vec![QualityValue::new_value(Product::None)]),
+            ),
+            (
+                "-; q=0.1",
+                Some(non_empty_vec![QualityValue::new(
+                    Product::None,
+                    Quality::new_clamped(100)
+                )]),
+            ),
+            (
+                "none; q=0.8, vscode; q=0.2",
+                Some(non_empty_vec![
+                    QualityValue::new(Product::None, Quality::new_clamped(800)),
+                    QualityValue::new(Product::VSCode, Quality::new_clamped(200))
+                ]),
+            ),
+        ] {
+            let result = parse_product_values(input);
+            match (result, expected) {
+                (Ok(result), Some(expected)) => assert_eq!(result, expected, "input: '{input}'"),
+                (Err(_), None) => (),
+                (result, expected) => panic!(
+                    "input = '{input}', unexpected result '{result:?}', expected: '{expected:?}'"
+                ),
+            }
+        }
+    }
+}
