@@ -56,19 +56,19 @@ pub fn new_web_client(
     let max_total = max_active * 2;
 
     let tcp_connector = TcpConnector::new(exec);
+    let mut tls_config = None;
 
     #[cfg(all(not(test), feature = "bench"))]
     let tcp_connector = match *EGRESS_ADDRESS_OVERWRITE.lock() {
-        Some(value) => tcp_connector.with_connector(Either::A(value)),
+        Some(value) => {
+            tls_config = Some(Arc::new(
+                TlsConnectorDataBuilder::new_http_auto()
+                    .with_server_verify_mode(ServerVerifyMode::Disable),
+            ));
+            tcp_connector.with_connector(Either::A(value))
+        }
         None => tcp_connector.with_connector(Either::B(())),
     };
-
-    #[cfg(not(all(not(test), feature = "bench")))]
-    let tls_config = None;
-    #[cfg(all(not(test), feature = "bench"))]
-    let tls_config = Some(Arc::new(
-        TlsConnectorDataBuilder::new_http_auto().with_server_verify_mode(ServerVerifyMode::Disable),
-    ));
 
     Ok(EasyHttpWebClient::connector_builder()
         .with_custom_transport_connector(tcp_connector)
