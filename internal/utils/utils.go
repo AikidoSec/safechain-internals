@@ -108,6 +108,28 @@ func RunCommand(ctx context.Context, command string, args ...string) (string, er
 	return RunCommandWithEnv(ctx, []string{}, command, args...)
 }
 
+type Command struct {
+	Command string
+	Args    []string
+	Env     []string
+}
+
+func RunAllCommands(ctx context.Context, commands []Command) ([]string, error) {
+	outputs := []string{}
+	errs := []error{}
+	for _, command := range commands {
+		output, err := RunCommandWithEnv(ctx, command.Env, command.Command, command.Args...)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		outputs = append(outputs, output)
+	}
+	if len(errs) > 0 {
+		return outputs, fmt.Errorf("failed to run commands: %v", errs)
+	}
+	return outputs, nil
+}
+
 func RunCommandWithEnv(ctx context.Context, env []string, command string, args ...string) (string, error) {
 	log.Printf("Running command: %s %s", command, strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, command, args...)
