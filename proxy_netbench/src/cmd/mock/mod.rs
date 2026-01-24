@@ -32,9 +32,11 @@ use rama::{
 };
 
 use clap::Args;
-use safechain_proxy_lib::{server, utils};
+use safechain_proxy_lib::{
+    firewall::malware_list::MALWARE_LIST_URI_STR_NPM, server, storage, utils,
+};
 
-use crate::config::{Scenario, ServerConfig};
+use crate::config::{Scenario, ServerConfig, download_malware_list_for_uri};
 
 #[derive(Debug, Clone, Args)]
 /// run bench mock server
@@ -80,7 +82,9 @@ pub async fn exec(
         AddRequiredResponseHeadersLayer::new()
             .with_server_header_value(HeaderValue::from_static(utils::env::server_identifier())),
     )
-        .into_layer(Arc::new(MockHttpServer::try_new(merged_cfg).await?));
+        .into_layer(Arc::new(
+            MockHttpServer::try_new(data.clone(), merged_cfg).await?,
+        ));
 
     let http_server = HttpServer::auto(exec).service(Arc::new(http_svc));
 
@@ -135,7 +139,7 @@ struct MockHttpServer {
 }
 
 impl MockHttpServer {
-    async fn try_new(cfg: ServerConfig) -> Result<Self, OpaqueError> {
+    async fn try_new(data: PathBuf, cfg: ServerConfig) -> Result<Self, OpaqueError> {
         let base_latency = cfg.base_latency.unwrap_or_default();
         let jitter = cfg.jitter.unwrap_or_default();
         let error_rate = cfg.error_rate.unwrap_or_default();
@@ -149,10 +153,19 @@ impl MockHttpServer {
             ));
         }
 
+        let data_storage =
+            storage::SyncCompactDataStorage::try_new(data.clone()).with_context(|| {
+                format!(
+                    "create compact data storage using dir at path '{}'",
+                    data.display()
+                )
+            })?;
+        tracing::info!(path = ?data, "data directory ready to be used");
+
         tracing::info!("generating random OK payloads...");
 
         let mut ok_payloads: Vec<&'static [u8]> = Vec::with_capacity(8);
-        for multiplier in 0..6 {
+        for multiplier in 0..5 {
             let payload = InfiniteReader::new()
                 .with_size_limit(2usize.pow(multiplier as u32) * 512)
                 .into_body()
@@ -165,6 +178,15 @@ impl MockHttpServer {
         // compressible payloads
         ok_payloads.push(include_bytes!("./mod.rs"));
         ok_payloads.push(include_bytes!("../../../Cargo.toml"));
+        // very compressible but big payload
+        ok_payloads.push(
+            format!(
+                "{:?}",
+                download_malware_list_for_uri(data_storage, MALWARE_LIST_URI_STR_NPM).await?
+            )
+            .into_bytes()
+            .leak(),
+        );
 
         Ok(Self {
             base_latency,

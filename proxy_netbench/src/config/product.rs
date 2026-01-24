@@ -33,7 +33,10 @@ use rand::{
     rng,
     seq::IndexedRandom,
 };
-use safechain_proxy_lib::{firewall::malware_list, storage};
+use safechain_proxy_lib::{
+    firewall::malware_list::{self, MALWARE_LIST_URI_STR_PYPI, MALWARE_LIST_URI_STR_VSCODE},
+    storage,
+};
 use tokio::sync::Mutex;
 
 rama::utils::macros::enums::enum_builder! {
@@ -109,18 +112,12 @@ async fn generate_random_uri(
             let fresh_entries = match product {
                 Product::None | Product::Unknown(_) => vec![],
                 Product::VSCode => {
-                    download_malware_list_for_uri(
-                        sync_storage.clone(),
-                        "https://malware-list.aikido.dev/malware_vscode.json",
-                    )
-                    .await?
+                    download_malware_list_for_uri(sync_storage.clone(), MALWARE_LIST_URI_STR_VSCODE)
+                        .await?
                 }
                 Product::PyPI => {
-                    download_malware_list_for_uri(
-                        sync_storage.clone(),
-                        "https://malware-list.aikido.dev/malware_pypi.json",
-                    )
-                    .await?
+                    download_malware_list_for_uri(sync_storage.clone(), MALWARE_LIST_URI_STR_PYPI)
+                        .await?
                 }
             };
             vacant_entry.insert(fresh_entries)
@@ -133,7 +130,7 @@ async fn generate_random_uri(
                 "http://example.com",
                 "https://example.com",
                 "https://aikido.dev",
-                "https://malware-list.aikido.dev/malware_pypi.json",
+                MALWARE_LIST_URI_STR_PYPI,
                 "https://http-test.ramaproxy.org/method",
                 "https://http-test.ramaproxy.org/response-stream",
                 "https://http-test.ramaproxy.org/response-compression",
@@ -226,7 +223,7 @@ async fn generate_random_uri(
     }
 }
 
-async fn download_malware_list_for_uri(
+pub async fn download_malware_list_for_uri(
     sync_storage: storage::SyncCompactDataStorage,
     uri: &'static str,
 ) -> Result<Vec<malware_list::ListDataEntry>, OpaqueError> {

@@ -14,7 +14,7 @@ use crate::{
     firewall::{
         DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
-        malware_list::{MalwareEntry, PackageVersion, RemoteMalwareList},
+        malware_list::{MALWARE_LIST_URI_STR_NPM, MalwareEntry, PackageVersion, RemoteMalwareList},
         pac::PacScriptGenerator,
     },
     http::response::generate_generic_blocked_response_for_req,
@@ -43,7 +43,7 @@ impl RuleNpm {
         // so it only gets updated once
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
-            Uri::from_static("https://malware-list.aikido.dev/malware_predictions.json"),
+            Uri::from_static(MALWARE_LIST_URI_STR_NPM),
             sync_storage,
             remote_malware_list_https_client,
         )

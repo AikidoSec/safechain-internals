@@ -16,7 +16,7 @@ use crate::{
     firewall::{
         DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
-        malware_list::RemoteMalwareList,
+        malware_list::{MALWARE_LIST_URI_STR_VSCODE, RemoteMalwareList},
         pac::PacScriptGenerator,
     },
     http::response::generate_malware_blocked_response_for_req,
@@ -41,7 +41,7 @@ impl RuleVSCode {
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
-            Uri::from_static("https://malware-list.aikido.dev/malware_vscode.json"),
+            Uri::from_static(MALWARE_LIST_URI_STR_VSCODE),
             sync_storage,
             remote_malware_list_https_client,
         )
