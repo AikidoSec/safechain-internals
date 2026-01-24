@@ -36,7 +36,7 @@
     <Feature Id="MainFeature" Title="SafeChain Ultimate" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
       <ComponentRef Id="PathComponent" />
-      <!-- <ComponentRef Id="CleanupProgramData" /> -->
+      <ComponentRef Id="CleanupProgramData" />
     </Feature>
 
     <!-- Components -->
@@ -84,7 +84,7 @@
       <Custom Action="RunTeardown" Before="RemoveFiles" Condition="(REMOVE~=&quot;ALL&quot;) AND (NOT UPGRADINGPRODUCTCODE)" />
     </InstallExecuteSequence>
 
-    <!-- Cleanup ProgramData on uninstall (disabled - preserving data between installs)
+    <!-- Cleanup ProgramData on uninstall -->
     <DirectoryRef Id="APPDATAAGENT">
       <Component Id="CleanupProgramData" Guid="c7e8f9a1-2b3c-4d5e-6f7a-8b9c0d1e2f3a">
         <RemoveFile Id="RemoveLogsFiles" Directory="APPDATALOGSDIR" Name="*" On="uninstall" />
@@ -98,7 +98,6 @@
         <RemoveFolder Id="RemoveAikidoDir" Directory="APPDATAAIKIDO" On="uninstall" />
       </Component>
     </DirectoryRef>
-    -->
 
     <!-- UI with license -->
     <WixVariable Id="WixUILicenseRtf" Value="$(var.ProjectDir)\packaging\windows\license.rtf" />
