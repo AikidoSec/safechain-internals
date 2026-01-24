@@ -42,8 +42,8 @@ pub async fn exec(
     guard: ShutdownGuard,
     args: ProxyCommand,
 ) -> Result<(), OpaqueError> {
-    tracing::info!(mock = %args.mock, "set mock server as egress address overwrite");
-    client::set_egress_address_overwrite(args.mock);
+    tracing::info!(mock = %args.mock, "try set mock server as egress address overwrite");
+    client::transport::try_set_egress_address_overwrite(args.mock)?;
 
     tokio::fs::create_dir_all(&data)
         .await

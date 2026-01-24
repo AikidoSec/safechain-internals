@@ -18,7 +18,7 @@ use rama::{
     net::{proxy::ProxyTarget, tls::server::TlsPeekRouter},
     rt::Executor,
     stream::Stream,
-    tcp::client::service::DefaultForwarder,
+    tcp::client::service::Forwarder,
     telemetry::tracing::{self, Level},
     tls::boring::server::TlsAcceptorLayer,
 };
@@ -32,14 +32,14 @@ use rama::{
     utils::str::arcstr::arcstr,
 };
 
-use crate::{firewall::Firewall, server::connectivity::CONNECTIVITY_DOMAIN};
+use crate::{client, firewall::Firewall, server::connectivity::CONNECTIVITY_DOMAIN};
 
 #[derive(Debug, Clone)]
 pub(super) struct MitmServer<S> {
     inner: S,
     mitm_all: bool,
     firewall: Firewall,
-    forwarder: DefaultForwarder,
+    forwarder: Forwarder<client::transport::TcpConnector>,
 }
 
 #[derive(Debug, Clone)]
@@ -87,7 +87,8 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
         inner,
         mitm_all,
         firewall,
-        forwarder: DefaultForwarder::ctx(exec),
+        forwarder: Forwarder::ctx(exec.clone())
+            .with_connector(client::transport::new_tcp_connector(exec)),
     })
 }
 
