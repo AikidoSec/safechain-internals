@@ -81,7 +81,7 @@
                   Impersonate="no"
                   Return="ignore" />
     <InstallExecuteSequence>
-      <Custom Action="RunTeardown" Before="RemoveFiles" Condition="(REMOVE~=&quot;ALL&quot;) AND (NOT UPGRADINGPRODUCTCODE)" />
+      <Custom Action="RunTeardown" Before="RemoveFiles" Condition="(REMOVE~=&quot;ALL&quot;)" />
     </InstallExecuteSequence>
 
     <!-- Cleanup ProgramData on uninstall -->
