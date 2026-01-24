@@ -158,7 +158,8 @@ impl RuleChrome {
     fn parse_crx_download_url(req: &Request) -> Option<(ArcStr, PackageVersion)> {
         let path = req.uri().path();
 
-        let base = path.rsplit_once('/')?.1.strip_suffix(".crx")?;
+        let (_, filename) = path.rsplit_once('/')?;
+        let base = filename.strip_suffix(".crx")?;
 
         let (extension_id, version_raw) = base.split_once('_')?;
 
