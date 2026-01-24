@@ -6,9 +6,13 @@ use rama::{
     extensions::ExtensionsRef,
     graceful::ShutdownGuard,
     http::{
-        Body, HeaderValue, Request, Response, StatusCode,
+        Body, HeaderName, HeaderValue, InfiniteReader, Request, Response, StatusCode, Uri,
+        body::util::BodyExt,
         headers::ContentType,
-        layer::{required_header::AddRequiredResponseHeadersLayer, trace::TraceLayer},
+        layer::{
+            compression::CompressionLayer, required_header::AddRequiredResponseHeadersLayer,
+            trace::TraceLayer,
+        },
         server::HttpServer,
         service::web::response::{Headers, IntoResponse},
     },
@@ -24,6 +28,7 @@ use rama::{
     tcp::server::TcpListener,
     telemetry::tracing,
     tls::boring::server::{TlsAcceptorData, TlsAcceptorLayer},
+    utils::str::smol_str::ToSmolStr,
 };
 
 use clap::Args;
@@ -71,10 +76,11 @@ pub async fn exec(
 
     let http_svc = (
         TraceLayer::new_for_http(),
+        CompressionLayer::new(),
         AddRequiredResponseHeadersLayer::new()
-            .with_server_header_value(HeaderValue::from_static(utils::env::project_name())),
+            .with_server_header_value(HeaderValue::from_static(utils::env::server_identifier())),
     )
-        .into_layer(Arc::new(MockHttpServer::try_new(merged_cfg)?));
+        .into_layer(Arc::new(MockHttpServer::try_new(merged_cfg).await?));
 
     let http_server = HttpServer::auto(exec).service(Arc::new(http_svc));
 
@@ -92,8 +98,11 @@ pub async fn exec(
     let server_addr = tcp_listener
         .local_addr()
         .context("get bound address for mock http(s) server")?;
+
+    // write the address right before serving
     server::write_server_socket_address_as_file(&data, "netbench.mock", server_addr.into()).await?;
 
+    tracing::info!("mock server ready to serve @ {server_addr}");
     tcp_listener.serve(tcp_svc).await;
 
     Ok(())
@@ -122,10 +131,11 @@ struct MockHttpServer {
     error_rate: f32,
     drop_rate: f32,
     timeout_rate: f32,
+    ok_payloads: Vec<&'static [u8]>,
 }
 
 impl MockHttpServer {
-    fn try_new(cfg: ServerConfig) -> Result<Self, OpaqueError> {
+    async fn try_new(cfg: ServerConfig) -> Result<Self, OpaqueError> {
         let base_latency = cfg.base_latency.unwrap_or_default();
         let jitter = cfg.jitter.unwrap_or_default();
         let error_rate = cfg.error_rate.unwrap_or_default();
@@ -139,12 +149,30 @@ impl MockHttpServer {
             ));
         }
 
+        tracing::info!("generating random OK payloads...");
+
+        let mut ok_payloads: Vec<&'static [u8]> = Vec::with_capacity(8);
+        for multiplier in 0..6 {
+            let payload = InfiniteReader::new()
+                .with_size_limit(2usize.pow(multiplier as u32) * 512)
+                .into_body()
+                .collect()
+                .await
+                .context("read generated random body")?
+                .to_bytes();
+            ok_payloads.push(payload.to_vec().leak());
+        }
+        // compressible payloads
+        ok_payloads.push(include_bytes!("./mod.rs"));
+        ok_payloads.push(include_bytes!("../../../Cargo.toml"));
+
         Ok(Self {
             base_latency,
             jitter,
             error_rate,
             drop_rate,
             timeout_rate,
+            ok_payloads,
         })
     }
 
@@ -191,21 +219,24 @@ impl MockHttpServer {
         std::time::Duration::from_secs_f64(secs)
     }
 
-    fn random_ok_body(uri: &rama::http::Uri) -> Body {
+    fn random_ok_body(&self, uri: &Uri) -> (usize, Body) {
         let mut h = std::collections::hash_map::DefaultHasher::new();
         std::hash::Hash::hash(&uri, &mut h);
-        let multiplier = (std::hash::Hasher::finish(&h) as u32) % 6;
+        let index = (std::hash::Hasher::finish(&h) as usize) % self.ok_payloads.len();
 
-        rama::http::body::InfiniteReader::new()
-            .with_size_limit(2usize.pow(multiplier) * 512)
-            .into_body()
+        (index, Body::from(self.ok_payloads[index]))
     }
 
-    fn random_ok_response(req: &Request) -> Response {
-        let body = Self::random_ok_body(req.uri());
+    fn random_ok_response(&self, req: &Request) -> Response {
+        let (index, body) = self.random_ok_body(req.uri());
+        let index_str = index.to_smolstr();
         (
             StatusCode::OK,
             Headers::single(ContentType::octet_stream()),
+            [(
+                HeaderName::from_static("x-mock-response-random"),
+                HeaderValue::from_str(&index_str).expect("ascii number to be valid header"),
+            )],
             body,
         )
             .into_response()
@@ -244,7 +275,7 @@ impl Service<Request> for MockHttpServer {
             }
             MockOutcome::Timeout => StatusCode::REQUEST_TIMEOUT.into_response(),
             MockOutcome::Error => Self::error_response(),
-            MockOutcome::Ok => Self::random_ok_response(&req),
+            MockOutcome::Ok => self.random_ok_response(&req),
         })
     }
 }
