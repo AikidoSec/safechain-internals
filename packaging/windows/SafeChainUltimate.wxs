@@ -73,14 +73,15 @@
       </Component>
     </DirectoryRef>
 
-    <!-- Custom action to run teardown on uninstall (runs after service is stopped) -->
+    <!-- Custom action to run teardown on uninstall (runs elevated before files are removed) -->
     <CustomAction Id="RunTeardown"
                   FileRef="AikidoAgentExeFile"
                   ExeCommand="--teardown"
-                  Execute="immediate"
+                  Execute="deferred"
+                  Impersonate="no"
                   Return="ignore" />
     <InstallExecuteSequence>
-      <Custom Action="RunTeardown" After="StopServices" Condition="REMOVE=&quot;ALL&quot;" />
+      <Custom Action="RunTeardown" Before="RemoveFiles" Condition="(REMOVE~=&quot;ALL&quot;) AND (NOT UPGRADINGPRODUCTCODE)" />
     </InstallExecuteSequence>
 
     <!-- Cleanup ProgramData on uninstall (disabled - preserving data between installs)
