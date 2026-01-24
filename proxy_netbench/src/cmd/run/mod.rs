@@ -11,6 +11,8 @@ use safechain_proxy_lib::storage;
 
 use crate::config::{ClientConfig, ProductValues, Scenario, parse_product_values, rand_requests};
 
+// TODO: also create client here that we will use... which includes har recording..
+
 #[derive(Debug, Clone, Args)]
 /// run benhmarker
 pub struct RunCommand {

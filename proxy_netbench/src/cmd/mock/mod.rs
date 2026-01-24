@@ -6,7 +6,7 @@ use rama::{
     extensions::ExtensionsRef,
     graceful::ShutdownGuard,
     http::{
-        Body, HeaderName, HeaderValue, InfiniteReader, Request, Response, StatusCode, Uri,
+        Body, HeaderValue, InfiniteReader, Request, Response, StatusCode, Uri,
         body::util::BodyExt,
         headers::{ContentLength, ContentType, HeaderMapExt},
         layer::{
@@ -28,7 +28,6 @@ use rama::{
     tcp::server::TcpListener,
     telemetry::tracing,
     tls::boring::server::{TlsAcceptorData, TlsAcceptorLayer},
-    utils::str::smol_str::ToSmolStr,
 };
 
 use clap::Args;
@@ -36,7 +35,13 @@ use safechain_proxy_lib::{
     firewall::malware_list::MALWARE_LIST_URI_STR_NPM, server, storage, utils,
 };
 
-use crate::config::{Scenario, ServerConfig, download_malware_list_for_uri};
+use crate::{
+    config::{Scenario, ServerConfig, download_malware_list_for_uri},
+    http::{
+        MockReplayIndex, MockResponseRandomIndex,
+        har::{self, HarEntry},
+    },
+};
 
 #[derive(Debug, Clone, Args)]
 /// run bench mock server
@@ -57,6 +62,10 @@ pub struct MockCommand {
         default_value = "127.0.0.1:0"
     )]
     pub bind: Interface,
+
+    /// replay the responses from the provided HAR file
+    #[arg(long, value_name = "HAR_FILE_PATH")]
+    pub replay: Option<PathBuf>,
 }
 
 pub async fn exec(
@@ -74,7 +83,7 @@ pub async fn exec(
         .map_err(OpaqueError::from_boxed)
         .context("bind proxy meta http(s) server")?;
 
-    let merged_cfg = merge_server_cfg(args);
+    let merged_cfg = merge_server_cfg(args.clone());
 
     let http_svc = (
         TraceLayer::new_for_http(),
@@ -83,7 +92,7 @@ pub async fn exec(
             .with_server_header_value(HeaderValue::from_static(utils::env::server_identifier())),
     )
         .into_layer(Arc::new(
-            MockHttpServer::try_new(data.clone(), merged_cfg).await?,
+            MockHttpServer::try_new(data.clone(), args.replay.clone(), merged_cfg).await?,
         ));
 
     let http_server = HttpServer::auto(exec).service(Arc::new(http_svc));
@@ -135,11 +144,15 @@ struct MockHttpServer {
     error_rate: f32,
     drop_rate: f32,
     timeout_rate: f32,
-    ok_payloads: Vec<&'static [u8]>,
+    ok_responses: OkResponses,
 }
 
 impl MockHttpServer {
-    async fn try_new(data: PathBuf, cfg: ServerConfig) -> Result<Self, OpaqueError> {
+    async fn try_new(
+        data: PathBuf,
+        replay: Option<PathBuf>,
+        cfg: ServerConfig,
+    ) -> Result<Self, OpaqueError> {
         let base_latency = cfg.base_latency.unwrap_or_default();
         let jitter = cfg.jitter.unwrap_or_default();
         let error_rate = cfg.error_rate.unwrap_or_default();
@@ -153,40 +166,20 @@ impl MockHttpServer {
             ));
         }
 
-        let data_storage =
-            storage::SyncCompactDataStorage::try_new(data.clone()).with_context(|| {
-                format!(
-                    "create compact data storage using dir at path '{}'",
-                    data.display()
-                )
-            })?;
-        tracing::info!(path = ?data, "data directory ready to be used");
-
-        tracing::info!("generating random OK payloads...");
-
-        let mut ok_payloads: Vec<&'static [u8]> = Vec::with_capacity(8);
-        for multiplier in 0..5 {
-            let payload = InfiniteReader::new()
-                .with_size_limit(2usize.pow(multiplier as u32) * 512)
-                .into_body()
-                .collect()
-                .await
-                .context("read generated random body")?
-                .to_bytes();
-            ok_payloads.push(payload.to_vec().leak());
-        }
-        // compressible payloads
-        ok_payloads.push(include_bytes!("./mod.rs"));
-        ok_payloads.push(include_bytes!("../../../Cargo.toml"));
-        // very compressible but big payload
-        ok_payloads.push(
-            format!(
-                "{:?}",
-                download_malware_list_for_uri(data_storage, MALWARE_LIST_URI_STR_NPM).await?
-            )
-            .into_bytes()
-            .leak(),
-        );
+        let ok_responses = match replay {
+            Some(path) => OkResponses::try_new_replay(path).await?,
+            None => {
+                let data_storage = storage::SyncCompactDataStorage::try_new(data.clone())
+                    .with_context(|| {
+                        format!(
+                            "create compact data storage using dir at path '{}'",
+                            data.display()
+                        )
+                    })?;
+                tracing::info!(path = ?data, "data directory ready to be used");
+                OkResponses::try_new_random_payloads(data_storage).await?
+            }
+        };
 
         Ok(Self {
             base_latency,
@@ -194,7 +187,7 @@ impl MockHttpServer {
             error_rate,
             drop_rate,
             timeout_rate,
-            ok_payloads,
+            ok_responses,
         })
     }
 
@@ -241,44 +234,6 @@ impl MockHttpServer {
         std::time::Duration::from_secs_f64(secs)
     }
 
-    fn random_ok_payload(&self, uri: &Uri) -> (usize, &'static [u8]) {
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        std::hash::Hash::hash(&uri, &mut h);
-        let index = (std::hash::Hasher::finish(&h) as usize) % self.ok_payloads.len();
-
-        (index, self.ok_payloads[index])
-    }
-
-    fn random_ok_response(&self, req: &Request) -> Response {
-        let (index, payload) = self.random_ok_payload(req.uri());
-        let index_str = index.to_smolstr();
-
-        let body = if payload.is_empty() {
-            Body::empty()
-        } else {
-            Body::from(payload)
-        };
-
-        let mut resp = (
-            StatusCode::OK,
-            [(
-                HeaderName::from_static("x-mock-response-random"),
-                HeaderValue::from_str(&index_str).expect("ascii number to be valid header"),
-            )],
-            body,
-        )
-            .into_response();
-        if !payload.is_empty() {
-            resp.headers_mut().typed_insert(ContentType::octet_stream());
-            if rand::random_bool(0.5) {
-                resp.headers_mut()
-                    .typed_insert(ContentLength(payload.len() as u64));
-            }
-        }
-
-        resp
-    }
-
     fn error_response() -> Response {
         StatusCode::INTERNAL_SERVER_ERROR.into_response()
     }
@@ -312,7 +267,16 @@ impl Service<Request> for MockHttpServer {
             }
             MockOutcome::Timeout => StatusCode::REQUEST_TIMEOUT.into_response(),
             MockOutcome::Error => Self::error_response(),
-            MockOutcome::Ok => self.random_ok_response(&req),
+            MockOutcome::Ok => match self.ok_responses.generate_response(&req) {
+                Some(resp) => resp,
+                None => {
+                    if let Some(controller) = req.extensions().get::<AbortController>() {
+                        controller.abort().await;
+                    }
+                    tracing::error!("failed to abort connection via controller");
+                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                }
+            },
         })
     }
 }
@@ -360,4 +324,97 @@ fn merge_server_cfg(args: MockCommand) -> ServerConfig {
             timeout_rate,
         }
     )
+}
+
+#[derive(Debug)]
+enum OkResponses {
+    Random(Vec<&'static [u8]>),
+    Replay(Vec<HarEntry>),
+}
+
+impl OkResponses {
+    async fn try_new_random_payloads(
+        data_storage: storage::SyncCompactDataStorage,
+    ) -> Result<Self, OpaqueError> {
+        tracing::info!("generating random OK payloads...");
+
+        let mut ok_payloads: Vec<&'static [u8]> = Vec::with_capacity(8);
+        for multiplier in 0..5 {
+            let payload = InfiniteReader::new()
+                .with_size_limit(2usize.pow(multiplier as u32) * 512)
+                .into_body()
+                .collect()
+                .await
+                .context("read generated random body")?
+                .to_bytes();
+            ok_payloads.push(payload.to_vec().leak());
+        }
+        // compressible payloads
+        ok_payloads.push(include_bytes!("./mod.rs"));
+        ok_payloads.push(include_bytes!("../../../Cargo.toml"));
+        // very compressible but big payload
+        ok_payloads.push(
+            format!(
+                "{:?}",
+                download_malware_list_for_uri(data_storage, MALWARE_LIST_URI_STR_NPM).await?
+            )
+            .into_bytes()
+            .leak(),
+        );
+
+        Ok(Self::Random(ok_payloads))
+    }
+
+    async fn try_new_replay(path: PathBuf) -> Result<Self, OpaqueError> {
+        tracing::info!("generating replay responses...");
+        let entries = har::load_har_entries(path).await?;
+        Ok(Self::Replay(entries))
+    }
+}
+
+fn random_index_from_uri(uri: &Uri, m: usize) -> usize {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hash::hash(&uri, &mut h);
+    (std::hash::Hasher::finish(&h) as usize) % m
+}
+
+impl OkResponses {
+    pub fn generate_response(&self, req: &Request) -> Option<Response> {
+        match self {
+            OkResponses::Random(items) => {
+                let index = random_index_from_uri(req.uri(), items.len());
+                let payload = items[index];
+
+                let body = if payload.is_empty() {
+                    Body::empty()
+                } else {
+                    Body::from(payload)
+                };
+
+                let mut resp = (StatusCode::OK, body).into_response();
+                resp.headers_mut()
+                    .typed_insert(MockResponseRandomIndex(index));
+                if !payload.is_empty() {
+                    resp.headers_mut().typed_insert(ContentType::octet_stream());
+                    if rand::random_bool(0.5) {
+                        resp.headers_mut()
+                            .typed_insert(ContentLength(payload.len() as u64));
+                    }
+                }
+
+                Some(resp)
+            }
+            OkResponses::Replay(items) => {
+                let index = match req.headers().typed_get() {
+                    Some(MockReplayIndex(index)) => index % items.len(),
+                    None => random_index_from_uri(req.uri(), items.len()),
+                };
+                items[index].response.as_ref().map(|resp| {
+                    let mut resp = resp.clone_as_http_response();
+                    resp.headers_mut().typed_insert(MockReplayIndex(index));
+                    resp
+                })
+            }
+        }
+    }
 }

@@ -12,6 +12,7 @@ resolver = "3"
 clap = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
 rand = { workspace = true }
+serde_json = { workspace = true }
 safechain-proxy-lib = { workspace = true, features = ["har", "bench"] }
 
 [target.'cfg(target_family = "unix")'.dependencies]

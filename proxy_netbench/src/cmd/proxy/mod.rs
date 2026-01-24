@@ -108,5 +108,13 @@ pub async fn exec(
     let proxy_addr = proxy_server.socket_address();
     server::write_server_socket_address_as_file(&data, "proxy", proxy_addr).await?;
 
-    proxy_server.serve().await
+    let result = proxy_server.serve().await;
+
+    if args.record_har
+        && let Err(err) = har_client.toggle().await
+    {
+        tracing::error!("failed to toggle HAR recording off again: {err}");
+    }
+
+    result
 }
