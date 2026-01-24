@@ -170,12 +170,12 @@ func UnsetSystemProxy(ctx context.Context) error {
 
 	for _, sid := range sids {
 		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
-		regValueToDelete := []string{
-			"ProxyEnable",
-			"ProxyServer",
+		regValuesToDisable := map[string]RegistryValue{
+			"ProxyEnable": {Type: "REG_DWORD", Value: "ProxyEnable", Data: "0"},
+			"ProxyServer": {Type: "REG_SZ", Value: "ProxyServer", Data: ""},
 		}
-		for _, regValue := range regValueToDelete {
-			if err := deleteRegistryValue(ctx, regPath, regValue); err != nil {
+		for _, regValue := range regValuesToDisable {
+			if err := setRegistryValue(ctx, regPath, regValue); err != nil {
 				errs = append(errs, err)
 			}
 		}
