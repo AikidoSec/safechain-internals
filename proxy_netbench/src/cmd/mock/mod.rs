@@ -8,13 +8,13 @@ use rama::{
     http::{
         Body, HeaderName, HeaderValue, InfiniteReader, Request, Response, StatusCode, Uri,
         body::util::BodyExt,
-        headers::ContentType,
+        headers::{ContentLength, ContentType, HeaderMapExt},
         layer::{
             compression::CompressionLayer, required_header::AddRequiredResponseHeadersLayer,
             trace::TraceLayer,
         },
         server::HttpServer,
-        service::web::response::{Headers, IntoResponse},
+        service::web::response::IntoResponse,
     },
     layer::{AbortableLayer, TimeoutLayer, abort::AbortController},
     net::{
@@ -241,27 +241,42 @@ impl MockHttpServer {
         std::time::Duration::from_secs_f64(secs)
     }
 
-    fn random_ok_body(&self, uri: &Uri) -> (usize, Body) {
+    fn random_ok_payload(&self, uri: &Uri) -> (usize, &'static [u8]) {
         let mut h = std::collections::hash_map::DefaultHasher::new();
         std::hash::Hash::hash(&uri, &mut h);
         let index = (std::hash::Hasher::finish(&h) as usize) % self.ok_payloads.len();
 
-        (index, Body::from(self.ok_payloads[index]))
+        (index, self.ok_payloads[index])
     }
 
     fn random_ok_response(&self, req: &Request) -> Response {
-        let (index, body) = self.random_ok_body(req.uri());
+        let (index, payload) = self.random_ok_payload(req.uri());
         let index_str = index.to_smolstr();
-        (
+
+        let body = if payload.is_empty() {
+            Body::empty()
+        } else {
+            Body::from(payload)
+        };
+
+        let mut resp = (
             StatusCode::OK,
-            Headers::single(ContentType::octet_stream()),
             [(
                 HeaderName::from_static("x-mock-response-random"),
                 HeaderValue::from_str(&index_str).expect("ascii number to be valid header"),
             )],
             body,
         )
-            .into_response()
+            .into_response();
+        if !payload.is_empty() {
+            resp.headers_mut().typed_insert(ContentType::octet_stream());
+            if rand::random_bool(0.5) {
+                resp.headers_mut()
+                    .typed_insert(ContentLength(payload.len() as u64));
+            }
+        }
+
+        resp
     }
 
     fn error_response() -> Response {
