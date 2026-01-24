@@ -1,4 +1,4 @@
-use std::{fmt, str::FromStr};
+use std::{fmt, str::FromStr, sync::Arc};
 
 use rama::{
     Service,
@@ -36,11 +36,12 @@ impl RuleChrome {
     where
         C: Service<Request, Output = Response, Error = OpaqueError>,
     {
-        let remote_malware_list = RemoteMalwareList::try_new(
+        let remote_malware_list = RemoteMalwareList::try_new_with_key_mapper(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_chrome.json"),
             sync_storage,
             remote_malware_list_https_client,
+            Arc::new(Self::normalize_malware_key),
         )
         .await
         .context("create remote malware list for chrome block rule")?;
@@ -131,24 +132,15 @@ impl Rule for RuleChrome {
 
 impl RuleChrome {
     fn matches_malware_entry(&self, extension_id: &str, version: &PackageVersion) -> bool {
-        let suffix = format!("@{}", extension_id);
-        let suffix_lower = suffix.to_ascii_lowercase();
+        let normalized_id = extension_id.to_ascii_lowercase();
+        let entries = self.remote_malware_list.find_entries(&normalized_id);
+        let Some(entries) = entries.entries() else {
+            return false;
+        };
 
-        let entries_result = self.remote_malware_list.find_entries("");
-        for (key, entries) in entries_result.iter_all() {
-            if !key.to_ascii_lowercase().ends_with(&suffix_lower) {
-                continue;
-            }
-
-            if entries
-                .iter()
-                .any(|e| Self::version_matches(&e.version, version))
-            {
-                return true;
-            }
-        }
-
-        false
+        entries
+            .iter()
+            .any(|e| Self::version_matches(&e.version, version))
     }
 
     fn version_matches(entry_version: &PackageVersion, observed_version: &PackageVersion) -> bool {
@@ -172,6 +164,13 @@ impl RuleChrome {
         let version = PackageVersion::from_str(&version_string).unwrap_or(PackageVersion::None);
 
         Some((ArcStr::from(extension_id), version))
+    }
+
+    fn normalize_malware_key(raw: String) -> String {
+        let raw = raw.trim();
+        let extension_id = raw.rsplit_once('@').map(|(_, id)| id).unwrap_or(raw);
+
+        extension_id.to_ascii_lowercase()
     }
 }
 

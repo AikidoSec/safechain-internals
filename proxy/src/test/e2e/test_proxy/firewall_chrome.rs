@@ -114,3 +114,18 @@ async fn test_chrome_allows_different_version() {
 
     assert_eq!(StatusCode::OK, resp.status());
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_chrome_allows_when_version_unparsable() {
+    let runtime = e2e::runtime::get().await;
+    let client = runtime.client_with_http_proxy().await;
+
+    let resp = client
+        .get("https://clients2.googleusercontent.com/crx/blobs/somehash/lajondecmobodlejlcjllhojikagldgd.crx")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::OK, resp.status());
+}
