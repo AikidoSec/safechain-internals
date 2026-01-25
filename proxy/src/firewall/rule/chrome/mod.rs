@@ -144,7 +144,37 @@ impl RuleChrome {
     }
 
     fn version_matches(entry_version: &PackageVersion, observed_version: &PackageVersion) -> bool {
-        matches!(entry_version, PackageVersion::Any) || entry_version == observed_version
+        if matches!(entry_version, PackageVersion::Any) {
+            return true;
+        }
+
+        if entry_version == observed_version {
+            return true;
+        }
+
+        // Avoid false negatives when malware list uses SemVer x.y.z
+        // but the CRX filename uses Chrome's 4-part x.y.z.0.
+        fn normalize_unknown(raw: &str) -> &str {
+            let raw = raw.trim();
+            if raw.ends_with(".0") && raw.matches('.').count() == 3 {
+                &raw[..raw.len() - 2]
+            } else {
+                raw
+            }
+        }
+
+        match (entry_version, observed_version) {
+            (PackageVersion::Semver(v), PackageVersion::Unknown(raw)) => {
+                normalize_unknown(raw.as_str()) == v.to_string()
+            }
+            (PackageVersion::Unknown(raw), PackageVersion::Semver(v)) => {
+                normalize_unknown(raw.as_str()) == v.to_string()
+            }
+            (PackageVersion::Unknown(a), PackageVersion::Unknown(b)) => {
+                normalize_unknown(a.as_str()) == normalize_unknown(b.as_str())
+            }
+            _ => false,
+        }
     }
 
     fn parse_crx_download_url(req: &Request) -> Option<(ArcStr, PackageVersion)> {

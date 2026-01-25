@@ -37,6 +37,17 @@ fn test_version_matches() {
 
     assert!(RuleChrome::version_matches(&v1, &v2));
     assert!(!RuleChrome::version_matches(&v1, &v3));
+
+    let s_6450 = PackageVersion::Semver("6.45.0".parse().unwrap());
+    let u_64500 = PackageVersion::Unknown("6.45.0.0".into());
+    let u_6450 = PackageVersion::Unknown("6.45.0".into());
+    let u_64501 = PackageVersion::Unknown("6.45.0.1".into());
+
+    assert!(RuleChrome::version_matches(&s_6450, &u_64500));
+    assert!(RuleChrome::version_matches(&u_64500, &s_6450));
+
+    assert!(RuleChrome::version_matches(&u_6450, &u_64500));
+    assert!(!RuleChrome::version_matches(&u_64501, &s_6450));
 }
 
 #[test]

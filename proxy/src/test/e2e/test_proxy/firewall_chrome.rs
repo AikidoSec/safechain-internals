@@ -129,3 +129,19 @@ async fn test_chrome_allows_when_version_unparsable() {
 
     assert_eq!(StatusCode::OK, resp.status());
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_chrome_bocks_fourth_digit_zero_vs_semver() {
+    let runtime = e2e::runtime::get().await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // CRX has 4 digits, malware list 3 (1225.100000.0 vs 1225.100000.0.0)
+    let resp = client
+        .get("https://clients2.googleusercontent.com/crx/blobs/somehash/faeadndfretgofoffijhlnkif_1225_100000_0_0.crx")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
