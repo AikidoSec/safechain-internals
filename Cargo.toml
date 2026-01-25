@@ -35,4 +35,4 @@ windows-native-keyring-store = "0.5"
 
 [workspace.dependencies.rama]
 git = "https://github.com/plabayo/rama"
-rev = "ead53c35134d92798c7d46208a8c1156224ecafe"
+rev = "eb977a57abde52c9e64c5977aea6dc943863c3d8"
