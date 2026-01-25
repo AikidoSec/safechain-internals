@@ -18,7 +18,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ($Version -eq "dev" -or [string]::IsNullOrEmpty($Version)) {
-    $WixVersion = "0.0.1-dev"
+    $WixVersion = "0.0.0-dev"
 } else {
     $WixVersion = $Version
 }
