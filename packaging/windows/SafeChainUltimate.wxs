@@ -8,6 +8,9 @@
            UpgradeCode="adb9d7b9-de00-4953-af0e-9c1e9ec15c81"
            Scope="perMachine">
 
+    <Icon Id="SafeChainIcon.ico" SourceFile="$(var.ProjectDir)\packaging\shared\resources\SafeChain.ico" />
+    <Property Id="ARPPRODUCTICON" Value="SafeChainIcon.ico" />
+
     <MajorUpgrade Schedule="afterInstallValidate" DowngradeErrorMessage="A newer version of SafeChain Ultimate is already installed." AllowSameVersionUpgrades="yes" />
     
     <Media Id="1" Cabinet="SafeChainUltimate.cab" EmbedCab="yes" />
