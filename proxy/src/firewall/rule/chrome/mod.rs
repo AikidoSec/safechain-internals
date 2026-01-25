@@ -8,6 +8,7 @@ use rama::{
     net::address::{Domain, DomainTrie},
     telemetry::tracing,
     utils::str::arcstr::{ArcStr, arcstr},
+    utils::str::smol_str::StrExt,
 };
 
 use crate::{
@@ -189,9 +190,10 @@ impl RuleChrome {
             return None;
         }
 
-        let version_string = version_raw.replace('_', ".");
+        let version_string = version_raw.replace_smolstr("_", ".");
 
-        let version = PackageVersion::from_str(&version_string).unwrap_or(PackageVersion::None);
+        let version =
+            PackageVersion::from_str(version_string.as_str()).unwrap_or(PackageVersion::None);
 
         Some((ArcStr::from(extension_id), version))
     }
