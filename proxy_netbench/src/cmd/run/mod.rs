@@ -9,7 +9,9 @@ use clap::Args;
 
 use safechain_proxy_lib::storage;
 
-use crate::config::{ClientConfig, ProductValues, Scenario, parse_product_values, rand_requests};
+use crate::config::{ClientConfig, ProductValues, Scenario, parse_product_values};
+
+pub mod requests;
 
 // TODO: also create client here that we will use... which includes har recording..
 
@@ -34,7 +36,15 @@ pub struct RunCommand {
     #[arg(long, value_parser = parse_product_values)]
     /// Scenario to run,
     /// manually defined parameters overwrite scenario parameters.
+    ///
+    /// Not used when replaying.
     products: Option<ProductValues>,
+
+    /// How much mock product requests generations should contain malaware.
+    ///
+    /// Not used when replaying.
+    #[arg(long, value_name = "SECONDS", default_value_t = 0.1)]
+    malware_ratio: f64,
 
     #[arg(long)]
     /// Scenario to run,
@@ -62,25 +72,13 @@ pub async fn exec(data: PathBuf, args: RunCommand) -> Result<(), OpaqueError> {
     let request_count_per_warmup = (args.warmup * target_rps as f64).next_up() as usize;
 
     let iterations = args.iterations.max(1);
-    let mut requests_per_iteration = Vec::with_capacity(iterations);
-    for i in 0..iterations {
-        tracing::info!(
-            "generate #{request_count_per_iteration} random requests for iteration {i} / {iterations}"
-        );
-        let requests = rand_requests(
-            &data_storage,
-            request_count_per_iteration,
-            args.products.clone(),
-        )
-        .await?;
-        requests_per_iteration.push(requests);
-    }
-
-    tracing::info!("generate #{request_count_per_warmup} random requests for warmup");
-    let _requests = rand_requests(
-        &data_storage,
+    let (_requests_for_iterations, _requests_for_warmup) = self::requests::mock::rand_requests(
+        data_storage,
+        iterations,
+        request_count_per_iteration,
         request_count_per_warmup,
         args.products.clone(),
+        args.malware_ratio,
     )
     .await?;
 
