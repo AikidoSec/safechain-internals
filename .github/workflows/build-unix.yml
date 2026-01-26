@@ -62,25 +62,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - rust_cache_prefix: ""
           - arch: arm64
             target: aarch64-apple-darwin
             runner: macos-14
             os: darwin
+            rust_cache_prefix: ""
           - arch: amd64
             target: x86_64-apple-darwin
             runner: macos-14
             os: darwin
+            rust_cache_prefix: ""
           - arch: amd64
             target: x86_64-unknown-linux-musl
             runner: ubuntu-latest
-            rust_cache_prefix: "musl-zig-0.15.1-build-0.21.3"
             os: linux
+            rust_cache_prefix: "musl-zig-0.15.1-build-0.21.3"
           - arch: arm64
             target: aarch64-unknown-linux-musl
             runner: ubuntu-24.04-arm
-            rust_cache_prefix: "musl-zig-0.15.1-build-0.21.3"
             os: linux
+            rust_cache_prefix: "musl-zig-0.15.1-build-0.21.3"
 
     runs-on: ${{ matrix.runner }}
     steps:
