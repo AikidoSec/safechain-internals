@@ -87,10 +87,10 @@ fn should_send_event(dedup: &parking_lot::Mutex<DedupState>, event: &BlockedEven
 
     let mut state = dedup.lock();
 
-    if let Some(last_at) = state.last_sent_by_key.get(&key) {
-        if last_at.elapsed() < EVENT_DEDUP_WINDOW {
-            return false;
-        }
+    if let Some(last_at) = state.last_sent_by_key.get(&key)
+        && last_at.elapsed() < EVENT_DEDUP_WINDOW
+    {
+        return false;
     }
 
     let cleanup_window = EVENT_DEDUP_WINDOW * 2;
