@@ -62,7 +62,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - rust_cache_prefix: ""
           - arch: arm64
             target: aarch64-apple-darwin
             runner: macos-14
