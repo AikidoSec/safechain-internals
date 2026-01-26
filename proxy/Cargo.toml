@@ -40,6 +40,7 @@ sudo = "0.6"
 
 [target.'cfg(target_family = "unix")'.dependencies]
 jemallocator = { package = "tikv-jemallocator", version = "0.6" }
+libc = "0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-native-keyring-store = "0.5"
