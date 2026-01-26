@@ -27,6 +27,7 @@ use ::{
         net::client::pool::http::HttpPooledConnectorConfig,
         rt::Executor,
         tcp::client::service::TcpConnector,
+        telemetry::tracing,
     },
     std::time::Duration,
 };
@@ -52,8 +53,10 @@ pub fn set_egress_address_overwrite(address: SocketAddress) {
 pub fn new_web_client(
     exec: Executor,
 ) -> Result<impl Service<Request, Output = Response, Error = OpaqueError> + Clone, OpaqueError> {
-    let max_active = crate::utils::env::compute_concurrent_request_count();
-    let max_total = max_active * 2;
+    let max_total = (crate::utils::env::compute_concurrent_request_count() / 2).max(40);
+    let max_active = (max_total * 3 / 4).max(20);
+
+    tracing::info!(max_active, max_total, "create egress pool with config",);
 
     let tcp_connector = TcpConnector::new(exec);
 
