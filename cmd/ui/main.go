@@ -23,6 +23,7 @@ func main() {
 
 	if *title == "" || *subtitle == "" || *ingress == "" || *packageId == "" {
 		fmt.Fprintln(os.Stderr, "Usage: safechain-ui --title <title> --subtitle <subtitle> --package-id <id> --ingress <ingress>")
+		fmt.Fprintf(os.Stderr, "Arguments provided: %v\n", os.Args[1:])
 		os.Exit(1)
 	}
 
