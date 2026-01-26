@@ -294,7 +294,7 @@ func RunningAsRoot() bool {
 
 func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 	scriptURL := fmt.Sprintf("%s/releases/download/%s/install-safe-chain.sh", repoURL, version)
-	scriptPath := filepath.Join(GetConfig().RunDir, "install-safe-chain.sh")
+	scriptPath := filepath.Join(os.TempDir(), "install-safe-chain.sh")
 
 	log.Printf("Downloading install script from %s...", scriptURL)
 	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath); err != nil {
