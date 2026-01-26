@@ -23,6 +23,8 @@ use crate::{
 
 use super::{BlockedRequest, RequestAction, Rule};
 
+mod malware_key;
+
 pub(in crate::firewall) struct RuleChrome {
     target_domains: DomainTrie<()>,
     remote_malware_list: RemoteMalwareList,
@@ -37,12 +39,12 @@ impl RuleChrome {
     where
         C: Service<Request, Output = Response, Error = OpaqueError>,
     {
-        let remote_malware_list = RemoteMalwareList::try_new_with_key_mapper(
+        let remote_malware_list = RemoteMalwareList::try_new(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_chrome.json"),
             sync_storage,
             remote_malware_list_https_client,
-            Arc::new(Self::normalize_malware_key),
+            Some(Arc::new(malware_key::ChromeMalwareListEntryFormatter)),
         )
         .await
         .context("create remote malware list for chrome block rule")?;
@@ -196,13 +198,6 @@ impl RuleChrome {
             PackageVersion::from_str(version_string.as_str()).unwrap_or(PackageVersion::None);
 
         Some((ArcStr::from(extension_id), version))
-    }
-
-    fn normalize_malware_key(raw: String) -> String {
-        let raw = raw.trim();
-        let extension_id = raw.rsplit_once('@').map(|(_, id)| id).unwrap_or(raw);
-
-        extension_id.to_ascii_lowercase()
     }
 }
 

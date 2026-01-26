@@ -1,6 +1,9 @@
-use crate::firewall::malware_list::PackageVersion;
+use crate::firewall::malware_list::{
+    ListDataEntry, MalwareListEntryFormatter, PackageVersion, Reason,
+};
 use rama::http::{Body, Request, Uri};
 
+use super::malware_key::ChromeMalwareListEntryFormatter;
 use super::*;
 
 #[test]
@@ -52,23 +55,30 @@ fn test_version_matches() {
 
 #[test]
 fn test_normalize_chrome_malware_key_known_entries() {
+    let formatter = ChromeMalwareListEntryFormatter;
+    let make_entry = |name: &str| ListDataEntry {
+        package_name: name.to_string(),
+        version: PackageVersion::Any,
+        reason: Reason::Malware,
+    };
+
     let key_1 =
         "Malicious Extension - Chrome Web Store@lajondecmobodlejlcjllhojikagldgd".to_owned();
     assert_eq!(
-        RuleChrome::normalize_malware_key(key_1),
+        formatter.format(&make_entry(key_1.as_str())),
         "lajondecmobodlejlcjllhojikagldgd"
     );
 
     let key_2 =
         "Into the Black Hole - Chrome Web Store@faeadnfmdfamenfhaipofoffijhlnkif".to_owned();
     assert_eq!(
-        RuleChrome::normalize_malware_key(key_2),
+        formatter.format(&make_entry(key_2.as_str())),
         "faeadnfmdfamenfhaipofoffijhlnkif"
     );
 
     let key_3 = "  Something@FAEADNFMD FAMENFHAIPOFOFFIJHLNKIF  ".replace(' ', "");
     assert_eq!(
-        RuleChrome::normalize_malware_key(key_3),
+        formatter.format(&make_entry(key_3.as_str())),
         "faeadnfmdfamenfhaipofoffijhlnkif"
     );
 }
