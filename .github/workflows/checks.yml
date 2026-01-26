@@ -83,3 +83,5 @@ jobs:
       - name: musl build check
         run: |
           cargo zigbuild -p safechain-proxy --target ${{ matrix.target }} --all-features
+        env:
+          AWS_LC_SYS_CMAKE_BUILDER: "0"
