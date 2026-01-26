@@ -71,14 +71,17 @@ jobs:
           components: clippy, rustfmt
           targets: ${{ matrix.target }}
       - name: Install Zig
-        uses: mlugg/setup-zig@e7d1537c378b83b8049f65dda471d87a2f7b2df2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
         with:
-          version: 0.13.0
+          version: 0.15.1
       - name: Install cargo-zigbuild
-        run: cargo install cargo-zigbuild --locked
+        run: cargo install --version 0.21.3 cargo-zigbuild --locked
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
         with:
           env-vars: "RUST_TOOLCHAIN=stable"
+          prefix-key: "musl-zig-0.15.1-build-0.21.3"
       - name: musl build check
         run: |
           cargo zigbuild -p safechain-proxy --target ${{ matrix.target }} --all-features
+        env:
+          AWS_LC_SYS_CMAKE_BUILDER: "0"
