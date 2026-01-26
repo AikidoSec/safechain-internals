@@ -8,7 +8,10 @@
            UpgradeCode="adb9d7b9-de00-4953-af0e-9c1e9ec15c81"
            Scope="perMachine">
 
-    <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="A newer version of SafeChain Ultimate is already installed." />
+    <Icon Id="SafeChainIcon.ico" SourceFile="$(var.ProjectDir)\packaging\shared\resources\SafeChain.ico" />
+    <Property Id="ARPPRODUCTICON" Value="SafeChainIcon.ico" />
+
+    <MajorUpgrade Schedule="afterInstallValidate" DowngradeErrorMessage="A newer version of SafeChain Ultimate is already installed." AllowSameVersionUpgrades="yes" />
     
     <Media Id="1" Cabinet="SafeChainUltimate.cab" EmbedCab="yes" />
 
@@ -73,15 +76,15 @@
       </Component>
     </DirectoryRef>
 
-    <!-- Custom action to run teardown on uninstall -->
+    <!-- Custom action to run teardown on uninstall (runs elevated before files are removed) -->
     <CustomAction Id="RunTeardown"
-                  Directory="BINDIR"
-                  ExeCommand="[BINDIR]SafeChainUltimate.exe --teardown"
+                  FileRef="AikidoAgentExeFile"
+                  ExeCommand="--teardown"
                   Execute="deferred"
                   Impersonate="no"
                   Return="ignore" />
     <InstallExecuteSequence>
-      <Custom Action="RunTeardown" Before="StopServices" Condition="REMOVE=&quot;ALL&quot;" />
+      <Custom Action="RunTeardown" Before="RemoveFiles" Condition="(REMOVE~=&quot;ALL&quot;)" />
     </InstallExecuteSequence>
 
     <!-- Cleanup ProgramData on uninstall -->

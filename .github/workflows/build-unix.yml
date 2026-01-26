@@ -62,6 +62,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - rust_cache_prefix: ""
           - arch: arm64
             target: aarch64-apple-darwin
             runner: macos-14
@@ -73,10 +74,12 @@ jobs:
           - arch: amd64
             target: x86_64-unknown-linux-musl
             runner: ubuntu-latest
+            rust_cache_prefix: "musl-zig-0.15.1-build-0.21.3"
             os: linux
           - arch: arm64
             target: aarch64-unknown-linux-musl
             runner: ubuntu-24.04-arm
+            rust_cache_prefix: "musl-zig-0.15.1-build-0.21.3"
             os: linux
 
     runs-on: ${{ matrix.runner }}
@@ -92,22 +95,26 @@ jobs:
 
       - name: Install Zig
         if: contains(matrix.target, 'unknown-linux-musl')
-        uses: mlugg/setup-zig@e7d1537c378b83b8049f65dda471d87a2f7b2df2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
         with:
-          version: 0.13.0
+          version: 0.15.1
 
       - name: Install cargo-zigbuild
         if: contains(matrix.target, 'unknown-linux-musl')
-        run: cargo install cargo-zigbuild --locked
+        run: cargo install --version 0.21.3 cargo-zigbuild --locked
 
       - name: Rust Cache
+        if: contains(matrix.target, 'unknown-linux-musl')
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
         with:
           env-vars: "RUST_TOOLCHAIN=stable"
+          prefix-key: matrix.rust_cache_prefix
 
       - name: Build proxy binary for linux musl
         if: ${{ contains(matrix.target, 'unknown-linux-musl') }}
         run: cargo zigbuild --release -p safechain-proxy --target "${{ matrix.target }}"
+        env:
+          AWS_LC_SYS_CMAKE_BUILDER: "0"
 
       - name: Build proxy binary for ${{ matrix.os }}/${{ matrix.arch }}
         if: ${{ !(contains(matrix.target, 'unknown-linux-musl')) }}
