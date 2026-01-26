@@ -109,6 +109,7 @@ async fn main() -> Result<(), BoxError> {
 
     self::utils::telemetry::init_tracing(&args)?;
 
+    #[cfg(target_family = "unix")]
     self::utils::os::raise_nofile(args.ulimit).context("set file descriptor limit")?;
 
     let base_shutdown_signal = graceful::default_signal();
