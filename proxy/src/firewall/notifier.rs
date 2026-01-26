@@ -1,4 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use super::events::BlockedEvent;
 use rama::{
@@ -9,7 +13,15 @@ use rama::{
     service::BoxService,
     telemetry::tracing,
 };
+use serde_json;
 use tokio::sync::{Semaphore, SemaphorePermit};
+
+const EVENT_DEDUP_WINDOW: Duration = Duration::from_secs(30);
+
+#[derive(Default)]
+struct DedupState {
+    last_sent_by_key: HashMap<String, Instant>,
+}
 
 #[derive(Clone)]
 pub struct EventNotifier {
@@ -17,6 +29,7 @@ pub struct EventNotifier {
     client: BoxService<Request, Response, OpaqueError>,
     reporting_endpoint: Uri,
     limit: Arc<Semaphore>,
+    dedup: Arc<parking_lot::Mutex<DedupState>>,
 }
 
 impl std::fmt::Debug for EventNotifier {
@@ -29,15 +42,26 @@ impl EventNotifier {
     pub fn try_new(exec: Executor, reporting_endpoint: Uri) -> Result<Self, OpaqueError> {
         let client = crate::client::new_web_client()?.boxed();
         let limit = Arc::new(Semaphore::const_new(compute_concurrent_request_count()));
+        let dedup = Arc::new(parking_lot::Mutex::new(DedupState::default()));
         Ok(Self {
             exec,
             client,
             reporting_endpoint,
             limit,
+            dedup,
         })
     }
 
     pub async fn notify(&self, event: BlockedEvent) {
+        if !should_send_event(&self.dedup, &event) {
+            tracing::debug!(
+                product = %event.artifact.product,
+                identifier = %event.artifact.identifier,
+                "suppressed duplicate blocked-event notification"
+            );
+            return;
+        }
+
         let client = self.client.clone();
         let reporting_endpoint = self.reporting_endpoint.clone();
         let limits = self.limit.clone();
@@ -53,6 +77,28 @@ impl EventNotifier {
             send_blocked_event(client, reporting_endpoint, event).await;
         });
     }
+}
+
+fn should_send_event(dedup: &parking_lot::Mutex<DedupState>, event: &BlockedEvent) -> bool {
+    let key = serde_json::to_string(&event.artifact)
+        .unwrap_or_else(|_| format!("{}:{}", event.artifact.product, event.artifact.identifier));
+
+    let now = Instant::now();
+
+    let mut state = dedup.lock();
+
+    if let Some(last_at) = state.last_sent_by_key.get(&key) {
+        if last_at.elapsed() < EVENT_DEDUP_WINDOW {
+            return false;
+        }
+    }
+
+    let cleanup_window = EVENT_DEDUP_WINDOW * 2;
+    state
+        .last_sent_by_key
+        .retain(|_, last_at| last_at.elapsed() <= cleanup_window);
+    state.last_sent_by_key.insert(key, now);
+    true
 }
 
 fn compute_concurrent_request_count() -> usize {
