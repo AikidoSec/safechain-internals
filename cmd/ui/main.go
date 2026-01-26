@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/ui"
 )
@@ -23,8 +24,12 @@ func main() {
 
 	if *title == "" || *subtitle == "" || *ingress == "" || *packageId == "" {
 		fmt.Fprintln(os.Stderr, "Usage: safechain-ui --title <title> --subtitle <subtitle> --package-id <id> --ingress <ingress>")
+		fmt.Fprintf(os.Stderr, "Arguments provided: %v\n", os.Args[1:])
 		os.Exit(1)
 	}
+
+	// remove the possible " on macOS.
+	trimmedTitle := strings.Trim(*title, "\"")
 
 	bypassTrigger := func() {
 		err := sendBypassRequest(*ingress, *packageId)
@@ -37,7 +42,7 @@ func main() {
 		bypassTrigger = nil
 	}
 
-	if err := ui.ShowBlockedModal(*title, *subtitle, *packageId, WindowTitle, bypassTrigger); err != nil {
+	if err := ui.ShowBlockedModal(trimmedTitle, *subtitle, *packageId, WindowTitle, bypassTrigger); err != nil {
 		log.Fatalf("Failed to show blocked modal: %v", err)
 	}
 }
