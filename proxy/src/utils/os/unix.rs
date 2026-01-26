@@ -1,6 +1,8 @@
 use rama::telemetry::tracing;
 
-pub fn raise_nofile(target: u64) -> std::io::Result<()> {
+pub use libc::rlim_t;
+
+pub fn raise_nofile(target: rlim_t) -> std::io::Result<()> {
     use std::{io, mem};
 
     unsafe {
@@ -9,10 +11,10 @@ pub fn raise_nofile(target: u64) -> std::io::Result<()> {
             return Err(io::Error::last_os_error());
         }
 
-        let hard = lim.rlim_max as u64;
+        let hard = lim.rlim_max;
         let new_soft = target.min(hard);
 
-        if lim.rlim_cur as u64 >= new_soft {
+        if lim.rlim_cur >= new_soft {
             tracing::info!(
                 "ulimit: keep current limit ({}) as it is higher than new soft limit ({new_soft}): nothing to do",
                 lim.rlim_cur,
@@ -21,7 +23,7 @@ pub fn raise_nofile(target: u64) -> std::io::Result<()> {
         }
 
         let previous_value = lim.rlim_cur;
-        lim.rlim_cur = new_soft as libc::rlim_t;
+        lim.rlim_cur = new_soft;
         if libc::setrlimit(libc::RLIMIT_NOFILE, &lim) != 0 {
             return Err(io::Error::last_os_error());
         }
