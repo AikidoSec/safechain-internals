@@ -37,7 +37,7 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 
 	args := []string{
 		"--package-id", key,
-		"--title", text,
+		"--title", fmt.Sprintf("\"%s\"", text),
 		"--ingress", ingressAddress,
 		"--bypass-enabled", "true",
 	}
