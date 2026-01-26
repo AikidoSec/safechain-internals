@@ -77,6 +77,11 @@ pub struct Args {
     /// Optional endpoint URL to POST blocked-event notifications to.
     #[arg(long, value_name = "URL")]
     pub reporting_endpoint: Option<Uri>,
+
+    #[cfg(target_family = "unix")]
+    /// Set the limit of max open file descriptors for this process and its children.
+    #[arg(long, value_name = "N", default_value_t = 262_144)]
+    pub ulimit: crate::utils::os::rlim_t,
 }
 
 /// Runs all the safechain-proxy services and blocks until

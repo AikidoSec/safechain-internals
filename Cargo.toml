@@ -14,6 +14,7 @@ clap = "4.5"
 humantime = "2.3"
 jemallocator = { package = "tikv-jemallocator", version = "0.6" }
 keyring-core = "0.7"
+libc = "0.2"
 linux-keyutils-keyring-store = "0.2"
 lz4_flex = "0.12"
 mimalloc = { version = "0.1", default-features = false }
@@ -35,4 +36,4 @@ windows-native-keyring-store = "0.5"
 
 [workspace.dependencies.rama]
 git = "https://github.com/plabayo/rama"
-rev = "eb977a57abde52c9e64c5977aea6dc943863c3d8"
+rev = "2f7732b329fccc67bcb4df051bdc5e253735d0bb"

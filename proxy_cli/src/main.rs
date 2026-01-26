@@ -1,8 +1,11 @@
 use rama::{error::BoxError, graceful};
 
+#[cfg(target_family = "unix")]
+use rama::error::ErrorContext as _;
+
 use safechain_proxy_lib::{
     cli::{Args, run_with_args},
-    utils::{self, telemetry::TelemetryConfig},
+    utils::telemetry::TelemetryConfig,
 };
 
 use clap::Parser;
@@ -19,11 +22,15 @@ static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 async fn main() -> Result<(), BoxError> {
     let args = Args::parse();
 
-    self::utils::telemetry::init_tracing(Some(TelemetryConfig {
+    safechain_proxy_lib::utils::telemetry::init_tracing(Some(TelemetryConfig {
         verbose: args.verbose,
         pretty: args.pretty,
         output: args.output.as_deref(),
     }))?;
+
+    #[cfg(target_family = "unix")]
+    safechain_proxy_lib::utils::os::raise_nofile(args.ulimit)
+        .context("set file descriptor limit")?;
 
     let base_shutdown_signal = graceful::default_signal();
     if let Err(err) = run_with_args(base_shutdown_signal, args).await {

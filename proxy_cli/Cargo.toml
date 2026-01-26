@@ -17,7 +17,6 @@ tokio = { workspace = true, features = ["full"] }
 safechain-proxy-lib = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 
-
 [target.'cfg(target_family = "unix")'.dependencies]
 jemallocator = { workspace = true }
 
