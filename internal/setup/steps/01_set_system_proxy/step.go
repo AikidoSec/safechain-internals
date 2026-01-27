@@ -55,7 +55,7 @@ func (s *Step) Install(ctx context.Context) error {
 }
 
 func (s *Step) Uninstall(ctx context.Context) error {
-	if err := platform.IsSystemPACSet(ctx, ""); err != nil {
+	if err := platform.IsSystemPACSet(ctx, proxy.MetaPacURL); err != nil {
 		return fmt.Errorf("system PAC is not set! Failing uninstallation to avoid proxy conflicts!")
 	}
 	return platform.UnsetSystemPAC(ctx, proxy.MetaPacURL)
