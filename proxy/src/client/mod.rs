@@ -30,7 +30,7 @@ pub fn new_web_client()
     use rama::tls::rustls::dep::rustls::ClientConfig;
     use rustls_platform_verifier::ConfigVerifierExt;
 
-    let config = ClientConfig::with_platform_verifier();
+    let config = ClientConfig::with_platform_verifier().context("create platform verifier")?;
 
     Ok(EasyHttpWebClient::connector_builder()
         .with_default_transport_connector()
