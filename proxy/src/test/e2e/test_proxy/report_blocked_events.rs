@@ -70,3 +70,56 @@ async fn test_report_blocked_events_posts_json_to_endpoint() {
     assert_eq!("npm", product);
     assert!(identifier.contains("safe-chain-test"));
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_report_blocked_events_dedupes_same_artifact_within_30s() {
+    let capture_client = crate::client::new_web_client().unwrap();
+
+    let resp = capture_client
+        .get("http://assert-test.internal/blocked-events/clear")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(StatusCode::NO_CONTENT, resp.status());
+
+    let runtime = e2e::runtime::spawn_with_args(&[
+        "--reporting-endpoint",
+        "http://assert-test.internal/blocked-events",
+    ])
+    .await;
+
+    let client = runtime.client_with_http_proxy().await;
+    for _ in 0..2 {
+        let resp = client
+            .get("https://registry.npmjs.org/safe-chain-test/-/safe-chain-test-0.0.1-security.tgz")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(StatusCode::FORBIDDEN, resp.status());
+    }
+
+    let mut captured: Vec<BlockedEvent> = Vec::new();
+    for _ in 0..40 {
+        let resp = capture_client
+            .get("http://assert-test.internal/blocked-events/take")
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(StatusCode::OK, resp.status());
+        captured = resp.try_into_json().await.unwrap();
+
+        if !captured.is_empty() {
+            break;
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+
+    assert_eq!(
+        1,
+        captured.len(),
+        "expected a single blocked-event notification after two identical blocked requests"
+    );
+}
