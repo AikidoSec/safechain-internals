@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -88,8 +89,8 @@ func getNetworkServices(ctx context.Context) ([]string, error) {
 	return services, nil
 }
 
-func isProxyEnabledAndUrlSet(output string, url string) bool {
-	parsed, err := url.Parse(url)
+func isProxyEnabledAndUrlSet(output string, proxyURL string) bool {
+	parsed, err := url.Parse(proxyURL)
 	if err != nil {
 		return false
 	}
