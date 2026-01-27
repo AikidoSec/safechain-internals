@@ -107,7 +107,7 @@ pub struct Args {
 async fn main() -> Result<(), BoxError> {
     let args = Args::parse();
 
-    self::utils::telemetry::init_tracing(&args)?;
+    let _tracing_guard = self::utils::telemetry::init_tracing(&args).await?;
 
     #[cfg(target_family = "unix")]
     self::utils::os::raise_nofile(args.ulimit).context("set file descriptor limit")?;
