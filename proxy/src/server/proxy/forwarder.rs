@@ -25,8 +25,6 @@ enum ForwarderKind {
     },
 }
 
-/// Custom TcpForwarder which can either connect direct,
-/// or via a hardecoded proxy.
 pub(super) struct TcpForwarder {
     kind: ForwarderKind,
 }
