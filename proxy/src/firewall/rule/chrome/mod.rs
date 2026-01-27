@@ -192,6 +192,8 @@ impl RuleChrome {
     }
 
     fn parse_crx_download_url(req: &Request) -> Option<(ArcStr, PackageVersion)> {
+        // Example CRX download URL path (after redirect):
+        //   /crx/lajondecmobodlejlcjllhojikagldgd_1_2_3_4.crx
         let path = req.uri().path();
 
         let (_, filename) = path.rsplit_once('/')?;
