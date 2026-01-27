@@ -100,33 +100,35 @@ impl Rule for RuleChrome {
             return Ok(RequestAction::Allow(req));
         }
 
-        if let Some((extension_id, version)) = Self::parse_crx_download_url(&req) {
-            tracing::debug!(
+        let Some((extension_id, version)) = Self::parse_crx_download_url(&req) else {
+            return Ok(RequestAction::Allow(req));
+        };
+
+        tracing::debug!(
+            http.url.full = %req.uri(),
+            http.request.method = %req.method(),
+            "CRX download - extension id: {extension_id}, version: {:?}",
+            version
+        );
+
+        if self.matches_malware_entry(extension_id.as_str(), &version) {
+            tracing::info!(
                 http.url.full = %req.uri(),
                 http.request.method = %req.method(),
-                "CRX download - extension id: {extension_id}, version: {:?}",
+                "blocked Chrome extension from CRX URL: {extension_id}, version: {:?}",
                 version
             );
 
-            if self.matches_malware_entry(extension_id.as_str(), &version) {
-                tracing::info!(
-                    http.url.full = %req.uri(),
-                    http.request.method = %req.method(),
-                    "blocked Chrome extension from CRX URL: {extension_id}, version: {:?}",
-                    version
-                );
-
-                return Ok(RequestAction::Block(BlockedRequest {
-                    response: generate_generic_blocked_response_for_req(req),
-                    info: BlockedEventInfo {
-                        artifact: BlockedArtifact {
-                            product: arcstr!("chrome"),
-                            identifier: extension_id,
-                            version: Some(version),
-                        },
+            return Ok(RequestAction::Block(BlockedRequest {
+                response: generate_generic_blocked_response_for_req(req),
+                info: BlockedEventInfo {
+                    artifact: BlockedArtifact {
+                        product: arcstr!("chrome"),
+                        identifier: extension_id,
+                        version: Some(version),
                     },
-                }));
-            }
+                },
+            }));
         }
 
         Ok(RequestAction::Allow(req))
