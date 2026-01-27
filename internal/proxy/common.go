@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +42,11 @@ func GetMetaUrls() (string, string, string, error) {
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to read meta config: %v", err)
 	}
-	return "http://" + metaAddress, "https://" + metaAddress, "https://" + metaAddress + "/pac", nil
+	parsed, err := url.Parse(metaAddress)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to parse address: %v", err)
+	}
+	return "http://" + metaAddress, "https://" + metaAddress, "https://localhost:" + parsed.Port() + "/pac", nil
 }
 
 func Ping(url string) error {
