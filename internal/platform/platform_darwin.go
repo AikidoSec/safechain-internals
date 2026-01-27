@@ -92,7 +92,7 @@ func isProxyEnabledAndUrlSet(output string, url string) bool {
 	return strings.Contains(string(output), "Enabled: Yes") && strings.Contains(string(output), "URL: "+url)
 }
 
-func isSystemProxySetForService(ctx context.Context, service string, https bool) (bool, error) {
+func isSystemProxySetForService(ctx context.Context, service string) (bool, error) {
 	outputHttp, err := exec.CommandContext(ctx, "networksetup", "-getwebproxy", service).Output()
 	if err != nil {
 		return false, err
