@@ -13,7 +13,6 @@ use rama::{
     service::BoxService,
     telemetry::tracing,
 };
-use serde_json;
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 const EVENT_DEDUP_WINDOW: Duration = Duration::from_secs(30);
@@ -80,13 +79,14 @@ impl EventNotifier {
 }
 
 fn should_send_event(dedup: &parking_lot::Mutex<DedupState>, event: &BlockedEvent) -> bool {
-    let key = serde_json::to_string(&event.artifact)
-        .unwrap_or_else(|_| format!("{}:{}", event.artifact.product, event.artifact.identifier));
+    let key = format!("{}:{}", event.artifact.product, event.artifact.identifier);
 
     let now = Instant::now();
 
     let mut state = dedup.lock();
 
+    // Software can ignore 403 and does retries, that are spaced apart.
+    // This will ensure we don't send out the same event multiple times in a short timespan
     if let Some(last_at) = state.last_sent_by_key.get(&key)
         && last_at.elapsed() < EVENT_DEDUP_WINDOW
     {
