@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use rama::{
     Layer as _, Service,
     error::OpaqueError,
-    extensions::{ExtensionsMut as _, ExtensionsRef as _},
+    extensions::ExtensionsRef as _,
     http::{
         Body, Request, Response, StatusCode,
         layer::{
@@ -15,12 +15,8 @@ use rama::{
         service::web::response::IntoResponse,
     },
     layer::HijackLayer,
-    net::{
-        tls::{SecureTransport, client::ClientConfig},
-        user::UserId,
-    },
+    net::user::UserId,
     telemetry::tracing::{self, Instrument as _},
-    tls::boring::client::TlsConnectorDataBuilder,
 };
 
 use crate::{firewall::Firewall, server::connectivity::CONNECTIVITY_DOMAIN};
@@ -62,30 +58,7 @@ where
         let uri = req.uri().clone();
         tracing::debug!(uri = %uri, "serving http(s) over proxy (egress) client");
 
-        let mut mod_req = req;
-
-        if let Some(tls_client_hello) = mod_req
-            .extensions()
-            .get::<SecureTransport>()
-            .and_then(|st| st.client_hello())
-            .cloned()
-        {
-            match TlsConnectorDataBuilder::try_from(&ClientConfig::from(tls_client_hello)) {
-                Ok(mirror_tls_cfg) => {
-                    tracing::trace!(
-                        "inject TLS Connector data builder based on input TLS ClientHello"
-                    );
-                    mod_req.extensions_mut().insert(mirror_tls_cfg);
-                }
-                Err(err) => {
-                    tracing::debug!(
-                        "failed to create TLS Connector data builder based on input TLS ClientHello: err = {err}; proceed anyway with default rama boring CH"
-                    );
-                }
-            }
-        }
-
-        let proxy_user: Cow<'static, str> = mod_req
+        let proxy_user: Cow<'static, str> = req
             .extensions()
             .get::<UserId>()
             .map(|id| match id {
@@ -99,7 +72,7 @@ where
 
         match self
             .inner
-            .serve(mod_req)
+            .serve(req)
             .instrument(tracing::debug_span!(
                 "MITM HTTP(S) web request",
                 proxy.user = %proxy_user,

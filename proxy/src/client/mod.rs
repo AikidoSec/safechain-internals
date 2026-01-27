@@ -27,13 +27,21 @@ pub use self::mock_client::new_mock_client as new_web_client;
 #[cfg(not(test))]
 pub fn new_web_client()
 -> Result<impl Service<Request, Output = Response, Error = OpaqueError> + Clone, OpaqueError> {
+    use rama::tls::rustls::dep::rustls::ClientConfig;
+    use rustls_platform_verifier::ConfigVerifierExt;
+
+    let config = ClientConfig::with_platform_verifier();
+
     Ok(EasyHttpWebClient::connector_builder()
         .with_default_transport_connector()
         .without_tls_proxy_support()
         .without_proxy_support()
         // fallback to HTTP/1.1 as default HTTP version in case
         // no protocol negotation happens on layers such as TLS (e.g. ALPN)
-        .with_tls_support_using_boringssl_and_default_http_version(None, Version::HTTP_11)
+        .with_tls_support_using_rustls_and_default_http_version(
+            Some(config.into()),
+            Version::HTTP_11,
+        )
         .with_default_http_connector(Executor::default())
         .try_with_default_connection_pool()
         .context("create connection pool for proxy web client")?
