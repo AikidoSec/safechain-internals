@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	ProxyBind          = "127.0.0.1:7654"
-	ProxyMeta          = "127.0.0.1:7655" // This hosts the proxy's CA and is also useful for health checks
+	ProxyBind          = "localhost:7654"
+	ProxyMeta          = "localhost:7655" // This hosts the proxy's CA and is also useful for health checks
 	ProxyReadyTimeout  = 10 * time.Second
 	ProxyReadyInterval = 1 * time.Second
 )
