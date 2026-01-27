@@ -46,7 +46,10 @@ func GetMetaUrls() (string, string, string, error) {
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to parse address: %v", err)
 	}
-	return "http://" + metaAddress, "https://" + metaAddress, "https://localhost:" + parsed.Port() + "/pac", nil
+	metaUrlHttp := "http://" + metaAddress
+	metaUrlHttps := "https://" + metaAddress
+	metaUrlPac := "https://localhost:" + parsed.Port() + "/pac"
+	return metaUrlHttp, metaUrlHttps, metaUrlPac, nil
 }
 
 func Ping(url string) error {
