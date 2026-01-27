@@ -40,10 +40,10 @@ func (s *Step) Install(ctx context.Context) error {
 	if err := platform.IsSystemPACSet(ctx, ""); err == nil {
 		return fmt.Errorf("system PAC is already set! Failing installation to avoid proxy conflicts!")
 	}
-	if err := platform.SetSystemPAC(ctx, proxy.ProxyPACUrl); err != nil {
+	if err := platform.SetSystemPAC(ctx, proxy.MetaPacURL); err != nil {
 		return fmt.Errorf("failed to set system PAC: %v", err)
 	}
-	if err := platform.IsSystemPACSet(ctx, proxy.ProxyPACUrl); err != nil {
+	if err := platform.IsSystemPACSet(ctx, proxy.MetaPacURL); err != nil {
 		return fmt.Errorf("could not verify if system PAC is set: %v", err)
 	}
 	log.Println("System PAC set successfully")
@@ -54,5 +54,5 @@ func (s *Step) Uninstall(ctx context.Context) error {
 	if err := platform.IsSystemPACSet(ctx, ""); err != nil {
 		return fmt.Errorf("system PAC is not set! Failing uninstallation to avoid proxy conflicts!")
 	}
-	return platform.UnsetSystemPAC(ctx, proxy.ProxyPACUrl)
+	return platform.UnsetSystemPAC(ctx, proxy.MetaPacURL)
 }

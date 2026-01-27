@@ -15,9 +15,9 @@ import (
 var (
 	ProxyHttpUrl  string
 	ProxyHttpsUrl string
-	ProxyPACUrl   string
 	MetaHttpUrl   string
 	MetaHttpsUrl  string
+	MetaPacURL    string
 )
 
 func readProxyConfig(filePath string) (string, error) {
@@ -28,20 +28,20 @@ func readProxyConfig(filePath string) (string, error) {
 	return strings.TrimSpace(string(content)), nil
 }
 
-func GetProxyUrls() (string, string, string, error) {
+func GetProxyUrls() (string, string, error) {
 	proxyAddress, err := readProxyConfig(filepath.Join(platform.GetRunDir(), "proxy.addr.txt"))
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to read proxy config: %v", err)
+		return "", "", fmt.Errorf("failed to read proxy config: %v", err)
 	}
-	return "http://" + proxyAddress, "https://" + proxyAddress, "https://" + proxyAddress + "/pac", nil
+	return "http://" + proxyAddress, "https://" + proxyAddress, nil
 }
 
-func GetMetaUrl() (string, string, error) {
+func GetMetaUrls() (string, string, string, error) {
 	metaAddress, err := readProxyConfig(filepath.Join(platform.GetRunDir(), "meta.addr.txt"))
 	if err != nil {
-		return "", "", fmt.Errorf("failed to read meta config: %v", err)
+		return "", "", "", fmt.Errorf("failed to read meta config: %v", err)
 	}
-	return "http://" + metaAddress, "https://" + metaAddress, nil
+	return "http://" + metaAddress, "https://" + metaAddress, "https://" + metaAddress + "/pac", nil
 }
 
 func Ping(url string) error {
@@ -82,11 +82,11 @@ func IsProxyRunning() bool {
 
 func LoadProxyConfig() error {
 	var err error
-	ProxyHttpUrl, ProxyHttpsUrl, ProxyPACUrl, err = GetProxyUrls()
+	ProxyHttpUrl, ProxyHttpsUrl, err = GetProxyUrls()
 	if err != nil {
 		return fmt.Errorf("failed to get proxy url: %v", err)
 	}
-	MetaHttpUrl, MetaHttpsUrl, err = GetMetaUrl()
+	MetaHttpUrl, MetaHttpsUrl, MetaPacURL, err = GetMetaUrls()
 	if err != nil {
 		return fmt.Errorf("failed to get meta url: %v", err)
 	}
