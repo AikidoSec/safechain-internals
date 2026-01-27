@@ -42,6 +42,7 @@ use crate::{Args, firewall::Firewall};
 use crate::diagnostics::har::HARExportLayer;
 
 mod client;
+mod forwarder;
 mod server;
 
 mod auth;
@@ -75,11 +76,12 @@ pub async fn run_proxy_server(
         .local_addr()
         .context("fetch local addr of bound TCP port for proxy")?;
 
-    let https_client = self::client::new_https_client(firewall.clone())?;
+    let https_client = self::client::new_https_client(firewall.clone(), args.proxy.clone())?;
 
     let http_proxy_mitm_server = self::server::new_mitm_server(
         guard.clone(),
         args.mitm_all,
+        args.proxy.clone(),
         tls_acceptor.clone(),
         firewall.clone(),
         #[cfg(feature = "har")]
@@ -88,6 +90,7 @@ pub async fn run_proxy_server(
     let socks5_proxy_mitm_server = self::server::new_mitm_server(
         guard.clone(),
         args.mitm_all,
+        args.proxy,
         tls_acceptor,
         firewall,
         #[cfg(feature = "har")]
@@ -98,7 +101,9 @@ pub async fn run_proxy_server(
         Socks5Acceptor::new(exec.clone())
             .with_auth_optional(true)
             .with_authorizer(self::auth::ZeroAuthority::new())
-            .with_connector(socks5::server::LazyConnector::new(socks5_proxy_mitm_server)),
+            .with_connector(socks5::server::LazyConnector::new(Arc::new(
+                socks5_proxy_mitm_server,
+            ))),
     );
 
     let http_inner_svc = (
@@ -121,7 +126,7 @@ pub async fn run_proxy_server(
             exec.clone(),
             MethodMatcher::CONNECT,
             service_fn(http_connect_accept),
-            http_proxy_mitm_server,
+            Arc::new(http_proxy_mitm_server),
         ),
         // =============================================
         // HTTP (plain-text) (proxy) connections
