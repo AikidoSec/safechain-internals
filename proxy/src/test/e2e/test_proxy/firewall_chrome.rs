@@ -145,3 +145,19 @@ async fn test_chrome_bocks_fourth_digit_zero_vs_semver() {
 
     assert_eq!(StatusCode::FORBIDDEN, resp.status());
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_chrome_blocks_two_digit_version_vs_four_digit_crx() {
+    let runtime = e2e::runtime::get().await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // CRX has 4 digits with trailing .0.0, malware list has 2 digits (14.1270 vs 14.1270.0.0)
+    let resp = client
+        .get("https://clients2.googleusercontent.com/crx/blobs/somehash/feeadnfmdfahesfhtipdfoffijhlnkif_14_1270_0_0.crx")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}

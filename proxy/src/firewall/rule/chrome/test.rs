@@ -25,32 +25,40 @@ fn test_parse_crx_download_url() {
 
 #[test]
 fn test_version_matches() {
-    assert!(RuleChrome::version_matches(
-        &PackageVersion::Any,
-        &PackageVersion::Unknown("1.0.0".into())
-    ));
-    assert!(RuleChrome::version_matches(
-        &PackageVersion::Any,
-        &PackageVersion::Semver("1.0.0".parse().unwrap())
-    ));
+    let test_cases = vec![
+        // (entry_version, observed_version, expected_match)
+        ("1.0.0", "1.0.0", true),
+        ("*", "1.0.0", true),
+        ("6.45.0.0", "6.45.0.0", true),
+        ("6.45.0.0", "1.0.0.0", false),
+        ("6.45.0", "6.45.0.0", true),
+        ("6.45.0.0", "6.45.0", true),
+        ("6.45.0", "6.45.0.0", true),
+        ("6.45.0.1", "6.45.0", false),
+        ("14.1270", "14.1270.0.0", true),
+        ("14.1270.0.0", "14.1270", true),
+        ("1.0.0.0", "1.0.1.0", false),
+        ("1.2.3.4", "1.2.3.5", false),
+        ("10.0", "10.0.0.1", false),
+        ("1.0", "1.0.0.1", false),
+    ];
 
-    let v1 = PackageVersion::Unknown("6.45.0.0".into());
-    let v2 = PackageVersion::Unknown("6.45.0.0".into());
-    let v3 = PackageVersion::Unknown("1.0.0.0".into());
+    for (entry, observed, expected) in test_cases {
+        let entry_v = if entry == "*" {
+            PackageVersion::Any
+        } else {
+            PackageVersion::Unknown(entry.into())
+        };
+        let observed_v = PackageVersion::Unknown(observed.into());
 
-    assert!(RuleChrome::version_matches(&v1, &v2));
-    assert!(!RuleChrome::version_matches(&v1, &v3));
-
-    let s_6450 = PackageVersion::Semver("6.45.0".parse().unwrap());
-    let u_64500 = PackageVersion::Unknown("6.45.0.0".into());
-    let u_6450 = PackageVersion::Unknown("6.45.0".into());
-    let u_64501 = PackageVersion::Unknown("6.45.0.1".into());
-
-    assert!(RuleChrome::version_matches(&s_6450, &u_64500));
-    assert!(RuleChrome::version_matches(&u_64500, &s_6450));
-
-    assert!(RuleChrome::version_matches(&u_6450, &u_64500));
-    assert!(!RuleChrome::version_matches(&u_64501, &s_6450));
+        assert_eq!(
+            RuleChrome::version_matches(&entry_v, &observed_v),
+            expected,
+            "Failed for entry: {}, observed: {}",
+            entry,
+            observed
+        );
+    }
 }
 
 #[test]

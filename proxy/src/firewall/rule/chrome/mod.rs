@@ -155,26 +155,37 @@ impl RuleChrome {
             return true;
         }
 
-        // Avoid false negatives when malware list uses SemVer x.y.z
-        // but the CRX filename uses Chrome's 4-part x.y.z.0.
-        fn normalize_unknown(raw: &str) -> &str {
-            let raw = raw.trim();
-            if raw.ends_with(".0") && raw.matches('.').count() == 3 {
-                &raw[..raw.len() - 2]
-            } else {
-                raw
+        // Chrome CRX URLs typically use 4-part versions (x.y.z.w), while the malware list
+        // can contain 2-part (x.y) or 3-part (x.y.z / SemVer) versions.
+        // To avoid false negatives, compare versions by padding the shorter one with
+        // trailing ".0" segments up to 4 parts.
+        fn normalize_to_4_parts(version: &str) -> [&str; 4] {
+            let mut iter = version.split('.');
+            [
+                iter.next().unwrap_or("0"),
+                iter.next().unwrap_or("0"),
+                iter.next().unwrap_or("0"),
+                iter.next().unwrap_or("0"),
+            ]
+        }
+
+        fn equal_with_zero_padding(a: &str, b: &str) -> bool {
+            if a == b {
+                return true;
             }
+
+            normalize_to_4_parts(a) == normalize_to_4_parts(b)
         }
 
         match (entry_version, observed_version) {
             (PackageVersion::Semver(v), PackageVersion::Unknown(raw)) => {
-                normalize_unknown(raw.as_str()) == v.to_string()
+                equal_with_zero_padding(&v.to_string(), raw.as_str())
             }
             (PackageVersion::Unknown(raw), PackageVersion::Semver(v)) => {
-                normalize_unknown(raw.as_str()) == v.to_string()
+                equal_with_zero_padding(raw.as_str(), &v.to_string())
             }
             (PackageVersion::Unknown(a), PackageVersion::Unknown(b)) => {
-                normalize_unknown(a.as_str()) == normalize_unknown(b.as_str())
+                equal_with_zero_padding(a.as_str(), b.as_str())
             }
             _ => false,
         }
