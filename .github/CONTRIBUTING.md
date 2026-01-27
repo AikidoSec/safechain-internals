@@ -19,7 +19,8 @@ Requirements to build the (Rust) proxy:
     - This is not used for Windows, there we use the default MVSC (2015) tooling
       which most likely is already installed on a developer machine.
 
-These (Rust) proxy dependencies are used to compile and link `rama-boring`, a `boringssl` fork.
+These (Rust) proxy dependencies are used to compile
+rust dependencies which have C/C++ bindings.
 
 ## Instructions
 
