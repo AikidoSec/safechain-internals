@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/AikidoSec/safechain-internals/internal/utils"
@@ -106,10 +105,6 @@ func SetupLogging() (io.Writer, error) {
 }
 
 func SetSystemPAC(ctx context.Context, pacURL string) error {
-	if _, err := utils.RunCommand(ctx, "netsh", "winhttp", "set", "proxy", pacURL); err != nil {
-		return err
-	}
-
 	sids, err := getLoggedInUserSIDs(ctx)
 	if err != nil {
 		return err
@@ -119,7 +114,7 @@ func SetSystemPAC(ctx context.Context, pacURL string) error {
 		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
 		regCmds := []RegistryValue{
 			{Type: "REG_DWORD", Value: "ProxyEnable", Data: "1"},
-			{Type: "REG_SZ", Value: "AutoConfigURL", Data: pacURL}, // URL to be used as proxy PAC by the OS
+			{Type: "REG_SZ", Value: "AutoConfigURL", Data: pacURL}, // URL to be used as PAC by the OS
 		}
 		for _, value := range regCmds {
 			if err := setRegistryValue(ctx, regPath, value); err != nil {
@@ -131,14 +126,6 @@ func SetSystemPAC(ctx context.Context, pacURL string) error {
 }
 
 func IsSystemPACSet(ctx context.Context, pacURL string) error {
-	output, err := utils.RunCommand(ctx, "netsh", "winhttp", "show", "proxy")
-	if err != nil {
-		return fmt.Errorf("failed to show winhttp proxy: %v", err)
-	}
-	if strings.Contains(string(output), "Direct access") {
-		return fmt.Errorf("winhttp proxy is not set")
-	}
-
 	sids, err := getLoggedInUserSIDs(ctx)
 	if err != nil || len(sids) == 0 {
 		return fmt.Errorf("failed to get logged in user sids: %v", err)
@@ -159,10 +146,6 @@ func IsSystemPACSet(ctx context.Context, pacURL string) error {
 
 func UnsetSystemPAC(ctx context.Context, pacURL string) error {
 	errs := []error{}
-	if _, err := utils.RunCommand(ctx, "netsh", "winhttp", "reset", "proxy"); err != nil {
-		errs = append(errs, err)
-	}
-
 	sids, err := getLoggedInUserSIDs(ctx)
 	if err != nil {
 		return err
