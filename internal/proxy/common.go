@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -82,6 +83,7 @@ func IsProxyRunning() bool {
 	metaUrls := []string{MetaHttpUrl, MetaHttpsUrl}
 	for _, url := range metaUrls {
 		if err := Ping(url); err != nil {
+			log.Println("Proxy not running:", err)
 			return false
 		}
 	}
