@@ -15,6 +15,7 @@ import (
 var (
 	ProxyHttpUrl  string
 	ProxyHttpsUrl string
+	ProxyPACUrl   string
 	MetaHttpUrl   string
 	MetaHttpsUrl  string
 )
@@ -27,12 +28,12 @@ func readProxyConfig(filePath string) (string, error) {
 	return strings.TrimSpace(string(content)), nil
 }
 
-func GetProxyUrl() (string, string, error) {
+func GetProxyUrls() (string, string, string, error) {
 	proxyAddress, err := readProxyConfig(filepath.Join(platform.GetRunDir(), "proxy.addr.txt"))
 	if err != nil {
-		return "", "", fmt.Errorf("failed to read proxy config: %v", err)
+		return "", "", "", fmt.Errorf("failed to read proxy config: %v", err)
 	}
-	return "http://" + proxyAddress, "https://" + proxyAddress, nil
+	return "http://" + proxyAddress, "https://" + proxyAddress, "https://" + proxyAddress + "/pac", nil
 }
 
 func GetMetaUrl() (string, string, error) {
@@ -81,7 +82,7 @@ func IsProxyRunning() bool {
 
 func LoadProxyConfig() error {
 	var err error
-	ProxyHttpUrl, ProxyHttpsUrl, err = GetProxyUrl()
+	ProxyHttpUrl, ProxyHttpsUrl, ProxyPACUrl, err = GetProxyUrls()
 	if err != nil {
 		return fmt.Errorf("failed to get proxy url: %v", err)
 	}

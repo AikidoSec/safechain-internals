@@ -105,8 +105,8 @@ func SetupLogging() (io.Writer, error) {
 	return io.MultiWriter(os.Stdout, fileWriter), nil
 }
 
-func SetSystemProxy(ctx context.Context, proxyURL string) error {
-	if _, err := utils.RunCommand(ctx, "netsh", "winhttp", "set", "proxy", proxyURL); err != nil {
+func SetSystemPAC(ctx context.Context, pacURL string) error {
+	if _, err := utils.RunCommand(ctx, "netsh", "winhttp", "set", "proxy", pacURL); err != nil {
 		return err
 	}
 
@@ -119,7 +119,7 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
 		regCmds := []RegistryValue{
 			{Type: "REG_DWORD", Value: "ProxyEnable", Data: "1"},
-			{Type: "REG_SZ", Value: "ProxyServer", Data: proxyURL}, // URL to be used as proxy server by the OS
+			{Type: "REG_SZ", Value: "AutoConfigURL", Data: pacURL}, // URL to be used as proxy PAC by the OS
 		}
 		for _, value := range regCmds {
 			if err := setRegistryValue(ctx, regPath, value); err != nil {
@@ -130,7 +130,7 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	return nil
 }
 
-func IsSystemProxySet(ctx context.Context, proxyURL string) error {
+func IsSystemPACSet(ctx context.Context, pacURL string) error {
 	output, err := utils.RunCommand(ctx, "netsh", "winhttp", "show", "proxy")
 	if err != nil {
 		return fmt.Errorf("failed to show winhttp proxy: %v", err)
@@ -149,15 +149,15 @@ func IsSystemProxySet(ctx context.Context, proxyURL string) error {
 		if !registryValueContains(ctx, regPath, "ProxyEnable", "0x1") {
 			return fmt.Errorf("ProxyEnable is not set in registry for user %s", sid)
 		}
-		if !registryValueContains(ctx, regPath, "ProxyServer", proxyURL) {
-			return fmt.Errorf("ProxyServer is not set in registry for user %s", sid)
+		if !registryValueContains(ctx, regPath, "AutoConfigURL", pacURL) {
+			return fmt.Errorf("AutoConfigURL is not set in registry for user %s", sid)
 		}
 	}
 
 	return nil
 }
 
-func UnsetSystemProxy(ctx context.Context) error {
+func UnsetSystemPAC(ctx context.Context, pacURL string) error {
 	errs := []error{}
 	if _, err := utils.RunCommand(ctx, "netsh", "winhttp", "reset", "proxy"); err != nil {
 		errs = append(errs, err)
@@ -171,8 +171,8 @@ func UnsetSystemProxy(ctx context.Context) error {
 	for _, sid := range sids {
 		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
 		regValuesToDisable := map[string]RegistryValue{
-			"ProxyEnable": {Type: "REG_DWORD", Value: "ProxyEnable", Data: "0"},
-			"ProxyServer": {Type: "REG_SZ", Value: "ProxyServer", Data: ""},
+			"ProxyEnable":   {Type: "REG_DWORD", Value: "ProxyEnable", Data: "0"},
+			"AutoConfigURL": {Type: "REG_SZ", Value: "AutoConfigURL", Data: ""},
 		}
 		for _, regValue := range regValuesToDisable {
 			if err := setRegistryValue(ctx, regPath, regValue); err != nil {

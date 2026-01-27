@@ -17,19 +17,19 @@ func New() *Step {
 }
 
 func (s *Step) InstallName() string {
-	return "Set System Proxy"
+	return "Set System PAC"
 }
 
 func (s *Step) InstallDescription() string {
-	return "Configures the system-level proxy to route traffic through SafeChain Proxy"
+	return "Configures the system-level PAC to route traffic through SafeChain Proxy"
 }
 
 func (s *Step) UninstallName() string {
-	return "Remove System Proxy"
+	return "Remove System PAC"
 }
 
 func (s *Step) UninstallDescription() string {
-	return "Removes the system-level proxy configuration that routes traffic through SafeChain Proxy"
+	return "Removes the system-level PAC configuration that routes traffic through SafeChain Proxy"
 }
 
 func (s *Step) Install(ctx context.Context) error {
@@ -37,16 +37,22 @@ func (s *Step) Install(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to load proxy config: %v", err)
 	}
-	if err := platform.SetSystemProxy(ctx, proxy.ProxyHttpUrl); err != nil {
-		return fmt.Errorf("failed to set system proxy: %v", err)
+	if err := platform.IsSystemPACSet(ctx, ""); err == nil {
+		return fmt.Errorf("system PAC is already set! Failing installation to avoid proxy conflicts!")
 	}
-	if err := platform.IsSystemProxySet(ctx, proxy.ProxyHttpUrl); err != nil {
-		return fmt.Errorf("could not verify if system proxy is set: %v", err)
+	if err := platform.SetSystemPAC(ctx, proxy.ProxyPACUrl); err != nil {
+		return fmt.Errorf("failed to set system PAC: %v", err)
 	}
-	log.Println("System proxy set successfully")
+	if err := platform.IsSystemPACSet(ctx, proxy.ProxyPACUrl); err != nil {
+		return fmt.Errorf("could not verify if system PAC is set: %v", err)
+	}
+	log.Println("System PAC set successfully")
 	return nil
 }
 
 func (s *Step) Uninstall(ctx context.Context) error {
-	return platform.UnsetSystemProxy(ctx)
+	if err := platform.IsSystemPACSet(ctx, ""); err != nil {
+		return fmt.Errorf("system PAC is not set! Failing uninstallation to avoid proxy conflicts!")
+	}
+	return platform.UnsetSystemPAC(ctx, proxy.ProxyPACUrl)
 }
