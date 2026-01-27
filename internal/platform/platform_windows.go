@@ -113,7 +113,6 @@ func SetSystemPAC(ctx context.Context, pacURL string) error {
 	for _, sid := range sids {
 		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
 		regCmds := []RegistryValue{
-			{Type: "REG_DWORD", Value: "ProxyEnable", Data: "1"},
 			{Type: "REG_SZ", Value: "AutoConfigURL", Data: pacURL}, // URL to be used as PAC by the OS
 		}
 		for _, value := range regCmds {
@@ -125,6 +124,16 @@ func SetSystemPAC(ctx context.Context, pacURL string) error {
 	return nil
 }
 
+func isSystemProxySetForSid(ctx context.Context, sid string) bool {
+	regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
+	return registryValueContains(ctx, regPath, "ProxyEnable", "0x1")
+}
+
+func isSystemPACSetForSid(ctx context.Context, sid string, pacURL string) bool {
+	regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
+	return registryValueContains(ctx, regPath, "AutoConfigURL", pacURL)
+}
+
 func IsSystemPACSet(ctx context.Context, pacURL string) error {
 	sids, err := getLoggedInUserSIDs(ctx)
 	if err != nil || len(sids) == 0 {
@@ -132,16 +141,24 @@ func IsSystemPACSet(ctx context.Context, pacURL string) error {
 	}
 
 	for _, sid := range sids {
-		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
-		if !registryValueContains(ctx, regPath, "ProxyEnable", "0x1") {
-			return fmt.Errorf("ProxyEnable is not set in registry for user %s", sid)
-		}
-		if !registryValueContains(ctx, regPath, "AutoConfigURL", pacURL) {
-			return fmt.Errorf("AutoConfigURL is not set in registry for user %s", sid)
+		if !isSystemPACSetForSid(ctx, sid, pacURL) {
+			return fmt.Errorf("system PAC is not set for user %s", sid)
 		}
 	}
-
 	return nil
+}
+
+func IsAnySystemProxySet(ctx context.Context) (bool, error) {
+	sids, err := getLoggedInUserSIDs(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, sid := range sids {
+		if isSystemProxySetForSid(ctx, sid) || isSystemPACSetForSid(ctx, sid, "") {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func UnsetSystemPAC(ctx context.Context, pacURL string) error {
@@ -154,7 +171,6 @@ func UnsetSystemPAC(ctx context.Context, pacURL string) error {
 	for _, sid := range sids {
 		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
 		regValuesToDisable := map[string]RegistryValue{
-			"ProxyEnable":   {Type: "REG_DWORD", Value: "ProxyEnable", Data: "0"},
 			"AutoConfigURL": {Type: "REG_SZ", Value: "AutoConfigURL", Data: ""},
 		}
 		for _, regValue := range regValuesToDisable {

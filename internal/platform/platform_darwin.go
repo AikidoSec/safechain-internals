@@ -89,10 +89,20 @@ func getNetworkServices(ctx context.Context) ([]string, error) {
 }
 
 func isProxyEnabledAndUrlSet(output string, url string) bool {
+	parsed, err := url.Parse(url)
+	if err != nil {
+		return false
+	}
+	host := parsed.Hostname()
+	port := parsed.Port()
+	return strings.Contains(string(output), "Enabled: Yes") && strings.Contains(string(output), "Host: "+host) && strings.Contains(string(output), "Port: "+port)
+}
+
+func isPACEnabledAndUrlSet(output string, url string) bool {
 	return strings.Contains(string(output), "Enabled: Yes") && strings.Contains(string(output), "URL: "+url)
 }
 
-func isSystemProxySetForService(ctx context.Context, service string) (bool, error) {
+func isSystemProxySetForService(ctx context.Context, service string, proxyURL string) (bool, error) {
 	outputHttp, err := exec.CommandContext(ctx, "networksetup", "-getwebproxy", service).Output()
 	if err != nil {
 		return false, err
@@ -101,7 +111,7 @@ func isSystemProxySetForService(ctx context.Context, service string) (bool, erro
 	if err != nil {
 		return false, err
 	}
-	return isProxyEnabledAndUrlSet(string(outputHttp), "") && isProxyEnabledAndUrlSet(string(outputHttps), ""), nil
+	return isProxyEnabledAndUrlSet(string(outputHttp), proxyURL) || isProxyEnabledAndUrlSet(string(outputHttps), proxyURL), nil
 }
 
 func isSystemPACSetForService(ctx context.Context, service string, pacURL string) (bool, error) {
@@ -109,7 +119,7 @@ func isSystemPACSetForService(ctx context.Context, service string, pacURL string
 	if err != nil {
 		return false, err
 	}
-	return isProxyEnabledAndUrlSet(string(output), pacURL), nil
+	return isPACEnabledAndUrlSet(string(output), pacURL), nil
 }
 
 func setSystemPACForService(ctx context.Context, service string, pacURL string) error {
@@ -168,6 +178,27 @@ func IsSystemPACSet(ctx context.Context, pacURL string) error {
 		return fmt.Errorf("system proxy is not set correctly for all services")
 	}
 	return nil
+}
+
+func IsAnySystemProxySet(ctx context.Context) (bool, error) {
+	services, err := getNetworkServices(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to get network services: %v", err)
+	}
+
+	proxyCheckFunctions := []func(ctx context.Context, service string, proxyURL string) (bool, error){
+		isSystemPACSetForService,
+		isSystemProxySetForService,
+	}
+
+	for _, service := range services {
+		for _, f := range proxyCheckFunctions {
+			if set, err := f(ctx, service, ""); err == nil && set {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func UnsetSystemPAC(ctx context.Context, pacURL string) error {

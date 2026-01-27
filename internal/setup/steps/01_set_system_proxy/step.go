@@ -37,8 +37,12 @@ func (s *Step) Install(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to load proxy config: %v", err)
 	}
-	if err := platform.IsSystemPACSet(ctx, ""); err == nil {
-		return fmt.Errorf("system PAC is already set! Failing installation to avoid proxy conflicts!")
+	proxySet, err := platform.IsAnySystemProxySet(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to check if any system proxy is set: %v", err)
+	}
+	if proxySet {
+		return fmt.Errorf("system proxy/pac is already set! Failing installation to avoid proxy conflicts!")
 	}
 	if err := platform.SetSystemPAC(ctx, proxy.MetaPacURL); err != nil {
 		return fmt.Errorf("failed to set system PAC: %v", err)
