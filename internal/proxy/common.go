@@ -43,7 +43,7 @@ func GetMetaUrls() (string, string, string, error) {
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to read meta config: %v", err)
 	}
-	parsed, err := url.Parse(metaAddress)
+	parsed, err := url.Parse("http://" + metaAddress)
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to parse address: %v", err)
 	}
