@@ -131,7 +131,7 @@ func (d *Daemon) run(ctx context.Context) error {
 
 	if !proxy.ProxyCAInstalled() {
 		log.Println("First time we setup the proxy, uninstall previous setups...")
-		if err := d.Uninstall(ctx); err != nil {
+		if err := d.Uninstall(ctx, false); err != nil {
 			log.Printf("Error uninstalling previous setup (might not exist): %v", err)
 		}
 	}
@@ -181,11 +181,13 @@ func (d *Daemon) run(ctx context.Context) error {
 	}
 }
 
-func (d *Daemon) Uninstall(ctx context.Context) error {
+func (d *Daemon) Uninstall(ctx context.Context, removeScanners bool) error {
 	log.Println("Uninstalling the SafeChain Ultimate...")
 
-	if err := d.registry.UninstallAll(ctx); err != nil {
-		log.Printf("Error uninstalling scanners: %v", err)
+	if removeScanners {
+		if err := d.registry.UninstallAll(ctx); err != nil {
+			log.Printf("Error uninstalling scanners: %v", err)
+		}
 	}
 
 	if err := proxy.UninstallProxyCA(ctx); err != nil {

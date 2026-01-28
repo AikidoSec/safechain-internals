@@ -38,7 +38,7 @@ pub fn new_web_client(
     let max_total = max_active * 2;
 
     let tcp_connector = self::transport::new_tcp_connector(exec.clone());
-    let tls_config = self::transport::new_tls_connector_config();
+    let tls_config = self::transport::new_tls_connector_config()?;
 
     Ok(EasyHttpWebClient::connector_builder()
         .with_custom_transport_connector(tcp_connector)
@@ -46,8 +46,8 @@ pub fn new_web_client(
         .without_proxy_support()
         // fallback to HTTP/1.1 as default HTTP version in case
         // no protocol negotation happens on layers such as TLS (e.g. ALPN)
-        .with_tls_support_using_boringssl_and_default_http_version(tls_config, Version::HTTP_11)
-        .with_default_http_connector(exec)
+        .with_tls_support_using_rustls_and_default_http_version(Some(tls_config), Version::HTTP_11)
+        .with_default_http_connector(Executor::default())
         .try_with_connection_pool(HttpPooledConnectorConfig {
             max_total,
             max_active,

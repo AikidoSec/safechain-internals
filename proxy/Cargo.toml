@@ -26,9 +26,11 @@ lz4_flex = { workspace = true }
 serde_test = { workspace = true }
 radix_trie = { workspace = true }
 serde_json = { workspace = true }
+moka = { workspace = true }
 rand = { workspace = true }
 parking_lot = { workspace = true }
 serde_html_form = { workspace = true }
+rustls-platform-verifier = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 linux-keyutils-keyring-store = { workspace = true }
@@ -48,7 +50,7 @@ libc = { workspace = true }
 
 [dependencies.rama]
 workspace = true
-features = ["http-full", "proxy-full", "dns", "boring"]
+features = ["http-full", "proxy-full", "dns", "boring", "rustls"]
 
 [dev-dependencies]
 tracing-test = "0.2"

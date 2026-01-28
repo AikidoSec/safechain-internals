@@ -22,11 +22,13 @@ static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 async fn main() -> Result<(), BoxError> {
     let args = Args::parse();
 
-    safechain_proxy_lib::utils::telemetry::init_tracing(Some(TelemetryConfig {
-        verbose: args.verbose,
-        pretty: args.pretty,
-        output: args.output.as_deref(),
-    }))?;
+    let _tracing_guard =
+        safechain_proxy_lib::utils::telemetry::init_tracing(Some(TelemetryConfig {
+            verbose: args.verbose,
+            pretty: args.pretty,
+            output: args.output.as_deref(),
+        }))
+        .await?;
 
     #[cfg(target_family = "unix")]
     safechain_proxy_lib::utils::os::raise_nofile(args.ulimit)

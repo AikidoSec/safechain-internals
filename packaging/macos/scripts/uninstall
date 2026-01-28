@@ -86,6 +86,10 @@ if [ -d "$AIKIDO_LOGS_DIR" ] && [ -z "$(ls -A "$AIKIDO_LOGS_DIR" 2>/dev/null)" ]
 fi
 
 echo ""
+echo "Removing package receipt..."
+pkgutil --forget com.aikidosecurity.safechainultimate 2>/dev/null && echo "  ✓ Package receipt removed" || echo "  Package receipt not found"
+
+echo ""
 echo "========================================="
 echo "✓ SafeChain Ultimate has been uninstalled"
 echo "========================================="

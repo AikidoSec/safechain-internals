@@ -18,10 +18,12 @@ libc = "0.2"
 linux-keyutils-keyring-store = "0.2"
 lz4_flex = "0.12"
 mimalloc = { version = "0.1", default-features = false }
+moka = "0.12"
 parking_lot = "0.12"
 postcard = "1.1"
 radix_trie = "0.3"
 rand = "0.9"
+rustls-platform-verifier = "0.6"
 safechain-proxy-lib = { path = "./proxy", version = "0.2.1" }
 secrecy = "0.10"
 semver = "1.0"
@@ -36,4 +38,4 @@ windows-native-keyring-store = "0.5"
 
 [workspace.dependencies.rama]
 git = "https://github.com/plabayo/rama"
-rev = "2f7732b329fccc67bcb4df051bdc5e253735d0bb"
+rev = "b51276f0cced785c64e941eca5087ecf2ca93d3f"

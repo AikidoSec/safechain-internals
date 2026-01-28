@@ -72,11 +72,12 @@ enum CliCommands {
 async fn main() -> Result<(), BoxError> {
     let args = Args::parse();
 
-    utils::telemetry::init_tracing(Some(utils::telemetry::TelemetryConfig {
+    let _tracing_guard = utils::telemetry::init_tracing(Some(utils::telemetry::TelemetryConfig {
         verbose: args.verbose,
         pretty: args.pretty,
         output: args.output.as_deref(),
-    }))?;
+    }))
+    .await?;
 
     let base_shutdown_signal = graceful::default_signal();
     if let Err(err) = run_with_args(base_shutdown_signal, args).await {

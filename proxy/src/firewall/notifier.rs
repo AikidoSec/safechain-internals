@@ -1,8 +1,14 @@
-use std::{sync::Arc, time::Duration};
-
-use crate::utils::env;
+use std::{
+    sync::{
+        Arc,
+        atomic::{self, AtomicU64},
+    },
+    time::Duration,
+};
 
 use super::events::BlockedEvent;
+use crate::utils::env;
+
 use rama::{
     Service,
     error::{ErrorContext as _, OpaqueError},
@@ -10,8 +16,33 @@ use rama::{
     rt::Executor,
     service::BoxService,
     telemetry::tracing,
+    utils::str::arcstr::ArcStr,
 };
+
 use tokio::sync::{Semaphore, SemaphorePermit};
+
+const EVENT_DEDUP_WINDOW: Duration = Duration::from_secs(30);
+const MAX_EVENTS: u64 = 10_000;
+
+type DedupCache = moka::sync::Cache<DedupKey, Arc<AtomicU64>>;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct DedupKey {
+    /// The product type (e.g., "npm", "pypi", "vscode", "chrome")
+    pub product: ArcStr,
+    /// The name or identifier of the artifact
+    pub identifier: ArcStr,
+}
+
+impl From<&BlockedEvent> for DedupKey {
+    #[inline(always)]
+    fn from(value: &BlockedEvent) -> Self {
+        Self {
+            product: value.artifact.product.clone(),
+            identifier: value.artifact.identifier.clone(),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct EventNotifier {
@@ -19,6 +50,7 @@ pub struct EventNotifier {
     client: BoxService<Request, Response, OpaqueError>,
     reporting_endpoint: Uri,
     limit: Arc<Semaphore>,
+    dedup: DedupCache,
 }
 
 impl std::fmt::Debug for EventNotifier {
@@ -31,15 +63,28 @@ impl EventNotifier {
     pub fn try_new(exec: Executor, reporting_endpoint: Uri) -> Result<Self, OpaqueError> {
         let client = crate::client::new_web_client(exec.clone())?.boxed();
         let limit = Arc::new(Semaphore::const_new(env::compute_concurrent_request_count()));
+        let dedup = moka::sync::CacheBuilder::new(MAX_EVENTS)
+            .time_to_live(EVENT_DEDUP_WINDOW)
+            .build();
         Ok(Self {
             exec,
             client,
             reporting_endpoint,
             limit,
+            dedup,
         })
     }
 
     pub async fn notify(&self, event: BlockedEvent) {
+        if !self.should_send_event(&event) {
+            tracing::debug!(
+                product = %event.artifact.product,
+                identifier = %event.artifact.identifier,
+                "suppressed duplicate blocked-event notification"
+            );
+            return;
+        }
+
         let client = self.client.clone();
         let reporting_endpoint = self.reporting_endpoint.clone();
         let limits = self.limit.clone();
@@ -54,6 +99,13 @@ impl EventNotifier {
             };
             send_blocked_event(client, reporting_endpoint, event).await;
         });
+    }
+
+    fn should_send_event(&self, event: &BlockedEvent) -> bool {
+        self.dedup
+            .get_with(DedupKey::from(event), Default::default)
+            .fetch_add(1, atomic::Ordering::SeqCst)
+            == 0
     }
 }
 

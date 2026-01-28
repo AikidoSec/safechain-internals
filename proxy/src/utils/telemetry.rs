@@ -1,13 +1,14 @@
-use std::{io::IsTerminal as _, path::Path};
+use std::{borrow::Cow, env::current_dir, io::IsTerminal as _, path::Path};
 
 use rama::{
     error::{BoxError, ErrorContext as _},
     telemetry::tracing::{
-        self,
+        self, appender,
         metadata::LevelFilter,
         subscriber::{EnvFilter, fmt::writer::BoxMakeWriter},
     },
 };
+use tokio::fs::create_dir_all;
 
 #[derive(Debug, Default)]
 pub struct TelemetryConfig<'a> {
@@ -19,11 +20,16 @@ pub struct TelemetryConfig<'a> {
     pub output: Option<&'a Path>,
 }
 
+#[derive(Debug)]
+pub struct TracingGuard {
+    _appender_guard: Option<appender::non_blocking::WorkerGuard>,
+}
+
 /// Configures structured logging with runtime control via `RUST_LOG` environment variable.
 ///
 /// Defaults to INFO level to balance visibility with performance.
 /// Use `RUST_LOG=debug` or `RUST_LOG=trace` for troubleshooting.
-pub fn init_tracing(cfg: Option<TelemetryConfig<'_>>) -> Result<(), BoxError> {
+pub async fn init_tracing(cfg: Option<TelemetryConfig<'_>>) -> Result<TracingGuard, BoxError> {
     let cfg = cfg.unwrap_or_default();
 
     let directive = if cfg.verbose {
@@ -33,17 +39,33 @@ pub fn init_tracing(cfg: Option<TelemetryConfig<'_>>) -> Result<(), BoxError> {
     }
     .into();
 
-    let make_writer = match cfg.output {
+    let (make_writer, _appender_guard) = match cfg.output {
         Some(path) => {
-            let file = std::fs::OpenOptions::new()
-                .append(true)
-                .create(true)
-                .open(path)
-                .context("open log file")?;
+            let (log_dir, log_file_prefix) =
+                if let Some(parent) = path.parent()
+                    && !parent.exists()
+                {
+                    create_dir_all(parent).await.context("create log dir")?;
+                    (
+                        Cow::Borrowed(parent),
+                        path.file_name()
+                            .context("file name expected if parent exists")?,
+                    )
+                } else {
+                    (
+                        Cow::Owned(current_dir().context(
+                            "failed to fetch current directory as fallback log directory",
+                        )?),
+                        path.as_ref(),
+                    )
+                };
 
-            BoxMakeWriter::new(file)
+            let file_appender = appender::rolling::hourly(log_dir, log_file_prefix);
+            let (non_blocking, guard) = appender::non_blocking(file_appender);
+
+            (BoxMakeWriter::new(non_blocking), Some(guard))
         }
-        None => BoxMakeWriter::new(std::io::stderr),
+        None => (BoxMakeWriter::new(std::io::stderr), None),
     };
 
     let subscriber = tracing::subscriber::fmt()
@@ -62,7 +84,7 @@ pub fn init_tracing(cfg: Option<TelemetryConfig<'_>>) -> Result<(), BoxError> {
     }
 
     tracing::info!("Tracing is set up");
-    Ok(())
+    Ok(TracingGuard { _appender_guard })
 }
 
 // NOTES for development team:

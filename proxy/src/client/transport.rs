@@ -15,9 +15,7 @@ pub fn new_tcp_connector(exec: Executor) -> TcpConnector {
 
 #[cfg(not(any(test, feature = "bench")))]
 mod production {
-    use std::sync::Arc;
-
-    use rama::tls::boring::client::TlsConnectorDataBuilder;
+    use rama::{error::OpaqueError, tls::rustls::client::TlsConnectorData};
 
     #[derive(Debug, Clone)]
     pub struct TcpStreamConnector;
@@ -41,8 +39,8 @@ mod production {
     }
 
     #[inline(always)]
-    pub fn new_tls_connector_config() -> Option<Arc<TlsConnectorDataBuilder>> {
-        None
+    pub fn new_tls_connector_config() -> Result<TlsConnectorData, OpaqueError> {
+        TlsConnectorData::try_new_http_auto()
     }
 }
 
@@ -51,14 +49,19 @@ pub use self::production::{TcpStreamConnector, new_tls_connector_config};
 
 #[cfg(any(test, feature = "bench"))]
 mod bench {
-    use std::sync::{Arc, OnceLock};
+    use std::sync::OnceLock;
 
     use rama::{
-        error::OpaqueError,
-        net::{address::SocketAddress, tls::client::ServerVerifyMode},
+        error::{ErrorContext as _, OpaqueError},
+        net::address::SocketAddress,
         telemetry::tracing,
-        tls::boring::client::TlsConnectorDataBuilder,
+        tls::rustls::{
+            client::{TlsConnectorData, TlsConnectorDataBuilder},
+            dep::rustls::ClientConfig,
+        },
     };
+
+    use rustls_platform_verifier::ConfigVerifierExt as _;
 
     static EGRESS_ADDRESS_OVERWRITE: OnceLock<Option<SocketAddress>> = OnceLock::new();
 
@@ -104,13 +107,17 @@ mod bench {
     }
 
     #[inline(always)]
-    pub fn new_tls_connector_config() -> Option<Arc<TlsConnectorDataBuilder>> {
-        is_eggress_address_overwritten().then(|| {
-            Arc::new(
-                TlsConnectorDataBuilder::new_http_auto()
-                    .with_server_verify_mode(ServerVerifyMode::Disable),
-            )
-        })
+    pub fn new_tls_connector_config() -> Result<TlsConnectorData, OpaqueError> {
+        if is_eggress_address_overwritten() {
+            Ok(TlsConnectorDataBuilder::new()
+                .with_alpn_protocols_http_auto()
+                .with_no_cert_verifier()
+                .build())
+        } else {
+            let config =
+                ClientConfig::with_platform_verifier().context("create platform verifier")?;
+            Ok(config.into())
+        }
     }
 }
 
