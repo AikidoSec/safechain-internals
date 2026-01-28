@@ -1,4 +1,4 @@
-use crate::firewall::malware_list::PackageVersion;
+use crate::firewall::version::PackageVersion;
 use rama::utils::str::arcstr::ArcStr;
 use serde::{Deserialize, Serialize};
 use std::{
