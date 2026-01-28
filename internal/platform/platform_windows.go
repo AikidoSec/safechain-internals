@@ -112,7 +112,7 @@ func GetProxyErrLogPath() string {
 	return filepath.Join(config.LogDir, SafeChainProxyErrLogName)
 }
 
-func SetSystemProxy(ctx context.Context, pacURL string) error {
+func SetSystemPAC(ctx context.Context, pacURL string) error {
 	sids, err := getLoggedInUserSIDs(ctx)
 	if err != nil {
 		return err
