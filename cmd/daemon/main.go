@@ -19,8 +19,9 @@ const serviceName = "SafeChainUltimate"
 
 func main() {
 	var (
-		showVersion = flag.Bool("version", false, "Show version information")
-		teardown    = flag.Bool("teardown", false, "Teardown SafeChain Ultimate")
+		showVersion    = flag.Bool("version", false, "Show version information")
+		teardown       = flag.Bool("teardown", false, "Teardown SafeChain Ultimate")
+		removeScanners = flag.Bool("remove-scanners", false, "Remove all scanners on teardown")
 	)
 	flag.Parse()
 
@@ -38,7 +39,7 @@ func main() {
 	}
 
 	if *teardown {
-		if err := d.Uninstall(ctx); err != nil {
+		if err := d.Uninstall(ctx, *removeScanners); err != nil {
 			log.Fatalf("Failed to teardown daemon: %v", err)
 		}
 		return
