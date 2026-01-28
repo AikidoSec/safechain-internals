@@ -37,19 +37,20 @@ impl fmt::Debug for TcpForwarder {
 
 impl TcpForwarder {
     pub(super) fn new(exec: Executor, proxy: Option<ProxyAddress>) -> Self {
+        let tcp_connector = TcpConnector::new(exec);
         let kind = match proxy {
             Some(proxy_addr) => {
-                let connector = ProxyConnectorLayer::optional(
+                let connector = ProxyConnectorLayer::required(
                     Socks5ProxyConnectorLayer::required(),
                     HttpProxyConnectorLayer::required(),
                 )
-                .into_layer(TcpConnector::new(exec));
+                .into_layer(Arc::new(tcp_connector));
                 ForwarderKind::Proxied {
                     connector,
                     proxy_addr,
                 }
             }
-            None => ForwarderKind::Direct(TcpConnector::new(exec)),
+            None => ForwarderKind::Direct(tcp_connector),
         };
         Self { kind }
     }
