@@ -100,10 +100,14 @@ impl Firewall {
                 .await
                 .context("create block rule: vscode")?
                 .into_dyn(),
-                self::rule::chrome::RuleChrome::try_new(data.clone())
-                    .await
-                    .context("create block rule: chrome")?
-                    .into_dyn(),
+                self::rule::chrome::RuleChrome::try_new(
+                    guard.clone(),
+                    shared_remote_malware_client.clone(),
+                    data.clone(),
+                )
+                .await
+                .context("create block rule: chrome")?
+                .into_dyn(),
                 self::rule::npm::RuleNpm::try_new(
                     guard.clone(),
                     shared_remote_malware_client.clone(),
