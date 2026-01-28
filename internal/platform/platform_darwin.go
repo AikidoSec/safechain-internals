@@ -59,22 +59,6 @@ func SetupLogging() (io.Writer, error) {
 	return os.Stdout, nil
 }
 
-func GetUltimateLogPath() string {
-	return filepath.Join(config.LogDir, SafeChainUltimateLogName)
-}
-
-func GetUltimateErrLogPath() string {
-	return filepath.Join(config.LogDir, SafeChainUltimateErrLogName)
-}
-
-func GetProxyLogPath() string {
-	return filepath.Join(config.LogDir, SafeChainProxyLogName)
-}
-
-func GetProxyErrLogPath() string {
-	return filepath.Join(config.LogDir, SafeChainProxyErrLogName)
-}
-
 /*
 This function returns the list of network services on the system.
 It identifies the services that are currently active and have a physical network interface.

@@ -17,6 +17,8 @@ import (
 )
 
 const (
+	SafeChainUltimateLogName       = "SafeChainUltimate.log"
+	SafeChainUltimateErrLogName    = "SafeChainUltimate.err"
 	SafeChainUIBinaryName          = "SafeChainUltimateUI.exe"
 	SafeChainProxyBinaryName       = "SafeChainProxy.exe"
 	SafeChainProxyLogName          = "SafeChainProxy.log"
@@ -102,14 +104,6 @@ func SetupLogging() (io.Writer, error) {
 	}
 
 	return io.MultiWriter(os.Stdout, fileWriter), nil
-}
-
-func GetProxyLogPath() string {
-	return filepath.Join(config.LogDir, SafeChainProxyLogName)
-}
-
-func GetProxyErrLogPath() string {
-	return filepath.Join(config.LogDir, SafeChainProxyErrLogName)
 }
 
 func SetSystemPAC(ctx context.Context, pacURL string) error {

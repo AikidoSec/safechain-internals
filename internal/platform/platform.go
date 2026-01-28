@@ -3,6 +3,7 @@ package platform
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 type Config struct {
@@ -39,4 +40,20 @@ func GetRunDir() string {
 
 func GetLogDir() string {
 	return config.LogDir
+}
+
+func GetUltimateLogPath() string {
+	return filepath.Join(config.LogDir, SafeChainUltimateLogName)
+}
+
+func GetUltimateErrLogPath() string {
+	return filepath.Join(config.LogDir, SafeChainUltimateErrLogName)
+}
+
+func GetProxyLogPath() string {
+	return filepath.Join(config.LogDir, SafeChainProxyLogName)
+}
+
+func GetProxyErrLogPath() string {
+	return filepath.Join(config.LogDir, SafeChainProxyErrLogName)
 }
