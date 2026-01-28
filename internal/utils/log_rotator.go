@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+const (
+	RotationLoopInterval = 1 * time.Hour
+)
+
 type logFile struct {
 	path    string
 	maxSize int64
@@ -38,7 +42,7 @@ func (r *LogRotator) Start(ctx context.Context, wg *sync.WaitGroup) {
 func (r *LogRotator) rotationLoop(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	ticker := time.NewTicker(1 * time.Hour)
+	ticker := time.NewTicker(RotationLoopInterval)
 	defer ticker.Stop()
 
 	r.checkAndRotate()
@@ -75,7 +79,7 @@ func (r *LogRotator) rotateIfNeeded(lf logFile) {
 		return
 	}
 
-	timestamp := time.Now().Format("2006-01-02-15")
+	timestamp := time.Now().UTC().Format("2006-01-02-15")
 	newPath := lf.path + "." + timestamp
 
 	if err := os.Rename(lf.path, newPath); err != nil {

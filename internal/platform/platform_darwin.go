@@ -19,7 +19,7 @@ import (
 
 const (
 	SafeChainUltimateLogName    = "safechain-ultimate.log"
-	SafeChainUltimateErrLogName = "safechain-ultimate.err"
+	SafeChainUltimateErrLogName = "safechain-ultimate.error.log"
 	SafeChainUIBinaryName       = "safechain-ultimate-ui"
 	SafeChainProxyBinaryName    = "safechain-proxy"
 	SafeChainProxyLogName       = "safechain-proxy.log"

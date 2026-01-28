@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+const (
+	ReapLoopInterval = 1 * time.Hour
+)
+
 type reapableLog struct {
 	path      string
 	maxLogAge time.Duration
@@ -40,7 +44,7 @@ func (r *LogReaper) Start(ctx context.Context, wg *sync.WaitGroup) {
 func (r *LogReaper) reapLoop(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	ticker := time.NewTicker(1 * time.Hour)
+	ticker := time.NewTicker(ReapLoopInterval)
 	defer ticker.Stop()
 
 	r.checkAndReap()
@@ -76,7 +80,7 @@ func (r *LogReaper) reapOldLogs(lf reapableLog) {
 		return
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 
 	for _, entry := range entries {
 		if entry.IsDir() {
