@@ -18,10 +18,12 @@ import (
 )
 
 const (
-	SafeChainUIBinaryName    = "safechain-ultimate-ui"
-	SafeChainProxyBinaryName = "safechain-proxy"
-	SafeChainProxyLogName    = "safechain-proxy.log"
-	SafeChainProxyErrLogName = "safechain-proxy.err"
+	SafeChainUltimateLogName    = "safechain-ultimate.log"
+	SafeChainUltimateErrLogName = "safechain-ultimate.err"
+	SafeChainUIBinaryName       = "safechain-ultimate-ui"
+	SafeChainProxyBinaryName    = "safechain-proxy"
+	SafeChainProxyLogName       = "safechain-proxy.log"
+	SafeChainProxyErrLogName    = "safechain-proxy.err"
 )
 
 var serviceRegex = regexp.MustCompile(`^\((\d+)\)\s+(.+)$`)
@@ -55,6 +57,22 @@ func PrepareShellEnvironment(_ context.Context) error {
 
 func SetupLogging() (io.Writer, error) {
 	return os.Stdout, nil
+}
+
+func GetUltimateLogPath() string {
+	return filepath.Join(config.LogDir, SafeChainUltimateLogName)
+}
+
+func GetUltimateErrLogPath() string {
+	return filepath.Join(config.LogDir, SafeChainUltimateErrLogName)
+}
+
+func GetProxyLogPath() string {
+	return filepath.Join(config.LogDir, SafeChainProxyLogName)
+}
+
+func GetProxyErrLogPath() string {
+	return filepath.Join(config.LogDir, SafeChainProxyErrLogName)
 }
 
 /*

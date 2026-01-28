@@ -105,6 +105,14 @@ func SetupLogging() (io.Writer, error) {
 	return io.MultiWriter(os.Stdout, fileWriter), nil
 }
 
+func GetProxyLogPath() string {
+	return filepath.Join(config.LogDir, SafeChainProxyLogName)
+}
+
+func GetProxyErrLogPath() string {
+	return filepath.Join(config.LogDir, SafeChainProxyErrLogName)
+}
+
 func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	if _, err := utils.RunCommand(ctx, "netsh", "winhttp", "set", "proxy", proxyURL); err != nil {
 		return err

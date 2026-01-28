@@ -13,6 +13,7 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
 	"github.com/AikidoSec/safechain-internals/internal/scannermanager"
 	"github.com/AikidoSec/safechain-internals/internal/setup"
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 	"github.com/AikidoSec/safechain-internals/internal/version"
 )
 
@@ -22,24 +23,28 @@ type Config struct {
 }
 
 type Daemon struct {
-	config   *Config
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
-	stopOnce sync.Once
-	proxy    *proxy.Proxy
-	registry *scannermanager.Registry
-	ingress  *ingress.Server
+	config     *Config
+	ctx        context.Context
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
+	stopOnce   sync.Once
+	proxy      *proxy.Proxy
+	registry   *scannermanager.Registry
+	ingress    *ingress.Server
+	logRotator *utils.LogRotator
+	logReaper  *utils.LogReaper
 }
 
 func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
 	d := &Daemon{
-		ctx:      ctx,
-		cancel:   cancel,
-		config:   config,
-		proxy:    proxy.New(),
-		registry: scannermanager.NewRegistry(),
-		ingress:  ingress.New(),
+		ctx:        ctx,
+		cancel:     cancel,
+		config:     config,
+		proxy:      proxy.New(),
+		registry:   scannermanager.NewRegistry(),
+		ingress:    ingress.New(),
+		logRotator: utils.NewLogRotator(),
+		logReaper:  utils.NewLogReaper(),
 	}
 
 	if err := platform.Init(); err != nil {
@@ -123,6 +128,9 @@ func (d *Daemon) Stop(ctx context.Context) error {
 
 func (d *Daemon) run(ctx context.Context) error {
 	defer d.wg.Done()
+
+	d.logRotator.Start(ctx, &d.wg)
+	d.logReaper.Start(ctx, &d.wg)
 
 	ticker := time.NewTicker(constants.DaemonHeartbeatInterval)
 	defer ticker.Stop()
@@ -214,4 +222,12 @@ func (d *Daemon) initLogging() {
 	}
 	log.SetOutput(writer)
 	log.SetFlags(log.LstdFlags)
+
+	d.logRotator.AddLogFile(platform.GetUltimateLogPath(), 10*1024*1024)
+	d.logRotator.AddLogFile(platform.GetUltimateErrLogPath(), 10*1024*1024)
+
+	d.logReaper.AddLogFile(platform.GetUltimateLogPath(), 24)
+	d.logReaper.AddLogFile(platform.GetUltimateErrLogPath(), 24)
+	d.logReaper.AddLogFile(platform.GetProxyLogPath(), 24)
+	d.logReaper.AddLogFile(platform.GetProxyErrLogPath(), 24)
 }

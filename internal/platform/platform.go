@@ -36,3 +36,7 @@ func GetConfig() *Config {
 func GetRunDir() string {
 	return config.RunDir
 }
+
+func GetLogDir() string {
+	return config.LogDir
+}
