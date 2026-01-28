@@ -18,10 +18,12 @@ import (
 )
 
 const (
-	SafeChainUIBinaryName    = "safechain-ultimate-ui"
-	SafeChainProxyBinaryName = "safechain-proxy"
-	SafeChainProxyLogName    = "safechain-proxy.log"
-	SafeChainProxyErrLogName = "safechain-proxy.err"
+	SafeChainUltimateLogName    = "safechain-ultimate.log"
+	SafeChainUltimateErrLogName = "safechain-ultimate.error.log"
+	SafeChainUIBinaryName       = "safechain-ultimate-ui"
+	SafeChainProxyBinaryName    = "safechain-proxy"
+	SafeChainProxyLogName       = "safechain-proxy.log"
+	SafeChainProxyErrLogName    = "safechain-proxy.err"
 )
 
 var serviceRegex = regexp.MustCompile(`^\((\d+)\)\s+(.+)$`)
