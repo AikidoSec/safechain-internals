@@ -223,11 +223,11 @@ func (d *Daemon) initLogging() {
 	log.SetOutput(writer)
 	log.SetFlags(log.LstdFlags)
 
-	d.logRotator.AddLogFile(platform.GetUltimateLogPath(), 10*1024*1024)
-	d.logRotator.AddLogFile(platform.GetUltimateErrLogPath(), 10*1024*1024)
+	d.logRotator.AddLogFile(platform.GetUltimateLogPath(), constants.LogRotationSizeInBytes)
+	d.logRotator.AddLogFile(platform.GetUltimateErrLogPath(), constants.LogRotationSizeInBytes)
 
-	d.logReaper.AddLogFile(platform.GetUltimateLogPath(), 24)
-	d.logReaper.AddLogFile(platform.GetUltimateErrLogPath(), 24)
-	d.logReaper.AddLogFile(platform.GetProxyLogPath(), 24)
-	d.logReaper.AddLogFile(platform.GetProxyErrLogPath(), 24)
+	d.logReaper.AddLogFile(platform.GetUltimateLogPath(), constants.LogReapingAgeInHours)
+	d.logReaper.AddLogFile(platform.GetUltimateErrLogPath(), constants.LogReapingAgeInHours)
+	d.logReaper.AddLogFile(platform.GetProxyLogPath(), constants.LogReapingAgeInHours)
+	d.logReaper.AddLogFile(platform.GetProxyErrLogPath(), constants.LogReapingAgeInHours)
 }
