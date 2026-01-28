@@ -15,10 +15,9 @@ use rama::{
         service::web::response::IntoResponse,
     },
     layer::ConsumeErrLayer,
-    net::{proxy::ProxyTarget, tls::server::TlsPeekRouter},
+    net::{address::ProxyAddress, proxy::ProxyTarget, tls::server::TlsPeekRouter},
     rt::Executor,
     stream::Stream,
-    tcp::client::service::DefaultForwarder,
     telemetry::tracing::{self, Level},
     tls::boring::server::TlsAcceptorLayer,
 };
@@ -34,12 +33,12 @@ use rama::{
 
 use crate::{firewall::Firewall, server::connectivity::CONNECTIVITY_DOMAIN};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(super) struct MitmServer<S> {
     inner: S,
     mitm_all: bool,
     firewall: Firewall,
-    forwarder: DefaultForwarder,
+    forwarder: super::forwarder::TcpForwarder,
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +55,7 @@ impl From<StaticHttpProxyError> for Response {
 pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
     guard: ShutdownGuard,
     mitm_all: bool,
+    upstream_proxy_address: Option<ProxyAddress>,
     tls_acceptor: TlsAcceptorLayer,
     firewall: Firewall,
     #[cfg(feature = "har")] har_export_layer: HARExportLayer,
@@ -71,7 +71,10 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
         MapResponseBodyLayer::new(Body::new),
         CompressionLayer::new(),
     )
-        .into_layer(super::client::new_https_client(firewall.clone())?);
+        .into_layer(super::client::new_https_client(
+            firewall.clone(),
+            upstream_proxy_address.clone(),
+        )?);
 
     let exec = Executor::graceful(guard);
 
@@ -80,11 +83,13 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
     let inner = TlsPeekRouter::new((tls_acceptor).into_layer(http_server.clone()))
         .with_fallback(http_server);
 
+    let forwarder = super::forwarder::TcpForwarder::new(exec, upstream_proxy_address);
+
     Ok(MitmServer {
         inner,
         mitm_all,
         firewall,
-        forwarder: DefaultForwarder::ctx(exec),
+        forwarder,
     })
 }
 
