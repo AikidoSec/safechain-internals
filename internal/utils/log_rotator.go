@@ -88,13 +88,4 @@ func (r *LogRotator) rotateIfNeeded(lf logFile) {
 	}
 
 	log.Printf("Rotated log file: %s -> %s", lf.path, newPath)
-
-	f, err := os.Create(lf.path)
-	if err != nil {
-		log.Printf("Failed to create new log file: %s", lf.path)
-		return
-	}
-	f.Close()
-
-	log.Printf("Created new log file: %s", lf.path)
 }
