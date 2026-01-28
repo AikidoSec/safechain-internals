@@ -38,7 +38,7 @@ func ProxyCAInstalled() bool {
 }
 
 func DownloadCACertFromProxy() error {
-	metaUrl, _, err := GetMetaUrl()
+	metaUrl, _, _, err := GetMetaUrls()
 	if err != nil {
 		return fmt.Errorf("failed to get meta url: %v", err)
 	}

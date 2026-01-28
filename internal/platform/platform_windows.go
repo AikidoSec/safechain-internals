@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/AikidoSec/safechain-internals/internal/utils"
@@ -126,8 +125,7 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	for _, sid := range sids {
 		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
 		regCmds := []RegistryValue{
-			{Type: "REG_DWORD", Value: "ProxyEnable", Data: "1"},
-			{Type: "REG_SZ", Value: "ProxyServer", Data: proxyURL}, // URL to be used as proxy server by the OS
+			{Type: "REG_SZ", Value: "AutoConfigURL", Data: pacURL}, // URL to be used as PAC by the OS
 		}
 		for _, value := range regCmds {
 			if err := setRegistryValue(ctx, regPath, value); err != nil {
@@ -138,39 +136,45 @@ func SetSystemProxy(ctx context.Context, proxyURL string) error {
 	return nil
 }
 
-func IsSystemProxySet(ctx context.Context, proxyURL string) error {
-	output, err := utils.RunCommand(ctx, "netsh", "winhttp", "show", "proxy")
-	if err != nil {
-		return fmt.Errorf("failed to show winhttp proxy: %v", err)
-	}
-	if strings.Contains(string(output), "Direct access") {
-		return fmt.Errorf("winhttp proxy is not set")
-	}
+func isSystemProxySetForSid(ctx context.Context, sid string) bool {
+	regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
+	return registryValueContains(ctx, regPath, "ProxyEnable", "0x1")
+}
 
+func isSystemPACSetForSid(ctx context.Context, sid string, pacURL string) bool {
+	regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
+	return registryValueContains(ctx, regPath, "AutoConfigURL", pacURL)
+}
+
+func IsSystemPACSet(ctx context.Context, pacURL string) error {
 	sids, err := getLoggedInUserSIDs(ctx)
 	if err != nil || len(sids) == 0 {
 		return fmt.Errorf("failed to get logged in user sids: %v", err)
 	}
 
 	for _, sid := range sids {
-		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
-		if !registryValueContains(ctx, regPath, "ProxyEnable", "0x1") {
-			return fmt.Errorf("ProxyEnable is not set in registry for user %s", sid)
-		}
-		if !registryValueContains(ctx, regPath, "ProxyServer", proxyURL) {
-			return fmt.Errorf("ProxyServer is not set in registry for user %s", sid)
+		if !isSystemPACSetForSid(ctx, sid, pacURL) {
+			return fmt.Errorf("system PAC is not set for user %s", sid)
 		}
 	}
-
 	return nil
 }
 
-func UnsetSystemProxy(ctx context.Context) error {
-	errs := []error{}
-	if _, err := utils.RunCommand(ctx, "netsh", "winhttp", "reset", "proxy"); err != nil {
-		errs = append(errs, err)
+func IsAnySystemProxySet(ctx context.Context) (bool, error) {
+	sids, err := getLoggedInUserSIDs(ctx)
+	if err != nil {
+		return false, err
 	}
+	for _, sid := range sids {
+		if isSystemProxySetForSid(ctx, sid) || isSystemPACSetForSid(ctx, sid, "") {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
+func UnsetSystemPAC(ctx context.Context, pacURL string) error {
+	errs := []error{}
 	sids, err := getLoggedInUserSIDs(ctx)
 	if err != nil {
 		return err
@@ -179,8 +183,7 @@ func UnsetSystemProxy(ctx context.Context) error {
 	for _, sid := range sids {
 		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
 		regValuesToDisable := map[string]RegistryValue{
-			"ProxyEnable": {Type: "REG_DWORD", Value: "ProxyEnable", Data: "0"},
-			"ProxyServer": {Type: "REG_SZ", Value: "ProxyServer", Data: ""},
+			"AutoConfigURL": {Type: "REG_SZ", Value: "AutoConfigURL", Data: ""},
 		}
 		for _, regValue := range regValuesToDisable {
 			if err := setRegistryValue(ctx, regPath, regValue); err != nil {
