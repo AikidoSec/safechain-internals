@@ -92,7 +92,7 @@ func SetupLogging() (io.Writer, error) {
 		return os.Stdout, err
 	}
 
-	logPath := filepath.Join(config.LogDir, "SafeChainUltimate.log")
+	logPath := filepath.Join(config.LogDir, SafeChainUltimateLogName)
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return os.Stdout, err
