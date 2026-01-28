@@ -74,8 +74,8 @@ async fn record_blocked_event(
 async fn take_blocked_events(
     State(MockState { blocked_events }): State<MockState>,
 ) -> impl IntoResponse {
-    let blocked_events = blocked_events.swap(Default::default());
-    Json(blocked_events.iter().collect::<Vec<_>>()).into_response()
+    let previous_blocked_events = blocked_events.swap(Default::default());
+    Json(previous_blocked_events.iter().collect::<Vec<_>>()).into_response()
 }
 
 async fn clear_blocked_events(
