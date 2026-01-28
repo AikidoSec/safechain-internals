@@ -1,6 +1,5 @@
-use crate::firewall::malware_list::{
-    ListDataEntry, MalwareListEntryFormatter, PackageVersion, Reason,
-};
+use crate::firewall::malware_list::{ListDataEntry, MalwareListEntryFormatter, Reason};
+use crate::firewall::version::{PackageVersion, PragmaticSemver};
 use rama::http::{Body, Request, Uri};
 
 use super::malware_key::ChromeMalwareListEntryFormatter;
@@ -20,7 +19,10 @@ fn test_parse_crx_download_url() {
 
     let (extension_id, version) = result.unwrap();
     assert_eq!(extension_id.as_str(), "GLNPJGLILKICBCKJPBGCFKOGEBGLLEMB");
-    assert_eq!(version, PackageVersion::Unknown("6.45.0.0".into()));
+    assert_eq!(
+        version,
+        PackageVersion::Semver(PragmaticSemver::new_two_components(6, 45))
+    );
 }
 
 #[test]
@@ -53,17 +55,15 @@ fn test_version_matches() {
         let entry_v = if entry == "*" {
             PackageVersion::Any
         } else {
-            PackageVersion::Unknown(entry.into())
+            PackageVersion::Semver(entry.parse().unwrap())
         };
-        let observed_v = PackageVersion::Unknown(observed.into());
+        let observed_v = PackageVersion::Semver(observed.parse().unwrap());
 
-        assert_eq!(
-            RuleChrome::version_matches(&entry_v, &observed_v),
-            expected,
-            "Failed for entry: {}, observed: {}",
-            entry,
-            observed
-        );
+        if expected {
+            assert_eq!(entry_v, observed_v);
+        } else {
+            assert_ne!(entry_v, observed_v);
+        }
     }
 }
 

@@ -1,0 +1,23 @@
+[package]
+name = "safechain-proxy-fuzz"
+description = "fuzzing modules for safechain-proxy utils"
+version = "0.1.0"
+edition = "2024"
+publish = false
+rust-version = "1.93"
+readme = "../docs/proxy.md"
+resolver = "3"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rama = { workspace = true }
+serde = "1.0"
+
+[[bin]]
+name = "parse_pragmatic_semver_version"
+path = "parse_pragmatic_semver_version.rs"
+test = false
+doc = false
