@@ -38,9 +38,6 @@ func (s *Step) Install(ctx context.Context) error {
 		return fmt.Errorf("failed to load proxy config: %v", err)
 	}
 	proxySet, err := platform.IsAnySystemProxySet(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to check if any system proxy is set: %v", err)
-	}
 	if proxySet {
 		return fmt.Errorf("system proxy/pac is already set! Failing installation to avoid proxy conflicts!")
 	}

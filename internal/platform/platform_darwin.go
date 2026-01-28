@@ -124,21 +124,29 @@ func isSystemPACSetForService(ctx context.Context, service string, pacURL string
 }
 
 func setSystemPACForService(ctx context.Context, service string, pacURL string) error {
+	errs := []error{}
 	if err := exec.CommandContext(ctx, "networksetup", "-setautoproxyurl", service, pacURL).Run(); err != nil {
-		return err
+		errs = append(errs, err)
 	}
 	if err := exec.CommandContext(ctx, "networksetup", "-setautoproxystate", service, "on").Run(); err != nil {
-		return err
+		errs = append(errs, err)
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to set system PAC for service %q: %v", service, errs)
 	}
 	return nil
 }
 
 func unsetSystemPACForService(ctx context.Context, service string) error {
+	errs := []error{}
 	if err := exec.CommandContext(ctx, "networksetup", "-setautoproxystate", service, "off").Run(); err != nil {
-		return err
+		errs = append(errs, err)
 	}
 	if err := exec.CommandContext(ctx, "networksetup", "-setautoproxyurl", service, "").Run(); err != nil {
-		return err
+		errs = append(errs, err)
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to unset system PAC for service %q: %v", service, errs)
 	}
 	return nil
 }
@@ -194,7 +202,11 @@ func IsAnySystemProxySet(ctx context.Context) (bool, error) {
 
 	for _, service := range services {
 		for _, f := range proxyCheckFunctions {
-			if set, err := f(ctx, service, ""); err == nil && set {
+			set, err := f(ctx, service, "")
+			if err != nil {
+				return false, fmt.Errorf("failed to check if system proxy is set for service %q (possibly not set): %v", service, err)
+			}
+			if set {
 				return true, nil
 			}
 		}
