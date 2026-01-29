@@ -12,9 +12,8 @@ resolver = "3"
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "0.4"
-rama = { workspace = true }
-serde = "1.0"
+libfuzzer-sys = { workspace = true }
+safechain-proxy-lib = { workspace = true }
 
 [[bin]]
 name = "parse_pragmatic_semver_version"

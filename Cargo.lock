@@ -2908,8 +2908,7 @@ name = "safechain-proxy-fuzz"
 version = "0.1.0"
 dependencies = [
  "libfuzzer-sys",
- "rama",
- "serde",
+ "safechain-proxy-lib",
 ]
 
 [[package]]

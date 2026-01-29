@@ -1,5 +1,5 @@
 [workspace]
-members = ["proxy", "proxy-fuzz", "proxy_cli", "proxy_netbench"]
+members = ["proxy", "proxy_cli", "proxy_fuzz", "proxy_netbench"]
 resolver = "3"
 
 [workspace.package]
@@ -15,6 +15,7 @@ humantime = "2.3"
 jemallocator = { package = "tikv-jemallocator", version = "0.6" }
 keyring-core = "0.7"
 libc = "0.2"
+libfuzzer-sys = "0.4"
 linux-keyutils-keyring-store = "0.2"
 lz4_flex = "0.12"
 mimalloc = { version = "0.1", default-features = false }

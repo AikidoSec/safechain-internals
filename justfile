@@ -16,11 +16,11 @@ rust-qa:
 
 rust-fuzz-check:
     @cargo install cargo-fuzz
-    cargo +nightly fuzz check --fuzz-dir ./proxy-fuzz
+    cargo +nightly fuzz check --fuzz-dir ./proxy_fuzz
 
 rust-fuzz *ARGS:
     @cargo install cargo-fuzz
-    cargo +nightly fuzz run --fuzz-dir ./proxy-fuzz -j 8 parse_pragmatic_semver_version -- -max_total_time=60
+    cargo +nightly fuzz run --fuzz-dir ./proxy_fuzz -j 8 parse_pragmatic_semver_version -- -max_total_time=60
 
 rust-qa-full: rust-qa rust-fuzz
     cargo nextest run --workspace --all-features --run-ignored=only
