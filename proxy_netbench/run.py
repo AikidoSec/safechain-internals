@@ -347,6 +347,13 @@ def main() -> int:
         "--scenario",
         default="baseline",
         choices=["baseline", "latency-jitter", "flaky-upstream"],
+        help="ignored when --har is set",
+    )
+    ap.add_argument("--har", default=None, help="replay requests from this HAR file")
+    ap.add_argument(
+        "--emulate",
+        action="store_true",
+        help="when replaying, also emulate recorded timings",
     )
     ap.add_argument(
         "--report-file", default=None, help="write JSONL report to file for diffing"
@@ -363,6 +370,12 @@ def main() -> int:
     )
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
+
+    har_path: Optional[Path] = (
+        Path(args.har).expanduser().resolve() if args.har else None
+    )
+    if har_path is not None and not har_path.exists():
+        raise RuntimeError(f"har file not found: {har_path}")
 
     run_build(verbose=args.verbose)
     netbench = netbench_path()
@@ -398,18 +411,23 @@ def main() -> int:
 
     atexit.register(lambda: cleanup(keep_data))
 
-    # Start mock server, traces to file
+    # Start mock server
     eprint("mock: starting")
     mock_argv = [
         netbench,
         "mock",
-        "--scenario",
-        args.scenario,
         "--data",
         str(data_dir),
         "--output",
         str(mock_log),
     ]
+    if har_path is not None:
+        # HAR mode: replay responses from the HAR
+        mock_argv += ["--replay", str(har_path)]
+    else:
+        # Normal mode: use scenario behavior
+        mock_argv += ["--scenario", args.scenario]
+
     mock_proc = start_process("mock", mock_argv, env)
     procs.append(mock_proc)
 
@@ -419,7 +437,7 @@ def main() -> int:
     ensure_process_alive(mock_proc)
     eprint("mock:", mock_addr)
 
-    # Start proxy optionally, traces to file
+    # Start proxy optionally
     if args.with_proxy:
         eprint("proxy: starting")
         proxy_argv = [
@@ -448,15 +466,23 @@ def main() -> int:
         netbench,
         "run",
         "--json",
-        "--scenario",
-        args.scenario,
         "--data",
         str(data_dir),
         "--output",
         str(run_log),
     ]
+
+    if har_path is not None:
+        # HAR mode: runner replays requests
+        run_argv += ["--replay", str(har_path)]
+        if args.emulate:
+            run_argv.append("--emulate")
+    else:
+        run_argv += ["--scenario", args.scenario]
+
     if args.with_proxy:
         run_argv.append("--proxy")
+
     run_argv.append(target_addr)
 
     eprint("run: started")
@@ -549,7 +575,6 @@ def main() -> int:
         print("diff friendly summary")
         print(summary_path.read_text(encoding="utf-8").strip())
 
-        # Optional compare output even in report mode
         if args.compare:
             previous_metrics = load_metrics_from_path(Path(args.compare))
             print_comparison_section(current_metrics, previous_metrics)
@@ -565,7 +590,14 @@ def main() -> int:
     # Human output
     print()
     print("netbench finished")
-    print(f"scenario={args.scenario} proxied={'yes' if args.with_proxy else 'no'}")
+    if har_path is not None:
+        print(
+            f"mode=har har={har_path} emulate={'yes' if args.emulate else 'no'} proxied={'yes' if args.with_proxy else 'no'}"
+        )
+    else:
+        print(
+            f"mode=scenario scenario={args.scenario} proxied={'yes' if args.with_proxy else 'no'}"
+        )
     print()
 
     summaries = [e for e in events if e.get("type") == "summary"]
