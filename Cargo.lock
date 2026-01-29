@@ -2873,6 +2873,7 @@ dependencies = [
  "linux-keyutils-keyring-store",
  "lz4_flex",
  "mimalloc",
+ "moka",
  "parking_lot",
  "postcard",
  "radix_trie",

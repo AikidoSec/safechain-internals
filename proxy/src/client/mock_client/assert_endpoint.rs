@@ -1,34 +1,35 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
 use rama::{
     Service,
     extensions::ExtensionsRef as _,
     http::{
         Request, Response, StatusCode,
-        service::web::extract::State,
         service::web::{
             Router,
+            extract::State,
             response::{IntoResponse, Json},
         },
     },
     net::user::UserId,
     telemetry::tracing,
+    utils::collections::AppendOnlyVec,
 };
-
-use parking_lot::Mutex;
 
 use crate::server::proxy::FirewallUserConfig;
 
 #[derive(Clone, Debug)]
 pub struct MockState {
-    pub blocked_events: Arc<Mutex<Vec<serde_json::Value>>>,
+    pub blocked_events: Arc<ArcSwap<AppendOnlyVec<serde_json::Value>>>,
 }
 
 impl MockState {
+    #[inline(always)]
     pub fn new() -> Self {
         Self {
-            blocked_events: Arc::new(Mutex::new(Vec::new())),
+            blocked_events: Default::default(),
         }
     }
 }
@@ -66,21 +67,20 @@ async fn record_blocked_event(
     State(MockState { blocked_events }): State<MockState>,
     Json(value): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    blocked_events.lock().push(value);
+    blocked_events.load().push(value);
     StatusCode::NO_CONTENT
 }
 
 async fn take_blocked_events(
     State(MockState { blocked_events }): State<MockState>,
 ) -> impl IntoResponse {
-    let mut guard = blocked_events.lock();
-    let events = std::mem::take(&mut *guard);
-    Json(events)
+    let previous_blocked_events = blocked_events.swap(Default::default());
+    Json(previous_blocked_events.iter().collect::<Vec<_>>()).into_response()
 }
 
 async fn clear_blocked_events(
     State(MockState { blocked_events }): State<MockState>,
 ) -> impl IntoResponse {
-    blocked_events.lock().clear();
+    let _ = blocked_events.swap(Default::default());
     StatusCode::NO_CONTENT
 }
