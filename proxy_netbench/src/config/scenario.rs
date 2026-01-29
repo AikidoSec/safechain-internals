@@ -29,7 +29,7 @@ impl Scenario {
                 // Smooth request generation with no randomness.
                 let concurrency = utils::env::compute_concurrent_request_count() as u32;
                 ClientConfig {
-                    target_rps: Some(5 * concurrency),
+                    target_rps: Some(concurrency),
                     concurrency: Some(concurrency),
                     jitter: None,
                     burst_size: Some(1),
