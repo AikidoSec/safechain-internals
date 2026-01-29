@@ -14,8 +14,8 @@ use rama::{
         matcher::HttpMatcher,
         service::web::response::IntoResponse,
     },
-    layer::HijackLayer,
-    net::user::UserId,
+    layer::{AddInputExtensionLayer, HijackLayer},
+    net::{address::ProxyAddress, user::UserId},
     telemetry::tracing::{self, Instrument as _},
 };
 
@@ -28,6 +28,7 @@ pub(super) struct HttpClient<S> {
 
 pub(super) fn new_https_client(
     firewall: Firewall,
+    upstream_proxy_address: Option<ProxyAddress>,
 ) -> Result<HttpClient<impl Service<Request, Output = Response, Error = OpaqueError>>, OpaqueError>
 {
     let inner = (
@@ -41,6 +42,7 @@ pub(super) fn new_https_client(
             HttpMatcher::domain(CONNECTIVITY_DOMAIN),
             crate::server::connectivity::new_connectivity_http_svc(),
         ),
+        upstream_proxy_address.map(AddInputExtensionLayer::new),
     )
         .into_layer(crate::client::new_web_client()?);
 
