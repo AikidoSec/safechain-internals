@@ -318,86 +318,23 @@ impl FromStr for PragmaticSemver {
     type Err = PragmaticSemverParseError;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
-        let trimmed_text = text.trim();
-        if trimmed_text.is_empty() {
+        let input = text.trim();
+        if input.is_empty() {
             return Err(PragmaticSemverParseError::EmptyString);
         }
 
         let mut version = PragmaticSemver::new_zeroed();
 
-        let Some(num_trailer_text) = parse_number_parts_from_str(trimmed_text, &mut version)?
-        else {
-            return Ok(version);
-        };
+        // Parse numeric parts first.
+        let remainder = parse_number_parts(input, &mut version)?;
 
-        let maybe_pre_trailer_text = if let Some(pre_text) = num_trailer_text.strip_prefix('-') {
-            match pre_text.split_once('+') {
-                Some((pre_text_without_build, rem)) => {
-                    version.pre = Identifier::new_utf8(pre_text_without_build.trim_matches('-'));
-                    (!rem.is_empty()).then_some(rem)
-                }
-                None => {
-                    version.pre = Identifier::new_utf8(pre_text.trim_matches('-'));
-                    None
-                }
-            }
-        } else if !num_trailer_text.contains('+') {
-            version.pre = Identifier::new_utf8(num_trailer_text.trim_end_matches('-'));
-            None
-        } else {
-            (!num_trailer_text.is_empty()).then_some(num_trailer_text)
-        };
-
-        if let Some(pre_trailer_text) = maybe_pre_trailer_text {
-            // assume this to build regardless of the content,
-            // this way it is not taken into account for comparisons
-            version.build = Identifier::new_utf8(pre_trailer_text.trim_matches('+'));
+        // Whatever is left is interpreted as pre and or build.
+        if let Some(tail) = remainder {
+            parse_pre_and_build(tail, &mut version);
         }
 
         Ok(version)
     }
-}
-
-macro_rules! try_parse_next_part {
-    ($version:ident, $part:ident, $text:ident, required = $required:expr) => {
-        let NumberParseOutcome { number, rem } = parse_numeric_identifier_from_str($text)?;
-        let $text = match number {
-            Some(number) => {
-                $version.$part = number;
-                match rem {
-                    Some(new_text) => new_text,
-                    None => return Ok(None),
-                }
-            }
-            None => {
-                return if $required {
-                    Err(PragmaticSemverParseError::UnexpectedNumberEnd)
-                } else {
-                    Ok(rem)
-                };
-            }
-        };
-        let $text = match parse_dot_from_str($text) {
-            Some(DotParseNextAction::Continue(rem)) => rem,
-            Some(DotParseNextAction::BeginPreOrBuild(rem)) => return Ok(Some(rem)),
-            None => return Ok(None),
-        };
-    };
-    ($version:ident, $part:ident, $text:ident) => {
-        try_parse_next_part!($version, $part, $text, required = false)
-    };
-}
-
-fn parse_number_parts_from_str<'a>(
-    text: &'a str,
-    version: &mut PragmaticSemver,
-) -> Result<Option<&'a str>, PragmaticSemverParseError> {
-    try_parse_next_part!(version, major, text, required = true);
-    try_parse_next_part!(version, minor, text);
-    try_parse_next_part!(version, patch, text);
-    try_parse_next_part!(version, fourth, text);
-    try_parse_next_part!(version, fifth, text);
-    Ok((!text.is_empty()).then_some(text))
 }
 
 #[derive(Debug)]
@@ -427,60 +364,186 @@ impl fmt::Display for PragmaticSemverParseError {
 
 impl std::error::Error for PragmaticSemverParseError {}
 
-struct NumberParseOutcome<'a> {
-    number: Option<u64>,
-    rem: Option<&'a str>,
-}
-
-enum DotParseNextAction<'a> {
+enum NextInput<'a> {
+    // Continue parsing numeric parts after a dot.
     Continue(&'a str),
-    BeginPreOrBuild(&'a str),
+    // Stop numeric parsing and return the remaining text (pre and or build).
+    Remainder(&'a str),
+    // Stop parsing because we reached the end (or a trailing dot).
+    End,
 }
 
-fn parse_numeric_identifier_from_str(
-    input: &str,
-) -> Result<NumberParseOutcome<'_>, PragmaticSemverParseError> {
-    let mut len = 0;
+impl<'a> NextInput<'a> {
+    /// [`NextInput::Remainder`] if trimmed `s`
+    /// is not empty, and [`NextInput::End`] otherwise.
+    fn remainder_or_end(s: &'a str) -> Self {
+        let trimmed_s = s.trim();
+        if trimmed_s.is_empty() {
+            Self::End
+        } else {
+            Self::Remainder(trimmed_s)
+        }
+    }
+
+    /// [`NextInput::Continue`] if trimmed `s`
+    /// is not empty, and [`NextInput::End`] otherwise.
+    fn continue_or_end(s: &'a str) -> Self {
+        let trimmed_s = s.trim();
+        if trimmed_s.is_empty() {
+            Self::End
+        } else {
+            Self::Continue(trimmed_s)
+        }
+    }
+}
+
+/// Parse up to 5 numeric parts: major, minor, patch, fourth, fifth.
+///
+/// This parser is intentionally lenient:
+/// - Only the first number (major) is required to start with digits
+/// - Additional parts are optional
+/// - A trailing dot is allowed ("1.2.")
+/// - As soon as we hit a non digit after a number, we stop numeric parsing
+///   and treat the rest as pre and or build
+fn parse_number_parts<'a>(
+    mut input: &'a str,
+    version: &mut PragmaticSemver,
+) -> Result<Option<&'a str>, PragmaticSemverParseError> {
+    // Borrow all numeric fields once, then iterate over them.
+    let number_fields = [
+        &mut version.major,
+        &mut version.minor,
+        &mut version.patch,
+        &mut version.fourth,
+        &mut version.fifth,
+    ];
+
+    for (idx, field) in number_fields.into_iter().enumerate() {
+        let required = idx == 0;
+
+        let (number_opt, next) = parse_one_number_part(input, required)?;
+
+        // Only assign if we actually parsed a number.
+        if let Some(n) = number_opt {
+            *field = n;
+        }
+
+        match next {
+            NextInput::Continue(next_input) => input = next_input,
+            NextInput::Remainder(rem) => return Ok((!rem.is_empty()).then_some(rem)),
+            NextInput::End => return Ok(None),
+        }
+    }
+
+    Ok((!input.is_empty()).then_some(input))
+}
+
+/// Parse a single numeric part from the start of `input`.
+///
+/// Rules:
+/// - If required and no digits: error
+/// - If optional and no digits: stop numeric parsing,
+///   remainder is pre and or build ([`NextInput::Remainder`])
+/// - If digits are present:
+///     - ".\<more\>" continues numeric parsing ([`NextInput::Continue`])
+///     - "." at end ends parsing (trailing dot allowed) ([`NextInput::End`])
+///     - end ends parsing ([`NextInput::End`])
+///     - any other character starts pre and or build ([`NextInput::Remainder`])
+fn parse_one_number_part<'a>(
+    input: &'a str,
+    required: bool,
+) -> Result<(Option<u64>, NextInput<'a>), PragmaticSemverParseError> {
+    let (number_opt, rest) = parse_u64_prefix(input)?;
+
+    if number_opt.is_none() {
+        if required {
+            return Err(PragmaticSemverParseError::UnexpectedNumberEnd);
+        }
+
+        return Ok((None, NextInput::remainder_or_end(rest)));
+    }
+
+    // We parsed a number, decide what happens next.
+    let next_input_action = if let Some(after_dot) = rest.strip_prefix('.') {
+        NextInput::continue_or_end(after_dot)
+    } else {
+        NextInput::remainder_or_end(rest)
+    };
+    Ok((number_opt, next_input_action))
+}
+
+/// Parse a u64 prefix from `input`.
+///
+/// Returns:
+/// - (Some(value), rest) if at least one digit was read
+/// - (None, input) if no digits were read
+///
+/// Overflows return OverflowNumber.
+fn parse_u64_prefix(input: &str) -> Result<(Option<u64>, &str), PragmaticSemverParseError> {
+    let bytes = input.as_bytes();
+    let mut i = 0usize;
     let mut value = 0u64;
 
-    while let Some(&digit) = input.as_bytes().get(len) {
-        if !digit.is_ascii_digit() {
+    while let Some(&b) = bytes.get(i) {
+        if !b.is_ascii_digit() {
             break;
         }
-        match value
+
+        value = value
             .checked_mul(10)
-            .and_then(|value| value.checked_add((digit - b'0') as u64))
-        {
-            Some(sum) => value = sum,
-            None => return Err(PragmaticSemverParseError::OverflowNumber),
-        }
-        len += 1;
+            .and_then(|v| v.checked_add((b - b'0') as u64))
+            .ok_or(PragmaticSemverParseError::OverflowNumber)?;
+
+        i += 1;
     }
 
-    if len > 0 {
-        Ok(NumberParseOutcome {
-            number: Some(value),
-            rem: Some(&input[len..]),
-        })
-    } else if !input[len..].is_empty() {
-        Ok(NumberParseOutcome {
-            number: None,
-            rem: Some(&input[len..]),
-        })
+    if i == 0 {
+        Ok((None, input))
     } else {
-        Ok(NumberParseOutcome {
-            number: None,
-            rem: None,
-        })
+        Ok((Some(value), &input[i..]))
     }
 }
 
-fn parse_dot_from_str(input: &str) -> Option<DotParseNextAction<'_>> {
-    if let Some(rest) = input.strip_prefix('.') {
-        (!rest.is_empty()).then_some(DotParseNextAction::Continue(rest))
-    } else if !input.is_empty() {
-        Some(DotParseNextAction::BeginPreOrBuild(input))
+/// Parse the tail (everything after numeric parts) into pre and build.
+///
+/// This is intentionally permissive and matches the original behavior:
+/// - pre can start with '-' or without it
+/// - build starts at '+'
+/// - we trim some leading and trailing separators to avoid weird artifacts
+///
+/// Accepted shapes:
+/// - "-pre"
+/// - "-pre+build"
+/// - "pre"
+/// - "pre+build"
+/// - "+build"
+fn parse_pre_and_build(tail: &str, version: &mut PragmaticSemver) {
+    // If it starts with '-', we treat it as explicit pre.
+    if let Some(after_dash) = tail.strip_prefix('-') {
+        if let Some((pre, build)) = after_dash.split_once('+') {
+            version.pre = Identifier::new_utf8(pre.trim_matches('-'));
+            if !build.is_empty() {
+                version.build = Identifier::new_utf8(build.trim_matches('+'));
+            }
+        } else {
+            version.pre = Identifier::new_utf8(after_dash.trim_matches('-'));
+        }
+        return;
+    }
+
+    // If it starts with '+', it is build only.
+    if let Some(after_plus) = tail.strip_prefix('+') {
+        version.build = Identifier::new_utf8(after_plus.trim_matches('+'));
+        return;
+    }
+
+    // Otherwise it is pre, optionally followed by "+build".
+    if let Some((pre, build)) = tail.split_once('+') {
+        version.pre = Identifier::new_utf8(pre.trim_end_matches('-'));
+        if !build.is_empty() {
+            version.build = Identifier::new_utf8(build.trim_matches('+'));
+        }
     } else {
-        None
+        version.pre = Identifier::new_utf8(tail.trim_end_matches('-'));
     }
 }
