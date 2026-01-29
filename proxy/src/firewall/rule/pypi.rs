@@ -64,6 +64,7 @@ impl RulePyPI {
             Uri::from_static("https://malware-list.aikido.dev/malware_pypi.json"),
             sync_storage,
             remote_malware_list_https_client,
+            None,
         )
         .await
         .context("create remote malware list for pypi block rule")?;
