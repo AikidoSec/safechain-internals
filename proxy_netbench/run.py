@@ -150,7 +150,6 @@ def render_diff_friendly_summary_from_events(events: List[Dict[str, Any]]) -> st
             return {
                 "total": int(t.get("total", 0)),
                 "ok": int(t.get("ok", 0)),
-                "connect_fail": int(t.get("connect_fail", 0)),
                 "http_fail": int(t.get("http_fail", 0)),
                 "other_fail": int(t.get("other_fail", 0)),
             }
@@ -160,7 +159,6 @@ def render_diff_friendly_summary_from_events(events: List[Dict[str, Any]]) -> st
             return {
                 "total": int(container.get("total", 0)),
                 "ok": int(container.get("ok", 0)),
-                "connect_fail": int(container.get("connect_fail", 0)),
                 "http_fail": int(container.get("http_fail", 0)),
                 "other_fail": int(container.get("other_fail", 0)),
             }
@@ -182,7 +180,6 @@ def render_diff_friendly_summary_from_events(events: List[Dict[str, Any]]) -> st
     if totals is None:
         total_total = 0
         total_ok = 0
-        total_conn = 0
         total_http = 0
         total_other = 0
 
@@ -195,14 +192,12 @@ def render_diff_friendly_summary_from_events(events: List[Dict[str, Any]]) -> st
 
             total_total += int(interval.get("total", 0))
             total_ok += int(interval.get("ok", 0))
-            total_conn += int(interval.get("connect_fail", 0))
             total_http += int(interval.get("http_fail", 0))
             total_other += int(interval.get("other_fail", 0))
 
         totals = {
             "total": total_total,
             "ok": total_ok,
-            "connect_fail": total_conn,
             "http_fail": total_http,
             "other_fail": total_other,
         }
@@ -210,7 +205,6 @@ def render_diff_friendly_summary_from_events(events: List[Dict[str, Any]]) -> st
     lines = []
     lines.append(f"total={totals['total']}")
     lines.append(f"ok={totals['ok']}")
-    lines.append(f"connect_fail={totals['connect_fail']}")
     lines.append(f"http_fail={totals['http_fail']}")
     lines.append(f"other_fail={totals['other_fail']}")
     return "\n".join(lines) + "\n"
@@ -237,11 +231,8 @@ def print_runner_progress_spinner(
         phase = str(last_summary.get("phase", ""))
         rps = float(last_summary.get("rps", 0.0))
         ok = int(safe_get(last_summary, "interval", "ok", default=0))
-        cf = int(safe_get(last_summary, "interval", "connect_fail", default=0))
         hf = int(safe_get(last_summary, "interval", "http_fail", default=0))
-        msg = (
-            f"{ch} {elapsed:6.1f}s phase={phase} rps={rps:6.1f} ok={ok} cf={cf} hf={hf}"
-        )
+        msg = f"{ch} {elapsed:6.1f}s phase={phase} rps={rps:6.1f} ok={ok} hf={hf}"
     else:
         msg = f"{ch} {elapsed:6.1f}s running"
 
@@ -259,7 +250,6 @@ def format_summary_line(s: Dict[str, Any], elapsed_wall_s: float) -> str:
     phase = str(s.get("phase", ""))
     rps = float(s.get("rps", 0.0))
     ok = int(safe_get(s, "interval", "ok", default=0))
-    cf = int(safe_get(s, "interval", "connect_fail", default=0))
     hf = int(safe_get(s, "interval", "http_fail", default=0))
 
     tot_ok = int(safe_get(s, "total", "ok", default=0))
@@ -271,7 +261,7 @@ def format_summary_line(s: Dict[str, Any], elapsed_wall_s: float) -> str:
 
     return (
         f"[{t_s:6.1f}s] phase={phase:6s} "
-        f"rps={rps:7.1f} ok={ok:5d} cf={cf:4d} hf={hf:4d} "
+        f"rps={rps:7.1f} ok={ok:5d} hf={hf:4d} "
         f"total_ok={tot_ok} total_fail={tot_fail}"
     )
 
@@ -303,13 +293,11 @@ def compute_aggregate_from_events(events: List[Dict[str, Any]]) -> Dict[str, flo
     if totals_src is None:
         total_total = 0.0
         total_ok = 0.0
-        connect_fail = 0.0
         http_fail = 0.0
         other_fail = 0.0
     else:
         total_total = float(totals_src.get("total", 0.0))
         total_ok = float(totals_src.get("ok", 0.0))
-        connect_fail = float(totals_src.get("connect_fail", 0.0))
         http_fail = float(totals_src.get("http_fail", 0.0))
         other_fail = float(totals_src.get("other_fail", 0.0))
 
@@ -329,7 +317,6 @@ def compute_aggregate_from_events(events: List[Dict[str, Any]]) -> Dict[str, flo
         "avg_main_rps": avg_rps,
         "total": total_total,
         "ok": total_ok,
-        "connect_fail": connect_fail,
         "http_fail": http_fail,
         "other_fail": other_fail,
         "ok_rate": ok_rate,
@@ -342,7 +329,6 @@ def write_kv_baseline(path: Path, metrics: Dict[str, float]) -> None:
         f"avg_main_rps={metrics.get('avg_main_rps', 0.0)}",
         f"total={metrics.get('total', 0.0)}",
         f"ok={metrics.get('ok', 0.0)}",
-        f"connect_fail={metrics.get('connect_fail', 0.0)}",
         f"http_fail={metrics.get('http_fail', 0.0)}",
         f"other_fail={metrics.get('other_fail', 0.0)}",
         f"ok_rate={metrics.get('ok_rate', 0.0)}",
@@ -405,9 +391,6 @@ def print_comparison_section(
     )
     print(
         f"ok:           {format_delta(current.get('ok', 0.0), previous.get('ok', 0.0))}"
-    )
-    print(
-        f"connect_fail: {format_delta(current.get('connect_fail', 0.0), previous.get('connect_fail', 0.0))}"
     )
     print(
         f"http_fail:    {format_delta(current.get('http_fail', 0.0), previous.get('http_fail', 0.0))}"
@@ -680,28 +663,27 @@ def main() -> int:
 
     summaries = [e for e in events if e.get("type") == "summary"]
     if summaries:
-        rows: List[Tuple[float, str, float, int, int, int]] = []
+        rows: List[Tuple[float, str, float, int, int]] = []
         for s in summaries:
             t_ms = float(s.get("t_ms", 0.0))
             t_s = t_ms / 1000.0
             phase = str(s.get("phase", ""))
             rps = float(s.get("rps", 0.0))
             ok = int(safe_get(s, "interval", "ok", default=0))
-            cf = int(safe_get(s, "interval", "connect_fail", default=0))
             hf = int(safe_get(s, "interval", "http_fail", default=0))
-            rows.append((t_s, phase, rps, ok, cf, hf))
+            rows.append((t_s, phase, rps, ok, hf))
 
         print("per second summary (last 12)")
-        print("time_s  phase    rps     ok  connect_fail  http_fail")
-        for t_s, phase, rps, ok, cf, hf in rows[-12:]:
-            print(f"{t_s:6.1f}  {phase:6s}  {rps:6.1f}  {ok:5d}  {cf:12d}  {hf:9d}")
+        print("time_s  phase    rps     ok  http_fail")
+        for t_s, phase, rps, ok, hf in rows[-12:]:
+            print(f"{t_s:6.1f}  {phase:6s}  {rps:6.1f}  {ok:5d}  {hf:9d}")
 
         max_rps = max(r[2] for r in rows) if rows else 0.0
         print()
         print("rps graph (last 24)")
-        for t_s, phase, rps, ok, cf, hf in rows[-24:]:
+        for t_s, phase, rps, ok, hf in rows[-24:]:
             bar = ascii_bar(rps, max_rps, width=24)
-            print(f"{t_s:6.1f} {phase:6s} {rps:6.1f} {bar} ok={ok} cf={cf} hf={hf}")
+            print(f"{t_s:6.1f} {phase:6s} {rps:6.1f} {bar} ok={ok} hf={hf}")
         print()
 
     final = next((e for e in reversed(events) if e.get("type") == "final"), None)
@@ -709,12 +691,11 @@ def main() -> int:
         total = safe_get(final, "total", default={})
         total_total = int(safe_get(total, "total", default=0))
         total_ok = int(safe_get(total, "ok", default=0))
-        total_cf = int(safe_get(total, "connect_fail", default=0))
         total_hf = int(safe_get(total, "http_fail", default=0))
         total_of = int(safe_get(total, "other_fail", default=0))
         print("final totals")
         print(
-            f"total={total_total} ok={total_ok} connect_fail={total_cf} http_fail={total_hf} other_fail={total_of}"
+            f"total={total_total} ok={total_ok} http_fail={total_hf} other_fail={total_of}"
         )
         print()
 

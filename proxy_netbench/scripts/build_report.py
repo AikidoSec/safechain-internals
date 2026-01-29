@@ -76,32 +76,28 @@ def main() -> int:
         out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return 0
 
-    lines.append(
-        "| scenario | avg main rps | ok rate | connect fail | http fail | other fail |"
-    )
-    lines.append("|---|---:|---:|---:|---:|---:|")
+    lines.append("| scenario | avg main rps | ok rate | http fail | other fail |")
+    lines.append("|---|---:|---:|---:|---:|")
 
     missing: list[str] = []
 
     for label, cur, prev in rows:
         avg = float(cur.get("avg_main_rps", 0.0))
         okr = float(cur.get("ok_rate", 0.0))
-        cf = float(cur.get("connect_fail", 0.0))
         hf = float(cur.get("http_fail", 0.0))
         of = float(cur.get("other_fail", 0.0))
 
         if prev is None:
             missing.append(label)
             lines.append(
-                f"| {label} | {avg:.2f} | {okr * 100:.2f}% | {cf:.0f} | {hf:.0f} | {of:.0f} |"
+                f"| {label} | {avg:.2f} | {okr * 100:.2f}% | {hf:.0f} | {of:.0f} |"
             )
         else:
             lines.append(
-                "| {label} | {avg} | {okr} | {cf} | {hf} | {of} |".format(
+                "| {label} | {avg} | {okr} | {hf} | {of} |".format(
                     label=label,
                     avg=fmt_delta(avg, float(prev.get("avg_main_rps", 0.0))),
                     okr=fmt_delta(okr, float(prev.get("ok_rate", 0.0)), rate=True),
-                    cf=fmt_delta(cf, float(prev.get("connect_fail", 0.0))),
                     hf=fmt_delta(hf, float(prev.get("http_fail", 0.0))),
                     of=fmt_delta(of, float(prev.get("other_fail", 0.0))),
                 )
