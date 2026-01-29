@@ -140,24 +140,79 @@ def safe_get(d: Dict[str, Any], *path: str, default: Any = None) -> Any:
 
 
 def render_diff_friendly_summary_from_events(events: List[Dict[str, Any]]) -> str:
-    finals = [e for e in events if e.get("type") == "final"]
-    final = finals[-1] if finals else None
-    if not final:
-        return "no_final_event=1\n"
+    def read_totals_from_container(container: Any) -> Optional[Dict[str, int]]:
+        if not isinstance(container, dict):
+            return None
 
-    total = safe_get(final, "total", default={})
-    total_total = int(safe_get(total, "total", default=0))
-    total_ok = int(safe_get(total, "ok", default=0))
-    total_conn = int(safe_get(total, "connect_fail", default=0))
-    total_http = int(safe_get(total, "http_fail", default=0))
-    total_other = int(safe_get(total, "other_fail", default=0))
+        # Most common: {"total": {...}}
+        t = container.get("total")
+        if isinstance(t, dict):
+            return {
+                "total": int(t.get("total", 0)),
+                "ok": int(t.get("ok", 0)),
+                "connect_fail": int(t.get("connect_fail", 0)),
+                "http_fail": int(t.get("http_fail", 0)),
+                "other_fail": int(t.get("other_fail", 0)),
+            }
+
+        # Alternate: totals are flat on the event itself
+        if "total" in container or "ok" in container:
+            return {
+                "total": int(container.get("total", 0)),
+                "ok": int(container.get("ok", 0)),
+                "connect_fail": int(container.get("connect_fail", 0)),
+                "http_fail": int(container.get("http_fail", 0)),
+                "other_fail": int(container.get("other_fail", 0)),
+            }
+
+        return None
+
+    # 1) Prefer final event totals
+    final = next((e for e in reversed(events) if e.get("type") == "final"), None)
+    totals = read_totals_from_container(final)
+
+    # 2) Fallback to last summary totals
+    if totals is None:
+        last_summary = next(
+            (e for e in reversed(events) if e.get("type") == "summary"), None
+        )
+        totals = read_totals_from_container(last_summary)
+
+    # 3) Last resort: sum interval counters across all summaries
+    if totals is None:
+        total_total = 0
+        total_ok = 0
+        total_conn = 0
+        total_http = 0
+        total_other = 0
+
+        for e in events:
+            if e.get("type") != "summary":
+                continue
+            interval = e.get("interval")
+            if not isinstance(interval, dict):
+                continue
+
+            total_total += int(interval.get("total", 0))
+            total_ok += int(interval.get("ok", 0))
+            total_conn += int(interval.get("connect_fail", 0))
+            total_http += int(interval.get("http_fail", 0))
+            total_other += int(interval.get("other_fail", 0))
+
+        totals = {
+            "total": total_total,
+            "ok": total_ok,
+            "connect_fail": total_conn,
+            "http_fail": total_http,
+            "other_fail": total_other,
+        }
 
     lines = []
-    lines.append(f"total={total_total}")
-    lines.append(f"ok={total_ok}")
-    lines.append(f"connect_fail={total_conn}")
-    lines.append(f"http_fail={total_http}")
-    lines.append(f"other_fail={total_other}")
+    lines.append(f"total={totals['total']}")
+    lines.append(f"ok={totals['ok']}")
+    lines.append(f"connect_fail={totals['connect_fail']}")
+    lines.append(f"http_fail={totals['http_fail']}")
+    lines.append(f"other_fail={totals['other_fail']}")
     return "\n".join(lines) + "\n"
 
 
@@ -229,20 +284,43 @@ def print_progress_line(s: Dict[str, Any], start_ts: float) -> None:
 def compute_aggregate_from_events(events: List[Dict[str, Any]]) -> Dict[str, float]:
     final = next((e for e in reversed(events) if e.get("type") == "final"), None)
 
-    total_total = float(safe_get(final or {}, "total", "total", default=0))
-    total_ok = float(safe_get(final or {}, "total", "ok", default=0))
-    connect_fail = float(safe_get(final or {}, "total", "connect_fail", default=0))
-    http_fail = float(safe_get(final or {}, "total", "http_fail", default=0))
-    other_fail = float(safe_get(final or {}, "total", "other_fail", default=0))
+    totals_src: Optional[Dict[str, Any]] = None
+
+    if isinstance(final, dict):
+        t = final.get("total")
+        if isinstance(t, dict) and ("total" in t or "ok" in t):
+            totals_src = t
+
+    if totals_src is None:
+        last_summary = next(
+            (e for e in reversed(events) if e.get("type") == "summary"), None
+        )
+        if isinstance(last_summary, dict):
+            t = last_summary.get("total")
+            if isinstance(t, dict) and ("total" in t or "ok" in t):
+                totals_src = t
+
+    if totals_src is None:
+        total_total = 0.0
+        total_ok = 0.0
+        connect_fail = 0.0
+        http_fail = 0.0
+        other_fail = 0.0
+    else:
+        total_total = float(totals_src.get("total", 0.0))
+        total_ok = float(totals_src.get("ok", 0.0))
+        connect_fail = float(totals_src.get("connect_fail", 0.0))
+        http_fail = float(totals_src.get("http_fail", 0.0))
+        other_fail = float(totals_src.get("other_fail", 0.0))
 
     ok_rate = (total_ok / total_total) if total_total > 0 else 0.0
 
-    summaries = [
+    main_summaries = [
         e for e in events if e.get("type") == "summary" and e.get("phase") == "main"
     ]
-    if summaries:
-        avg_rps = sum(float(s.get("rps", 0.0)) for s in summaries) / float(
-            len(summaries)
+    if main_summaries:
+        avg_rps = sum(float(s.get("rps", 0.0)) for s in main_summaries) / float(
+            len(main_summaries)
         )
     else:
         avg_rps = 0.0
