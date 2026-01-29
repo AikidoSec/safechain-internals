@@ -14,8 +14,9 @@ use rama::{
 use crate::{
     firewall::{
         events::{BlockedArtifact, BlockedEventInfo},
-        malware_list::{PackageVersion, RemoteMalwareList},
+        malware_list::RemoteMalwareList,
         pac::PacScriptGenerator,
+        version::PackageVersion,
     },
     http::response::generate_generic_blocked_response_for_req,
     storage::SyncCompactDataStorage,
@@ -143,54 +144,7 @@ impl RuleChrome {
             return false;
         };
 
-        entries
-            .iter()
-            .any(|e| Self::version_matches(&e.version, version))
-    }
-
-    fn version_matches(entry_version: &PackageVersion, observed_version: &PackageVersion) -> bool {
-        if matches!(entry_version, PackageVersion::Any) {
-            return true;
-        }
-
-        if entry_version == observed_version {
-            return true;
-        }
-
-        // Chrome CRX URLs typically use 4-part versions (x.y.z.w), while the malware list
-        // can contain 2-part (x.y) or 3-part (x.y.z / SemVer) versions.
-        // To avoid false negatives, compare versions by padding the shorter one with
-        // trailing ".0" segments up to 4 parts.
-        fn normalize_to_4_parts(version: &str) -> [&str; 4] {
-            let mut iter = version.split('.');
-            [
-                iter.next().unwrap_or("0"),
-                iter.next().unwrap_or("0"),
-                iter.next().unwrap_or("0"),
-                iter.next().unwrap_or("0"),
-            ]
-        }
-
-        fn equal_with_zero_padding(a: &str, b: &str) -> bool {
-            if a == b {
-                return true;
-            }
-
-            normalize_to_4_parts(a) == normalize_to_4_parts(b)
-        }
-
-        match (entry_version, observed_version) {
-            (PackageVersion::Semver(v), PackageVersion::Unknown(raw)) => {
-                equal_with_zero_padding(&v.to_string(), raw.as_str())
-            }
-            (PackageVersion::Unknown(raw), PackageVersion::Semver(v)) => {
-                equal_with_zero_padding(raw.as_str(), &v.to_string())
-            }
-            (PackageVersion::Unknown(a), PackageVersion::Unknown(b)) => {
-                equal_with_zero_padding(a.as_str(), b.as_str())
-            }
-            _ => false,
-        }
+        entries.iter().any(|e| e.version.eq(version))
     }
 
     fn parse_crx_download_url(req: &Request) -> Option<(ArcStr, PackageVersion)> {

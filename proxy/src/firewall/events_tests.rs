@@ -1,7 +1,8 @@
-use super::*;
-use crate::firewall::malware_list::PackageVersion;
-use rama::utils::str::arcstr::arcstr;
 use std::str::FromStr;
+
+use super::*;
+use crate::firewall::version::PackageVersion;
+use rama::utils::str::arcstr::arcstr;
 
 #[test]
 fn blocked_event_serializes_with_expected_keys() {

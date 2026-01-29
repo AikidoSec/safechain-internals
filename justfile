@@ -12,8 +12,17 @@ rust-qa:
     cargo clippy --all-features --workspace --all-targets
     @cargo install cargo-nextest --locked
     cargo nextest run --all-features --workspace
+    just rust-fuzz-check
 
-rust-qa-full: rust-qa
+rust-fuzz-check:
+    @cargo install cargo-fuzz
+    cargo +nightly fuzz check --fuzz-dir ./proxy-fuzz
+
+rust-fuzz *ARGS:
+    @cargo install cargo-fuzz
+    cargo +nightly fuzz run --fuzz-dir ./proxy-fuzz -j 8 parse_pragmatic_semver_version -- -max_total_time=60
+
+rust-qa-full: rust-qa rust-fuzz
     cargo nextest run --workspace --all-features --run-ignored=only
 
 run-proxy *ARGS:

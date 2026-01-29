@@ -28,6 +28,7 @@ pub mod layer;
 pub mod malware_list;
 pub mod notifier;
 pub mod rule;
+pub mod version;
 
 mod pac;
 

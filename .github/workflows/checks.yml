@@ -23,7 +23,7 @@ jobs:
     env:
       RUSTFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561
         with:
           toolchain: stable
@@ -64,7 +64,7 @@ jobs:
     env:
       RUSTFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561
         with:
           toolchain: stable
@@ -85,3 +85,34 @@ jobs:
           cargo zigbuild -p safechain-proxy --target ${{ matrix.target }} --all-features
         env:
           AWS_LC_SYS_CMAKE_BUILDER: "0"
+
+  proxy-fuzz:
+    runs-on: ubuntu-latest
+
+    env:
+      CARGO_FUZZ_VERSION: 0.13.1
+      FUZZ_TIME: 60
+
+    strategy:
+      matrix:
+        include:
+          - fuzz_target: parse_pragmatic_semver_version
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561
+        with:
+          toolchain: nightly
+      - uses: actions/cache@v5
+        with:
+          path: ${{ runner.tool_cache }}/cargo-fuzz
+          key: cargo-fuzz-bin-${{ env.CARGO_FUZZ_VERSION }}
+      - run: echo "${{ runner.tool_cache }}/cargo-fuzz/bin" >> $GITHUB_PATH
+      - run: cargo install --root "${{ runner.tool_cache }}/cargo-fuzz" --version ${{ env.CARGO_FUZZ_VERSION }} cargo-fuzz --locked
+      - run: cargo fuzz build --fuzz-dir ./proxy-fuzz ${{ matrix.fuzz_target }}
+      - run: cargo fuzz run --fuzz-dir ./proxy-fuzz ${{ matrix.fuzz_target }} -- -max_total_time=${{ env.FUZZ_TIME }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzzing-artifacts-${{ matrix.fuzz_target }}-${{ github.sha }}
+          path: fuzz/artifacts
