@@ -100,7 +100,10 @@ func (r *LogReaper) reapOldLogs(lf reapableLog) {
 		}
 
 		if now.Sub(logTime) > lf.maxLogAge {
-			os.Remove(filepath.Join(dir, name))
+			if err := os.Remove(filepath.Join(dir, name)); err != nil {
+				log.Printf("Failed to remove old log file: %s", filepath.Join(dir, name))
+				return
+			}
 			log.Printf("Reaped old log file: %s", filepath.Join(dir, name))
 		}
 	}
