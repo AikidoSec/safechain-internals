@@ -116,19 +116,7 @@ impl PartialOrd for Identifier {
 
 impl Identifier {
     fn new_utf8(s: &str) -> Self {
-        const ALPHA_LOWERCASE_MASK: u8 = 0b0010_0000;
-        let mut iter = s
-            .bytes()
-            .filter_map(|c| {
-                Some(match c {
-                    b'A'..=b'Z' => c | ALPHA_LOWERCASE_MASK,
-                    b'a'..=b'z' => c,
-                    b'0'..=b'9' => c,
-                    b'.' | b'-' | b'_' | b'+' => c,
-                    _ => return None,
-                })
-            })
-            .peekable();
+        let mut iter = s.bytes().filter_map(normalize_identifier_byte).peekable();
         if iter.peek().is_some() {
             Self(Some(iter.collect()))
         } else {
@@ -139,6 +127,18 @@ impl Identifier {
     const fn empty() -> Self {
         Self(None)
     }
+}
+
+fn normalize_identifier_byte(c: u8) -> Option<u8> {
+    const ALPHA_LOWERCASE_MASK: u8 = 0b0010_0000;
+
+    Some(match c {
+        b'A'..=b'Z' => c | ALPHA_LOWERCASE_MASK,
+        b'a'..=b'z' => c,
+        b'0'..=b'9' => c,
+        b'.' | b'-' | b'_' | b'+' => c,
+        _ => return None,
+    })
 }
 
 impl fmt::Debug for Identifier {
@@ -374,8 +374,6 @@ enum NextInput<'a> {
 }
 
 impl<'a> NextInput<'a> {
-    /// [`NextInput::Remainder`] if trimmed `s`
-    /// is not empty, and [`NextInput::End`] otherwise.
     fn remainder_or_end(s: &'a str) -> Self {
         let trimmed_s = s.trim();
         if trimmed_s.is_empty() {
@@ -385,8 +383,6 @@ impl<'a> NextInput<'a> {
         }
     }
 
-    /// [`NextInput::Continue`] if trimmed `s`
-    /// is not empty, and [`NextInput::End`] otherwise.
     fn continue_or_end(s: &'a str) -> Self {
         let trimmed_s = s.trim();
         if trimmed_s.is_empty() {
@@ -406,7 +402,7 @@ impl<'a> NextInput<'a> {
 /// - As soon as we hit a non digit after a number, we stop numeric parsing
 ///   and treat the rest as pre and or build
 fn parse_number_parts<'a>(
-    mut input: &'a str,
+    input: &'a str,
     version: &mut PragmaticSemver,
 ) -> Result<Option<&'a str>, PragmaticSemverParseError> {
     // Borrow all numeric fields once, then iterate over them.
@@ -418,10 +414,11 @@ fn parse_number_parts<'a>(
         &mut version.fifth,
     ];
 
+    let mut mod_input = input;
     for (idx, field) in number_fields.into_iter().enumerate() {
         let required = idx == 0;
 
-        let (number_opt, next) = parse_one_number_part(input, required)?;
+        let (number_opt, next) = parse_one_number_part(mod_input, required)?;
 
         // Only assign if we actually parsed a number.
         if let Some(n) = number_opt {
@@ -429,13 +426,13 @@ fn parse_number_parts<'a>(
         }
 
         match next {
-            NextInput::Continue(next_input) => input = next_input,
+            NextInput::Continue(next_input) => mod_input = next_input,
             NextInput::Remainder(rem) => return Ok((!rem.is_empty()).then_some(rem)),
             NextInput::End => return Ok(None),
         }
     }
 
-    Ok((!input.is_empty()).then_some(input))
+    Ok((!mod_input.is_empty()).then_some(mod_input))
 }
 
 /// Parse a single numeric part from the start of `input`.
@@ -518,32 +515,35 @@ fn parse_u64_prefix(input: &str) -> Result<(Option<u64>, &str), PragmaticSemverP
 /// - "pre+build"
 /// - "+build"
 fn parse_pre_and_build(tail: &str, version: &mut PragmaticSemver) {
-    // If it starts with '-', we treat it as explicit pre.
+    // explicit pre, optionally followed by "+build"
     if let Some(after_dash) = tail.strip_prefix('-') {
-        if let Some((pre, build)) = after_dash.split_once('+') {
-            version.pre = Identifier::new_utf8(pre.trim_matches('-'));
-            if !build.is_empty() {
-                version.build = Identifier::new_utf8(build.trim_matches('+'));
-            }
-        } else {
-            version.pre = Identifier::new_utf8(after_dash.trim_matches('-'));
+        let (pre, build_opt) = split_pre_build(after_dash);
+        version.pre = Identifier::new_utf8(pre.trim_matches('-'));
+
+        if let Some(build) = build_opt {
+            version.build = Identifier::new_utf8(build.trim_matches('+'));
         }
         return;
     }
 
-    // If it starts with '+', it is build only.
+    // build only
     if let Some(after_plus) = tail.strip_prefix('+') {
         version.build = Identifier::new_utf8(after_plus.trim_matches('+'));
         return;
     }
 
-    // Otherwise it is pre, optionally followed by "+build".
-    if let Some((pre, build)) = tail.split_once('+') {
-        version.pre = Identifier::new_utf8(pre.trim_end_matches('-'));
-        if !build.is_empty() {
-            version.build = Identifier::new_utf8(build.trim_matches('+'));
-        }
-    } else {
-        version.pre = Identifier::new_utf8(tail.trim_end_matches('-'));
+    // implicit pre (without `-` prefix), optionally followed by "+build"
+    let (pre, build_opt) = split_pre_build(tail);
+    version.pre = Identifier::new_utf8(pre.trim_end_matches('-'));
+
+    if let Some(build) = build_opt {
+        version.build = Identifier::new_utf8(build.trim_matches('+'));
+    }
+}
+
+fn split_pre_build(s: &str) -> (&str, Option<&str>) {
+    match s.split_once('+') {
+        Some((pre, build)) => (pre, (!build.is_empty()).then_some(build)),
+        None => (s, None),
     }
 }
