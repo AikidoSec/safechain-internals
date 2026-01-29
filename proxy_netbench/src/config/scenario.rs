@@ -29,7 +29,7 @@ impl Scenario {
                 // Smooth request generation with no randomness.
                 let concurrency = utils::env::compute_concurrent_request_count() as u32;
                 ClientConfig {
-                    target_rps: Some(50 * concurrency),
+                    target_rps: Some(5 * concurrency),
                     concurrency: Some(concurrency),
                     jitter: None,
                     burst_size: Some(1),
@@ -40,7 +40,7 @@ impl Scenario {
                 // Requests are sent at an uneven pace.
                 // This introduces burstiness and queue formation.
                 ClientConfig {
-                    target_rps: Some(5000),
+                    target_rps: Some(500),
                     concurrency: Some(100),
                     jitter: Some(0.005),
                     burst_size: Some(2),
@@ -50,7 +50,7 @@ impl Scenario {
             Scenario::FlakyUpstream => {
                 // Client side jitter is higher to simulate unstable producers.
                 ClientConfig {
-                    target_rps: Some(2500),
+                    target_rps: Some(250),
                     concurrency: Some(50),
                     jitter: Some(0.01),
                     burst_size: Some(2),

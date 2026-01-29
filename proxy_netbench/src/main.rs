@@ -100,7 +100,7 @@ where
 
     graceful.spawn_task_fn(async move |guard| {
         let result = match args.cmds {
-            CliCommands::Run(run_args) => self::cmd::run::exec(args.data, run_args).await,
+            CliCommands::Run(run_args) => self::cmd::run::exec(args.data, guard, run_args).await,
             CliCommands::Mock(mock_args) => {
                 self::cmd::mock::exec(args.data, guard, mock_args).await
             }

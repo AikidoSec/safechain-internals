@@ -10,7 +10,7 @@ use safechain_proxy_lib::{
     storage::SyncCompactDataStorage,
 };
 
-use super::malware::download_malware_list_for_uri;
+use crate::http::malware::download_malware_list_for_uri;
 
 #[derive(Debug)]
 pub(super) struct VSCodeUriGenerator {

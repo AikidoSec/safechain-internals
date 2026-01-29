@@ -1,23 +1,47 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use rama::{
+    Service as _,
     error::{ErrorContext as _, OpaqueError},
+    graceful::ShutdownGuard,
+    net::address::SocketAddress,
+    rt::Executor,
     telemetry::tracing,
 };
 
 use clap::Args;
+use tokio::time::Instant;
 
-use safechain_proxy_lib::storage;
+use crate::{
+    cmd::run::requests::{
+        GeneratedRequest, RequestGenerator, RequestGeneratorMockConfig,
+        RequestGeneratorReplayConfig,
+    },
+    config::{ClientConfig, ProductValues, Scenario, parse_product_values},
+};
 
-use crate::config::{ClientConfig, ProductValues, Scenario, parse_product_values};
-
+pub mod client;
+pub mod reporter;
 pub mod requests;
 
-// TODO: also create client here that we will use... which includes har recording..
+use self::reporter::*;
 
 #[derive(Debug, Clone, Args)]
 /// run benhmarker
 pub struct RunCommand {
+    /// socket address of the proxy if proxied
+    /// or else the address of the target (mock) server if directly connecting.
+    #[arg(value_name = "ADDRESS", required = true)]
+    target: SocketAddress,
+
+    /// run via a proxy
+    #[arg(long = "proxy", default_value_t = false)]
+    proxy: bool,
+
+    /// report json instead of a human-friendly format
+    #[arg(long, default_value_t = false)]
+    json: bool,
+
     #[clap(flatten)]
     config: Option<ClientConfig>,
 
@@ -46,43 +70,145 @@ pub struct RunCommand {
     #[arg(long, value_name = "SECONDS", default_value_t = 0.1)]
     malware_ratio: f64,
 
+    /// Replay the requests from the provided HAR file
+    #[arg(long, value_name = "HAR_FILE_PATH")]
+    replay: Option<PathBuf>,
+
+    /// When replaying also emulate the given timings
+    #[arg(long = "emulate", default_value_t = false)]
+    emulate_timing: bool,
+
     #[arg(long)]
     /// Scenario to run,
     /// manually defined parameters overwrite scenario parameters.
     scenario: Option<Scenario>,
 }
 
-pub async fn exec(data: PathBuf, args: RunCommand) -> Result<(), OpaqueError> {
-    tokio::fs::create_dir_all(&data)
-        .await
-        .with_context(|| format!("create data directory at path '{}'", data.display()))?;
-    let data_storage =
-        storage::SyncCompactDataStorage::try_new(data.clone()).with_context(|| {
-            format!(
-                "create compact data storage using dir at path '{}'",
-                data.display()
-            )
-        })?;
-    tracing::info!(path = ?data, "data directory ready to be used");
+pub async fn exec(
+    data: PathBuf,
+    guard: ShutdownGuard,
+    args: RunCommand,
+) -> Result<(), OpaqueError> {
+    let client =
+        self::client::http_cient(Executor::graceful(guard.clone()), args.target, args.proxy)
+            .context("create HTTP(S) client")?;
 
     let merged_cfg = merge_server_cfg(args.scenario, args.config);
 
-    let target_rps = merged_cfg.target_rps.unwrap_or(1000);
+    let target_rps = merged_cfg.target_rps.unwrap_or(200).max(1);
+    let burst_size = merged_cfg.burst_size.unwrap_or_default().max(1);
+    let jitter = merged_cfg.jitter.unwrap_or_default().clamp(0.0, 1.0);
+
     let request_count_per_iteration = (args.duration * target_rps as f64).next_up() as usize;
     let request_count_per_warmup = (args.warmup * target_rps as f64).next_up() as usize;
 
     let iterations = args.iterations.max(1);
-    let (_requests_for_iterations, _requests_for_warmup) = self::requests::mock::rand_requests(
-        data_storage,
-        iterations,
-        request_count_per_iteration,
-        request_count_per_warmup,
-        args.products.clone(),
-        args.malware_ratio,
-    )
-    .await?;
 
-    Ok(())
+    let mut req_gen = match args.replay {
+        Some(har_fp) => RequestGenerator::new_replay_gen(RequestGeneratorReplayConfig {
+            har: har_fp,
+            iterations,
+            target_rps,
+            burst_size,
+            jitter,
+            emulate_timing: args.emulate_timing,
+        })
+        .await
+        .context("create replay req generator")?,
+        None => RequestGenerator::new_mock_gen(RequestGeneratorMockConfig {
+            data,
+            iterations,
+            target_rps,
+            burst_size,
+            jitter,
+            request_count_per_iteration,
+            request_count_per_warmup,
+            products: args.products,
+            malware_ratio: args.malware_ratio,
+        })
+        .await
+        .context("create mock req generator")?,
+    };
+
+    const REPORT_INTERVAL: Duration = Duration::from_secs(1);
+
+    let mut reporter: Box<dyn Reporter> = if args.json {
+        const EMIT_EVENTS: bool = true;
+        Box::new(JsonlReporter::new(REPORT_INTERVAL, EMIT_EVENTS))
+    } else {
+        Box::new(HumanReporter::new(REPORT_INTERVAL))
+    };
+
+    let mut cancelled = std::pin::pin!(guard.downgrade().into_cancelled());
+
+    let start = Instant::now();
+
+    loop {
+        let GeneratedRequest {
+            req,
+            index,
+            iteration,
+            warmup,
+        } = tokio::select! {
+            _ = cancelled.as_mut() => {
+                tracing::error!("exit bench runner early: guard shutdown");
+                return Ok(());
+            }
+            maybe_req = req_gen.next_request() => {
+                let Some(req) = maybe_req else {
+                    tracing::debug!("bench runner done: exit");
+                    return Ok(());
+                };
+
+                req
+            }
+        };
+
+        let phase = if warmup { Phase::Warmup } else { Phase::Main };
+
+        let req_start = Instant::now();
+        let outcome = match client.serve(req).await {
+            Ok(resp) => {
+                let status = resp.status().as_u16();
+                if (200..400).contains(&status) {
+                    RequestOutcome {
+                        ok: true,
+                        status: Some(status),
+                        failure: None,
+                    }
+                } else {
+                    RequestOutcome {
+                        ok: false,
+                        status: Some(status),
+                        failure: Some(FailureKind::HttpStatus),
+                    }
+                }
+            }
+            Err(err) => {
+                tracing::debug!("non-http error: {err}");
+                RequestOutcome {
+                    ok: false,
+                    status: None,
+                    failure: Some(FailureKind::Other),
+                }
+            }
+        };
+
+        let ev = RequestResultEvent {
+            ts: std::time::SystemTime::now(),
+            elapsed: start.elapsed(),
+            phase,
+            iteration,
+            index,
+            latency: req_start.elapsed(),
+            outcome,
+        };
+
+        reporter.on_result(&ev);
+
+        let now = start.elapsed();
+        reporter.on_tick(now);
+    }
 }
 
 fn merge_server_cfg(scenario: Option<Scenario>, config: Option<ClientConfig>) -> ClientConfig {

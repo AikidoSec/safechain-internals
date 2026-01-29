@@ -36,11 +36,11 @@ use safechain_proxy_lib::{
 };
 
 use crate::{
-    cmd::run::requests::mock::malware::download_malware_list_for_uri,
     config::{Scenario, ServerConfig},
     http::{
         MockReplayIndex, MockResponseRandomIndex,
         har::{self, HarEntry},
+        malware::download_malware_list_for_uri,
     },
 };
 

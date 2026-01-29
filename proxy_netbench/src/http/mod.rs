@@ -9,6 +9,7 @@ use rama::{
 };
 
 pub mod har;
+pub mod malware;
 
 macro_rules! impl_typed_usize_header {
     ($t:ident, $name:literal) => {

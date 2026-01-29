@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use rama::{
     error::OpaqueError,
     http::{Body, Request},
@@ -12,8 +14,6 @@ mod none;
 mod pypi;
 mod vscode;
 
-pub mod malware;
-
 /// Generate N random requests for a M iterations + warmup
 pub async fn rand_requests(
     sync_storage: storage::SyncCompactDataStorage,
@@ -22,7 +22,7 @@ pub async fn rand_requests(
     request_count_warmup: usize,
     products: Option<ProductValues>,
     malware_ratio: f64,
-) -> Result<(Vec<Vec<Request>>, Vec<Request>), OpaqueError> {
+) -> Result<(Vec<VecDeque<Request>>, VecDeque<Request>), OpaqueError> {
     let products = products.unwrap_or_else(default_product_values);
     tracing::info!(
         "using products: {}",
@@ -73,8 +73,8 @@ async fn rand_requests_inner(
     malware_ratio: f64,
     vscode: &mut self::vscode::VSCodeUriGenerator,
     pypi: &mut self::pypi::PyPIUriGenerator,
-) -> Result<Vec<Request>, OpaqueError> {
-    let mut requests = Vec::with_capacity(request_count);
+) -> Result<VecDeque<Request>, OpaqueError> {
+    let mut requests = VecDeque::with_capacity(request_count);
 
     let weights: Vec<_> = products.iter().map(|p| p.quality.as_u16()).collect();
     let dist = WeightedIndex::new(&weights).unwrap();
@@ -89,7 +89,7 @@ async fn rand_requests_inner(
 
         let mut req = Request::new(Body::empty());
         *req.uri_mut() = uri;
-        requests.push(req);
+        requests.push_back(req);
     }
 
     Ok(requests)
