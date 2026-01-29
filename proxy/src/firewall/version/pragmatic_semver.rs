@@ -325,10 +325,7 @@ impl FromStr for PragmaticSemver {
 
         let mut version = PragmaticSemver::new_zeroed();
 
-        // Parse numeric parts first.
         let remainder = parse_number_parts(input, &mut version)?;
-
-        // Whatever is left is interpreted as pre and or build.
         if let Some(tail) = remainder {
             parse_pre_and_build(tail, &mut version);
         }
