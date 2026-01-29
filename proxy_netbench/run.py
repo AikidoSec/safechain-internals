@@ -1,38 +1,4 @@
 #!/usr/bin/env python3
-"""
-netbench_orchestrator.py
-
-Only stdlib.
-
-What it does
-1. Builds netbench in release mode with cargo.
-2. Creates a unique temp data dir for this run.
-3. Starts mock server, waits until it writes its bind address file.
-4. Optionally starts proxy, waits until it writes its bind address file.
-5. Runs benchmarker with --json, captures JSONL stdout to a file.
-6. Prints live progress lines while the runner is executing.
-7. If --report-file is provided, writes the raw JSONL report and a stable summary file for diffs.
-8. If no --report-file, prints a compact human report with a small ASCII graph.
-
-Logging
-- netbench tracing output is redirected to log files using --output
-- mock: {data_dir}/logs/mock.log
-- proxy: {data_dir}/logs/proxy.log (if used)
-- run: {data_dir}/logs/run.log
-
-Address discovery
-- mock address from {data_dir}/netbench.mock.addr.txt
-- proxy address from {data_dir}/proxy.addr.txt
-
-CLI
-- --scenario baseline|latency-jitter|flaky-upstream
-- --with-proxy
-- --report-file path/to/report.jsonl
-- --verbose
-
-Notes
-- Progress lines are printed to stderr so stdout stays clean and can be piped.
-"""
 
 from __future__ import annotations
 
@@ -48,7 +14,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 @dataclass
@@ -260,6 +226,120 @@ def print_progress_line(s: Dict[str, Any], start_ts: float) -> None:
     eprint(format_summary_line(s, elapsed))
 
 
+def compute_aggregate_from_events(events: List[Dict[str, Any]]) -> Dict[str, float]:
+    final = next((e for e in reversed(events) if e.get("type") == "final"), None)
+
+    total_total = float(safe_get(final or {}, "total", "total", default=0))
+    total_ok = float(safe_get(final or {}, "total", "ok", default=0))
+    connect_fail = float(safe_get(final or {}, "total", "connect_fail", default=0))
+    http_fail = float(safe_get(final or {}, "total", "http_fail", default=0))
+    other_fail = float(safe_get(final or {}, "total", "other_fail", default=0))
+
+    ok_rate = (total_ok / total_total) if total_total > 0 else 0.0
+
+    summaries = [
+        e for e in events if e.get("type") == "summary" and e.get("phase") == "main"
+    ]
+    if summaries:
+        avg_rps = sum(float(s.get("rps", 0.0)) for s in summaries) / float(
+            len(summaries)
+        )
+    else:
+        avg_rps = 0.0
+
+    return {
+        "avg_main_rps": avg_rps,
+        "total": total_total,
+        "ok": total_ok,
+        "connect_fail": connect_fail,
+        "http_fail": http_fail,
+        "other_fail": other_fail,
+        "ok_rate": ok_rate,
+    }
+
+
+def write_kv_baseline(path: Path, metrics: Dict[str, float]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        f"avg_main_rps={metrics.get('avg_main_rps', 0.0)}",
+        f"total={metrics.get('total', 0.0)}",
+        f"ok={metrics.get('ok', 0.0)}",
+        f"connect_fail={metrics.get('connect_fail', 0.0)}",
+        f"http_fail={metrics.get('http_fail', 0.0)}",
+        f"other_fail={metrics.get('other_fail', 0.0)}",
+        f"ok_rate={metrics.get('ok_rate', 0.0)}",
+    ]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def parse_kv_summary(text: str) -> Dict[str, float]:
+    out: Dict[str, float] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k = k.strip()
+        v = v.strip()
+        try:
+            out[k] = float(v)
+        except ValueError:
+            continue
+    return out
+
+
+def load_metrics_from_path(path: Path) -> Dict[str, float]:
+    text = path.read_text(encoding="utf-8")
+    if path.suffix.lower().endswith("jsonl"):
+        events: List[Dict[str, Any]] = []
+        for line in text.splitlines():
+            ev = parse_json_line(line)
+            if ev is not None:
+                events.append(ev)
+        return compute_aggregate_from_events(events)
+
+    return parse_kv_summary(text)
+
+
+def format_delta(cur: float, prev: float, is_rate: bool = False) -> str:
+    d = cur - prev
+    if is_rate:
+        return f"{cur * 100:.2f}% ({d * 100:+.2f}pp)"
+    if prev != 0:
+        pct = (d / prev) * 100.0
+        return f"{cur:.2f} ({d:+.2f}, {pct:+.1f}%)"
+    return f"{cur:.2f} ({d:+.2f})"
+
+
+def print_comparison_section(
+    current: Dict[str, float], previous: Dict[str, float]
+) -> None:
+    print()
+    print("comparison")
+    print(
+        f"avg_main_rps: {format_delta(current.get('avg_main_rps', 0.0), previous.get('avg_main_rps', 0.0))}"
+    )
+    print(
+        f"ok_rate:      {format_delta(current.get('ok_rate', 0.0), previous.get('ok_rate', 0.0), is_rate=True)}"
+    )
+    print(
+        f"total:        {format_delta(current.get('total', 0.0), previous.get('total', 0.0))}"
+    )
+    print(
+        f"ok:           {format_delta(current.get('ok', 0.0), previous.get('ok', 0.0))}"
+    )
+    print(
+        f"connect_fail: {format_delta(current.get('connect_fail', 0.0), previous.get('connect_fail', 0.0))}"
+    )
+    print(
+        f"http_fail:    {format_delta(current.get('http_fail', 0.0), previous.get('http_fail', 0.0))}"
+    )
+    print(
+        f"other_fail:   {format_delta(current.get('other_fail', 0.0), previous.get('other_fail', 0.0))}"
+    )
+    print()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--with-proxy", action="store_true")
@@ -270,6 +350,16 @@ def main() -> int:
     )
     ap.add_argument(
         "--report-file", default=None, help="write JSONL report to file for diffing"
+    )
+    ap.add_argument(
+        "--compare",
+        default=None,
+        help="path to previous summary.txt or jsonl for comparison",
+    )
+    ap.add_argument(
+        "--save-baseline",
+        default=None,
+        help="write current baseline summary (kv) to this path",
     )
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
@@ -292,7 +382,6 @@ def main() -> int:
     env.setdefault("RUST_LOG", "debug" if args.verbose else "info")
 
     procs: List[Proc] = []
-
     keep_data = bool(args.report_file)
 
     def cleanup(keep: bool) -> None:
@@ -354,8 +443,7 @@ def main() -> int:
     else:
         target_addr = mock_addr
 
-    # Run benchmarker.
-    # We stream runner stdout to capture JSONL and show progress live.
+    # Run benchmarker
     run_argv = [
         netbench,
         "run",
@@ -430,14 +518,21 @@ def main() -> int:
             f"- run log: {run_log}\n"
         )
 
+    # Always write stable summary to data dir
     run_summary.write_text(
         render_diff_friendly_summary_from_events(events), encoding="utf-8"
     )
 
+    # Compute metrics for comparison and saving
+    current_metrics = compute_aggregate_from_events(events)
+
+    if args.save_baseline:
+        write_kv_baseline(Path(args.save_baseline), current_metrics)
+
     # Stop services
     cleanup(keep=keep_data)
 
-    # If user asked for a report file, copy raw JSONL and summary to requested location.
+    # Copy report artifacts if requested
     if args.report_file:
         report_path = Path(args.report_file)
         report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -453,6 +548,12 @@ def main() -> int:
         print()
         print("diff friendly summary")
         print(summary_path.read_text(encoding="utf-8").strip())
+
+        # Optional compare output even in report mode
+        if args.compare:
+            previous_metrics = load_metrics_from_path(Path(args.compare))
+            print_comparison_section(current_metrics, previous_metrics)
+
         print()
         print("logs")
         print(str(mock_log))
@@ -506,6 +607,10 @@ def main() -> int:
             f"total={total_total} ok={total_ok} connect_fail={total_cf} http_fail={total_hf} other_fail={total_of}"
         )
         print()
+
+    if args.compare:
+        previous_metrics = load_metrics_from_path(Path(args.compare))
+        print_comparison_section(current_metrics, previous_metrics)
 
     print("artifacts")
     print(f"data dir: {data_dir}")
