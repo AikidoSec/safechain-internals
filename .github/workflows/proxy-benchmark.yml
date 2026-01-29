@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NETBENCH_ORCHESTRATOR: netbench_orchestrator.py
+  NETBENCH_ORCHESTRATOR: proxy_netbench/run.py
   BASELINE_ARTIFACT_NAME: netbench-baselines
   BASELINE_DIR: baselines
   RUN_DIR: run-metrics
