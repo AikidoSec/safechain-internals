@@ -55,7 +55,11 @@ impl Firewall {
         reporting_endpoint: Option<rama::http::Uri>,
     ) -> Result<Self, OpaqueError> {
         let exec = Executor::graceful(guard.clone());
-        let inner_https_client = crate::client::new_web_client(exec.clone())?;
+
+        let inner_https_client = crate::client::new_web_client(
+            exec.clone(),
+            crate::client::WebClientConfig::without_overwrites(),
+        )?;
 
         let shared_remote_malware_client = (
             MapResponseBodyLayer::new(Body::new),

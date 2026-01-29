@@ -17,6 +17,7 @@ use ::{
         http::{Request, Response, Version, client::EasyHttpWebClient},
         net::client::pool::http::HttpPooledConnectorConfig,
         rt::Executor,
+        telemetry::tracing,
     },
     std::time::Duration,
 };
@@ -29,15 +30,39 @@ pub use self::mock_client::new_mock_client as new_web_client;
 
 pub mod transport;
 
+#[derive(Debug, Default)]
+pub struct WebClientConfig {
+    #[cfg(all(not(test), feature = "bench"))]
+    pub do_not_allow_overwrite: bool,
+}
+
+impl WebClientConfig {
+    pub fn without_overwrites() -> Self {
+        Self {
+            #[cfg(all(not(test), feature = "bench"))]
+            do_not_allow_overwrite: true,
+        }
+    }
+}
+
 /// Create a new web client that can be cloned and shared.
 #[cfg(not(test))]
 pub fn new_web_client(
     exec: Executor,
+    cfg: WebClientConfig,
 ) -> Result<impl Service<Request, Output = Response, Error = OpaqueError> + Clone, OpaqueError> {
+    tracing::trace!("new_web_client w/ cfg: {cfg:?}");
+
     let max_active = crate::utils::env::compute_concurrent_request_count();
     let max_total = max_active * 2;
 
-    let tcp_connector = self::transport::new_tcp_connector(exec.clone());
+    let tcp_connector = self::transport::new_tcp_connector(
+        exec.clone(),
+        self::transport::TcpConnectorConfig {
+            #[cfg(all(not(test), feature = "bench"))]
+            do_not_allow_overwrite: cfg.do_not_allow_overwrite,
+        },
+    );
     let tls_config = self::transport::new_tls_connector_config()?;
 
     Ok(EasyHttpWebClient::connector_builder()

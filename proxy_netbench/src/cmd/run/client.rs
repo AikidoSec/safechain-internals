@@ -10,23 +10,26 @@ use rama::{
     rt::Executor,
     service::BoxService,
 };
-use safechain_proxy_lib::client::{new_web_client, transport::try_set_egress_address_overwrite};
+use safechain_proxy_lib::client::{
+    WebClientConfig, new_web_client, transport::try_set_egress_address_overwrite,
+};
 
 pub fn http_cient(
     exec: Executor,
     target: SocketAddress,
     proxy: bool,
 ) -> Result<BoxService<Request, Response, OpaqueError>, OpaqueError> {
+    try_set_egress_address_overwrite(target)?;
+
     if proxy {
         Ok(AddInputExtensionLayer::new(ProxyAddress {
             protocol: Some(Protocol::HTTP),
             address: target.into(),
             credential: None,
         })
-        .into_layer(new_web_client(exec)?)
+        .into_layer(new_web_client(exec, WebClientConfig::default())?)
         .boxed())
     } else {
-        try_set_egress_address_overwrite(target)?;
-        Ok(new_web_client(exec)?.boxed())
+        Ok(new_web_client(exec, WebClientConfig::without_overwrites())?.boxed())
     }
 }

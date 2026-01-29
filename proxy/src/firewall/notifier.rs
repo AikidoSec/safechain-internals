@@ -61,7 +61,9 @@ impl std::fmt::Debug for EventNotifier {
 
 impl EventNotifier {
     pub fn try_new(exec: Executor, reporting_endpoint: Uri) -> Result<Self, OpaqueError> {
-        let client = crate::client::new_web_client(exec.clone())?.boxed();
+        let client =
+            crate::client::new_web_client(exec.clone(), crate::client::WebClientConfig::default())?
+                .boxed();
         let limit = Arc::new(Semaphore::const_new(env::compute_concurrent_request_count()));
         let dedup = moka::sync::CacheBuilder::new(MAX_EVENTS)
             .time_to_live(EVENT_DEDUP_WINDOW)

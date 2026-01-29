@@ -9,8 +9,14 @@ pub type TcpConnector = tcp::client::service::TcpConnector<
     TcpStreamConnectorCloneFactory<TcpStreamConnector>,
 >;
 
-pub fn new_tcp_connector(exec: Executor) -> TcpConnector {
-    tcp::client::service::TcpConnector::new(exec).with_connector(TcpStreamConnector::new())
+#[derive(Debug, Default)]
+pub struct TcpConnectorConfig {
+    #[cfg(all(not(test), feature = "bench"))]
+    pub do_not_allow_overwrite: bool,
+}
+
+pub fn new_tcp_connector(exec: Executor, cfg: TcpConnectorConfig) -> TcpConnector {
+    tcp::client::service::TcpConnector::new(exec).with_connector(TcpStreamConnector::new(cfg))
 }
 
 #[cfg(not(any(test, feature = "bench")))]
@@ -22,7 +28,7 @@ mod production {
 
     impl TcpStreamConnector {
         #[inline(always)]
-        pub(super) fn new() -> Self {
+        pub(super) fn new(_cfg: super::TcpConnectorConfig) -> Self {
             Self
         }
     }
@@ -83,8 +89,14 @@ mod bench {
     pub struct TcpStreamConnector(Option<SocketAddress>);
 
     impl TcpStreamConnector {
-        #[inline(always)]
-        pub(super) fn new() -> Self {
+        pub(super) fn new(cfg: super::TcpConnectorConfig) -> Self {
+            tracing::trace!("TcpStreamConnector w/ cfg: {cfg:?}");
+
+            #[cfg(all(not(test), feature = "bench"))]
+            if cfg.do_not_allow_overwrite {
+                return Self(None);
+            }
+
             Self(get_egress_address_overwrite())
         }
     }

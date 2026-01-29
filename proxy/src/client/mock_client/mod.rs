@@ -25,6 +25,7 @@ static ASSERT_ENDPOINT_STATE: LazyLock<assert_endpoint::MockState> =
 
 pub fn new_mock_client(
     exec: Executor,
+    _cfg: super::WebClientConfig,
 ) -> Result<impl Service<Request, Output = Response, Error = OpaqueError> + Clone, OpaqueError> {
     let echo_svc_builder = EchoServiceBuilder::default();
     let echo_svc = Arc::new(echo_svc_builder.build_http(exec));

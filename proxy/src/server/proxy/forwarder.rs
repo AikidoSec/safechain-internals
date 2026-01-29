@@ -17,7 +17,7 @@ use rama::{
     tcp::client::Request,
 };
 
-use crate::client::transport::{TcpConnector, new_tcp_connector};
+use crate::client::transport::{TcpConnector, TcpConnectorConfig, new_tcp_connector};
 
 enum ForwarderKind {
     Direct(TcpConnector),
@@ -39,7 +39,7 @@ impl fmt::Debug for TcpForwarder {
 
 impl TcpForwarder {
     pub(super) fn new(exec: Executor, proxy: Option<ProxyAddress>) -> Self {
-        let tcp_connector = new_tcp_connector(exec);
+        let tcp_connector = new_tcp_connector(exec, TcpConnectorConfig::default());
         let kind = match proxy {
             Some(proxy_addr) => {
                 let connector = ProxyConnectorLayer::required(

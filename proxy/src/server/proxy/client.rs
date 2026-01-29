@@ -46,7 +46,10 @@ pub(super) fn new_https_client(
         ),
         upstream_proxy_address.map(AddInputExtensionLayer::new),
     )
-        .into_layer(crate::client::new_web_client(exec)?);
+        .into_layer(crate::client::new_web_client(
+            exec,
+            crate::client::WebClientConfig::default(),
+        )?);
 
     Ok(HttpClient { inner })
 }

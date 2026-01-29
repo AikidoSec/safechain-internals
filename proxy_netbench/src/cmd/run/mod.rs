@@ -1,16 +1,24 @@
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use rama::{
     Service as _,
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
+    http::Response,
     net::address::SocketAddress,
     rt::Executor,
     telemetry::tracing,
 };
 
 use clap::Args;
-use tokio::time::Instant;
+use safechain_proxy_lib::utils::env;
+use tokio::{
+    sync::{
+        Semaphore,
+        mpsc::{self, Receiver},
+    },
+    time::Instant,
+};
 
 use crate::{
     cmd::run::requests::{
@@ -46,15 +54,15 @@ pub struct RunCommand {
     config: Option<ClientConfig>,
 
     /// Iteration duration
-    #[arg(long, value_name = "SECONDS", default_value_t = 10.)]
+    #[arg(long, value_name = "SECONDS", default_value_t = 5.)]
     duration: f64,
 
     /// Warmup duration
-    #[arg(long, value_name = "SECONDS", default_value_t = 5.)]
+    #[arg(long, value_name = "SECONDS", default_value_t = 1.)]
     warmup: f64,
 
     /// Amount of times we run through the samples
-    #[arg(long, default_value_t = 4)]
+    #[arg(long, default_value_t = 2)]
     iterations: usize,
 
     #[arg(long, value_parser = parse_product_values)]
@@ -102,6 +110,25 @@ pub async fn exec(
     let request_count_per_iteration = (args.duration * target_rps as f64).next_up() as usize;
     let request_count_per_warmup = (args.warmup * target_rps as f64).next_up() as usize;
 
+    let concurrency = {
+        let c = merged_cfg.concurrency.unwrap_or_default();
+        if c == 0 {
+            env::compute_concurrent_request_count()
+        } else {
+            c as usize
+        }
+    };
+
+    tracing::info!(
+        %target_rps,
+        %burst_size,
+        %jitter,
+        %request_count_per_iteration,
+        %request_count_per_warmup,
+        %concurrency,
+        "client config parameters ready",
+    );
+
     let iterations = args.iterations.max(1);
 
     let mut req_gen = match args.replay {
@@ -132,16 +159,19 @@ pub async fn exec(
 
     const REPORT_INTERVAL: Duration = Duration::from_secs(1);
 
-    let mut reporter: Box<dyn Reporter> = if args.json {
+    let reporter: Box<dyn Reporter> = if args.json {
         const EMIT_EVENTS: bool = true;
         Box::new(JsonlReporter::new(REPORT_INTERVAL, EMIT_EVENTS))
     } else {
         Box::new(HumanReporter::new(REPORT_INTERVAL))
     };
 
-    let mut cancelled = std::pin::pin!(guard.downgrade().into_cancelled());
+    let (result_tx, result_rx) = mpsc::channel(concurrency * 8);
+    guard.spawn_task_fn(|guard| report_worker(guard, reporter, result_rx));
 
-    let start = Instant::now();
+    let mut cancelled = std::pin::pin!(guard.clone_weak().into_cancelled());
+
+    let concurrency = Arc::new(Semaphore::new(concurrency));
 
     loop {
         let GeneratedRequest {
@@ -166,8 +196,78 @@ pub async fn exec(
 
         let phase = if warmup { Phase::Warmup } else { Phase::Main };
 
-        let req_start = Instant::now();
-        let outcome = match client.serve(req).await {
+        let client = client.clone();
+        let concurrency = concurrency.clone();
+        let result_tx = result_tx.clone();
+
+        guard.spawn_task_fn(async move |guard| {
+            let _guard = tokio::select! {
+                _ = guard.cancelled() => {
+                    tracing::error!("cancel wait for concurrency: guard shutdown");
+                    return;
+                }
+                guard_result = concurrency.acquire() => {
+                    guard_result.expect("to always be able to acquire a semaphore guard")
+                }
+            };
+
+            let req_start = Instant::now();
+            let result = client.serve(req).await;
+            if let Err(err) = result_tx
+                .send(ClientResult {
+                    result,
+                    req_start,
+                    phase,
+                    iteration,
+                    index,
+                })
+                .await
+            {
+                tracing::debug!("failed to send client result msg: {err}");
+            }
+        });
+    }
+}
+
+struct ClientResult {
+    result: Result<Response, OpaqueError>,
+    req_start: Instant,
+    phase: Phase,
+    iteration: usize,
+    index: usize,
+}
+
+async fn report_worker(
+    guard: ShutdownGuard,
+    mut reporter: Box<dyn Reporter>,
+    mut result_rx: Receiver<ClientResult>,
+) {
+    let start = Instant::now();
+
+    loop {
+        let ClientResult {
+            result,
+            req_start,
+            phase,
+            iteration,
+            index,
+        } = tokio::select! {
+            _ = guard.cancelled() => {
+                tracing::debug!("exit report worker: guard shutdown");
+                return;
+            }
+
+            maybe_result = result_rx.recv() => {
+                let Some(result) = maybe_result else {
+                    tracing::debug!("exit report worker: result senders closed");
+                    return;
+                };
+
+                result
+            }
+        };
+
+        let outcome = match result {
             Ok(resp) => {
                 let status = resp.status().as_u16();
                 if (200..400).contains(&status) {

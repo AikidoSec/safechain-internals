@@ -6,6 +6,9 @@ use rama::{
     telemetry::tracing,
 };
 
+#[cfg(target_family = "unix")]
+use rama::error::ErrorContext as _;
+
 use clap::{Parser, Subcommand};
 use safechain_proxy_lib::utils;
 
@@ -58,6 +61,11 @@ pub struct Args {
     #[arg(long, value_name = "SECONDS", default_value_t = 0., global = true)]
     /// the graceful shutdown timeout (<= 0.0 = no timeout)
     pub graceful: f64,
+
+    #[cfg(target_family = "unix")]
+    /// Set the limit of max open file descriptors for this process and its children.
+    #[arg(long, value_name = "N", default_value_t = 262_144, global = true)]
+    pub ulimit: safechain_proxy_lib::utils::os::rlim_t,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -78,6 +86,10 @@ async fn main() -> Result<(), BoxError> {
         output: args.output.as_deref(),
     }))
     .await?;
+
+    #[cfg(target_family = "unix")]
+    safechain_proxy_lib::utils::os::raise_nofile(args.ulimit)
+        .context("set file descriptor limit")?;
 
     let base_shutdown_signal = graceful::default_signal();
     if let Err(err) = run_with_args(base_shutdown_signal, args).await {
