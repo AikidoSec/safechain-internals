@@ -19,7 +19,10 @@ use rama::{
     },
     layer::ConsumeErrLayer,
     net::{
-        address::SocketAddress, http::RequestContext, proxy::ProxyTarget, socket::Interface,
+        address::{ProxyAddress, SocketAddress},
+        http::RequestContext,
+        proxy::ProxyTarget,
+        socket::Interface,
         stream::layer::http::BodyLimitLayer,
     },
     proxy::socks5::{self, Socks5Acceptor, server::Socks5PeekRouter},
@@ -42,6 +45,7 @@ use crate::firewall::Firewall;
 use crate::diagnostics::har::HARExportLayer;
 
 mod client;
+mod forwarder;
 mod server;
 
 mod auth;
@@ -88,6 +92,7 @@ where
 
 pub async fn build_proxy_server(
     bind: Interface,
+    upstream_proxy_addr: Option<ProxyAddress>,
     mitm_all: bool,
     guard: ShutdownGuard,
     tls_acceptor: TlsAcceptorLayer,
@@ -106,10 +111,15 @@ pub async fn build_proxy_server(
         .local_addr()
         .context("fetch local addr of bound TCP port for proxy")?;
 
-    let https_client = self::client::new_https_client(exec.clone(), firewall.clone())?;
+    let https_client = self::client::new_https_client(
+        exec.clone(),
+        firewall.clone(),
+        upstream_proxy_addr.clone(),
+    )?;
 
     let http_proxy_mitm_server = self::server::new_mitm_server(
         guard.clone(),
+        upstream_proxy_addr.clone(),
         mitm_all,
         tls_acceptor.clone(),
         firewall.clone(),
@@ -118,6 +128,7 @@ pub async fn build_proxy_server(
     )?;
     let socks5_proxy_mitm_server = self::server::new_mitm_server(
         guard.clone(),
+        upstream_proxy_addr,
         mitm_all,
         tls_acceptor,
         firewall,
@@ -129,7 +140,9 @@ pub async fn build_proxy_server(
         Socks5Acceptor::new(exec.clone())
             .with_auth_optional(true)
             .with_authorizer(self::auth::ZeroAuthority::new())
-            .with_connector(socks5::server::LazyConnector::new(socks5_proxy_mitm_server)),
+            .with_connector(socks5::server::LazyConnector::new(Arc::new(
+                socks5_proxy_mitm_server,
+            ))),
     );
 
     let http_inner_svc = (
@@ -152,7 +165,7 @@ pub async fn build_proxy_server(
             exec.clone(),
             MethodMatcher::CONNECT,
             service_fn(http_connect_accept),
-            http_proxy_mitm_server,
+            Arc::new(http_proxy_mitm_server),
         ),
         // =============================================
         // HTTP (plain-text) (proxy) connections
@@ -178,6 +191,7 @@ pub async fn build_proxy_server(
 #[allow(clippy::too_many_arguments)]
 pub async fn run_proxy_server(
     bind: Interface,
+    upstream_proxy_addr: Option<ProxyAddress>,
     data: &Path,
     mitm_all: bool,
     guard: ShutdownGuard,
@@ -188,6 +202,7 @@ pub async fn run_proxy_server(
 ) -> Result<(), OpaqueError> {
     let proxy_server = build_proxy_server(
         bind,
+        upstream_proxy_addr,
         mitm_all,
         guard,
         tls_acceptor,

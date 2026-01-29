@@ -15,10 +15,9 @@ use rama::{
         service::web::response::IntoResponse,
     },
     layer::ConsumeErrLayer,
-    net::{proxy::ProxyTarget, tls::server::TlsPeekRouter},
+    net::{address::ProxyAddress, proxy::ProxyTarget, tls::server::TlsPeekRouter},
     rt::Executor,
     stream::Stream,
-    tcp::client::service::Forwarder,
     telemetry::tracing::{self, Level},
     tls::boring::server::TlsAcceptorLayer,
 };
@@ -32,14 +31,14 @@ use rama::{
     utils::str::arcstr::arcstr,
 };
 
-use crate::{client, firewall::Firewall, server::connectivity::CONNECTIVITY_DOMAIN};
+use crate::{firewall::Firewall, server::connectivity::CONNECTIVITY_DOMAIN};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(super) struct MitmServer<S> {
     inner: S,
     mitm_all: bool,
     firewall: Firewall,
-    forwarder: Forwarder<client::transport::TcpConnector>,
+    forwarder: super::forwarder::TcpForwarder,
 }
 
 #[derive(Debug, Clone)]
@@ -55,6 +54,7 @@ impl From<StaticHttpProxyError> for Response {
 
 pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
     guard: ShutdownGuard,
+    upstream_proxy_address: Option<ProxyAddress>,
     mitm_all: bool,
     tls_acceptor: TlsAcceptorLayer,
     firewall: Firewall,
@@ -76,6 +76,7 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
         .into_layer(super::client::new_https_client(
             exec.clone(),
             firewall.clone(),
+            upstream_proxy_address.clone(),
         )?);
 
     let http_server = HttpServer::auto(exec.clone()).service(Arc::new(https_svc));
@@ -83,12 +84,13 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
     let inner = TlsPeekRouter::new((tls_acceptor).into_layer(http_server.clone()))
         .with_fallback(http_server);
 
+    let forwarder = super::forwarder::TcpForwarder::new(exec, upstream_proxy_address);
+
     Ok(MitmServer {
         inner,
         mitm_all,
         firewall,
-        forwarder: Forwarder::ctx(exec.clone())
-            .with_connector(client::transport::new_tcp_connector(exec)),
+        forwarder,
     })
 }
 

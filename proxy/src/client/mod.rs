@@ -43,7 +43,7 @@ pub fn new_web_client(
     Ok(EasyHttpWebClient::connector_builder()
         .with_custom_transport_connector(tcp_connector)
         .without_tls_proxy_support()
-        .without_proxy_support()
+        .with_proxy_support()
         // fallback to HTTP/1.1 as default HTTP version in case
         // no protocol negotation happens on layers such as TLS (e.g. ALPN)
         .with_tls_support_using_rustls_and_default_http_version(Some(tls_config), Version::HTTP_11)

@@ -4,7 +4,10 @@ use rama::{
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
     http::Uri,
-    net::{address::SocketAddress, socket::Interface},
+    net::{
+        address::{ProxyAddress, SocketAddress},
+        socket::Interface,
+    },
     telemetry::tracing,
 };
 
@@ -27,6 +30,10 @@ pub struct ProxyCommand {
         default_value = "127.0.0.1:0"
     )]
     pub bind: Interface,
+
+    /// Set an upstream proxy to be used for all egress proxy traffic.
+    #[arg(long, value_name = "<scheme>://[user:[password]@]<host>[:port]")]
+    pub proxy: Option<ProxyAddress>,
 
     #[arg(long)]
     /// Record the entire proxy traffic to a HAR file.
@@ -95,9 +102,11 @@ pub async fn exec(
         ));
     }
 
+    const DO_NOT_MITM_ALL: bool = false;
     let proxy_server = server::proxy::build_proxy_server(
         args.bind,
-        false,
+        args.proxy,
+        DO_NOT_MITM_ALL,
         guard,
         tls_acceptor,
         firewall,

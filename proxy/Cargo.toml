@@ -18,7 +18,6 @@ clap = { version = "4.5", features = ["derive"] }
 keyring-core = { workspace = true }
 humantime = { workspace = true }
 secrecy = { workspace = true }
-semver = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 postcard = { workspace = true, features = ["alloc"] }

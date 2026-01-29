@@ -44,6 +44,7 @@ impl RuleVSCode {
             Uri::from_static(MALWARE_LIST_URI_STR_VSCODE),
             sync_storage,
             remote_malware_list_https_client,
+            None,
         )
         .await
         .context("create remote malware list for vscode block rule")?;

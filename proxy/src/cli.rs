@@ -6,7 +6,10 @@ use rama::{
     error::{BoxError, ErrorContext, OpaqueError},
     graceful::{self, ShutdownGuard},
     http::Uri,
-    net::{address::SocketAddress, socket::Interface},
+    net::{
+        address::{ProxyAddress, SocketAddress},
+        socket::Interface,
+    },
     rt::Executor,
     telemetry::tracing::{self, Instrument as _},
     tls::boring::server::TlsAcceptorLayer,
@@ -52,6 +55,10 @@ pub struct Args {
     /// MITM all traffic, regardless of the firewall host filters
     #[arg(long = "all", short = 'A')]
     pub mitm_all: bool,
+
+    /// Set an upstream proxy to be used for all egress proxy traffic.
+    #[arg(long, value_name = "<scheme>://[user:[password]@]<host>[:port]")]
+    pub proxy: Option<ProxyAddress>,
 
     /// directory in which data will be stored on the filesystem
     #[arg(
@@ -236,6 +243,7 @@ async fn run_proxy_server(
     tracing::info!("spawning proxy server...");
     if let Err(err) = crate::server::proxy::run_proxy_server(
         args.bind,
+        args.proxy,
         &args.data,
         args.mitm_all,
         guard,
