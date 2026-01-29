@@ -13,6 +13,10 @@ Other proxy docs:
 - [./proxy/pac.md](./proxy/pac.md): learn more about Proxy Auto Configuration
   and how the safechain proxy project supports this flow.
 
+Related docs:
+
+- [./netbench.md](./netbench.md): learn how to benchmark the proxy code of safechain
+
 ## Quick Start
 
 ### Running the Proxy
