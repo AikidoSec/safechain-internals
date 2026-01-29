@@ -38,11 +38,13 @@ run-proxy *ARGS:
         --pretty \
         {{ARGS}}
 
-run-netbench *ARGS:
+run-netbench-cli *ARGS:
     cargo run \
         --bin netbench \
         {{ARGS}}
 
+run-netbench *ARGS:
+    ./proxy_netbench/run.py {{ARGS}}
 
 proxy-har-toggle:
     curl -v -XPOST http://127.0.0.1:8088/har/toggle
