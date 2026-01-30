@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt, str::FromStr};
+use std::{borrow::Cow, fmt, hash, str::FromStr};
 
 use rama::{telemetry::tracing, utils::str::arcstr::ArcStr};
 use serde::{Deserialize, Serialize};
@@ -27,6 +27,18 @@ impl PartialEq for PackageVersion {
             (Self::Unknown(s), Self::None) | (Self::None, Self::Unknown(s)) => s.trim().is_empty(),
             (Self::Any, _) | (_, Self::Any) => true,
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
+}
+
+impl hash::Hash for PackageVersion {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        match self {
+            PackageVersion::Semver(pragmatic_semver) => pragmatic_semver.hash(state),
+            PackageVersion::Any => "*".hash(state),
+            PackageVersion::None => "".hash(state),
+            PackageVersion::Unknown(arc_str) => arc_str.hash(state),
         }
     }
 }
@@ -75,6 +87,17 @@ impl PartialEq<PackageVersion> for PragmaticSemver {
     }
 }
 
+impl fmt::Display for PackageVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PackageVersion::Semver(version) => version.fmt(f),
+            PackageVersion::Any => "*".fmt(f),
+            PackageVersion::None => "".fmt(f),
+            PackageVersion::Unknown(arc_str) => arc_str.fmt(f),
+        }
+    }
+}
+
 impl Serialize for PackageVersion {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -102,16 +125,5 @@ impl<'de> Deserialize<'de> for PackageVersion {
 
         let Ok(v) = PackageVersion::from_str(&raw);
         Ok(v)
-    }
-}
-
-impl fmt::Display for PackageVersion {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            PackageVersion::Semver(semver) => write!(f, "{:?}", semver),
-            PackageVersion::None => write!(f, ""),
-            PackageVersion::Unknown(s) => write!(f, "{}", s),
-            PackageVersion::Any => write!(f, "*"),
-        }
     }
 }

@@ -1,12 +1,13 @@
 use std::{borrow::Cow, fmt, hash, str::FromStr, sync::Arc};
 
-use rama::utils::str::smol_str::{SmolStr, format_smolstr};
+use rama::utils::str::smol_str::ToSmolStr as _;
 
 use serde::{Deserialize, Serialize, de::Error};
 
 /// **SemVer version**-like struct with a lot of flexibility in the input we accept.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PragmaticSemver {
+    prefix: Identifier,
     major: u64,
     minor: u64,
     patch: u64,
@@ -16,12 +17,10 @@ pub struct PragmaticSemver {
     build: Identifier,
 }
 
-impl Serialize for PragmaticSemver {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+impl fmt::Display for PragmaticSemver {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let Self {
+            prefix,
             major,
             minor,
             patch,
@@ -30,24 +29,33 @@ impl Serialize for PragmaticSemver {
             pre,
             build,
         } = self;
-        let trailer_semver = if *fifth != 0 {
-            format_smolstr!(".{fourth}.{fifth}")
+
+        write!(f, "{prefix:?}{major}.{minor}.{patch}")?;
+
+        if *fifth != 0 {
+            write!(f, ".{fourth}.{fifth}")?;
         } else if *fourth != 0 {
-            format_smolstr!(".{fourth}")
-        } else {
-            SmolStr::default()
-        };
-        let s = if pre.0.is_some() {
-            if build.0.is_some() {
-                format_smolstr!("{major}.{minor}.{patch}{trailer_semver}-{pre:?}+{build:?}")
-            } else {
-                format_smolstr!("{major}.{minor}.{patch}{trailer_semver}-{pre:?}")
-            }
-        } else if build.0.is_some() {
-            format_smolstr!("{major}.{minor}.{patch}{trailer_semver}+{build:?}")
-        } else {
-            format_smolstr!("{major}.{minor}.{patch}{trailer_semver}")
-        };
+            write!(f, ".{fourth}")?;
+        }
+
+        if !pre.is_empty() {
+            write!(f, "-{}", pre.as_str())?;
+        }
+
+        if !build.is_empty() {
+            write!(f, "+{}", build.as_str())?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Serialize for PragmaticSemver {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let s = self.to_smolstr();
         s.serialize(serializer)
     }
 }
@@ -73,29 +81,23 @@ impl hash::Hash for PragmaticSemver {
     }
 }
 
-impl fmt::Debug for PragmaticSemver {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Self {
-            major,
-            minor,
-            patch,
-            fourth,
-            fifth,
-            pre,
-            build,
-        } = self;
-        write!(
-            f,
-            "{major}.{minor}.{patch}.{fourth}.{fifth}-{pre:?}+{build:?}"
-        )
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash)]
 /// Opaque identifier that can be safely compared/
 ///
 /// Used for pre- and build- data parts of [`PragmaticSemver`].
 pub struct Identifier(Option<Arc<[u8]>>);
+
+impl Identifier {
+    fn is_empty(&self) -> bool {
+        self.0.is_none()
+    }
+
+    fn as_str(&self) -> &str {
+        let id_bytes = self.0.as_deref().unwrap_or_default();
+        // SAFETY: constructor ensures we are only dealing with ASCII alphanumeric
+        unsafe { std::str::from_utf8_unchecked(id_bytes) }
+    }
+}
 
 impl Ord for Identifier {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
@@ -115,8 +117,17 @@ impl PartialOrd for Identifier {
 }
 
 impl Identifier {
+    #[inline(always)]
     fn new_utf8(s: &str) -> Self {
-        let mut iter = s.bytes().filter_map(normalize_identifier_byte).peekable();
+        Self::new_bytes(s.as_bytes())
+    }
+
+    fn new_bytes(b: &[u8]) -> Self {
+        let mut iter = b
+            .iter()
+            .copied()
+            .filter_map(normalize_identifier_byte)
+            .peekable();
         if iter.peek().is_some() {
             Self(Some(iter.collect()))
         } else {
@@ -143,10 +154,7 @@ fn normalize_identifier_byte(c: u8) -> Option<u8> {
 
 impl fmt::Debug for Identifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let id_bytes = self.0.as_deref().unwrap_or_default();
-        // SAFETY: constructor ensures we are only dealing with ASCII alphanumeric
-        let id_utf8 = unsafe { std::str::from_utf8_unchecked(id_bytes) };
-        write!(f, "{}", id_utf8)
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -190,6 +198,7 @@ impl PragmaticSemver {
         fifth: u64,
     ) -> Self {
         Self {
+            prefix: Identifier::empty(),
             major,
             minor,
             patch,
@@ -203,6 +212,17 @@ impl PragmaticSemver {
     /// Create [`PragmaticSemver`] by parsing from string representation.
     pub fn parse(text: &str) -> Result<Self, PragmaticSemverParseError> {
         Self::from_str(text)
+    }
+
+    rama::utils::macros::generate_set_and_with! {
+        /// (un)set the prefix part of this [`PragmaticSemver`].
+        pub fn prefix(mut self, maybe_str: Option<&str>) -> Self {
+            self.prefix = match maybe_str {
+                Some(s) => Identifier::new_utf8(s),
+                None => Identifier::empty(),
+            };
+            self
+        }
     }
 
     rama::utils::macros::generate_set_and_with! {
@@ -231,6 +251,7 @@ impl PragmaticSemver {
 impl PartialEq for PragmaticSemver {
     fn eq(&self, other: &Self) -> bool {
         let Self {
+            prefix: _,
             major,
             minor,
             patch,
@@ -241,6 +262,7 @@ impl PartialEq for PragmaticSemver {
         } = self;
 
         let Self {
+            prefix: _,
             major: other_major,
             minor: other_minor,
             patch: other_patch,
@@ -271,6 +293,7 @@ impl Ord for PragmaticSemver {
     #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let Self {
+            prefix: _,
             major,
             minor,
             patch,
@@ -281,6 +304,7 @@ impl Ord for PragmaticSemver {
         } = self;
 
         let Self {
+            prefix: _,
             major: other_major,
             minor: other_minor,
             patch: other_patch,
@@ -323,9 +347,14 @@ impl FromStr for PragmaticSemver {
             return Err(PragmaticSemverParseError::EmptyString);
         }
 
-        let mut version = PragmaticSemver::new_zeroed();
+        let (trimmed_input, prefix) = trim_optional_version_prefix(input);
 
-        let remainder = parse_number_parts(input, &mut version)?;
+        let mut version = PragmaticSemver::new_zeroed();
+        if !prefix.is_empty() {
+            version.prefix = prefix;
+        }
+
+        let remainder = parse_number_parts(trimmed_input, &mut version)?;
         if let Some(tail) = remainder {
             parse_pre_and_build(tail, &mut version);
         }
@@ -388,6 +417,22 @@ impl<'a> NextInput<'a> {
             Self::Continue(trimmed_s)
         }
     }
+}
+
+fn trim_optional_version_prefix(input: &str) -> (&str, Identifier) {
+    if input.len() < 2 {
+        return (input, Identifier::empty());
+    }
+
+    if [b'v', b'r'].contains(&input.as_bytes()[0]) {
+        let prefix = Identifier::new_bytes(&input.as_bytes()[..1]);
+        let trimmed_input = input[1..].trim_start();
+        if !trimmed_input.is_empty() && trimmed_input.as_bytes()[0].is_ascii_digit() {
+            return (trimmed_input, prefix);
+        }
+    }
+
+    (input, Identifier::empty())
 }
 
 /// Parse up to 5 numeric parts: major, minor, patch, fourth, fifth.

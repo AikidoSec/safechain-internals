@@ -18,6 +18,8 @@ use rama::{
 
 use tokio::sync::{Semaphore, SemaphorePermit};
 
+use crate::firewall::version::PackageVersion;
+
 use super::events::BlockedEvent;
 
 const EVENT_DEDUP_WINDOW: Duration = Duration::from_secs(30);
@@ -31,8 +33,8 @@ struct DedupKey {
     pub product: ArcStr,
     /// The name or identifier of the artifact
     pub identifier: ArcStr,
-    /// Version string
-    pub version: Option<ArcStr>,
+    /// Optional version of the artifact (e.g. semver)
+    pub version: Option<PackageVersion>,
 }
 
 impl From<&BlockedEvent> for DedupKey {
@@ -41,11 +43,7 @@ impl From<&BlockedEvent> for DedupKey {
         Self {
             product: value.artifact.product.clone(),
             identifier: value.artifact.identifier.clone(),
-            version: value
-                .artifact
-                .version
-                .as_ref()
-                .map(|v| ArcStr::from(v.to_string())),
+            version: value.artifact.version.clone(),
         }
     }
 }
