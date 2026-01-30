@@ -28,7 +28,7 @@ jobs:
       fail-fast: false
       matrix:
         scenario: [baseline, latency-jitter, flaky-upstream]
-        proxy: [none, global, scoped]
+        proxy: [direct, global, scoped]
 
     steps:
       - name: Checkout
