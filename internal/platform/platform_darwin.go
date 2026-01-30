@@ -44,7 +44,7 @@ func initConfig() error {
 		}
 	}
 	safeChainHomeDir := filepath.Join(config.HomeDir, ".safe-chain")
-	config.BinaryDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/AikidoSecurity.app/Contents/MacOS"
+	config.BinaryDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/bin"
 	config.RunDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/run"
 	config.LogDir = "/Library/Logs/AikidoSecurity/SafeChainUltimate"
 	config.SafeChainBinaryPath = filepath.Join(safeChainHomeDir, "bin", "safe-chain")

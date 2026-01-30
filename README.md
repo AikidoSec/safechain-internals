@@ -28,7 +28,7 @@ msiexec /i SafeChainUltimate.msi /qn /norestart
 
 Run the uninstall script that was installed with the package:
 ```bash
-sudo "Library/Application Support/AikidoSecurity/SafeChainUltimate/AikidoSecurity.app/Contents/MacOS/scripts/uninstall"
+sudo "Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall"
 ```
 
 ### Windows
