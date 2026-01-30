@@ -100,7 +100,7 @@ jobs:
           if-no-files-found: error
 
   bench-replay:
-    name: bench replay (${{ matrix.name }})
+    name: bench replay (${{ matrix.name }}), proxy=${{ matrix.proxy }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -108,6 +108,10 @@ jobs:
         include:
           - name: synthetic
             har_fp: proxy_netbench/har_files/synthetic.har.json
+            proxy: direct
+          - name: synthetic
+            har_fp: proxy_netbench/har_files/synthetic.har.json
+            proxy: global
 
     steps:
       - name: Checkout
@@ -146,15 +150,16 @@ jobs:
 
       - name: Run netbench (matrix)
         env:
+          PROXY: ${{ matrix.proxy }}
           REPLAY_NAME: ${{ matrix.name }}
           REPLAY_HAR_FP: ${{ matrix.har_fp }}
         run: |
           set -euo pipefail
           mkdir -p reports "$RUN_DIR"
 
-          CUR_KV="$RUN_DIR/replay_${REPLAY_NAME}.global.kv.txt"
-          BASE_KV="$BASELINE_DIR/replay_${REPLAY_NAME}.global.kv.txt"
-          REPORT_PATH="reports/replay_${REPLAY_NAME}.global.jsonl"
+          CUR_KV="$RUN_DIR/replay_${REPLAY_NAME}.${PROXY}.kv.txt"
+          BASE_KV="$BASELINE_DIR/replay_${REPLAY_NAME}.${PROXY}.kv.txt"
+          REPORT_PATH="reports/replay_${REPLAY_NAME}.${PROXY}.jsonl"
 
           COMPARE_FLAG=""
           if [ -f "$BASE_KV" ]; then
@@ -162,7 +167,7 @@ jobs:
           fi
 
           python3 "$NETBENCH_ORCHESTRATOR" \
-            --proxy "global" \
+            --proxy "$PROXY" \
             --har "$REPLAY_HAR_FP" \
             --emulate \
             --report-file "$REPORT_PATH" \
@@ -172,11 +177,11 @@ jobs:
       - name: Upload run artifacts (jsonl, summary, kv)
         uses: actions/upload-artifact@v4
         with:
-          name: netbench-replay_${{ matrix.name }}-proxy-global
+          name: netbench-replay_${{ matrix.name }}-proxy-${{ matrix.proxy }}
           path: |
-            reports/replay_${{ matrix.name }}.global.jsonl
-            reports/replay_${{ matrix.name }}.global.jsonl.summary.txt
-            run-metrics/replay_${{ matrix.name }}.global.kv.txt
+            reports/replay_${{ matrix.name }}.${{ matrix.proxy }}.jsonl
+            reports/replay_${{ matrix.name }}.${{ matrix.proxy }}.jsonl.summary.txt
+            run-metrics/replay_${{ matrix.name }}.${{ matrix.proxy }}.kv.txt
           if-no-files-found: error
 
   publish_baselines:
