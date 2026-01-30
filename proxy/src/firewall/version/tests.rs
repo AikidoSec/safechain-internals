@@ -312,4 +312,36 @@ mod package_version {
             }
         }
     }
+
+    #[test]
+    fn test_display() {
+        let v1_0_0 = PackageVersion::Semver(PragmaticSemver::new_semver(1, 0, 0));
+        assert_eq!(format!("{}", v1_0_0), "1.0.0.0.0-+");
+
+        let v2_3_4 = PackageVersion::Semver(PragmaticSemver::new_semver(2, 3, 4));
+        assert_eq!(format!("{}", v2_3_4), "2.3.4.0.0-+");
+
+        let v10_5_1 = PackageVersion::Semver(PragmaticSemver::new_semver(10, 5, 1));
+        assert_eq!(format!("{}", v10_5_1), "10.5.1.0.0-+");
+
+        let v0_1_0 = PackageVersion::Semver(PragmaticSemver::new_semver(0, 1, 0));
+        assert_eq!(format!("{}", v0_1_0), "0.1.0.0.0-+");
+
+        let alpha_version =
+            PackageVersion::Semver(PragmaticSemver::new_semver(1, 2, 3).with_pre("alpha.1"));
+        assert_eq!(format!("{}", alpha_version), "1.2.3.0.0-alpha.1+");
+
+        let beta_version =
+            PackageVersion::Semver(PragmaticSemver::new_semver(2, 0, 0).with_pre("beta.2"));
+        assert_eq!(format!("{}", beta_version), "2.0.0.0.0-beta.2+");
+
+        let none_version = PackageVersion::None;
+        assert_eq!(format!("{}", none_version), "");
+
+        let any_version = PackageVersion::Any;
+        assert_eq!(format!("{}", any_version), "*");
+
+        let custom_version = PackageVersion::Unknown(arcstr!("v1.0.0-snapshot-20240130"));
+        assert_eq!(format!("{}", custom_version), "v1.0.0-snapshot-20240130");
+    }
 }

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, str::FromStr};
+use std::{borrow::Cow, fmt, str::FromStr};
 
 use rama::{telemetry::tracing, utils::str::arcstr::ArcStr};
 use serde::{Deserialize, Serialize};
@@ -102,5 +102,16 @@ impl<'de> Deserialize<'de> for PackageVersion {
 
         let Ok(v) = PackageVersion::from_str(&raw);
         Ok(v)
+    }
+}
+
+impl fmt::Display for PackageVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PackageVersion::Semver(semver) => write!(f, "{:?}", semver),
+            PackageVersion::None => write!(f, ""),
+            PackageVersion::Unknown(s) => write!(f, "{}", s),
+            PackageVersion::Any => write!(f, "*"),
+        }
     }
 }

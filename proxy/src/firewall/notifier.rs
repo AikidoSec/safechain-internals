@@ -31,6 +31,8 @@ struct DedupKey {
     pub product: ArcStr,
     /// The name or identifier of the artifact
     pub identifier: ArcStr,
+    /// Version string
+    pub version: Option<ArcStr>,
 }
 
 impl From<&BlockedEvent> for DedupKey {
@@ -39,6 +41,11 @@ impl From<&BlockedEvent> for DedupKey {
         Self {
             product: value.artifact.product.clone(),
             identifier: value.artifact.identifier.clone(),
+            version: value
+                .artifact
+                .version
+                .as_ref()
+                .map(|v| ArcStr::from(v.to_string())),
         }
     }
 }
@@ -79,6 +86,7 @@ impl EventNotifier {
             tracing::debug!(
                 product = %event.artifact.product,
                 identifier = %event.artifact.identifier,
+                version = ?event.artifact.version,
                 "suppressed duplicate blocked-event notification"
             );
             return;
