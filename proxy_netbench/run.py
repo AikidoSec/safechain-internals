@@ -711,7 +711,7 @@ def main() -> int:
         print()
         print("logs")
         print(str(mock_log))
-        if args.proxy_enabled:
+        if proxy_is_enabled:
             print(str(proxy_log))
         print(str(run_log))
 
