@@ -14,8 +14,6 @@ use rama::{
 use clap::Args;
 use safechain_proxy_lib::{client, diagnostics, firewall, server, storage, tls};
 
-use crate::definitions;
-
 #[derive(Debug, Clone, Args)]
 /// run proxy in function of benchmarker
 pub struct ProxyCommand {
@@ -75,16 +73,9 @@ pub async fn exec(
 
     // by default take into account reporting in benchmarks,
     // as it will usually be enabled, so we might as well see it in the numbers
-    let maybe_reporting_endpoint: Option<Uri> = (!args.disable_reporting)
-        .then(|| {
-            format!(
-                "https://{}/blocked-events",
-                definitions::FAKE_AIKIDO_REPORTER_DOMAIN
-            )
-            .parse()
-            .context("parse reporter fake domain")
-        })
-        .transpose()?;
+    let maybe_reporting_endpoint: Option<Uri> = (!args.disable_reporting).then_some(
+        Uri::from_static("https://localhost/reporter/blocked-events"),
+    );
 
     // ensure to not wait for firewall creation in case shutdown was initiated,
     // this can happen for example in case remote lists need to be fetched and the

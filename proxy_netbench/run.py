@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import http.client
 import json
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -375,6 +377,59 @@ def format_delta(cur: float, prev: float, is_rate: bool = False) -> str:
     return f"{cur:.2f} ({d:+.2f})"
 
 
+def split_host_port(addr: str) -> Tuple[str, int]:
+    # addr looks like "127.0.0.1:57777"
+    host, port_s = addr.rsplit(":", 1)
+    return host, int(port_s)
+
+
+def fetch_blocked_events_count_via_mock(
+    mock_addr: str, timeout_s: float = 2.0
+) -> Optional[int]:
+    """
+    Query the mock server for blocked event count.
+
+    The endpoint is served by the mock server under a pseudo domain:
+    GET https://reporter-fake-aikido.internal/counter/blocked-events
+
+    We connect to the mock server socket address, but we send Host header
+    for reporter-fake-aikido.internal so the mock server routes it correctly.
+    """
+    host, port = split_host_port(mock_addr)
+
+    conn = http.client.HTTPConnection(host, port, timeout=timeout_s)
+    try:
+        conn.request(
+            "GET",
+            "/reporter/counter/blocked-events",
+            headers={
+                "Host": "localhost",
+                "Accept": "text/plain",
+                "Connection": "close",
+            },
+        )
+        resp = conn.getresponse()
+        body = resp.read().decode("utf-8", errors="replace").strip()
+
+        if resp.status < 200 or resp.status >= 300:
+            eprint("blocked-events: unexpected status", resp.status, body[:200])
+            return None
+
+        try:
+            return int(body)
+        except ValueError:
+            eprint("blocked-events: non-int payload", body[:200])
+            return None
+    except (OSError, http.client.HTTPException, socket.timeout) as exc:
+        eprint("blocked-events: request failed", exc)
+        return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def print_comparison_section(
     current: Dict[str, float], previous: Dict[str, float]
 ) -> None:
@@ -458,7 +513,7 @@ def main() -> int:
     run_summary = data_dir / "run.summary.txt"
 
     env = dict(os.environ)
-    env.setdefault("RUST_LOG", "debug" if args.verbose else "info")
+    env.setdefault("RUST_LOG", "trace" if args.verbose else "info")
 
     procs: List[Proc] = []
     keep_data = bool(args.report_file)
@@ -618,6 +673,14 @@ def main() -> int:
     # Compute metrics for comparison and saving
     current_metrics = compute_aggregate_from_events(events)
 
+    blocked_count: Optional[int] = None
+    if proxy_is_enabled:
+        blocked_count = fetch_blocked_events_count_via_mock(mock_addr)
+        if blocked_count is not None:
+            eprint(f"proxy: blocked_events_total={blocked_count}")
+        else:
+            eprint("proxy: blocked_events_total=unknown")
+
     if args.save_baseline:
         write_kv_baseline(Path(args.save_baseline), current_metrics)
 
@@ -651,6 +714,15 @@ def main() -> int:
         if args.proxy_enabled:
             print(str(proxy_log))
         print(str(run_log))
+
+        if proxy_is_enabled:
+            if blocked_count is not None:
+                print()
+                print(f"blocked_events_total={blocked_count}")
+            else:
+                print()
+                print("blocked_events_total=unknown")
+
         return 0
 
     # Human output
@@ -660,6 +732,12 @@ def main() -> int:
         print(
             f"mode=har har={har_path} emulate={'yes' if args.emulate else 'no'} proxy={args.proxy}"
         )
+        if proxy_is_enabled:
+            if blocked_count is not None:
+                print(f"blocked_events_total={blocked_count}")
+            else:
+                print("blocked_events_total=unknown")
+            print()
     else:
         print(f"mode=scenario scenario={args.scenario} proxied={args.proxy}")
     print()

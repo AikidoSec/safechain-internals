@@ -19,6 +19,7 @@ use rama::{
     },
     layer::{AbortableLayer, HijackLayer, TimeoutLayer, abort::AbortController},
     net::{
+        address::Domain,
         socket::Interface,
         tls::{
             self, ApplicationProtocol,
@@ -38,7 +39,6 @@ use safechain_proxy_lib::{
 
 use crate::{
     config::{Scenario, ServerConfig},
-    definitions,
     http::{
         MockReplayIndex, MockResponseRandomIndex,
         har::{self, HarEntry},
@@ -46,7 +46,7 @@ use crate::{
     },
 };
 
-mod fake_reporter;
+mod fake_svc;
 
 #[derive(Debug, Clone, Args)]
 /// run bench mock server
@@ -96,8 +96,8 @@ pub async fn exec(
         AddRequiredResponseHeadersLayer::new()
             .with_server_header_value(HeaderValue::from_static(utils::env::server_identifier())),
         HijackLayer::new(
-            DomainMatcher::exact(definitions::FAKE_AIKIDO_REPORTER_DOMAIN),
-            self::fake_reporter::fake_reporter_svc(),
+            DomainMatcher::exact(Domain::tld_localhost()),
+            self::fake_svc::fake_svc(),
         ),
     )
         .into_layer(Arc::new(

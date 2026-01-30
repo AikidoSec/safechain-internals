@@ -2,18 +2,15 @@ use std::time::Duration;
 
 use rama::{
     Layer as _, Service,
-    error::{ErrorContext as _, OpaqueError},
+    error::OpaqueError,
     http::{
         Body, Request, Response,
         layer::{
-            decompression::DecompressionLayer,
-            map_request_body::MapRequestBodyLayer,
+            decompression::DecompressionLayer, map_request_body::MapRequestBodyLayer,
             map_response_body::MapResponseBodyLayer,
-            retry::{ManagedPolicy, RetryLayer},
-            timeout::TimeoutLayer,
         },
     },
-    layer::{AddInputExtensionLayer, MapErrLayer},
+    layer::AddInputExtensionLayer,
     net::{
         Protocol,
         address::{ProxyAddress, SocketAddress},
@@ -21,7 +18,6 @@ use rama::{
     },
     rt::Executor,
     service::BoxService,
-    utils::{backoff::ExponentialBackoff, rng::HasherRng},
 };
 
 use safechain_proxy_lib::client::{
@@ -71,19 +67,6 @@ where
 {
     Ok((
         MapResponseBodyLayer::new(Body::new),
-        MapErrLayer::new(OpaqueError::from_std),
-        TimeoutLayer::new(Duration::from_secs(3)),
-        RetryLayer::new(
-            ManagedPolicy::default().with_backoff(
-                ExponentialBackoff::new(
-                    Duration::from_millis(100),
-                    Duration::from_secs(2),
-                    0.01,
-                    HasherRng::default,
-                )
-                .context("create exponential backoff impl")?,
-            ),
-        ),
         DecompressionLayer::new(),
         MapRequestBodyLayer::new(Body::new),
     )
