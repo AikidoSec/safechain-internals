@@ -35,16 +35,17 @@ pub async fn init_tracing(args: &Args) -> Result<TracingGuard, BoxError> {
 
     let (make_writer, _appender_guard) = match args.output.as_deref() {
         Some(path) => {
-            let log_dir = if let Some(parent) = path.parent()
-                && !parent.exists()
-            {
-                create_dir_all(parent).await.context("create log dir")?;
-                Cow::Borrowed(parent)
-            } else {
-                Cow::Owned(
+            let log_dir = match path.parent() {
+                Some(parent) if !parent.as_os_str().is_empty() => {
+                    if !parent.exists() {
+                        create_dir_all(parent).await.context("create log dir")?;
+                    }
+                    Cow::Borrowed(parent)
+                }
+                _ => Cow::Owned(
                     current_dir()
                         .context("failed to fetch current directory as fallback log directory")?,
-                )
+                ),
             };
 
             let prefix = path
