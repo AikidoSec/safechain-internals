@@ -29,10 +29,10 @@ impl Scenario {
             Scenario::Baseline => {
                 // Smooth request generation with no randomness.
                 ClientConfig {
-                    target_rps: Some(5_000),
+                    target_rps: Some(concurrency * 5),
                     concurrency: Some(concurrency),
                     jitter: None,
-                    burst_size: Some(100),
+                    burst_size: Some(5),
                 }
             }
 
@@ -40,20 +40,20 @@ impl Scenario {
                 // Requests are sent at an uneven pace.
                 // This introduces burstiness and queue formation.
                 ClientConfig {
-                    target_rps: Some(2_000),
+                    target_rps: Some(concurrency * 8),
                     concurrency: Some(concurrency * 2),
                     jitter: Some(0.005),
-                    burst_size: Some(50),
+                    burst_size: Some(2),
                 }
             }
 
             Scenario::FlakyUpstream => {
                 // Client side jitter is higher to simulate unstable producers.
                 ClientConfig {
-                    target_rps: Some(1_000),
+                    target_rps: Some(concurrency * 2),
                     concurrency: Some(concurrency * 2),
                     jitter: Some(0.01),
-                    burst_size: Some(20),
+                    burst_size: Some(1),
                 }
             }
         }
