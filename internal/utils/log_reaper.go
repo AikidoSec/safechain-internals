@@ -73,6 +73,10 @@ func (r *LogReaper) checkAndReap() {
 func (r *LogReaper) reapOldLogs(lf reapableLog) {
 	dir := filepath.Dir(lf.path)
 	baseName := filepath.Base(lf.path)
+	ext := filepath.Ext(baseName)
+	baseNameWithoutExt := baseName[:len(baseName)-len(ext)]
+	prefix := baseNameWithoutExt + "."
+	suffix := ext
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -88,11 +92,11 @@ func (r *LogReaper) reapOldLogs(lf reapableLog) {
 		}
 
 		name := entry.Name()
-		if !strings.HasPrefix(name, baseName+".") {
+		if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, suffix) {
 			continue
 		}
 
-		timestampStr := strings.TrimPrefix(name, baseName+".")
+		timestampStr := strings.TrimSuffix(strings.TrimPrefix(name, prefix), suffix)
 		logTime, err := time.Parse("2006-01-02-15", timestampStr)
 		if err != nil {
 			log.Printf("Failed to parse log file timestamp: %s", timestampStr)
@@ -100,11 +104,12 @@ func (r *LogReaper) reapOldLogs(lf reapableLog) {
 		}
 
 		if now.Sub(logTime) > lf.maxLogAge {
-			if err := os.Remove(filepath.Join(dir, name)); err != nil {
-				log.Printf("Failed to remove old log file: %s", filepath.Join(dir, name))
+			fullPath := filepath.Join(dir, name)
+			if err := os.Remove(fullPath); err != nil {
+				log.Printf("Failed to remove old log file: %s", fullPath)
 				return
 			}
-			log.Printf("Reaped old log file: %s", filepath.Join(dir, name))
+			log.Printf("Reaped old log file: %s", fullPath)
 		}
 	}
 }

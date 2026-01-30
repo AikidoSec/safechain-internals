@@ -3,7 +3,11 @@ use std::{borrow::Cow, env::current_dir, io::IsTerminal as _};
 use rama::{
     error::{BoxError, ErrorContext as _},
     telemetry::tracing::{
-        self, appender,
+        self,
+        appender::{
+            self,
+            rolling::{Rotation, RollingFileAppender},
+        },
         metadata::LevelFilter,
         subscriber::{EnvFilter, fmt::writer::BoxMakeWriter},
     },
@@ -31,26 +35,28 @@ pub async fn init_tracing(args: &Args) -> Result<TracingGuard, BoxError> {
 
     let (make_writer, _appender_guard) = match args.output.as_deref() {
         Some(path) => {
-            let (log_dir, log_file_prefix) =
+            let log_dir =
                 if let Some(parent) = path.parent()
                     && !parent.exists()
                 {
                     create_dir_all(parent).await.context("create log dir")?;
-                    (
-                        Cow::Borrowed(parent),
-                        path.file_name()
-                            .context("file name expected if parent exists")?,
-                    )
+                    Cow::Borrowed(parent)
                 } else {
-                    (
-                        Cow::Owned(current_dir().context(
-                            "failed to fetch current directory as fallback log directory",
-                        )?),
-                        path.as_ref(),
-                    )
+                    Cow::Owned(current_dir().context(
+                        "failed to fetch current directory as fallback log directory",
+                    )?)
                 };
 
-            let file_appender = appender::rolling::hourly(log_dir, log_file_prefix);
+            let prefix = path
+                .file_stem()
+                .context("file name expected if parent exists")?
+                .to_string_lossy();
+            let file_appender = RollingFileAppender::builder()
+                .rotation(Rotation::HOURLY)
+                .filename_prefix(prefix.as_ref())
+                .filename_suffix("log")
+                .build(&*log_dir)
+                .context("init rolling file appender")?;
             let (non_blocking, guard) = appender::non_blocking(file_appender);
 
             (BoxMakeWriter::new(non_blocking), Some(guard))
