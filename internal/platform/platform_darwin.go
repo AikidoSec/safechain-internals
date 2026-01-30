@@ -18,6 +18,7 @@ import (
 )
 
 const (
+	SafeChainUltimateBaseDir    = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/AikidoSecurity.app/Contents/MacOS"
 	SafeChainUltimateLogName    = "safechain-ultimate.log"
 	SafeChainUltimateErrLogName = "safechain-ultimate.error.log"
 	SafeChainUIBinaryName       = "safechain-ultimate-ui"
@@ -44,8 +45,8 @@ func initConfig() error {
 		}
 	}
 	safeChainHomeDir := filepath.Join(config.HomeDir, ".safe-chain")
-	config.BinaryDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/bin"
-	config.RunDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/run"
+	config.BinaryDir = filepath.Join(SafeChainUltimateBaseDir, "bin")
+	config.RunDir = filepath.Join(SafeChainUltimateBaseDir, "run")
 	config.LogDir = "/Library/Logs/AikidoSecurity/SafeChainUltimate"
 	config.SafeChainBinaryPath = filepath.Join(safeChainHomeDir, "bin", "safe-chain")
 	return nil
