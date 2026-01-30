@@ -96,7 +96,6 @@ LAUNCHDAEMONS_DIR="$PKG_ROOT/Library/LaunchDaemons"
 LOGS_DIR="$PKG_ROOT/Library/Logs/AikidoSecurity/SafeChainUltimate"
 APP_BUNDLE_DIR="$INSTALL_DIR/AikidoSecurity.app"
 
-mkdir -p "$INSTALL_DIR/bin"
 mkdir -p "$LAUNCHDAEMONS_DIR"
 mkdir -p "$LOGS_DIR"
 mkdir -p "$PKG_SCRIPTS"
@@ -107,14 +106,14 @@ mkdir -p "$APP_BUNDLE_DIR/Contents/Resources"
 touch "$LOGS_DIR/.keep"
 chmod 644 "$LOGS_DIR/.keep"
 
-# Copy binaries
+# Copy binaries into app bundle
 echo "Copying binaries..."
-cp "$AGENT_BIN" "$INSTALL_DIR/bin/safechain-ultimate"
-cp "$AGENT_UI_BIN" "$INSTALL_DIR/bin/safechain-ultimate-ui"
-cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-proxy"
-chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
-chmod 755 "$INSTALL_DIR/bin/safechain-ultimate-ui"
-chmod 755 "$INSTALL_DIR/bin/safechain-proxy"
+cp "$AGENT_BIN" "$APP_BUNDLE_DIR/Contents/MacOS/safechain-ultimate"
+cp "$AGENT_UI_BIN" "$APP_BUNDLE_DIR/Contents/MacOS/safechain-ultimate-ui"
+cp "$PROXY_BIN" "$APP_BUNDLE_DIR/Contents/MacOS/safechain-proxy"
+chmod 755 "$APP_BUNDLE_DIR/Contents/MacOS/safechain-ultimate"
+chmod 755 "$APP_BUNDLE_DIR/Contents/MacOS/safechain-ultimate-ui"
+chmod 755 "$APP_BUNDLE_DIR/Contents/MacOS/safechain-proxy"
 
 # Copy scripts
 echo "Copying scripts..."
@@ -142,9 +141,6 @@ if [ -f "$ICNS_FILE" ]; then
 else
     echo "Warning: AppIcon.icns not found, Login Items will show generic icon" >&2
 fi
-
-# Create symlink to the actual binary
-ln -sf "../../../bin/safechain-ultimate" "$APP_BUNDLE_DIR/Contents/MacOS/safechain-ultimate"
 
 # Copy LaunchDaemon plist
 echo "Copying LaunchDaemon plist..."

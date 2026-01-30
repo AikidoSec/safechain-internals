@@ -23,7 +23,7 @@ if [ -f "$LAUNCHDAEMON_PLIST" ]; then
 fi
 
 echo "Running SafeChain Ultimate teardown..."
-sudo "/Library/Application Support/AikidoSecurity/SafeChainUltimate/bin/safechain-ultimate" --teardown
+sudo "/Library/Application Support/AikidoSecurity/SafeChainUltimate/AikidoSecurity.app/Contents/MacOS/safechain-ultimate" --teardown
 
 echo "Pre-uninstall completed"
 

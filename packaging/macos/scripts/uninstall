@@ -15,7 +15,7 @@ LOGS_DIR="/Library/Logs/AikidoSecurity/SafeChainUltimate"
 LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist"
 DAEMON_LABEL="com.aikidosecurity.safechainultimate"
 APP_BUNDLE="$INSTALL_DIR/AikidoSecurity.app"
-BINARY="$APP_BUNDLE/bin/safechain-ultimate"
+BINARY="$APP_BUNDLE/Contents/MacOS/safechain-ultimate"
 
 echo "========================================="
 echo "SafeChain Ultimate - Uninstaller"
