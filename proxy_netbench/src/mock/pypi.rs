@@ -1,6 +1,6 @@
 use rama::{
     error::{ErrorContext as _, OpaqueError},
-    http::Uri,
+    http::{Body, Request, Uri},
 };
 
 use rand::{rng, seq::IndexedRandom as _};
@@ -10,23 +10,23 @@ use safechain_proxy_lib::{
     storage::SyncCompactDataStorage,
 };
 
-use crate::http::malware::download_malware_list_for_uri;
+use crate::{http::malware::download_malware_list_for_uri, mock::RequestMocker};
 
 #[derive(Debug)]
-pub(super) struct PyPIUriGenerator {
+pub struct PyPIMocker {
     storage: Option<SyncCompactDataStorage>,
     malware_list: Vec<malware_list::ListDataEntry>,
 }
 
-impl PyPIUriGenerator {
-    pub(super) fn new(storage: SyncCompactDataStorage) -> Self {
+impl PyPIMocker {
+    pub fn new(storage: SyncCompactDataStorage) -> Self {
         Self {
             storage: Some(storage),
             malware_list: Default::default(),
         }
     }
 
-    pub(super) async fn random_uri(&mut self, malware_ratio: f64) -> Result<Uri, OpaqueError> {
+    async fn random_uri(&mut self, malware_ratio: f64) -> Result<Uri, OpaqueError> {
         if let Some(storage) = self.storage.take() {
             self.malware_list = download_malware_list_for_uri(storage, MALWARE_LIST_URI_STR_PYPI)
                 .await
@@ -64,5 +64,20 @@ impl PyPIUriGenerator {
                 .parse()
                 .context("parse PyPI uri")
         }
+    }
+}
+
+impl RequestMocker for PyPIMocker {
+    type Error = OpaqueError;
+
+    async fn mock_request(
+        &mut self,
+        params: super::MockRequestParameters,
+    ) -> Result<Request, Self::Error> {
+        let uri = self.random_uri(params.malware_ratio).await?;
+
+        let mut req = Request::new(Body::empty());
+        *req.uri_mut() = uri;
+        Ok(req)
     }
 }

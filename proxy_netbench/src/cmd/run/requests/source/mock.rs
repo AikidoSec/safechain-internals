@@ -1,18 +1,16 @@
 use std::collections::VecDeque;
 
-use rama::{
-    error::OpaqueError,
-    http::{Body, Request},
-    telemetry::tracing,
-};
+use rama::{error::OpaqueError, http::Request, telemetry::tracing};
 use rand::distr::{Distribution as _, weighted::WeightedIndex};
 use safechain_proxy_lib::storage;
 
-use crate::config::{Product, ProductValues, default_product_values};
-
-mod none;
-mod pypi;
-mod vscode;
+use crate::{
+    config::{Product, ProductValues, default_product_values},
+    mock::{
+        MockRequestParameters, RequestMocker, pypi::PyPIMocker, random::RandomMocker,
+        vscode::VSCodeMocker,
+    },
+};
 
 /// Generate N random requests for a M iterations + warmup
 pub async fn rand_requests(
@@ -33,8 +31,9 @@ pub async fn rand_requests(
             .join(", ")
     );
 
-    let mut vscode = self::vscode::VSCodeUriGenerator::new(sync_storage.clone());
-    let mut pypi = self::pypi::PyPIUriGenerator::new(sync_storage);
+    let mut rnd = RandomMocker::new();
+    let mut vscode = VSCodeMocker::new(sync_storage.clone());
+    let mut pypi = PyPIMocker::new(sync_storage);
 
     let mut total_requests = Vec::with_capacity(iterations);
     for i in 1..=iterations {
@@ -46,6 +45,7 @@ pub async fn rand_requests(
                 request_count,
                 &products,
                 malware_ratio,
+                &mut rnd,
                 &mut vscode,
                 &mut pypi,
             )
@@ -58,6 +58,7 @@ pub async fn rand_requests(
         request_count_warmup,
         &products,
         malware_ratio,
+        &mut rnd,
         &mut vscode,
         &mut pypi,
     )
@@ -71,8 +72,9 @@ async fn rand_requests_inner(
     request_count: usize,
     products: &ProductValues,
     malware_ratio: f64,
-    vscode: &mut self::vscode::VSCodeUriGenerator,
-    pypi: &mut self::pypi::PyPIUriGenerator,
+    rnd: &mut RandomMocker,
+    vscode: &mut VSCodeMocker,
+    pypi: &mut PyPIMocker,
 ) -> Result<VecDeque<Request>, OpaqueError> {
     let mut requests = VecDeque::with_capacity(request_count);
 
@@ -81,15 +83,15 @@ async fn rand_requests_inner(
     for _ in 0..request_count {
         let product = products[dist.sample(&mut rand::rng())].value.clone();
 
-        let uri = match product {
-            Product::None | Product::Unknown(_) => self::none::random_uri()?,
-            Product::VSCode => vscode.random_uri(malware_ratio).await?,
-            Product::PyPI => pypi.random_uri(malware_ratio).await?,
+        let params = MockRequestParameters { malware_ratio };
+
+        let req = match product {
+            Product::None | Product::Unknown(_) => rnd.mock_request(params).await?,
+            Product::VSCode => vscode.mock_request(params).await?,
+            Product::PyPI => pypi.mock_request(params).await?,
         };
 
-        let mut req = Request::new(Body::empty());
-        *req.uri_mut() = uri;
-        requests.push_back(req);
+        requests.push_back(req)
     }
 
     Ok(requests)

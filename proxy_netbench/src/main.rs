@@ -15,6 +15,7 @@ use safechain_proxy_lib::utils;
 pub mod cmd;
 pub mod config;
 pub mod http;
+pub mod mock;
 
 #[cfg(target_family = "unix")]
 #[global_allocator]
