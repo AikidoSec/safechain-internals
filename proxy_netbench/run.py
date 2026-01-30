@@ -403,7 +403,12 @@ def print_comparison_section(
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--with-proxy", action="store_true")
+    ap.add_argument(
+        "--proxy",
+        default="direct",
+        choices=["direct", "global", "scoped"],
+        help="global vs scoped only has impact on mock (gen) data",
+    )
     ap.add_argument(
         "--scenario",
         default="baseline",
@@ -458,17 +463,14 @@ def main() -> int:
     procs: List[Proc] = []
     keep_data = bool(args.report_file)
 
+    proxy_is_enabled = args.proxy and args.proxy != "direct"
+
     def cleanup(keep: bool) -> None:
         for pr in reversed(procs):
             terminate_process(pr)
 
         if keep:
             return
-
-        try:
-            shutil.rmtree(data_dir)
-        except Exception:
-            pass
 
     atexit.register(lambda: cleanup(keep_data))
 
@@ -499,7 +501,7 @@ def main() -> int:
     eprint("mock:", mock_addr)
 
     # Start proxy optionally
-    if args.with_proxy:
+    if proxy_is_enabled:
         eprint("proxy: starting")
         proxy_argv = [
             netbench,
@@ -534,15 +536,18 @@ def main() -> int:
     ]
 
     if har_path is not None:
-        # HAR mode: runner replays requests
         run_argv += ["--replay", str(har_path)]
         if args.emulate:
             run_argv.append("--emulate")
     else:
         run_argv += ["--scenario", args.scenario]
 
-    if args.with_proxy:
+    if proxy_is_enabled:
         run_argv.append("--proxy")
+        if args.proxy == "global":
+            run_argv += ["--products", "none, vscode; q=0.2, pypi; q=0.1"]
+        elif args.proxy == "scoped":
+            run_argv += ["--products", "vscode; q=0.6, pypi; q=0.4"]
 
     run_argv.append(target_addr)
 
@@ -601,7 +606,7 @@ def main() -> int:
             f"- data dir: {data_dir}\n"
             f"- jsonl: {run_jsonl}\n"
             f"- mock log: {mock_log}\n"
-            f"- proxy log: {proxy_log if args.with_proxy else '(no proxy)'}\n"
+            f"- proxy log: {proxy_log if args.proxy else '(no proxy)'}\n"
             f"- run log: {run_log}\n"
         )
 
@@ -643,7 +648,7 @@ def main() -> int:
         print()
         print("logs")
         print(str(mock_log))
-        if args.with_proxy:
+        if args.proxy_enabled:
             print(str(proxy_log))
         print(str(run_log))
         return 0
@@ -653,12 +658,10 @@ def main() -> int:
     print("netbench finished")
     if har_path is not None:
         print(
-            f"mode=har har={har_path} emulate={'yes' if args.emulate else 'no'} proxied={'yes' if args.with_proxy else 'no'}"
+            f"mode=har har={har_path} emulate={'yes' if args.emulate else 'no'} proxy={args.proxy}"
         )
     else:
-        print(
-            f"mode=scenario scenario={args.scenario} proxied={'yes' if args.with_proxy else 'no'}"
-        )
+        print(f"mode=scenario scenario={args.scenario} proxied={args.proxy}")
     print()
 
     summaries = [e for e in events if e.get("type") == "summary"]
@@ -708,7 +711,7 @@ def main() -> int:
     print(f"jsonl: {run_jsonl}")
     print(f"summary: {run_summary}")
     print(f"mock log: {mock_log}")
-    if args.with_proxy:
+    if proxy_is_enabled:
         print(f"proxy log: {proxy_log}")
     print(f"run log: {run_log}")
     print()

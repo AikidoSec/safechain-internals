@@ -13,10 +13,11 @@ use rama::{
             compression::CompressionLayer, required_header::AddRequiredResponseHeadersLayer,
             trace::TraceLayer,
         },
+        matcher::DomainMatcher,
         server::HttpServer,
         service::web::response::IntoResponse,
     },
-    layer::{AbortableLayer, TimeoutLayer, abort::AbortController},
+    layer::{AbortableLayer, HijackLayer, TimeoutLayer, abort::AbortController},
     net::{
         socket::Interface,
         tls::{
@@ -37,12 +38,15 @@ use safechain_proxy_lib::{
 
 use crate::{
     config::{Scenario, ServerConfig},
+    definitions,
     http::{
         MockReplayIndex, MockResponseRandomIndex,
         har::{self, HarEntry},
         malware::download_malware_list_for_uri,
     },
 };
+
+mod fake_reporter;
 
 #[derive(Debug, Clone, Args)]
 /// run bench mock server
@@ -91,6 +95,10 @@ pub async fn exec(
         CompressionLayer::new(),
         AddRequiredResponseHeadersLayer::new()
             .with_server_header_value(HeaderValue::from_static(utils::env::server_identifier())),
+        HijackLayer::new(
+            DomainMatcher::exact(definitions::FAKE_AIKIDO_REPORTER_DOMAIN),
+            self::fake_reporter::fake_reporter_svc(),
+        ),
     )
         .into_layer(Arc::new(
             MockHttpServer::try_new(data.clone(), args.replay.clone(), merged_cfg).await?,

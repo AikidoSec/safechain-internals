@@ -28,7 +28,7 @@ jobs:
       fail-fast: false
       matrix:
         scenario: [baseline, latency-jitter, flaky-upstream]
-        proxy: [false, true]
+        proxy: [none, global, scoped]
 
     steps:
       - name: Checkout
@@ -73,16 +73,9 @@ jobs:
           set -euo pipefail
           mkdir -p reports "$RUN_DIR"
 
-          PROXY_FLAG=""
-          PROXY_LABEL="direct"
-          if [ "$PROXY" = "true" ]; then
-            PROXY_FLAG="--with-proxy"
-            PROXY_LABEL="proxy"
-          fi
-
-          CUR_KV="$RUN_DIR/${SCENARIO}.${PROXY_LABEL}.kv.txt"
-          BASE_KV="$BASELINE_DIR/${SCENARIO}.${PROXY_LABEL}.kv.txt"
-          REPORT_PATH="reports/${SCENARIO}.${PROXY_LABEL}.jsonl"
+          CUR_KV="$RUN_DIR/${SCENARIO}.${PROXY}.kv.txt"
+          BASE_KV="$BASELINE_DIR/${SCENARIO}.${PROXY}.kv.txt"
+          REPORT_PATH="reports/${SCENARIO}.${PROXY}.jsonl"
 
           COMPARE_FLAG=""
           if [ -f "$BASE_KV" ]; then
@@ -90,7 +83,7 @@ jobs:
           fi
 
           python3 "$NETBENCH_ORCHESTRATOR" \
-            $PROXY_FLAG \
+            --proxy "$PROXY" \
             --scenario "$SCENARIO" \
             --report-file "$REPORT_PATH" \
             --save-baseline "$CUR_KV" \
@@ -101,9 +94,89 @@ jobs:
         with:
           name: netbench-${{ matrix.scenario }}-proxy-${{ matrix.proxy }}
           path: |
-            reports/${{ matrix.scenario }}.${{ matrix.proxy && 'proxy' || 'direct' }}.jsonl
-            reports/${{ matrix.scenario }}.${{ matrix.proxy && 'proxy' || 'direct' }}.jsonl.summary.txt
-            run-metrics/${{ matrix.scenario }}.${{ matrix.proxy && 'proxy' || 'direct' }}.kv.txt
+            reports/${{ matrix.scenario }}.${{ matrix.proxy }}.jsonl
+            reports/${{ matrix.scenario }}.${{ matrix.proxy }}.jsonl.summary.txt
+            run-metrics/${{ matrix.scenario }}.${{ matrix.proxy }}.kv.txt
+          if-no-files-found: error
+
+  bench-replay:
+    name: bench replay (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: synthetic
+            har_fp: proxy_netbench/har_files/synthetic.har.json
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Download baselines from latest successful main run
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$BASELINE_DIR"
+          python3 proxy_netbench/scripts/download_baselines.py \
+            --repo "${{ github.repository }}" \
+            --workflow "proxy-benchmark.yml" \
+            --artifact "$BASELINE_ARTIFACT_NAME" \
+            --out "$BASELINE_DIR" \
+            --branch "main"
+
+      - name: Run netbench (matrix)
+        env:
+          REPLAY_NAME: ${{ matrix.name }}
+          REPLAY_HAR_FP: ${{ matrix.har_fp }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports "$RUN_DIR"
+
+          CUR_KV="$RUN_DIR/replay_${REPLAY_NAME}.global.kv.txt"
+          BASE_KV="$BASELINE_DIR/replay_${REPLAY_NAME}.global.kv.txt"
+          REPORT_PATH="reports/replay_${REPLAY_NAME}.global.jsonl"
+
+          COMPARE_FLAG=""
+          if [ -f "$BASE_KV" ]; then
+            COMPARE_FLAG="--compare $BASE_KV"
+          fi
+
+          python3 "$NETBENCH_ORCHESTRATOR" \
+            --proxy "global" \
+            --har "$REPLAY_HAR_FP" \
+            --emulate \
+            --report-file "$REPORT_PATH" \
+            --save-baseline "$CUR_KV" \
+            $COMPARE_FLAG
+
+      - name: Upload run artifacts (jsonl, summary, kv)
+        uses: actions/upload-artifact@v4
+        with:
+          name: netbench-replay_${{ matrix.name }}-proxy-global
+          path: |
+            reports/replay_${{ matrix.name }}.global.jsonl
+            reports/replay_${{ matrix.name }}.global.jsonl.summary.txt
+            run-metrics/replay_${{ matrix.name }}.global.kv.txt
           if-no-files-found: error
 
   publish_baselines:

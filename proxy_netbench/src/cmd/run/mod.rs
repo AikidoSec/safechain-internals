@@ -4,7 +4,7 @@ use rama::{
     Service as _,
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
-    http::Response,
+    http::{body::util::BodyExt, response::Parts},
     net::address::SocketAddress,
     rt::Executor,
     telemetry::tracing,
@@ -62,7 +62,7 @@ pub struct RunCommand {
     warmup: f64,
 
     /// Amount of times we run through the samples
-    #[arg(long, default_value_t = 2)]
+    #[arg(long, default_value_t = 3)]
     iterations: usize,
 
     #[arg(long, value_parser = parse_product_values)]
@@ -97,10 +97,6 @@ pub async fn exec(
     guard: ShutdownGuard,
     args: RunCommand,
 ) -> Result<(), OpaqueError> {
-    let client =
-        self::client::http_cient(Executor::graceful(guard.clone()), args.target, args.proxy)
-            .context("create HTTP(S) client")?;
-
     let merged_cfg = merge_server_cfg(args.scenario, args.config);
 
     let target_rps = merged_cfg.target_rps.unwrap_or(200).max(1);
@@ -118,6 +114,14 @@ pub async fn exec(
             c as usize
         }
     };
+
+    let client = self::client::http_cient(
+        Executor::graceful(guard.clone()),
+        args.target,
+        concurrency,
+        args.proxy,
+    )
+    .context("create HTTP(S) client")?;
 
     tracing::info!(
         %target_rps,
@@ -212,7 +216,16 @@ pub async fn exec(
             };
 
             let req_start = Instant::now();
-            let result = client.serve(req).await;
+            let result = match client.serve(req).await {
+                Err(err) => Err(err),
+                Ok(resp) => {
+                    let (parts, body) = resp.into_parts();
+                    match body.collect().await.context("collect resp payload") {
+                        Err(err) => Err(err),
+                        Ok(_) => Ok(parts),
+                    }
+                }
+            };
             if let Err(err) = result_tx
                 .send(ClientResult {
                     result,
@@ -230,7 +243,7 @@ pub async fn exec(
 }
 
 struct ClientResult {
-    result: Result<Response, OpaqueError>,
+    result: Result<Parts, OpaqueError>,
     req_start: Instant,
     phase: Phase,
     iteration: usize,
@@ -269,7 +282,7 @@ async fn report_worker(
 
         let outcome = match result {
             Ok(resp) => {
-                let status = resp.status().as_u16();
+                let status = resp.status.as_u16();
                 if (200..400).contains(&status) {
                     RequestOutcome {
                         ok: true,

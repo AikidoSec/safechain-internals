@@ -14,6 +14,8 @@ use rama::{
 use clap::Args;
 use safechain_proxy_lib::{client, diagnostics, firewall, server, storage, tls};
 
+use crate::definitions;
+
 #[derive(Debug, Clone, Args)]
 /// run proxy in function of benchmarker
 pub struct ProxyCommand {
@@ -39,9 +41,9 @@ pub struct ProxyCommand {
     /// Record the entire proxy traffic to a HAR file.
     pub record_har: bool,
 
-    /// Optional endpoint URL to POST blocked-event notifications to.
-    #[arg(long, value_name = "URL")]
-    pub reporting_endpoint: Option<Uri>,
+    #[arg(long, default_value_t = false)]
+    /// Optionally disable reporting
+    pub disable_reporting: bool,
 }
 
 pub async fn exec(
@@ -71,6 +73,19 @@ pub async fn exec(
     tracing::info!(path = ?data, "write new (tmp) root CA to disk");
     server::write_root_ca_as_file(&data, &root_ca).await?;
 
+    // by default take into account reporting in benchmarks,
+    // as it will usually be enabled, so we might as well see it in the numbers
+    let maybe_reporting_endpoint: Option<Uri> = (!args.disable_reporting)
+        .then(|| {
+            format!(
+                "https://{}/blocked-events",
+                definitions::FAKE_AIKIDO_REPORTER_DOMAIN
+            )
+            .parse()
+            .context("parse reporter fake domain")
+        })
+        .transpose()?;
+
     // ensure to not wait for firewall creation in case shutdown was initiated,
     // this can happen for example in case remote lists need to be fetched and the
     // something on the network on either side is not working
@@ -78,7 +93,7 @@ pub async fn exec(
         result = firewall::Firewall::try_new(
             guard.clone(),
             data_storage,
-            args.reporting_endpoint.clone(),
+            maybe_reporting_endpoint,
         ) => {
             result?
         }
