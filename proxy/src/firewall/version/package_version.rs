@@ -1,6 +1,12 @@
-use std::{borrow::Cow, fmt, hash, str::FromStr};
+use std::{borrow::Cow, fmt, str::FromStr};
 
-use rama::{telemetry::tracing, utils::str::arcstr::ArcStr};
+use rama::{
+    telemetry::tracing,
+    utils::str::{
+        arcstr::ArcStr,
+        smol_str::{StrExt, ToSmolStr},
+    },
+};
 use serde::{Deserialize, Serialize};
 
 use super::PragmaticSemver;
@@ -19,6 +25,32 @@ pub enum PackageVersion {
     Unknown(ArcStr),
 }
 
+impl PackageVersion {
+    /// Get a key/hash version for use in collections and hashing.
+    ///
+    /// See [`PackageVersionKey`] for more information.
+    pub fn as_key(&self) -> PackageVersionKey {
+        match self {
+            PackageVersion::Semver(pragmatic_semver) => {
+                PackageVersionKey(Some(pragmatic_semver.to_smolstr().into()))
+            }
+            PackageVersion::Any | PackageVersion::None => PackageVersionKey(None),
+            PackageVersion::Unknown(arc_str) => {
+                PackageVersionKey(Some(arc_str.trim().to_lowercase_smolstr().into()))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+/// Type that can be used in case you want to use [`PackageVersion`]
+/// as a kind of [`Hash`].
+///
+/// Due to the [`PackageVersion::Any`] variant this is not exactly
+/// the same as [`PartialEq`] but it's close enough and can be seen
+/// as equivalent for any actually set and known version number
+pub struct PackageVersionKey(Option<ArcStr>);
+
 impl PartialEq for PackageVersion {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -27,18 +59,6 @@ impl PartialEq for PackageVersion {
             (Self::Unknown(s), Self::None) | (Self::None, Self::Unknown(s)) => s.trim().is_empty(),
             (Self::Any, _) | (_, Self::Any) => true,
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
-        }
-    }
-}
-
-impl hash::Hash for PackageVersion {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        core::mem::discriminant(self).hash(state);
-        match self {
-            PackageVersion::Semver(pragmatic_semver) => pragmatic_semver.hash(state),
-            PackageVersion::Any => "*".hash(state),
-            PackageVersion::None => "".hash(state),
-            PackageVersion::Unknown(arc_str) => arc_str.hash(state),
         }
     }
 }
