@@ -420,7 +420,10 @@ impl<'a> NextInput<'a> {
 }
 
 fn trim_optional_version_prefix(input: &str) -> (&str, Identifier) {
-    if input.len() < 2 {
+    if input.len() <= 1 {
+        // shortcut if length is too short, because:
+        // 1. it would mean no meaningful prefix can be found
+        // 2. it protects us against OOB errors when accessing bytes below
         return (input, Identifier::empty());
     }
 
