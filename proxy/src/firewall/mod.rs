@@ -35,7 +35,7 @@ mod pac;
 
 use self::domain_matcher::DomainMatcher;
 
-use crate::storage::SyncCompactDataStorage;
+use crate::{firewall::notifier::EventNotifier, storage::SyncCompactDataStorage};
 
 use self::rule::{RequestAction, Rule};
 
@@ -53,6 +53,31 @@ impl Firewall {
         guard: ShutdownGuard,
         data: SyncCompactDataStorage,
         reporting_endpoint: Option<rama::http::Uri>,
+    ) -> Result<Self, OpaqueError> {
+        let notifier = match reporting_endpoint {
+            Some(endpoint) => match self::notifier::EventNotifier::try_new(
+                Executor::graceful(guard.clone()),
+                endpoint,
+            ) {
+                Ok(notifier) => Some(notifier),
+                Err(err) => {
+                    tracing::warn!(
+                        error = %err,
+                        "failed to initialize blocked-event notifier; reporting disabled"
+                    );
+                    None
+                }
+            },
+            None => None,
+        };
+
+        Self::try_new_with_event_notifier(guard, data, notifier).await
+    }
+
+    pub async fn try_new_with_event_notifier(
+        guard: ShutdownGuard,
+        data: SyncCompactDataStorage,
+        notifier: Option<EventNotifier>,
     ) -> Result<Self, OpaqueError> {
         let exec = Executor::graceful(guard.clone());
 
@@ -81,20 +106,6 @@ impl Firewall {
         )
             .into_layer(inner_https_client)
             .boxed();
-
-        let notifier = match reporting_endpoint {
-            Some(endpoint) => match self::notifier::EventNotifier::try_new(exec, endpoint) {
-                Ok(notifier) => Some(notifier),
-                Err(err) => {
-                    tracing::warn!(
-                        error = %err,
-                        "failed to initialize blocked-event notifier; reporting disabled"
-                    );
-                    None
-                }
-            },
-            None => None,
-        };
 
         Ok(Self {
             block_rules: Arc::new(vec![
@@ -158,7 +169,10 @@ impl Firewall {
 
         for rule in self.block_rules.iter() {
             match rule.evaluate_request(mod_req).await? {
-                RequestAction::Allow(new_mod_req) => mod_req = new_mod_req,
+                RequestAction::Allow(new_mod_req) => {
+                    tracing::trace!("firewall rule for {} allows request", rule.product_name());
+                    mod_req = new_mod_req
+                }
                 RequestAction::Block(blocked) => {
                     self.record_blocked_event(blocked.info.clone()).await;
                     return Ok(RequestAction::Block(blocked));

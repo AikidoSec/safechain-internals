@@ -41,11 +41,11 @@ impl VSCodeMocker {
             "netbench-foo.gallerycdn.vsassets.io",
         ];
         const PATH_TEMPLATES: &[&str] = &[
-            "/files/<publisher>/<extension>/<version>/foo",
-            "/extensions/<publisher>/<extension>/foo",
-            "/_apis/public/gallery/publishers/<publisher>/vsextensions/<extension>/foo",
-            "/_apis/public/gallery/publisher/<publisher>/<extension>/foo",
-            "/_apis/public/gallery/publisher/<publisher>/extension/<extension>/foo",
+            "/files/<publisher>/<extension>/<version>/foo/vspackage",
+            "/extensions/<publisher>/<extension>/foo/vspackage",
+            "/_apis/public/gallery/publishers/<publisher>/vsextensions/<extension>/foo/vspackage",
+            "/_apis/public/gallery/publisher/<publisher>/<extension>/foo/vspackage",
+            "/_apis/public/gallery/publisher/<publisher>/extension/<extension>/foo/vspackage",
         ];
 
         let domain = DOMAINS

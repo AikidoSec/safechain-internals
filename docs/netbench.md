@@ -207,25 +207,38 @@ The orchestrator is recommended, but the individual components can be run manual
 ### Mock server
 
 ```bash
-netbench mock --scenario baseline
+just run-netbench-cli mock --scenario baseline
 
-# use `netbench mock --help` for more usage info
+# use `just run-netbench-cli mock --help` for more usage info
 ```
 
 ### Proxy
 
 ```bash
-netbench proxy <mock-address>
+just run-netbench-cli proxy <mock-address>
 
-# use `netbench proxy --help` for more usage info
+# use `just run-netbench-cli proxy --help` for more usage info
 ```
 
 ### Runner
 
 ```bash
-netbench run --json --scenario baseline <address>
+just run-netbench-cli run --json --scenario baseline <address>
 
-# use `netbench run --help` for more usage info
+# use `just run-netbench-cli run --help` for more usage info
 ```
 
 Manual usage is useful for debugging or integration with custom tooling.
+
+### Emulate
+
+The emulate command in the netbench cli allows you to
+verify if the proxy firewall is correctly blocking
+and notifying about malware for support apps (e.g. vscode).
+
+```bash
+just run-netbench-cli emulate vscode
+```
+
+If all is well it will show both the blocked response as well as
+the captured blocked-event notification.

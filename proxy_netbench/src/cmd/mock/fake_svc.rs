@@ -18,6 +18,8 @@ use rama::{
     },
 };
 
+use safechain_proxy_lib::firewall::events::BlockedEvent;
+
 pub(super) fn fake_svc() -> impl Service<Request, Output = Response, Error = Infallible> + Clone {
     Arc::new(
         Router::new_with_state(TotalCounters::default())
@@ -36,7 +38,7 @@ struct TotalCounters {
 
 async fn reporter_blocked_events(
     State(TotalCounters { blocked_events }): State<TotalCounters>,
-    Json(_): Json<serde_json::Value>,
+    Json(_): Json<BlockedEvent>,
 ) -> impl IntoResponse {
     let _ = blocked_events.fetch_add(1, Ordering::SeqCst);
     StatusCode::OK

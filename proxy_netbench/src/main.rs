@@ -73,6 +73,7 @@ pub struct Args {
 #[allow(clippy::large_enum_variant)]
 enum CliCommands {
     Run(self::cmd::run::RunCommand),
+    Emulate(self::cmd::emulate::EmulateCommand),
     Mock(self::cmd::mock::MockCommand),
     Proxy(self::cmd::proxy::ProxyCommand),
 }
@@ -114,6 +115,9 @@ where
     graceful.spawn_task_fn(async move |guard| {
         let result = match args.cmds {
             CliCommands::Run(run_args) => self::cmd::run::exec(args.data, guard, run_args).await,
+            CliCommands::Emulate(emulate_args) => {
+                self::cmd::emulate::exec(args.data, guard, emulate_args).await
+            }
             CliCommands::Mock(mock_args) => {
                 self::cmd::mock::exec(args.data, guard, mock_args).await
             }

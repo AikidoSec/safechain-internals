@@ -218,12 +218,17 @@ fn parse_wheel_filename(filename: &str) -> Option<PackageInfo> {
     let version = rest.split('-').next()?;
 
     if version.eq_ignore_ascii_case("latest") || dist.is_empty() || version.is_empty() {
+        tracing::debug!(version, dist, "ignore pypi wheel");
         return None;
     }
 
     Some(PackageInfo {
         name: normalize_package_name(dist),
-        version: PackageVersion::from_str(version).unwrap(),
+        version: PackageVersion::from_str(version)
+            .inspect_err(|err| {
+                tracing::debug!("failed to parse package version: {err}");
+            })
+            .ok()?,
     })
 }
 
@@ -245,12 +250,17 @@ fn parse_source_dist_filename(filename: &str) -> Option<PackageInfo> {
 
     let (dist, version) = base.rsplit_once('-')?;
     if version.eq_ignore_ascii_case("latest") || dist.is_empty() || version.is_empty() {
+        tracing::debug!(version, dist, "ignore pypi dist filename");
         return None;
     }
 
     Some(PackageInfo {
         name: normalize_package_name(dist),
-        version: PackageVersion::from_str(version).unwrap(),
+        version: PackageVersion::from_str(version)
+            .inspect_err(|err| {
+                tracing::debug!("failed to parse package version: {err}");
+            })
+            .ok()?,
     })
 }
 

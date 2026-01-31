@@ -33,32 +33,52 @@ impl PyPIMocker {
                 .context("download pypi malware_list")?;
         }
 
-        const URI_TEMPLATES: &[&str] = &[
-            "https://pypi.org/pypi/<PACKAGE_NAME>/json",
-            "https://pypi.org/simple/<PACKAGE_NAME>/",
+        const TARGET_URI_TEMPLATE: &[&str] = &[
             "https://files.pythonhosted.org/packages/abc/def/<PACKAGE_NAME>-<VERSION>-py3-none-any.whl",
             "https://files.pythonhosted.org/packages/source/d/<PACKAGE_NAME>/<PACKAGE_NAME>-<VERSION>.tar.gz",
-            "https://pypi.org/pypi/<PACKAGE_NAME>/json",
-            "https://pypi.org/",
-            "https://pypi.org/help/",
         ];
 
-        let template = URI_TEMPLATES
-            .choose(&mut rng())
-            .context("select random PyPI uri template")?;
-
         if rand::random_bool(malware_ratio) {
+            let template = TARGET_URI_TEMPLATE
+                .choose(&mut rng())
+                .context("select random PyPI uri template")?;
+
             let entry = self
                 .malware_list
                 .choose(&mut rng())
                 .context("select random PyPI malware")?;
+
+            let package_name = entry.package_name.clone();
+            let normalised_package_name = if template.ends_with(".whl") {
+                package_name.replace("-", "_")
+            } else {
+                package_name
+            };
+
             template
-                .replace("<PACKAGE_NAME>", &entry.package_name)
+                .replace("<PACKAGE_NAME>", &normalised_package_name)
                 .replace("<VERSION>", &entry.version.to_string())
                 .parse()
                 .context("parse PyPI uri")
         } else {
-            template
+            const META_URI_TEMPLATES: &[&str] = &[
+                "https://pypi.org/pypi/<PACKAGE_NAME>/json",
+                "https://pypi.org/simple/<PACKAGE_NAME>/",
+                "https://pypi.org/pypi/<PACKAGE_NAME>/json",
+                "https://pypi.org/",
+                "https://pypi.org/help/",
+            ];
+
+            const TOTAL_URI_LEN: usize = META_URI_TEMPLATES.len() + TARGET_URI_TEMPLATE.len();
+
+            let idx = rand::random_range(0..TOTAL_URI_LEN);
+            let value = if idx < META_URI_TEMPLATES.len() {
+                META_URI_TEMPLATES[idx]
+            } else {
+                TARGET_URI_TEMPLATE[idx - META_URI_TEMPLATES.len()]
+            };
+
+            value
                 .replace("<PACKAGE_NAME>", "netbench-foo")
                 .replace("<VERSION>", "bar")
                 .parse()

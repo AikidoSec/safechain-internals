@@ -64,6 +64,18 @@ impl EventNotifier {
         let client =
             crate::client::new_web_client(exec.clone(), crate::client::WebClientConfig::default())?
                 .boxed();
+        Self::try_new_with_client(exec, reporting_endpoint, client)
+    }
+
+    pub fn try_new_with_client<C>(
+        exec: Executor,
+        reporting_endpoint: Uri,
+        client: C,
+    ) -> Result<Self, OpaqueError>
+    where
+        C: Service<Request, Output = Response, Error = OpaqueError>,
+    {
+        let client = client.boxed();
         let limit = Arc::new(Semaphore::const_new(env::compute_concurrent_request_count()));
         let dedup = moka::sync::CacheBuilder::new(MAX_EVENTS)
             .time_to_live(EVENT_DEDUP_WINDOW)
