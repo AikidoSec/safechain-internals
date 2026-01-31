@@ -1,11 +1,10 @@
 use rama::{
-    dns::GlobalDnsResolver,
     rt::Executor,
     tcp::{self, client::service::TcpStreamConnectorCloneFactory},
 };
 
 pub type TcpConnector = tcp::client::service::TcpConnector<
-    GlobalDnsResolver,
+    DnsResolver,
     TcpStreamConnectorCloneFactory<TcpStreamConnector>,
 >;
 
@@ -16,7 +15,9 @@ pub struct TcpConnectorConfig {
 }
 
 pub fn new_tcp_connector(exec: Executor, cfg: TcpConnectorConfig) -> TcpConnector {
-    tcp::client::service::TcpConnector::new(exec).with_connector(TcpStreamConnector::new(cfg))
+    tcp::client::service::TcpConnector::new(exec)
+        .with_connector(TcpStreamConnector::new(cfg))
+        .with_dns(new_dns_resolver())
 }
 
 #[cfg(not(any(test, feature = "bench")))]
@@ -44,6 +45,13 @@ mod production {
         }
     }
 
+    pub use ::rama::dns::GlobalDnsResolver as DnsResolver;
+
+    #[inline(always)]
+    pub fn new_dns_resolver() -> DnsResolver {
+        DnsResolver::new()
+    }
+
     #[inline(always)]
     pub fn new_tls_connector_config() -> Result<TlsConnectorData, OpaqueError> {
         TlsConnectorData::try_new_http_auto()
@@ -51,14 +59,16 @@ mod production {
 }
 
 #[cfg(not(any(test, feature = "bench")))]
-pub use self::production::{TcpStreamConnector, new_tls_connector_config};
+pub use self::production::{
+    DnsResolver, TcpStreamConnector, new_dns_resolver, new_tls_connector_config,
+};
 
 #[cfg(any(test, feature = "bench"))]
 mod bench {
     use std::sync::OnceLock;
 
     use rama::{
-        error::{ErrorContext as _, OpaqueError},
+        error::{BoxError, ErrorContext as _, OpaqueError},
         net::address::SocketAddress,
         telemetry::tracing,
         tls::rustls::{
@@ -101,6 +111,57 @@ mod bench {
         }
     }
 
+    #[derive(Debug, Clone)]
+    pub struct DnsResolver(Option<::rama::dns::GlobalDnsResolver>);
+
+    #[inline(always)]
+    pub fn new_dns_resolver() -> DnsResolver {
+        if is_eggress_address_overwritten() {
+            DnsResolver(None)
+        } else {
+            DnsResolver(Some(::rama::dns::GlobalDnsResolver::new()))
+        }
+    }
+
+    impl ::rama::dns::DnsResolver for DnsResolver {
+        type Error = BoxError;
+
+        async fn txt_lookup(
+            &self,
+            domain: rama::net::address::Domain,
+        ) -> Result<Vec<Vec<u8>>, Self::Error> {
+            if let Some(resolver) = self.0.as_ref() {
+                resolver.txt_lookup(domain).await
+            } else {
+                Ok(Vec::default())
+            }
+        }
+
+        async fn ipv4_lookup(
+            &self,
+            domain: rama::net::address::Domain,
+        ) -> Result<Vec<std::net::Ipv4Addr>, Self::Error> {
+            if let Some(resolver) = self.0.as_ref() {
+                resolver.ipv4_lookup(domain).await
+            } else {
+                // dummy value, we do not connect to it anyway
+                Ok(vec![std::net::Ipv4Addr::LOCALHOST])
+            }
+        }
+
+        async fn ipv6_lookup(
+            &self,
+            domain: rama::net::address::Domain,
+        ) -> Result<Vec<std::net::Ipv6Addr>, Self::Error> {
+            if let Some(resolver) = self.0.as_ref() {
+                resolver.ipv6_lookup(domain).await
+            } else {
+                // dummy value, we do not connect to it anyway
+                Ok(vec![std::net::Ipv6Addr::LOCALHOST])
+            }
+        }
+    }
+
     impl rama::tcp::client::TcpStreamConnector for TcpStreamConnector {
         type Error = std::io::Error;
 
@@ -135,5 +196,6 @@ mod bench {
 
 #[cfg(any(test, feature = "bench"))]
 pub use self::bench::{
-    TcpStreamConnector, new_tls_connector_config, try_set_egress_address_overwrite,
+    DnsResolver, TcpStreamConnector, new_dns_resolver, new_tls_connector_config,
+    try_set_egress_address_overwrite,
 };

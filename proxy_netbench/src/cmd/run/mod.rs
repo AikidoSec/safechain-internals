@@ -1,11 +1,11 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
 
 use rama::{
     Service as _,
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, body::util::BodyExt, response::Parts},
-    net::address::SocketAddress,
+    net::{address::SocketAddress, conn::is_connection_error},
     rt::Executor,
     service::BoxService,
     telemetry::tracing,
@@ -368,7 +368,7 @@ fn compute_outcome_for_client_result(result: Result<Parts, OpaqueError>) -> Requ
     match result {
         Ok(resp) => {
             let status = resp.status.as_u16();
-            if (200..400).contains(&status) {
+            if (200..500).contains(&status) {
                 RequestOutcome {
                     ok: true,
                     status: Some(status),
@@ -385,7 +385,11 @@ fn compute_outcome_for_client_result(result: Result<Parts, OpaqueError>) -> Requ
         Err(err) => {
             tracing::debug!("non-http error: {err}");
             RequestOutcome {
-                ok: false,
+                ok: err
+                    .source()
+                    .and_then(|e| e.downcast_ref::<std::io::Error>())
+                    .map(is_connection_error)
+                    .unwrap_or_default(),
                 status: None,
                 failure: Some(FailureKind::Other),
             }

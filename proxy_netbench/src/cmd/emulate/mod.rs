@@ -190,8 +190,10 @@ async fn exec_emulate_loop(
             return Ok(());
         };
 
-        if !source_filter.filter(&req) {
-            return Ok(());
+        match source_filter.filter(&req) {
+            self::filters::FilterResult::Continue => (),
+            self::filters::FilterResult::Skip => continue,
+            self::filters::FilterResult::Done => return Ok(()),
         }
 
         if gap_secs > 0. {

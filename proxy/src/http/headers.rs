@@ -8,25 +8,20 @@ use rama::http::{
 use rama::telemetry::tracing;
 
 pub fn remove_cache_headers(headers: &mut HeaderMap) {
-    for header_name in [ETAG, LAST_MODIFIED, CACHE_CONTROL] {
-        match headers.entry(header_name) {
-            Entry::Occupied(entry) => {
-                let (key, values) = entry.remove_entry_mult();
-                let removed = values.count();
-                tracing::debug!(header = %key, removed, "removed cache header values");
-            }
-            Entry::Vacant(_) => {}
-        }
-    }
+    remove_headers(headers, &[ETAG, LAST_MODIFIED, CACHE_CONTROL]);
 }
 
 pub fn remove_sensitive_req_headers(headers: &mut HeaderMap) {
-    for header_name in [AUTHORIZATION, COOKIE, PROXY_AUTHORIZATION] {
+    remove_headers(headers, &[AUTHORIZATION, COOKIE, PROXY_AUTHORIZATION]);
+}
+
+fn remove_headers(headers: &mut HeaderMap, header_names: &[HeaderName]) {
+    for header_name in header_names {
         match headers.entry(header_name) {
             Entry::Occupied(entry) => {
                 let (key, values) = entry.remove_entry_mult();
                 let removed = values.count();
-                tracing::debug!(header = %key, removed, "removed sensitive (request) header values");
+                tracing::debug!(header = %key, removed, "removed header values");
             }
             Entry::Vacant(_) => {}
         }

@@ -5,7 +5,6 @@ use rama::http::{Request, matcher::PathMatcher};
 #[derive(Debug, Clone)]
 pub struct PathFilter(Arc<[PathMatcher]>);
 
-/// clap arg parser
 pub fn parse_path_filter(input: &str) -> Result<PathFilter, Infallible> {
     let path_matcher_result = input
         .split(",")

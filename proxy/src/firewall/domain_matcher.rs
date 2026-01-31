@@ -32,18 +32,19 @@ impl<D: AsDomainRef> FromIterator<D> for DomainMatcher {
                 && let Ok(_) = parent.try_as_wildcard()
             {
                 domains.insert_domain(parent, DomainAllowMode::Parent);
-            } else {
-                if domains
-                    .match_parent(&domain)
-                    .map(|m| *m.value == DomainAllowMode::Parent)
-                    .unwrap_or_default()
-                {
-                    // ignore exact mode if already a parent-mode exists for the key
-                    // in order to prevent accidental collisions.
-                    continue;
-                }
-                domains.insert_domain(domain, DomainAllowMode::Exact);
+                continue;
             }
+
+            if domains
+                .match_parent(&domain)
+                .map(|m| *m.value == DomainAllowMode::Parent)
+                .unwrap_or_default()
+            {
+                // ignore exact mode if already a parent-mode exists for the key
+                // in order to prevent accidental collisions.
+                continue;
+            }
+            domains.insert_domain(domain, DomainAllowMode::Exact);
         }
         Self(domains)
     }

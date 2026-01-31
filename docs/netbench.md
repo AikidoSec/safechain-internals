@@ -242,3 +242,9 @@ just run-netbench-cli emulate vscode
 
 If all is well it will show both the blocked response as well as
 the captured blocked-event notification.
+
+The `emulate` command can also be used to replay HAR traffic,
+and you can even use it to automatically export malware requests
+that weren't blocked as new (regression) test cases.
+
+See `just run-netbench-cli emulate --help` for more information.

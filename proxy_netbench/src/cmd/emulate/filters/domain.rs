@@ -10,7 +10,6 @@ use safechain_proxy_lib::firewall::DomainMatcher;
 #[derive(Debug, Default, Clone)]
 pub struct DomainFilter(Option<Arc<DomainMatcher>>);
 
-/// clap arg parser
 pub fn parse_domain_filter(input: &str) -> Result<DomainFilter, BoxError> {
     let domains_result: Result<Vec<_>, _> = input
         .split(",")

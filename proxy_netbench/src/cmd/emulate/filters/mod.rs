@@ -11,6 +11,13 @@ pub struct SourceFilter {
     path: Option<self::path::PathFilter>,
 }
 
+#[derive(Debug)]
+pub enum FilterResult {
+    Continue,
+    Skip,
+    Done,
+}
+
 impl SourceFilter {
     pub fn new_synthetic_filter(
         range: Option<self::range::RangeFilter>,
@@ -36,20 +43,24 @@ impl SourceFilter {
         }
     }
 
-    pub fn filter(&mut self, req: &Request) -> bool {
+    pub fn filter(&mut self, req: &Request) -> FilterResult {
         if let Some(domain_matcher) = self.domain.as_ref()
             && !domain_matcher.match_req(req)
         {
-            return false;
+            return FilterResult::Skip;
         }
 
         if let Some(path_matcher) = self.path.as_ref()
             && !path_matcher.match_req(req)
         {
-            return false;
+            return FilterResult::Skip;
         }
 
         // IMPORTANT: range is post-filtered!
-        self.range.advance()
+        if self.range.advance() {
+            FilterResult::Done
+        } else {
+            FilterResult::Continue
+        }
     }
 }
