@@ -73,8 +73,8 @@ def terminate_process(proc: Proc, timeout_s: float = 3.0) -> None:
             p.terminate()
         else:
             p.send_signal(signal.SIGTERM)
-    except Exception:
-        pass
+    except Exception as e:
+        eprint("failed to terminate process", e)
 
     try:
         p.wait(timeout=timeout_s)
@@ -326,6 +326,11 @@ def compute_aggregate_from_events(events: List[Dict[str, Any]]) -> Dict[str, flo
 
 
 def write_kv_baseline(path: Path, metrics: Dict[str, float]) -> None:
+    """
+    Path is given as cli arg 'save-baseline' by the same
+    user executing this script and is as such trusted as-is.
+    """
+
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         f"avg_main_rps={metrics.get('avg_main_rps', 0.0)}",
@@ -355,6 +360,11 @@ def parse_kv_summary(text: str) -> Dict[str, float]:
 
 
 def load_metrics_from_path(path: Path) -> Dict[str, float]:
+    """
+    Path is given as cli arg 'compare' by the same
+    user executing this script and is as such trusted as-is.
+    """
+
     text = path.read_text(encoding="utf-8")
     if path.suffix.lower().endswith("jsonl"):
         events: List[Dict[str, Any]] = []
@@ -623,7 +633,8 @@ def main() -> int:
     spin = 0
 
     with run_jsonl.open("w", encoding="utf-8") as f_jsonl:
-        assert runner.stdout is not None
+        if not runner.stdout:
+            raise Exception("stdout is not defined for runner")
 
         last_spin_update = 0.0
         while True:

@@ -26,6 +26,8 @@ def api_get(url: str, token: str) -> dict:
         },
         method="GET",
     )
+    if not url.startswith(("http://", "https://")):
+        raise ValueError("URL must start with http:// or https://")
     with urllib.request.urlopen(req) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
@@ -40,6 +42,8 @@ def api_download(url: str, token: str, dest: Path) -> None:
         },
         method="GET",
     )
+    if not url.startswith(("http://", "https://")):
+        raise ValueError("URL must start with http:// or https://")
     with urllib.request.urlopen(req) as resp, dest.open("wb") as f:
         while True:
             chunk = resp.read(1024 * 128)

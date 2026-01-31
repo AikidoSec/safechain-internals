@@ -69,39 +69,13 @@ pub async fn build_meta_https_server(
     firewall: Firewall,
     #[cfg(feature = "har")] har_client: HarClient,
 ) -> Result<MetaServer<impl Service<TcpStream> + Clone>, OpaqueError> {
-    #[cfg_attr(not(feature = "har"), allow(unused_mut))]
-    let mut http_router = Router::new()
-        .with_get("/", Html(META_SITE_INDEX_HTML))
-        .with_get("/ping", "pong")
-        .with_get("/ca", move || {
-            let response = root_ca.as_http_response();
-            std::future::ready(response)
-        })
-        // See `docs/proxy/pac.md` for in-depth documentation regarding
-        // Proxy Auto Configuration (PAC in short).
-        .with_get("/pac", move |req: Request| {
-            if !req.extensions().contains::<SecureTransport>() {
-                tracing::debug!("/pac endpoint only available for TLS connections (as MITM proxy would anyway fail if Root CA is not trusted)");
-                return std::future::ready(StatusCode::NOT_FOUND.into_response());
-            }
-
-            let response = firewall.generate_pac_script_response(proxy_addr, req);
-            std::future::ready(response)
-        });
-
-    #[cfg(feature = "har")]
-    {
-        http_router.set_post("/har/toggle", move || {
-            let har_client = har_client.clone();
-            async move {
-                har_client
-                    .toggle()
-                    .await
-                    .map(|previous| (!previous).to_string())
-                    .into_response()
-            }
-        });
-    }
+    let http_router = build_meta_http_router(
+        root_ca,
+        proxy_addr,
+        firewall,
+        #[cfg(feature = "har")]
+        har_client,
+    );
 
     let http_svc = (
         TraceLayer::new_for_http(),
@@ -131,6 +105,49 @@ pub async fn build_meta_https_server(
         socket_address: meta_addr.into(),
         listener: tcp_listener,
     })
+}
+
+fn build_meta_http_router(
+    root_ca: RootCA,
+    proxy_addr: SocketAddress,
+    firewall: Firewall,
+    #[cfg(feature = "har")] har_client: HarClient,
+) -> Router {
+    #[cfg_attr(not(feature = "har"), allow(unused_mut))]
+    let mut router = Router::new()
+        .with_get("/", Html(META_SITE_INDEX_HTML))
+        .with_get("/ping", "pong")
+        .with_get("/ca", move || {
+            let response = root_ca.as_http_response();
+            std::future::ready(response)
+        })
+        // See `docs/proxy/pac.md` for in-depth documentation regarding
+        // Proxy Auto Configuration (PAC in short).
+        .with_get("/pac", move |req: Request| {
+            if !req.extensions().contains::<SecureTransport>() {
+                tracing::debug!("/pac endpoint only available for TLS connections (as MITM proxy would anyway fail if Root CA is not trusted)");
+                return std::future::ready(StatusCode::NOT_FOUND.into_response());
+            }
+
+            let response = firewall.generate_pac_script_response(proxy_addr, req);
+            std::future::ready(response)
+        });
+
+    #[cfg(feature = "har")]
+    {
+        router.set_post("/har/toggle", move || {
+            let har_client = har_client.clone();
+            async move {
+                har_client
+                    .toggle()
+                    .await
+                    .map(|previous| (!previous).to_string())
+                    .into_response()
+            }
+        });
+    }
+
+    router
 }
 
 #[allow(clippy::too_many_arguments)]

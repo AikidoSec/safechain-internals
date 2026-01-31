@@ -24,7 +24,7 @@ use safechain_proxy_lib::client::{
     WebClientConfig, new_web_client, transport::try_set_egress_address_overwrite,
 };
 
-pub fn http_cient(
+pub fn http_client(
     exec: Executor,
     target: SocketAddress,
     concurrency: usize,

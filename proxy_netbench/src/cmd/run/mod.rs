@@ -4,9 +4,10 @@ use rama::{
     Service as _,
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
-    http::{body::util::BodyExt, response::Parts},
+    http::{Request, Response, body::util::BodyExt, response::Parts},
     net::address::SocketAddress,
     rt::Executor,
+    service::BoxService,
     telemetry::tracing,
 };
 
@@ -97,85 +98,50 @@ pub async fn exec(
     guard: ShutdownGuard,
     args: RunCommand,
 ) -> Result<(), OpaqueError> {
-    let merged_cfg = merge_server_cfg(args.scenario, args.config);
+    let run_params = RunParameters::new(args.scenario, args.config, args.duration, args.warmup);
 
-    let target_rps = merged_cfg.target_rps.unwrap_or(200).max(1);
-    let burst_size = merged_cfg.burst_size.unwrap_or_default().max(1);
-    let jitter = merged_cfg.jitter.unwrap_or_default().clamp(0.0, 1.0);
-
-    let request_count_per_iteration = (args.duration * target_rps as f64).next_up() as usize;
-    let request_count_per_warmup = (args.warmup * target_rps as f64).next_up() as usize;
-
-    let concurrency = {
-        let c = merged_cfg.concurrency.unwrap_or_default();
-        if c == 0 {
-            env::compute_concurrent_request_count()
-        } else {
-            c as usize
-        }
-    };
-
-    let client = self::client::http_cient(
+    let client = self::client::http_client(
         Executor::graceful(guard.clone()),
         args.target,
-        concurrency,
+        run_params.concurrency,
         args.proxy,
     )
     .context("create HTTP(S) client")?;
 
-    tracing::info!(
-        %target_rps,
-        %burst_size,
-        %jitter,
-        %request_count_per_iteration,
-        %request_count_per_warmup,
-        %concurrency,
-        "client config parameters ready",
-    );
+    tracing::info!(?run_params, "client config parameters ready",);
 
     let iterations = args.iterations.max(1);
 
-    let mut req_gen = match args.replay {
-        Some(har_fp) => RequestGenerator::new_replay_gen(RequestGeneratorReplayConfig {
-            har: har_fp,
-            iterations,
-            target_rps,
-            burst_size,
-            jitter,
-            emulate_timing: args.emulate_timing,
-        })
-        .await
-        .context("create replay req generator")?,
-        None => RequestGenerator::new_mock_gen(RequestGeneratorMockConfig {
-            data,
-            iterations,
-            target_rps,
-            burst_size,
-            jitter,
-            request_count_per_iteration,
-            request_count_per_warmup,
-            products: args.products,
-            malware_ratio: args.malware_ratio,
-        })
-        .await
-        .context("create mock req generator")?,
-    };
+    let req_gen = new_request_generator(
+        data,
+        args.replay,
+        args.emulate_timing,
+        args.products,
+        args.malware_ratio,
+        iterations,
+        run_params,
+    )
+    .await?;
 
-    const REPORT_INTERVAL: Duration = Duration::from_secs(1);
+    let reporter = new_reporter(args.json);
 
-    let reporter: Box<dyn Reporter> = if args.json {
-        const EMIT_EVENTS: bool = true;
-        Box::new(JsonlReporter::new(REPORT_INTERVAL, EMIT_EVENTS))
-    } else {
-        Box::new(HumanReporter::new(REPORT_INTERVAL))
-    };
-
-    let (result_tx, result_rx) = mpsc::channel(concurrency * 8);
+    let (result_tx, result_rx) = mpsc::channel(run_params.concurrency * 8);
     guard.spawn_task_fn(|guard| report_worker(guard, reporter, result_rx));
 
+    run_send_and_validate_loop(guard, run_params, req_gen, client, result_tx).await
+}
+
+async fn run_send_and_validate_loop(
+    guard: ShutdownGuard,
+    run_params: RunParameters,
+    req_gen_input: RequestGenerator,
+    client: BoxService<Request, Response, OpaqueError>,
+    result_tx: mpsc::Sender<ClientResult>,
+) -> Result<(), OpaqueError> {
+    let mut req_gen = req_gen_input;
     let mut cancelled = std::pin::pin!(guard.clone_weak().into_cancelled());
 
-    let concurrency = Arc::new(Semaphore::new(concurrency));
+    let concurrency = Arc::new(Semaphore::new(run_params.concurrency));
 
     loop {
         let GeneratedRequest {
@@ -239,6 +205,60 @@ pub async fn exec(
                 tracing::debug!("failed to send client result msg: {err}");
             }
         });
+    }
+}
+
+async fn new_request_generator(
+    data: PathBuf,
+    replay: Option<PathBuf>,
+    emulate_timing: bool,
+    products: Option<ProductValues>,
+    malware_ratio: f64,
+    iterations: usize,
+    RunParameters {
+        target_rps,
+        burst_size,
+        jitter,
+        request_count_per_iteration,
+        request_count_per_warmup,
+        ..
+    }: RunParameters,
+) -> Result<RequestGenerator, OpaqueError> {
+    Ok(match replay {
+        Some(har_fp) => RequestGenerator::new_replay_gen(RequestGeneratorReplayConfig {
+            har: har_fp,
+            iterations,
+            target_rps,
+            burst_size,
+            jitter,
+            emulate_timing,
+        })
+        .await
+        .context("create replay req generator")?,
+        None => RequestGenerator::new_mock_gen(RequestGeneratorMockConfig {
+            data,
+            iterations,
+            target_rps,
+            burst_size,
+            jitter,
+            request_count_per_iteration,
+            request_count_per_warmup,
+            products,
+            malware_ratio,
+        })
+        .await
+        .context("create mock req generator")?,
+    })
+}
+
+fn new_reporter(json: bool) -> Box<dyn Reporter> {
+    const REPORT_INTERVAL: Duration = Duration::from_secs(1);
+
+    if json {
+        const EMIT_EVENTS: bool = true;
+        Box::new(JsonlReporter::new(REPORT_INTERVAL, EMIT_EVENTS))
+    } else {
+        Box::new(HumanReporter::new(REPORT_INTERVAL))
     }
 }
 
@@ -321,6 +341,54 @@ async fn report_worker(
 
         let now = start.elapsed();
         reporter.on_tick(now);
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RunParameters {
+    target_rps: u32,
+    burst_size: u32,
+    jitter: f64,
+    request_count_per_iteration: usize,
+    request_count_per_warmup: usize,
+    concurrency: usize,
+}
+
+impl RunParameters {
+    fn new(
+        scenario: Option<Scenario>,
+        config: Option<ClientConfig>,
+        iter_window_seconds: f64,
+        warmup_window_seconds: f64,
+    ) -> Self {
+        let merged_cfg = merge_server_cfg(scenario, config);
+
+        let target_rps = merged_cfg.target_rps.unwrap_or(200).max(1);
+        let burst_size = merged_cfg.burst_size.unwrap_or_default().max(1);
+        let jitter = merged_cfg.jitter.unwrap_or_default().clamp(0.0, 1.0);
+
+        let request_count_per_iteration =
+            (iter_window_seconds * target_rps as f64).next_up() as usize;
+        let request_count_per_warmup =
+            (warmup_window_seconds * target_rps as f64).next_up() as usize;
+
+        let concurrency = {
+            let c = merged_cfg.concurrency.unwrap_or_default();
+            if c == 0 {
+                env::compute_concurrent_request_count()
+            } else {
+                c as usize
+            }
+        };
+
+        Self {
+            target_rps,
+            burst_size,
+            jitter,
+            request_count_per_iteration,
+            request_count_per_warmup,
+            concurrency,
+        }
     }
 }
 

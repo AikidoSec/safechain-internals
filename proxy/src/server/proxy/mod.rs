@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::{convert::Infallible, path::Path, sync::Arc};
 
 use rama::{
     Layer, Service,
@@ -111,27 +111,12 @@ pub async fn build_proxy_server(
         .local_addr()
         .context("fetch local addr of bound TCP port for proxy")?;
 
-    let https_client = self::client::new_https_client(
-        exec.clone(),
-        firewall.clone(),
-        upstream_proxy_addr.clone(),
-    )?;
-
-    let http_proxy_mitm_server = self::server::new_mitm_server(
+    let socks5_proxy_mitm_server = self::server::new_mitm_server(
         guard.clone(),
         upstream_proxy_addr.clone(),
         mitm_all,
         tls_acceptor.clone(),
         firewall.clone(),
-        #[cfg(feature = "har")]
-        har_export_layer.clone(),
-    )?;
-    let socks5_proxy_mitm_server = self::server::new_mitm_server(
-        guard.clone(),
-        upstream_proxy_addr,
-        mitm_all,
-        tls_acceptor,
-        firewall,
         #[cfg(feature = "har")]
         har_export_layer.clone(),
     )?;
@@ -145,7 +130,53 @@ pub async fn build_proxy_server(
             ))),
     );
 
-    let http_inner_svc = (
+    let http_mitm_proxy = create_http_mitm_proxy(
+        mitm_all,
+        guard,
+        upstream_proxy_addr,
+        tls_acceptor,
+        firewall,
+        #[cfg(feature = "har")]
+        har_export_layer,
+    )?;
+
+    let http_server = HttpServer::auto(exec).service(Arc::new(http_mitm_proxy));
+
+    let tcp_inner_svc = socks5_proxy_router.with_fallback(http_server);
+
+    tracing::info!(proxy.address = %proxy_addr, "local HTTP(S)/SOCKS5 proxy ready");
+
+    Ok(ProxyServer {
+        service: tcp_inner_svc,
+        socket_address: proxy_addr.into(),
+        listener: tcp_service,
+    })
+}
+
+fn create_http_mitm_proxy(
+    mitm_all: bool,
+    guard: ShutdownGuard,
+    upstream_proxy_addr: Option<ProxyAddress>,
+    tls_acceptor: TlsAcceptorLayer,
+    firewall: Firewall,
+    #[cfg(feature = "har")] har_export_layer: HARExportLayer,
+) -> Result<impl Service<Request, Output = Response, Error = Infallible>, OpaqueError> {
+    let exec = Executor::graceful(guard.clone());
+
+    let http_proxy_mitm_server = self::server::new_mitm_server(
+        guard,
+        upstream_proxy_addr.clone(),
+        mitm_all,
+        tls_acceptor,
+        firewall.clone(),
+        #[cfg(feature = "har")]
+        har_export_layer.clone(),
+    )?;
+
+    let https_client = self::client::new_https_client(exec.clone(), firewall, upstream_proxy_addr)?;
+
+    Ok((
+        MapResponseBodyLayer::new(Body::new),
         TraceLayer::new_for_http(),
         ConsumeErrLayer::trace(Level::DEBUG),
         #[cfg(feature = "har")]
@@ -162,7 +193,7 @@ pub async fn build_proxy_server(
             // We make use use the void trailer parser to ensure we drop any ignored label.
             .with_labels::<((), self::auth::FirewallUserConfigParser)>(),
         UpgradeLayer::new(
-            exec.clone(),
+            exec,
             MethodMatcher::CONNECT,
             service_fn(http_connect_accept),
             Arc::new(http_proxy_mitm_server),
@@ -173,19 +204,7 @@ pub async fn build_proxy_server(
         CompressionLayer::new(),
         // =============================================
     )
-        .into_layer(https_client);
-
-    let http_service = HttpServer::auto(exec).service(Arc::new(http_inner_svc));
-
-    let tcp_inner_svc = socks5_proxy_router.with_fallback(http_service);
-
-    tracing::info!(proxy.address = %proxy_addr, "local HTTP(S)/SOCKS5 proxy ready");
-
-    Ok(ProxyServer {
-        service: tcp_inner_svc,
-        socket_address: proxy_addr.into(),
-        listener: tcp_service,
-    })
+        .into_layer(https_client))
 }
 
 #[allow(clippy::too_many_arguments)]

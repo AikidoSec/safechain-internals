@@ -37,11 +37,11 @@ impl RpsPacer {
         jitter: f64,
         rng: rand::rngs::SmallRng,
     ) -> Self {
-        let target_rps = target_rps.max(1) as f64;
+        let normalised_target_rps = target_rps.max(1) as f64;
         let capacity = burst_size.max(1) as f64;
 
         Self {
-            target_rps,
+            target_rps: normalised_target_rps,
             capacity,
             tokens: capacity,
             last: Instant::now(),
