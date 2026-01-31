@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -80,7 +81,10 @@ func (r *LogRotator) rotateIfNeeded(lf logFile) {
 	}
 
 	timestamp := time.Now().UTC().Format("2006-01-02-15")
-	newPath := lf.path + "." + timestamp
+	dir, base := filepath.Dir(lf.path), filepath.Base(lf.path)
+	ext := filepath.Ext(base)
+	nameWithoutExt := base[:len(base)-len(ext)]
+	newPath := filepath.Join(dir, nameWithoutExt+"."+timestamp+ext)
 
 	if err := os.Rename(lf.path, newPath); err != nil {
 		log.Printf("Failed to rotate log file: %s -> %s", lf.path, newPath)
