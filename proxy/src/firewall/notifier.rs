@@ -18,6 +18,8 @@ use rama::{
 
 use tokio::sync::{Semaphore, SemaphorePermit};
 
+use crate::firewall::version::{PackageVersion, PackageVersionKey};
+
 use super::events::BlockedEvent;
 
 const EVENT_DEDUP_WINDOW: Duration = Duration::from_secs(30);
@@ -31,6 +33,8 @@ struct DedupKey {
     pub product: ArcStr,
     /// The name or identifier of the artifact
     pub identifier: ArcStr,
+    /// Optional version of the artifact (e.g. semver)
+    pub version: PackageVersionKey,
 }
 
 impl From<&BlockedEvent> for DedupKey {
@@ -39,6 +43,12 @@ impl From<&BlockedEvent> for DedupKey {
         Self {
             product: value.artifact.product.clone(),
             identifier: value.artifact.identifier.clone(),
+            version: value
+                .artifact
+                .version
+                .as_ref()
+                .map(PackageVersion::as_key)
+                .unwrap_or_default(),
         }
     }
 }
@@ -79,6 +89,7 @@ impl EventNotifier {
             tracing::debug!(
                 product = %event.artifact.product,
                 identifier = %event.artifact.identifier,
+                version = ?event.artifact.version,
                 "suppressed duplicate blocked-event notification"
             );
             return;

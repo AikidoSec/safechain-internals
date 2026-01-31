@@ -1,6 +1,12 @@
-use std::{borrow::Cow, str::FromStr};
+use std::{borrow::Cow, fmt, str::FromStr};
 
-use rama::{telemetry::tracing, utils::str::arcstr::ArcStr};
+use rama::{
+    telemetry::tracing,
+    utils::str::{
+        arcstr::ArcStr,
+        smol_str::{StrExt, ToSmolStr},
+    },
+};
 use serde::{Deserialize, Serialize};
 
 use super::PragmaticSemver;
@@ -18,6 +24,32 @@ pub enum PackageVersion {
     /// do not break existing proxies
     Unknown(ArcStr),
 }
+
+impl PackageVersion {
+    /// Get a key/hash version for use in collections and hashing.
+    ///
+    /// See [`PackageVersionKey`] for more information.
+    pub fn as_key(&self) -> PackageVersionKey {
+        match self {
+            PackageVersion::Semver(pragmatic_semver) => {
+                PackageVersionKey(Some(pragmatic_semver.to_smolstr().into()))
+            }
+            PackageVersion::Any | PackageVersion::None => PackageVersionKey(None),
+            PackageVersion::Unknown(arc_str) => {
+                PackageVersionKey(Some(arc_str.trim().to_lowercase_smolstr().into()))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+/// Type that can be used in case you want to use [`PackageVersion`]
+/// as a kind of [`Hash`].
+///
+/// Due to the [`PackageVersion::Any`] variant this is not exactly
+/// the same as [`PartialEq`] but it's close enough and can be seen
+/// as equivalent for any actually set and known version number
+pub struct PackageVersionKey(Option<ArcStr>);
 
 impl PartialEq for PackageVersion {
     fn eq(&self, other: &Self) -> bool {
@@ -72,6 +104,17 @@ impl PartialEq<PragmaticSemver> for PackageVersion {
 impl PartialEq<PackageVersion> for PragmaticSemver {
     fn eq(&self, other: &PackageVersion) -> bool {
         other.eq(self)
+    }
+}
+
+impl fmt::Display for PackageVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PackageVersion::Semver(version) => version.fmt(f),
+            PackageVersion::Any => "*".fmt(f),
+            PackageVersion::None => "".fmt(f),
+            PackageVersion::Unknown(arc_str) => arc_str.fmt(f),
+        }
     }
 }
 
