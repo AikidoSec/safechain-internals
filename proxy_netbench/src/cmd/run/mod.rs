@@ -313,54 +313,18 @@ async fn report_worker(
     let start = Instant::now();
 
     loop {
-        let ClientResult {
+        let Some(ClientResult {
             result,
             req_start,
             phase,
             iteration,
             index,
-        } = tokio::select! {
-            _ = guard.cancelled() => {
-                tracing::debug!("exit report worker: guard shutdown");
-                return;
-            }
-
-            maybe_result = result_rx.recv() => {
-                let Some(result) = maybe_result else {
-                    tracing::debug!("exit report worker: result senders closed");
-                    return;
-                };
-
-                result
-            }
+        }) = recv_next_client_result(&guard, &mut result_rx).await
+        else {
+            return;
         };
 
-        let outcome = match result {
-            Ok(resp) => {
-                let status = resp.status.as_u16();
-                if (200..400).contains(&status) {
-                    RequestOutcome {
-                        ok: true,
-                        status: Some(status),
-                        failure: None,
-                    }
-                } else {
-                    RequestOutcome {
-                        ok: false,
-                        status: Some(status),
-                        failure: Some(FailureKind::HttpStatus),
-                    }
-                }
-            }
-            Err(err) => {
-                tracing::debug!("non-http error: {err}");
-                RequestOutcome {
-                    ok: false,
-                    status: None,
-                    failure: Some(FailureKind::Other),
-                }
-            }
-        };
+        let outcome = compute_outcome_for_client_result(result);
 
         let ev = RequestResultEvent {
             ts: std::time::SystemTime::now(),
@@ -376,6 +340,56 @@ async fn report_worker(
 
         let now = start.elapsed();
         reporter.on_tick(now);
+    }
+}
+
+async fn recv_next_client_result(
+    guard: &ShutdownGuard,
+    result_rx: &mut mpsc::Receiver<ClientResult>,
+) -> Option<ClientResult> {
+    tokio::select! {
+        _ = guard.cancelled() => {
+            tracing::debug!("exit report worker: guard shutdown");
+            None
+        }
+
+        maybe_result = result_rx.recv() => {
+            let Some(result) = maybe_result else {
+                tracing::debug!("exit report worker: result senders closed");
+                return None;
+            };
+
+            Some(result)
+        }
+    }
+}
+
+fn compute_outcome_for_client_result(result: Result<Parts, OpaqueError>) -> RequestOutcome {
+    match result {
+        Ok(resp) => {
+            let status = resp.status.as_u16();
+            if (200..400).contains(&status) {
+                RequestOutcome {
+                    ok: true,
+                    status: Some(status),
+                    failure: None,
+                }
+            } else {
+                RequestOutcome {
+                    ok: false,
+                    status: Some(status),
+                    failure: Some(FailureKind::HttpStatus),
+                }
+            }
+        }
+        Err(err) => {
+            tracing::debug!("non-http error: {err}");
+            RequestOutcome {
+                ok: false,
+                status: None,
+                failure: Some(FailureKind::Other),
+            }
+        }
     }
 }
 
