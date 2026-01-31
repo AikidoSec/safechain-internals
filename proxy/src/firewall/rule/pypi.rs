@@ -81,6 +81,10 @@ impl RulePyPI {
     fn is_blocked(&self, package_info: &PackageInfo) -> Result<bool, OpaqueError> {
         let entries = self.remote_malware_list.find_entries(&package_info.name);
         let Some(entries) = entries.entries() else {
+            tracing::trace!(
+                "no malware entry found for pkg name: '{}'",
+                package_info.name
+            );
             return Ok(false);
         };
 

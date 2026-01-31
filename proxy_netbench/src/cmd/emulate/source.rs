@@ -72,7 +72,7 @@ impl Source {
     ) -> Result<Response, OpaqueError> {
         match self {
             Source::Synthetic(_) => Ok((
-                StatusCode::INTERNAL_SERVER_ERROR,
+                StatusCode::NOT_MODIFIED,
                 "synthetic request was not blocked",
             )
                 .into_response()),

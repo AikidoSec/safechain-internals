@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use rama::{
-    Layer as _, Service as _,
+    Layer as _, Service,
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
     http::{
@@ -34,6 +34,9 @@ pub mod version;
 mod domain_matcher;
 mod pac;
 
+#[cfg(test)]
+mod tests;
+
 pub use self::domain_matcher::DomainMatcher;
 
 use crate::{
@@ -47,7 +50,7 @@ pub struct Firewall {
     // NOTE: if we ever want to update these rules on the fly,
     // e.g. removing/adding them, we can ArcSwap these and have
     // a background task update these when needed..
-    block_rules: Arc<Vec<self::rule::DynRule>>,
+    block_rules: Arc<[self::rule::DynRule]>,
     notifier: Option<self::notifier::EventNotifier>,
 }
 
@@ -89,6 +92,16 @@ impl Firewall {
             crate::client::WebClientConfig::without_overwrites(),
         )?;
 
+        Self::try_new_with_event_notifier_and_web_client(guard, data, notifier, inner_https_client)
+            .await
+    }
+
+    pub async fn try_new_with_event_notifier_and_web_client(
+        guard: ShutdownGuard,
+        data: SyncCompactDataStorage,
+        notifier: Option<EventNotifier>,
+        inner_https_client: impl Service<Request, Output = Response, Error = OpaqueError>,
+    ) -> Result<Self, OpaqueError> {
         let shared_remote_malware_client = (
             MapResponseBodyLayer::new(Body::new),
             DecompressionLayer::new(),
@@ -111,7 +124,7 @@ impl Firewall {
             .boxed();
 
         Ok(Self {
-            block_rules: Arc::new(vec![
+            block_rules: vec![
                 self::rule::vscode::RuleVSCode::try_new(
                     guard.clone(),
                     shared_remote_malware_client.clone(),
@@ -140,7 +153,8 @@ impl Firewall {
                     .await
                     .context("create block rule: pypi")?
                     .into_dyn(),
-            ]),
+            ]
+            .into(),
             notifier,
         })
     }

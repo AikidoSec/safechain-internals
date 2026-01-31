@@ -15,6 +15,7 @@ use safechain_proxy_lib::{
 };
 
 mod client;
+mod export;
 mod filters;
 mod source;
 
@@ -72,6 +73,17 @@ pub struct EmulateCommand {
     /// - '/user/{name}/foo'
     paths: Option<PathFilter>,
 
+    #[arg(long)]
+    /// exports requests which succeeded to a unique file in the given dir (path)
+    export: Option<PathBuf>,
+
+    /// Preserve sensitive headers when exporting requests.
+    ///
+    /// WARNING this can contain sensitive information such as credentials and
+    /// similar derived info.
+    #[arg(long, default_value_t = false)]
+    preserve: bool,
+
     /// artificial delay in between req executions
     #[arg(long, value_name = "SECONDS", default_value_t = 0.)]
     gap: f64,
@@ -80,8 +92,6 @@ pub struct EmulateCommand {
     #[arg(long, value_name = "SECONDS", default_value_t = 30.)]
     timeout: f64,
     // TODO:
-    // - support export success requests to a file under dir (to create test cases from this)
-    //   - add under firewall tests using such requests to ensure they do block :)
     // - write diagnostics docs
     // - apply last feedback aikibot
 }
@@ -123,11 +133,19 @@ pub async fn exec(
     )
     .await?;
 
+    let maybe_exporter = run_future_unless_cancelled(
+        &guard,
+        "maybe create (req) exporter",
+        maybe_create_exporter(args.export, args.preserve),
+    )
+    .await?;
+
     tokio::time::timeout(
         Duration::from_secs_f64(args.timeout.max(1.)),
         exec_emulate_loop(
             &guard,
             client.clone(),
+            maybe_exporter,
             source,
             source_filter,
             args.curl,
@@ -158,6 +176,7 @@ pub async fn exec(
 async fn exec_emulate_loop(
     guard: &ShutdownGuard,
     client: Client,
+    maybe_exporter: Option<self::export::Exporter>,
     mut source: Source,
     mut source_filter: SourceFilter,
     curl: bool,
@@ -179,6 +198,14 @@ async fn exec_emulate_loop(
             tokio::time::sleep(Duration::from_secs_f64(gap_secs)).await;
         }
 
+        let (maybe_artifact, req) = if let Some(exporter) = maybe_exporter.as_ref() {
+            tracing::debug!("prepare export artifect for req ({})", req.uri());
+            let (artifact, req) = exporter.prepare_export_artifact(req).await?;
+            (Some(artifact), req)
+        } else {
+            (None, req)
+        };
+
         if curl {
             let (parts, body) = req.into_parts();
             let bytes = body
@@ -194,8 +221,27 @@ async fn exec_emulate_loop(
             continue;
         }
 
-        let _resp = client.serve(req).await?;
+        let resp = client.serve(req).await?;
+
+        if let Some(artifact) = maybe_artifact
+            && (100..400).contains(&resp.status().as_u16())
+        {
+            tracing::debug!("export req artifact for unexpected success");
+            artifact.export().await.context("export req artifact")?;
+        }
     }
+}
+
+async fn maybe_create_exporter(
+    dir: Option<PathBuf>,
+    preserve_sensitive_headers: bool,
+) -> Result<Option<self::export::Exporter>, OpaqueError> {
+    let Some(dir) = dir else {
+        return Ok(None);
+    };
+
+    let exporter = self::export::Exporter::try_new(dir, preserve_sensitive_headers).await?;
+    Ok(Some(exporter))
 }
 
 async fn create_data_storage(data: PathBuf) -> Result<SyncCompactDataStorage, OpaqueError> {

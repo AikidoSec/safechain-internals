@@ -1,6 +1,8 @@
 use rama::http::{
     HeaderMap, HeaderName, HeaderValue,
-    header::{CACHE_CONTROL, ETAG, Entry, LAST_MODIFIED},
+    header::{
+        AUTHORIZATION, CACHE_CONTROL, COOKIE, ETAG, Entry, LAST_MODIFIED, PROXY_AUTHORIZATION,
+    },
     headers::{HeaderEncode, TypedHeader},
 };
 use rama::telemetry::tracing;
@@ -12,6 +14,19 @@ pub fn remove_cache_headers(headers: &mut HeaderMap) {
                 let (key, values) = entry.remove_entry_mult();
                 let removed = values.count();
                 tracing::debug!(header = %key, removed, "removed cache header values");
+            }
+            Entry::Vacant(_) => {}
+        }
+    }
+}
+
+pub fn remove_sensitive_req_headers(headers: &mut HeaderMap) {
+    for header_name in [AUTHORIZATION, COOKIE, PROXY_AUTHORIZATION] {
+        match headers.entry(header_name) {
+            Entry::Occupied(entry) => {
+                let (key, values) = entry.remove_entry_mult();
+                let removed = values.count();
+                tracing::debug!(header = %key, removed, "removed sensitive (request) header values");
             }
             Entry::Vacant(_) => {}
         }
