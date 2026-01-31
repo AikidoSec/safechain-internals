@@ -1,8 +1,8 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use rama::{
     Layer as _, Service,
-    error::{ErrorContext as _, OpaqueError},
+    error::OpaqueError,
     graceful::ShutdownGuard,
     http::{
         Request, Response, StatusCode, Uri,
@@ -10,7 +10,7 @@ use rama::{
             BidirectionalWriter, RequestWriterLayer, ResponseWriterLayer, WriterMode,
         },
         service::web::{
-            IntoEndpointService, Router,
+            Router,
             extract::{Json, State},
             response::IntoResponse,
         },
@@ -23,8 +23,11 @@ use rama::{
 
 use safechain_proxy_lib::{
     firewall::{Firewall, events::BlockedEvent, notifier::EventNotifier},
-    storage,
+    storage::SyncCompactDataStorage,
 };
+use tokio::sync::Mutex;
+
+use crate::cmd::emulate::Source;
 
 #[derive(Debug, Clone)]
 pub(super) struct Client {
@@ -32,16 +35,12 @@ pub(super) struct Client {
     web_svc: BoxService<Request, Response, OpaqueError>,
 }
 
-pub(super) async fn new_client(guard: ShutdownGuard, data: PathBuf) -> Result<Client, OpaqueError> {
+pub(super) async fn new_client(
+    guard: ShutdownGuard,
+    data_storage: SyncCompactDataStorage,
+    source: Source,
+) -> Result<Client, OpaqueError> {
     let shared_data = Data::default();
-
-    let data_storage =
-        storage::SyncCompactDataStorage::try_new(data.clone()).with_context(|| {
-            format!(
-                "create compact data storage using dir at path '{}'",
-                data.display()
-            )
-        })?;
 
     let exec = Executor::graceful(guard.clone());
 
@@ -70,9 +69,9 @@ pub(super) async fn new_client(guard: ShutdownGuard, data: PathBuf) -> Result<Cl
         firewall.clone().into_evaluate_request_layer(),
         firewall.into_evaluate_response_layer(),
     )
-        .into_layer(
-            (StatusCode::INTERNAL_SERVER_ERROR, "request was not blocked").into_endpoint_service(),
-        )
+        .into_layer(MockHttpClient {
+            source: Arc::new(Mutex::new(source)),
+        })
         .boxed();
 
     Ok(Client {
@@ -109,6 +108,21 @@ impl Client {
 
     pub(super) fn blocked_events(&self) -> impl Iterator<Item = &BlockedEvent> {
         self.shared_data.blocked_events.iter()
+    }
+}
+
+#[derive(Debug, Clone)]
+struct MockHttpClient {
+    source: Arc<Mutex<Source>>,
+}
+
+impl Service<Request> for MockHttpClient {
+    type Output = Response;
+    type Error = OpaqueError;
+
+    #[inline(always)]
+    async fn serve(&self, req: Request) -> Result<Self::Output, Self::Error> {
+        self.source.lock().await.next_response_for(req).await
     }
 }
 

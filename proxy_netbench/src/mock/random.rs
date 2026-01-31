@@ -20,12 +20,10 @@ impl RandomMocker {
 }
 
 impl RequestMocker for RandomMocker {
-    type Error = OpaqueError;
-
     async fn mock_request(
         &mut self,
         _params: MockRequestParameters,
-    ) -> Result<Request, Self::Error> {
+    ) -> Result<Request, OpaqueError> {
         let uri = random_uri()?;
 
         let mut req = Request::new(Body::empty());

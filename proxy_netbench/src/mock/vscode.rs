@@ -84,12 +84,10 @@ impl VSCodeMocker {
 }
 
 impl RequestMocker for VSCodeMocker {
-    type Error = OpaqueError;
-
     async fn mock_request(
         &mut self,
         params: super::MockRequestParameters,
-    ) -> Result<Request, Self::Error> {
+    ) -> Result<Request, OpaqueError> {
         let uri = self.random_uri(params.malware_ratio).await?;
 
         let mut req = Request::new(Body::empty());
