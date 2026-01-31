@@ -3,6 +3,12 @@
 //! This allows the code to also be shared where desired
 //! with developer tooling such as netbench.
 
+#![cfg_attr(
+    not(test),
+    warn(clippy::print_stdout, clippy::dbg_macro),
+    deny(clippy::unwrap_used, clippy::expect_used)
+)]
+
 pub mod cli;
 pub mod client;
 pub mod diagnostics;

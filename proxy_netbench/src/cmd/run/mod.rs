@@ -214,6 +214,7 @@ async fn serve_req_validate_resp_and_report_result(
             return;
         }
         guard_result = concurrency.acquire() => {
+            #[allow(clippy::expect_used, reason = "see expect msg")]
             guard_result.expect("to always be able to acquire a semaphore guard")
         }
     };

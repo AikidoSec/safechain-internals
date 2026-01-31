@@ -1,6 +1,10 @@
 use std::collections::VecDeque;
 
-use rama::{error::OpaqueError, http::Request, telemetry::tracing};
+use rama::{
+    error::{ErrorContext as _, OpaqueError},
+    http::Request,
+    telemetry::tracing,
+};
 use rand::distr::{Distribution as _, weighted::WeightedIndex};
 use safechain_proxy_lib::storage;
 
@@ -79,7 +83,7 @@ async fn rand_requests_inner(
     let mut requests = VecDeque::with_capacity(request_count);
 
     let weights: Vec<_> = products.iter().map(|p| p.quality.as_u16()).collect();
-    let dist = WeightedIndex::new(&weights).unwrap();
+    let dist = WeightedIndex::new(&weights).context("create weighted index")?;
     for _ in 0..request_count {
         let product = products[dist.sample(&mut rand::rng())].value.clone();
 

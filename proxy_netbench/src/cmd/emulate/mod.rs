@@ -91,9 +91,6 @@ pub struct EmulateCommand {
     /// caps how long this command is allowed to run for (min 1 second)
     #[arg(long, value_name = "SECONDS", default_value_t = 30.)]
     timeout: f64,
-    // TODO:
-    // - write diagnostics docs
-    // - apply last feedback aikibot
 }
 
 pub async fn exec(
