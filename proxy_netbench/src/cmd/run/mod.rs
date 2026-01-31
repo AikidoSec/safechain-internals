@@ -166,45 +166,80 @@ async fn run_send_and_validate_loop(
 
         let phase = if warmup { Phase::Warmup } else { Phase::Main };
 
-        let client = client.clone();
-        let concurrency = concurrency.clone();
-        let result_tx = result_tx.clone();
+        guard.spawn_task_fn({
+            let concurrency_clone = concurrency.clone();
+            let client_clone = client.clone();
+            let result_tx_clone = result_tx.clone();
 
-        guard.spawn_task_fn(async move |guard| {
-            let _guard = tokio::select! {
-                _ = guard.cancelled() => {
-                    tracing::error!("cancel wait for concurrency: guard shutdown");
-                    return;
-                }
-                guard_result = concurrency.acquire() => {
-                    guard_result.expect("to always be able to acquire a semaphore guard")
-                }
-            };
-
-            let req_start = Instant::now();
-            let result = match client.serve(req).await {
-                Err(err) => Err(err),
-                Ok(resp) => {
-                    let (parts, body) = resp.into_parts();
-                    match body.collect().await.context("collect resp payload") {
-                        Err(err) => Err(err),
-                        Ok(_) => Ok(parts),
-                    }
-                }
-            };
-            if let Err(err) = result_tx
-                .send(ClientResult {
-                    result,
-                    req_start,
-                    phase,
-                    iteration,
-                    index,
-                })
-                .await
-            {
-                tracing::debug!("failed to send client result msg: {err}");
+            move |guard| {
+                serve_req_validate_resp_and_report_result(
+                    guard,
+                    concurrency_clone,
+                    client_clone,
+                    req,
+                    result_tx_clone,
+                    ServeRequestParameters {
+                        phase,
+                        iteration,
+                        index,
+                    },
+                )
             }
         });
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ServeRequestParameters {
+    phase: Phase,
+    iteration: usize,
+    index: usize,
+}
+
+async fn serve_req_validate_resp_and_report_result(
+    guard: ShutdownGuard,
+    concurrency: Arc<Semaphore>,
+    client: BoxService<Request, Response, OpaqueError>,
+    req: Request,
+    result_tx: mpsc::Sender<ClientResult>,
+    ServeRequestParameters {
+        phase,
+        iteration,
+        index,
+    }: ServeRequestParameters,
+) {
+    let _guard = tokio::select! {
+        _ = guard.cancelled() => {
+            tracing::error!("cancel wait for concurrency: guard shutdown");
+            return;
+        }
+        guard_result = concurrency.acquire() => {
+            guard_result.expect("to always be able to acquire a semaphore guard")
+        }
+    };
+
+    let req_start = Instant::now();
+    let result = match client.serve(req).await {
+        Err(err) => Err(err),
+        Ok(resp) => {
+            let (parts, body) = resp.into_parts();
+            match body.collect().await.context("collect resp payload") {
+                Err(err) => Err(err),
+                Ok(_) => Ok(parts),
+            }
+        }
+    };
+    if let Err(err) = result_tx
+        .send(ClientResult {
+            result,
+            req_start,
+            phase,
+            iteration,
+            index,
+        })
+        .await
+    {
+        tracing::debug!("failed to send client result msg: {err}");
     }
 }
 

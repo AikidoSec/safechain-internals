@@ -74,7 +74,7 @@ def terminate_process(proc: Proc, timeout_s: float = 3.0) -> None:
         else:
             p.send_signal(signal.SIGTERM)
     except Exception as e:
-        eprint("failed to terminate process", e)
+        eprint("failed to terminate process via SIGTERM", e)
 
     try:
         p.wait(timeout=timeout_s)
@@ -87,12 +87,14 @@ def terminate_process(proc: Proc, timeout_s: float = 3.0) -> None:
             p.kill()
         else:
             p.send_signal(signal.SIGKILL)
-    except Exception:
+    except Exception as e:
+        eprint("failed terminate process via SIGKILL", e)
         pass
 
     try:
         p.wait(timeout=timeout_s)
-    except Exception:
+    except Exception as e:
+        eprint("timeout while waiting for process to exit", timeout_s, e)
         pass
 
 

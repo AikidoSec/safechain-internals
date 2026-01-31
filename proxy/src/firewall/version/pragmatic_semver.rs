@@ -5,8 +5,9 @@ use rama::utils::str::smol_str::ToSmolStr as _;
 use serde::{Deserialize, Serialize, de::Error};
 
 /// **SemVer version**-like struct with a lot of flexibility in the input we accept.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PragmaticSemver {
+    prefix: Identifier,
     major: u64,
     minor: u64,
     patch: u64,
@@ -19,6 +20,7 @@ pub struct PragmaticSemver {
 impl fmt::Display for PragmaticSemver {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let Self {
+            prefix,
             major,
             minor,
             patch,
@@ -28,7 +30,7 @@ impl fmt::Display for PragmaticSemver {
             build,
         } = self;
 
-        write!(f, "{major}.{minor}.{patch}")?;
+        write!(f, "{prefix:?}{major}.{minor}.{patch}")?;
 
         if *fifth != 0 {
             write!(f, ".{fourth}.{fifth}")?;
@@ -79,24 +81,6 @@ impl hash::Hash for PragmaticSemver {
     }
 }
 
-impl fmt::Debug for PragmaticSemver {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Self {
-            major,
-            minor,
-            patch,
-            fourth,
-            fifth,
-            pre,
-            build,
-        } = self;
-        write!(
-            f,
-            "{major}.{minor}.{patch}.{fourth}.{fifth}-{pre:?}+{build:?}"
-        )
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash)]
 /// Opaque identifier that can be safely compared/
 ///
@@ -133,8 +117,17 @@ impl PartialOrd for Identifier {
 }
 
 impl Identifier {
+    #[inline(always)]
     fn new_utf8(s: &str) -> Self {
-        let mut iter = s.bytes().filter_map(normalize_identifier_byte).peekable();
+        Self::new_bytes(s.as_bytes())
+    }
+
+    fn new_bytes(b: &[u8]) -> Self {
+        let mut iter = b
+            .iter()
+            .copied()
+            .filter_map(normalize_identifier_byte)
+            .peekable();
         if iter.peek().is_some() {
             Self(Some(iter.collect()))
         } else {
@@ -205,6 +198,7 @@ impl PragmaticSemver {
         fifth: u64,
     ) -> Self {
         Self {
+            prefix: Identifier::empty(),
             major,
             minor,
             patch,
@@ -218,6 +212,17 @@ impl PragmaticSemver {
     /// Create [`PragmaticSemver`] by parsing from string representation.
     pub fn parse(text: &str) -> Result<Self, PragmaticSemverParseError> {
         Self::from_str(text)
+    }
+
+    rama::utils::macros::generate_set_and_with! {
+        /// (un)set the prefix part of this [`PragmaticSemver`].
+        pub fn prefix(mut self, maybe_str: Option<&str>) -> Self {
+            self.prefix = match maybe_str {
+                Some(s) => Identifier::new_utf8(s),
+                None => Identifier::empty(),
+            };
+            self
+        }
     }
 
     rama::utils::macros::generate_set_and_with! {
@@ -246,6 +251,7 @@ impl PragmaticSemver {
 impl PartialEq for PragmaticSemver {
     fn eq(&self, other: &Self) -> bool {
         let Self {
+            prefix: _,
             major,
             minor,
             patch,
@@ -256,6 +262,7 @@ impl PartialEq for PragmaticSemver {
         } = self;
 
         let Self {
+            prefix: _,
             major: other_major,
             minor: other_minor,
             patch: other_patch,
@@ -286,6 +293,7 @@ impl Ord for PragmaticSemver {
     #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let Self {
+            prefix: _,
             major,
             minor,
             patch,
@@ -296,6 +304,7 @@ impl Ord for PragmaticSemver {
         } = self;
 
         let Self {
+            prefix: _,
             major: other_major,
             minor: other_minor,
             patch: other_patch,
@@ -338,9 +347,14 @@ impl FromStr for PragmaticSemver {
             return Err(PragmaticSemverParseError::EmptyString);
         }
 
-        let mut version = PragmaticSemver::new_zeroed();
+        let (trimmed_input, prefix) = trim_optional_version_prefix(input);
 
-        let remainder = parse_number_parts(input, &mut version)?;
+        let mut version = PragmaticSemver::new_zeroed();
+        if !prefix.is_empty() {
+            version.prefix = prefix;
+        }
+
+        let remainder = parse_number_parts(trimmed_input, &mut version)?;
         if let Some(tail) = remainder {
             parse_pre_and_build(tail, &mut version);
         }
@@ -403,6 +417,30 @@ impl<'a> NextInput<'a> {
             Self::Continue(trimmed_s)
         }
     }
+}
+
+fn trim_optional_version_prefix(input: &str) -> (&str, Identifier) {
+    if input.len() <= 1 {
+        // shortcut if length is too short, because:
+        // 1. it would mean no meaningful prefix can be found
+        // 2. it protects us against OOB errors when accessing bytes below
+        return (input, Identifier::empty());
+    }
+
+    let input_bytes = input.as_bytes();
+
+    if [b'v', b'r'].contains(&input_bytes[0]) {
+        let prefix = Identifier::new_bytes(&input_bytes[..1]);
+
+        let trimmed_input = input[1..].trim_start();
+        let trimmed_input_bytes = trimmed_input.as_bytes();
+
+        if !trimmed_input_bytes.is_empty() && trimmed_input_bytes[0].is_ascii_digit() {
+            return (trimmed_input, prefix);
+        }
+    }
+
+    (input, Identifier::empty())
 }
 
 /// Parse up to 5 numeric parts: major, minor, patch, fourth, fifth.
