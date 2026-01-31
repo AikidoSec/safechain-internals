@@ -32,6 +32,12 @@ pub struct EmulateCommand {
     /// instead of emulating return a curl request
     #[arg(long, default_value_t = false)]
     curl: bool,
+    // TODO:
+    // - support filters: range, domain, path, ...
+    // - support export success requests to a file under dir (to create test cases from this)
+    //   - add under firewall tests using such requests to ensure they do block :)
+    // - write diagnostics docs
+    // - apply last feedback aikibot
 }
 
 pub async fn exec(
