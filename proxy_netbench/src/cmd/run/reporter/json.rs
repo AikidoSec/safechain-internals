@@ -55,13 +55,13 @@ impl Reporter for JsonlReporter {
         self.last_tick = now;
 
         let rps = self.interval_counts.total as f64 / self.interval.as_secs_f64();
-        let (phase, it, idx) = self.last_pos.unwrap_or((Phase::Warmup, 0, 0));
+        let (phase, iteration, idx) = self.last_pos.unwrap_or((Phase::Warmup, 0, 0));
 
         let line = serde_json::json!({
             "type": "summary",
             "t_ms": now.as_millis(),
             "phase": match phase { Phase::Warmup => "warmup", Phase::Main => "main" },
-            "iteration": it,
+            "iteration": iteration,
             "index": idx,
             "interval_ms": self.interval.as_millis(),
             "rps": rps,

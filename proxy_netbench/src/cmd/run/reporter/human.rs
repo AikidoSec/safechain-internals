@@ -45,16 +45,17 @@ impl Reporter for HumanReporter {
         }
         self.last_tick = now;
 
-        let rps = self.interval_counts.total as f64 / self.interval.as_secs_f64();
-        let (phase, it, idx) = self.last_pos.unwrap_or((Phase::Warmup, 0, 0));
+        let interval_secs = self.interval.as_secs_f64();
+        let rps = if interval_secs == 0. {
+            0.
+        } else {
+            self.interval_counts.total as f64 / interval_secs
+        };
+        let (phase, iteration, idx) = self.last_pos.unwrap_or((Phase::Warmup, 0, 0));
 
         println!(
-            "t={:.1}s phase={:?} it={} idx={} rps={:.1} ok={} http_fail={} other_fail={} total_ok={} total_fail={}",
+            "t={:.1}s phase={phase:?} iteration={iteration} idx={idx} rps={rps:.1} ok={} http_fail={} other_fail={} total_ok={} total_fail={}",
             now.as_secs_f64(),
-            phase,
-            it,
-            idx,
-            rps,
             self.interval_counts.ok,
             self.interval_counts.http_fail,
             self.interval_counts.other_fail,

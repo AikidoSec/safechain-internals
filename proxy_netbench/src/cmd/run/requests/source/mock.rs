@@ -31,9 +31,9 @@ pub async fn rand_requests(
             .join(", ")
     );
 
-    let mut rnd = RandomMocker::new();
-    let mut vscode = VSCodeMocker::new(sync_storage.clone());
-    let mut pypi = PyPIMocker::new(sync_storage);
+    let mut random_mocker = RandomMocker::new();
+    let mut vscode_mocker = VSCodeMocker::new(sync_storage.clone());
+    let mut pypi_mocker = PyPIMocker::new(sync_storage);
 
     let mut total_requests = Vec::with_capacity(iterations);
     for i in 1..=iterations {
@@ -45,9 +45,9 @@ pub async fn rand_requests(
                 request_count,
                 &products,
                 malware_ratio,
-                &mut rnd,
-                &mut vscode,
-                &mut pypi,
+                &mut random_mocker,
+                &mut vscode_mocker,
+                &mut pypi_mocker,
             )
             .await?,
         );
@@ -58,9 +58,9 @@ pub async fn rand_requests(
         request_count_warmup,
         &products,
         malware_ratio,
-        &mut rnd,
-        &mut vscode,
-        &mut pypi,
+        &mut random_mocker,
+        &mut vscode_mocker,
+        &mut pypi_mocker,
     )
     .await?;
 
@@ -72,9 +72,9 @@ async fn rand_requests_inner(
     request_count: usize,
     products: &ProductValues,
     malware_ratio: f64,
-    rnd: &mut RandomMocker,
-    vscode: &mut VSCodeMocker,
-    pypi: &mut PyPIMocker,
+    random_mocker: &mut RandomMocker,
+    vscode_mocker: &mut VSCodeMocker,
+    pypi_mocker: &mut PyPIMocker,
 ) -> Result<VecDeque<Request>, OpaqueError> {
     let mut requests = VecDeque::with_capacity(request_count);
 
@@ -86,9 +86,9 @@ async fn rand_requests_inner(
         let params = MockRequestParameters { malware_ratio };
 
         let req = match product {
-            Product::None | Product::Unknown(_) => rnd.mock_request(params).await?,
-            Product::VSCode => vscode.mock_request(params).await?,
-            Product::PyPI => pypi.mock_request(params).await?,
+            Product::None | Product::Unknown(_) => random_mocker.mock_request(params).await?,
+            Product::VSCode => vscode_mocker.mock_request(params).await?,
+            Product::PyPI => pypi_mocker.mock_request(params).await?,
         };
 
         requests.push_back(req)
