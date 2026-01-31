@@ -94,17 +94,20 @@ PKG_SCRIPTS="$BUILD_DIR/scripts"
 INSTALL_DIR="$PKG_ROOT/Library/Application Support/AikidoSecurity/SafeChainUltimate"
 LAUNCHDAEMONS_DIR="$PKG_ROOT/Library/LaunchDaemons"
 LOGS_DIR="$PKG_ROOT/Library/Logs/AikidoSecurity/SafeChainUltimate"
+APP_BUNDLE_DIR="$INSTALL_DIR/SafeChainUltimate.app"
 
 mkdir -p "$INSTALL_DIR/bin"
 mkdir -p "$LAUNCHDAEMONS_DIR"
 mkdir -p "$LOGS_DIR"
 mkdir -p "$PKG_SCRIPTS"
+mkdir -p "$APP_BUNDLE_DIR/Contents/MacOS"
+mkdir -p "$APP_BUNDLE_DIR/Contents/Resources"
 
 # Create placeholder file in logs directory to ensure it's included in package
 touch "$LOGS_DIR/.keep"
 chmod 644 "$LOGS_DIR/.keep"
 
-# Copy binaries
+# Copy binaries into app bundle
 echo "Copying binaries..."
 cp "$AGENT_BIN" "$INSTALL_DIR/bin/safechain-ultimate"
 cp "$AGENT_UI_BIN" "$INSTALL_DIR/bin/safechain-ultimate-ui"
@@ -118,6 +121,27 @@ echo "Copying scripts..."
 mkdir -p "$INSTALL_DIR/scripts"
 cp "$SCRIPT_DIR/scripts/uninstall" "$INSTALL_DIR/scripts/uninstall"
 chmod 755 "$INSTALL_DIR/scripts/uninstall"
+
+# Create app bundle for Login Items icon
+echo "Creating app bundle..."
+APP_BUNDLE_SRC="$SCRIPT_DIR/app-bundle"
+
+# Copy Info.plist and update version
+cp "$APP_BUNDLE_SRC/Contents/Info.plist" "$APP_BUNDLE_DIR/Contents/Info.plist"
+sed -i '' "s/<string>1.0.0<\/string>/<string>$PKG_VERSION<\/string>/" "$APP_BUNDLE_DIR/Contents/Info.plist"
+
+# Copy icon if it exists, otherwise generate it
+ICNS_FILE="$APP_BUNDLE_SRC/Contents/Resources/AppIcon.icns"
+if [ ! -f "$ICNS_FILE" ]; then
+    echo "  Generating icns file..."
+    "$SCRIPT_DIR/generate-icns.sh"
+fi
+
+if [ -f "$ICNS_FILE" ]; then
+    cp "$ICNS_FILE" "$APP_BUNDLE_DIR/Contents/Resources/AppIcon.icns"
+else
+    echo "Warning: AppIcon.icns not found, Login Items will show generic icon" >&2
+fi
 
 # Copy LaunchDaemon plist
 echo "Copying LaunchDaemon plist..."
