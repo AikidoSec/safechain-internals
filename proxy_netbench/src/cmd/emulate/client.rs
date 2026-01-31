@@ -44,8 +44,11 @@ pub(super) async fn new_client(
 
     let exec = Executor::graceful(guard.clone());
 
-    let traffic_writer =
-        BidirectionalWriter::stdout_unbounded(&exec, Some(WriterMode::All), Some(WriterMode::All));
+    let traffic_writer = BidirectionalWriter::stdout_unbounded(
+        &exec,
+        Some(WriterMode::Headers),
+        Some(WriterMode::Headers),
+    );
 
     let notifier_web_client = Arc::new(
         MapErrLayer::new(OpaqueError::from_std).into_layer(

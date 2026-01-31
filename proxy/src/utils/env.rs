@@ -3,7 +3,12 @@ pub const fn project_name() -> &'static str {
 }
 
 pub const fn server_identifier() -> &'static str {
-    concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"))
+    concat!(
+        "Aikido ",
+        env!("CARGO_PKG_NAME"),
+        "/",
+        env!("CARGO_PKG_VERSION")
+    )
 }
 
 pub fn compute_concurrent_request_count() -> usize {

@@ -1,10 +1,10 @@
 use rama::net::address::{AsDomainRef, Domain, DomainParentMatch, DomainTrie};
 
 #[derive(Debug)]
-pub(super) struct DomainMatcher(DomainTrie<DomainAllowMode>);
+pub struct DomainMatcher(DomainTrie<DomainAllowMode>);
 
 impl DomainMatcher {
-    pub(super) fn is_match(&self, domain: &Domain) -> bool {
+    pub fn is_match(&self, domain: &Domain) -> bool {
         match self.0.match_parent(domain) {
             None => false,
             Some(DomainParentMatch {
@@ -19,7 +19,7 @@ impl DomainMatcher {
         }
     }
 
-    pub(super) fn iter(&self) -> impl Iterator<Item = Domain> {
+    pub fn iter(&self) -> impl Iterator<Item = Domain> {
         self.0.iter().map(|t| t.0)
     }
 }

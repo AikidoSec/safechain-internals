@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use rama::{
     Service,
@@ -15,10 +15,17 @@ use safechain_proxy_lib::{
 };
 
 mod client;
+mod filters;
 mod source;
 
 use self::{
     client::Client,
+    filters::{
+        SourceFilter,
+        domain::{DomainFilter, parse_domain_filter},
+        path::{PathFilter, parse_path_filter},
+        range::RangeFilter,
+    },
     source::{Source, SourceKind},
 };
 
@@ -32,8 +39,47 @@ pub struct EmulateCommand {
     /// instead of emulating return a curl request
     #[arg(long, default_value_t = false)]
     curl: bool,
+
+    #[arg(long)]
+    /// post-filtered request range
+    ///
+    /// examples:
+    ///
+    /// - '3'
+    /// - '..3'
+    /// - '..=3'
+    /// - '1..2'
+    /// - '1..=2'
+    range: Option<RangeFilter>,
+
+    #[arg(long, value_parser = parse_domain_filter)]
+    /// domains to filter on (by default all domains are allowed)
+    ///
+    /// examples:
+    ///
+    /// - 'example.com'
+    /// - 'foo.example.com'
+    /// - '*.example.com'
+    domains: Option<DomainFilter>,
+
+    #[arg(long, value_parser = parse_path_filter)]
+    /// paths to filter on (by default all paths are allowed)
+    ///
+    /// examples:
+    ///
+    /// - '/'
+    /// - '/foo/*'
+    /// - '/user/{name}/foo'
+    paths: Option<PathFilter>,
+
+    /// artificial delay in between req executions
+    #[arg(long, value_name = "SECONDS", default_value_t = 0.)]
+    gap: f64,
+
+    /// caps how long this command is allowed to run for (min 1 second)
+    #[arg(long, value_name = "SECONDS", default_value_t = 30.)]
+    timeout: f64,
     // TODO:
-    // - support filters: range, domain, path, ...
     // - support export success requests to a file under dir (to create test cases from this)
     //   - add under firewall tests using such requests to ensure they do block :)
     // - write diagnostics docs
@@ -52,11 +98,22 @@ pub async fn exec(
     )
     .await?;
 
-    let source = run_future_unless_cancelled(
-        &guard,
-        "create source",
-        Source::try_new(args.source, data_storage.clone()),
-    )
+    let (source, source_filter) = run_future_unless_cancelled(&guard, "create source", {
+        let data_storage_clone = data_storage.clone();
+        async move {
+            let source = Source::try_new(args.source, data_storage_clone).await?;
+            match source {
+                har_src @ Source::Har { .. } => Ok((
+                    har_src,
+                    SourceFilter::new_har_filter(args.range, args.domains, args.paths),
+                )),
+                synthetic_src @ Source::Synthetic(_) => Ok((
+                    synthetic_src,
+                    SourceFilter::new_synthetic_filter(args.range, args.domains, args.paths),
+                )),
+            }
+        }
+    })
     .await?;
 
     let client = run_future_unless_cancelled(
@@ -66,7 +123,19 @@ pub async fn exec(
     )
     .await?;
 
-    exec_emulate_loop(&guard, client.clone(), source, args.curl).await?;
+    tokio::time::timeout(
+        Duration::from_secs_f64(args.timeout.max(1.)),
+        exec_emulate_loop(
+            &guard,
+            client.clone(),
+            source,
+            source_filter,
+            args.curl,
+            args.gap,
+        ),
+    )
+    .await
+    .context("exec timeout")??;
 
     client.wait_for_blocked_events().await?;
     for blocked_event in client.blocked_events() {
@@ -90,7 +159,9 @@ async fn exec_emulate_loop(
     guard: &ShutdownGuard,
     client: Client,
     mut source: Source,
+    mut source_filter: SourceFilter,
     curl: bool,
+    gap_secs: f64,
 ) -> Result<(), OpaqueError> {
     loop {
         let Some(req) =
@@ -99,6 +170,14 @@ async fn exec_emulate_loop(
         else {
             return Ok(());
         };
+
+        if !source_filter.filter(&req) {
+            return Ok(());
+        }
+
+        if gap_secs > 0. {
+            tokio::time::sleep(Duration::from_secs_f64(gap_secs)).await;
+        }
 
         if curl {
             let (parts, body) = req.into_parts();

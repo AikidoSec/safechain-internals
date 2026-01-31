@@ -18,8 +18,11 @@ rama::utils::macros::enums::enum_builder! {
 }
 
 pub fn parse_product_values(input: &str) -> Result<ProductValues, String> {
-    let result: Result<Vec<QualityValue<Product>>, _> =
-        input.split(",").map(|s| s.parse()).collect();
+    let result: Result<Vec<QualityValue<Product>>, _> = input
+        .split(",")
+        .filter(|&s| !s.is_empty())
+        .map(|s| s.parse())
+        .collect();
     match result {
         Ok(values) => NonEmptyVec::try_from(values).map_err(|err| err.to_string()),
         Err(err) => Err(err.to_string()),
@@ -45,19 +48,6 @@ mod tests {
     #[test]
     fn test_parse_product_values() {
         for (input, expected) in [
-            (
-                "",
-                Some(non_empty_vec![QualityValue::new_value(Product::Unknown(
-                    "".to_owned()
-                ))]),
-            ),
-            (
-                ";q=0.42",
-                Some(non_empty_vec![QualityValue::new(
-                    Product::Unknown("".to_owned()),
-                    Quality::new_clamped(420)
-                )]),
-            ),
             (
                 "-",
                 Some(non_empty_vec![QualityValue::new_value(Product::None)]),

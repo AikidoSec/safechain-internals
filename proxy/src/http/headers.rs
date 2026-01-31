@@ -1,6 +1,7 @@
 use rama::http::{
-    HeaderMap,
+    HeaderMap, HeaderName, HeaderValue,
     header::{CACHE_CONTROL, ETAG, Entry, LAST_MODIFIED},
+    headers::{HeaderEncode, TypedHeader},
 };
 use rama::telemetry::tracing;
 
@@ -14,6 +15,26 @@ pub fn remove_cache_headers(headers: &mut HeaderMap) {
             }
             Entry::Vacant(_) => {}
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+/// x-blocked-by http header that is used by the firewall
+/// in case a request was blocked.
+pub struct BlockedByHeader;
+
+impl TypedHeader for BlockedByHeader {
+    fn name() -> &'static HeaderName {
+        static NAME: HeaderName = HeaderName::from_static("x-blocked-by");
+        &NAME
+    }
+}
+
+impl HeaderEncode for BlockedByHeader {
+    fn encode<E: Extend<HeaderValue>>(&self, values: &mut E) {
+        values.extend(std::iter::once(HeaderValue::from_static(
+            crate::utils::env::server_identifier(),
+        )))
     }
 }
 

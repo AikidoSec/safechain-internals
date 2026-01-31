@@ -7,6 +7,7 @@ use rama::{
     http::{
         Body, HeaderValue, Request, Response,
         header::CONTENT_TYPE,
+        headers::HeaderMapExt,
         layer::{
             decompression::DecompressionLayer,
             map_request_body::MapRequestBodyLayer,
@@ -33,9 +34,11 @@ pub mod version;
 mod domain_matcher;
 mod pac;
 
-use self::domain_matcher::DomainMatcher;
+pub use self::domain_matcher::DomainMatcher;
 
-use crate::{firewall::notifier::EventNotifier, storage::SyncCompactDataStorage};
+use crate::{
+    firewall::notifier::EventNotifier, http::BlockedByHeader, storage::SyncCompactDataStorage,
+};
 
 use self::rule::{RequestAction, Rule};
 
@@ -173,8 +176,9 @@ impl Firewall {
                     tracing::trace!("firewall rule for {} allows request", rule.product_name());
                     mod_req = new_mod_req
                 }
-                RequestAction::Block(blocked) => {
+                RequestAction::Block(mut blocked) => {
                     self.record_blocked_event(blocked.info.clone()).await;
+                    blocked.response.headers_mut().typed_insert(BlockedByHeader);
                     return Ok(RequestAction::Block(blocked));
                 }
             }
