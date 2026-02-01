@@ -14,16 +14,19 @@ rust-qa:
     cargo nextest run --all-features --workspace
     just rust-fuzz-check
 
+rust-test-ignored:
+    @cargo install cargo-nextest --locked
+    cargo nextest run --workspace --all-features --run-ignored=only
+
 rust-fuzz-check:
     @cargo install cargo-fuzz
-    cargo +nightly fuzz check --fuzz-dir ./proxy-fuzz
+    cargo +nightly fuzz check --fuzz-dir ./proxy_fuzz
 
 rust-fuzz *ARGS:
     @cargo install cargo-fuzz
-    cargo +nightly fuzz run --fuzz-dir ./proxy-fuzz -j 8 parse_pragmatic_semver_version -- -max_total_time=60
+    cargo +nightly fuzz run --fuzz-dir ./proxy_fuzz -j 8 parse_pragmatic_semver_version -- -max_total_time=60
 
-rust-qa-full: rust-qa rust-fuzz
-    cargo nextest run --workspace --all-features --run-ignored=only
+rust-qa-full: rust-qa rust-test-ignored rust-fuzz
 
 run-proxy *ARGS:
     mkdir -p .aikido/safechain-proxy
@@ -37,6 +40,14 @@ run-proxy *ARGS:
         --secrets .aikido/safechain-proxy \
         --pretty \
         {{ARGS}}
+
+run-netbench-cli *ARGS:
+    cargo run \
+        --bin netbench \
+        {{ARGS}}
+
+run-netbench *ARGS:
+    ./proxy_netbench/run.py {{ARGS}}
 
 proxy-har-toggle:
     curl -v -XPOST http://127.0.0.1:8088/har/toggle

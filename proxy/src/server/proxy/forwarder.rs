@@ -14,8 +14,10 @@ use rama::{
     proxy::socks5::Socks5ProxyConnectorLayer,
     rt::Executor,
     stream::Stream,
-    tcp::client::{Request, service::TcpConnector},
+    tcp::client::Request,
 };
+
+use crate::client::transport::{TcpConnector, TcpConnectorConfig, new_tcp_connector};
 
 enum ForwarderKind {
     Direct(TcpConnector),
@@ -37,7 +39,7 @@ impl fmt::Debug for TcpForwarder {
 
 impl TcpForwarder {
     pub(super) fn new(exec: Executor, proxy: Option<ProxyAddress>) -> Self {
-        let tcp_connector = TcpConnector::new(exec);
+        let tcp_connector = new_tcp_connector(exec, TcpConnectorConfig::default());
         let kind = match proxy {
             Some(proxy_addr) => {
                 let connector = ProxyConnectorLayer::required(

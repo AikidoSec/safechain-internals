@@ -62,6 +62,15 @@ impl SyncSecrets {
     }
 }
 
+#[cfg(feature = "bench")]
+impl SyncSecrets {
+    pub fn new_in_memory() -> Self {
+        Self(Backend::InMemory {
+            secrets: Arc::new(RwLock::new(HashMap::new())),
+        })
+    }
+}
+
 impl FromStr for SyncSecrets {
     type Err = OpaqueError;
 

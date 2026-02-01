@@ -23,10 +23,12 @@ mod vscode_marketplace;
 static ASSERT_ENDPOINT_STATE: LazyLock<assert_endpoint::MockState> =
     LazyLock::new(assert_endpoint::MockState::new);
 
-pub fn new_mock_client()
--> Result<impl Service<Request, Output = Response, Error = OpaqueError> + Clone, OpaqueError> {
+pub fn new_mock_client(
+    exec: Executor,
+    _cfg: super::WebClientConfig,
+) -> Result<impl Service<Request, Output = Response, Error = OpaqueError> + Clone, OpaqueError> {
     let echo_svc_builder = EchoServiceBuilder::default();
-    let echo_svc = Arc::new(echo_svc_builder.build_http(Executor::default()));
+    let echo_svc = Arc::new(echo_svc_builder.build_http(exec));
     let not_found_svc = service_fn(move |req| {
         let echo_svc = echo_svc.clone();
         async move { echo_svc.serve(req).await.map(IntoResponse::into_response) }

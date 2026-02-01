@@ -54,12 +54,14 @@ impl From<StaticHttpProxyError> for Response {
 
 pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
     guard: ShutdownGuard,
-    mitm_all: bool,
     upstream_proxy_address: Option<ProxyAddress>,
+    mitm_all: bool,
     tls_acceptor: TlsAcceptorLayer,
     firewall: Firewall,
     #[cfg(feature = "har")] har_export_layer: HARExportLayer,
 ) -> Result<MitmServer<impl Service<S, Output = (), Error = BoxError> + Clone>, OpaqueError> {
+    let exec = Executor::graceful(guard);
+
     let https_svc = (
         TraceLayer::new_for_http(),
         ConsumeErrLayer::trace(Level::DEBUG).with_response(StaticHttpProxyError),
@@ -72,11 +74,10 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
         CompressionLayer::new(),
     )
         .into_layer(super::client::new_https_client(
+            exec.clone(),
             firewall.clone(),
             upstream_proxy_address.clone(),
         )?);
-
-    let exec = Executor::graceful(guard);
 
     let http_server = HttpServer::auto(exec.clone()).service(Arc::new(https_svc));
 

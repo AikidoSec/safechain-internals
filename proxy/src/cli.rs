@@ -1,3 +1,5 @@
+//! CLI utilities and types
+
 use std::{path::PathBuf, time::Duration};
 
 use rama::{
@@ -8,33 +10,14 @@ use rama::{
         address::{ProxyAddress, SocketAddress},
         socket::Interface,
     },
+    rt::Executor,
     telemetry::tracing::{self, Instrument as _},
     tls::boring::server::TlsAcceptorLayer,
 };
 
 use clap::Parser;
 
-pub mod client;
-pub mod diagnostics;
-pub mod firewall;
-pub mod http;
-pub mod server;
-pub mod storage;
-pub mod tls;
-pub mod utils;
-
-#[cfg(target_family = "unix")]
-#[global_allocator]
-static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
-
-#[cfg(target_os = "windows")]
-#[global_allocator]
-static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
-#[cfg(test)]
-pub mod test;
-
-/// CLI arguments for configuring proxy behavior.
+// CLI arguments for configuring proxy behavior.
 #[derive(Debug, Clone, Parser)]
 #[command(name = "safechain-proxy")]
 #[command(bin_name = "safechain-proxy")]
@@ -59,7 +42,7 @@ pub struct Args {
         value_name = "keyring | memory | <dir>",
         default_value = "keyring"
     )]
-    pub secrets: self::storage::SyncSecrets,
+    pub secrets: crate::storage::SyncSecrets,
 
     /// debug logging as default instead of Info; use RUST_LOG env for more options
     #[arg(long, short = 'v', default_value_t = false)]
@@ -99,33 +82,13 @@ pub struct Args {
     pub graceful: f64,
 
     /// Optional endpoint URL to POST blocked-event notifications to.
-    ///
-    /// If omitted, blocked events are still recorded locally but not reported.
-    #[arg(long = "reporting-endpoint", value_name = "URL")]
+    #[arg(long, value_name = "URL")]
     pub reporting_endpoint: Option<Uri>,
 
     #[cfg(target_family = "unix")]
     /// Set the limit of max open file descriptors for this process and its children.
     #[arg(long, value_name = "N", default_value_t = 262_144)]
-    pub ulimit: self::utils::os::rlim_t,
-}
-
-#[tokio::main]
-async fn main() -> Result<(), BoxError> {
-    let args = Args::parse();
-
-    let _tracing_guard = self::utils::telemetry::init_tracing(&args).await?;
-
-    #[cfg(target_family = "unix")]
-    self::utils::os::raise_nofile(args.ulimit).context("set file descriptor limit")?;
-
-    let base_shutdown_signal = graceful::default_signal();
-    if let Err(err) = run_with_args(base_shutdown_signal, args).await {
-        eprintln!("🚩 exit with error: {err}");
-        std::process::exit(1);
-    }
-
-    Ok(())
+    pub ulimit: crate::utils::os::rlim_t,
 }
 
 /// Runs all the safechain-proxy services and blocks until
@@ -133,14 +96,14 @@ async fn main() -> Result<(), BoxError> {
 ///
 /// This entry point is used by both the (binary) `main` function as well as
 /// for the e2e test suite found in the test module.
-async fn run_with_args<F>(base_shutdown_signal: F, args: Args) -> Result<(), BoxError>
+pub async fn run_with_args<F>(base_shutdown_signal: F, args: Args) -> Result<(), BoxError>
 where
     F: Future<Output: Send + 'static> + Send + 'static,
 {
     tokio::fs::create_dir_all(&args.data)
         .await
         .with_context(|| format!("create data directory at path '{}'", args.data.display()))?;
-    let data_storage = self::storage::SyncCompactDataStorage::try_new(args.data.clone())
+    let data_storage = crate::storage::SyncCompactDataStorage::try_new(args.data.clone())
         .with_context(|| {
             format!(
                 "create compact data storage using dir at path '{}'",
@@ -151,21 +114,21 @@ where
 
     let graceful_timeout = (args.graceful > 0.).then(|| Duration::from_secs_f64(args.graceful));
 
-    let (tls_acceptor, root_ca) =
-        self::tls::new_tls_acceptor_layer(&args, &data_storage).context("prepare TLS acceptor")?;
+    let (tls_acceptor, root_ca) = crate::tls::new_tls_acceptor_layer(&args.secrets, &data_storage)
+        .context("prepare TLS acceptor")?;
 
     let (error_tx, error_rx) = tokio::sync::mpsc::channel::<OpaqueError>(1);
     let graceful = graceful::Shutdown::new(new_shutdown_signal(error_rx, base_shutdown_signal));
 
     #[cfg(feature = "har")]
     let (har_client, har_export_layer) =
-        { self::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
+        { crate::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
 
     // ensure to not wait for firewall creation in case shutdown was initiated,
     // this can happen for example in case remote lists need to be fetched and the
     // something on the network on either side is not working
     let firewall = tokio::select! {
-        result = self::firewall::Firewall::try_new(
+        result = crate::firewall::Firewall::try_new(
             graceful.guard(),
             data_storage,
             args.reporting_endpoint.clone(),
@@ -238,15 +201,16 @@ async fn run_meta_https_server(
     guard: ShutdownGuard,
     error_tx: tokio::sync::mpsc::Sender<OpaqueError>,
     tls_acceptor: TlsAcceptorLayer,
-    root_ca: self::tls::RootCA,
+    root_ca: crate::tls::RootCA,
     proxy_addr_rx: tokio::sync::oneshot::Receiver<SocketAddress>,
-    firewall: self::firewall::Firewall,
-    #[cfg(feature = "har")] har_client: self::diagnostics::har::HarClient,
+    firewall: crate::firewall::Firewall,
+    #[cfg(feature = "har")] har_client: crate::diagnostics::har::HarClient,
 ) {
     tracing::info!("spawning meta http(s) server...");
-    if let Err(err) = self::server::meta::run_meta_https_server(
-        args,
-        guard,
+    if let Err(err) = crate::server::meta::run_meta_https_server(
+        args.meta_bind,
+        &args.data,
+        Executor::graceful(guard),
         tls_acceptor,
         root_ca,
         proxy_addr_rx,
@@ -256,7 +220,7 @@ async fn run_meta_https_server(
     )
     .instrument(tracing::debug_span!(
         "meta server lifetime",
-        server.service.name = format!("{}-meta", self::utils::env::project_name()),
+        server.service.name = format!("{}-meta", crate::utils::env::project_name()),
         otel.kind = "server",
         network.protocol.name = "http",
     ))
@@ -273,12 +237,15 @@ async fn run_proxy_server(
     error_tx: tokio::sync::mpsc::Sender<OpaqueError>,
     tls_acceptor: TlsAcceptorLayer,
     proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
-    firewall: self::firewall::Firewall,
-    #[cfg(feature = "har")] har_export_layer: self::diagnostics::har::HARExportLayer,
+    firewall: crate::firewall::Firewall,
+    #[cfg(feature = "har")] har_export_layer: crate::diagnostics::har::HARExportLayer,
 ) {
     tracing::info!("spawning proxy server...");
-    if let Err(err) = self::server::proxy::run_proxy_server(
-        args,
+    if let Err(err) = crate::server::proxy::run_proxy_server(
+        args.bind,
+        args.proxy,
+        &args.data,
+        args.mitm_all,
         guard,
         tls_acceptor,
         proxy_addr_tx,
@@ -288,7 +255,7 @@ async fn run_proxy_server(
     )
     .instrument(tracing::debug_span!(
         "proxy server lifetime",
-        server.service.name = self::utils::env::project_name(),
+        server.service.name = crate::utils::env::project_name(),
         otel.kind = "server",
         network.protocol.name = "tcp",
     ))

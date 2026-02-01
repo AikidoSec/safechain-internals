@@ -18,11 +18,11 @@ use rama::{
     utils::collections::AppendOnlyVec,
 };
 
-use crate::server::proxy::FirewallUserConfig;
+use crate::{firewall::events::BlockedEvent, server::proxy::FirewallUserConfig};
 
 #[derive(Clone, Debug)]
 pub struct MockState {
-    pub blocked_events: Arc<ArcSwap<AppendOnlyVec<serde_json::Value>>>,
+    pub blocked_events: Arc<ArcSwap<AppendOnlyVec<BlockedEvent>>>,
 }
 
 impl MockState {
@@ -65,9 +65,9 @@ async fn safechain_config_echo(req: Request) -> impl IntoResponse {
 
 async fn record_blocked_event(
     State(MockState { blocked_events }): State<MockState>,
-    Json(value): Json<serde_json::Value>,
+    Json(event): Json<BlockedEvent>,
 ) -> impl IntoResponse {
-    blocked_events.load().push(value);
+    blocked_events.load().push(event);
     StatusCode::NO_CONTENT
 }
 

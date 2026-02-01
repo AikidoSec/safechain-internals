@@ -1,10 +1,9 @@
-use std::{sync::Arc, time::Duration};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use rama::{
-    Layer,
+    Layer, Service,
     error::{ErrorContext, OpaqueError},
     extensions::ExtensionsRef as _,
-    graceful::ShutdownGuard,
     http::{
         HeaderValue, Request, StatusCode,
         layer::{required_header::AddRequiredResponseHeadersLayer, trace::TraceLayer},
@@ -17,10 +16,11 @@ use rama::{
     layer::TimeoutLayer,
     net::{
         address::SocketAddress,
+        socket::Interface,
         tls::{SecureTransport, server::TlsPeekRouter},
     },
     rt::Executor,
-    tcp::server::TcpListener,
+    tcp::{TcpStream, server::TcpListener},
     telemetry::tracing,
     tls::boring::server::TlsAcceptorLayer,
 };
@@ -28,26 +28,93 @@ use rama::{
 #[cfg(feature = "har")]
 use crate::diagnostics::har::HarClient;
 
-use crate::{Args, firewall::Firewall, tls::RootCA};
+use crate::{firewall::Firewall, tls::RootCA};
 
-pub async fn run_meta_https_server(
-    args: Args,
-    guard: ShutdownGuard,
+#[derive(Debug)]
+/// Meta HTTP(S) server that can serve meta connections.
+///
+/// You can create it using [`build_meta_https_server`]
+/// or build and run it directly using [`run_meta_https_server`].
+///
+/// The first is useful for lib usage, while the latter is mostly
+/// for the proxycli use-case.
+pub struct MetaServer<S> {
+    service: S,
+    socket_address: SocketAddress,
+    listener: TcpListener,
+}
+
+impl<S> MetaServer<S>
+where
+    S: Service<TcpStream> + Clone,
+{
+    /// The (local) address this meta server is bound to.
+    pub fn socket_address(&self) -> SocketAddress {
+        self.socket_address
+    }
+
+    /// Serve meta connections from this server.
+    pub async fn serve(self) -> Result<(), OpaqueError> {
+        self.listener.serve(self.service).await;
+        Ok(())
+    }
+}
+
+pub async fn build_meta_https_server(
+    bind: Interface,
+    exec: Executor,
     tls_acceptor: TlsAcceptorLayer,
     root_ca: RootCA,
-    proxy_addr_rx: tokio::sync::oneshot::Receiver<SocketAddress>,
+    proxy_addr: SocketAddress,
     firewall: Firewall,
     #[cfg(feature = "har")] har_client: HarClient,
-) -> Result<(), OpaqueError> {
-    let proxy_addr = tokio::time::timeout(Duration::from_secs(8), proxy_addr_rx)
+) -> Result<MetaServer<impl Service<TcpStream> + Clone>, OpaqueError> {
+    let http_router = build_meta_http_router(
+        root_ca,
+        proxy_addr,
+        firewall,
+        #[cfg(feature = "har")]
+        har_client,
+    );
+
+    let http_svc = (
+        TraceLayer::new_for_http(),
+        AddRequiredResponseHeadersLayer::new()
+            .with_server_header_value(HeaderValue::from_static(crate::utils::env::project_name())),
+    )
+        .into_layer(http_router);
+
+    let http_server = HttpServer::auto(exec.clone()).service(Arc::new(http_svc));
+
+    let tcp_svc = TimeoutLayer::new(Duration::from_secs(60)).into_layer(
+        TlsPeekRouter::new(tls_acceptor.into_layer(http_server.clone())).with_fallback(http_server),
+    );
+
+    let tcp_listener = TcpListener::bind(bind, exec)
         .await
-        .context("wait to recv proxy addr from proxy task")?
-        .context("recv proxy addr from proxy task")?;
+        .map_err(OpaqueError::from_boxed)
+        .context("bind proxy meta http(s) server")?;
 
-    tracing::info!("meta HTTP(S) server received proxy address from proxy task: {proxy_addr}");
+    let meta_addr = tcp_listener
+        .local_addr()
+        .context("get bound address for proxy meta http(s) server")?;
+    tracing::info!("meta http(s) server bound to: {meta_addr}");
 
+    Ok(MetaServer {
+        service: tcp_svc,
+        socket_address: meta_addr.into(),
+        listener: tcp_listener,
+    })
+}
+
+fn build_meta_http_router(
+    root_ca: RootCA,
+    proxy_addr: SocketAddress,
+    firewall: Firewall,
+    #[cfg(feature = "har")] har_client: HarClient,
+) -> Router {
     #[cfg_attr(not(feature = "har"), allow(unused_mut))]
-    let mut http_router = Router::new()
+    let mut router = Router::new()
         .with_get("/", Html(META_SITE_INDEX_HTML))
         .with_get("/ping", "pong")
         .with_get("/ca", move || {
@@ -68,7 +135,7 @@ pub async fn run_meta_https_server(
 
     #[cfg(feature = "har")]
     {
-        http_router.set_post("/har/toggle", move || {
+        router.set_post("/har/toggle", move || {
             let har_client = har_client.clone();
             async move {
                 har_client
@@ -80,36 +147,42 @@ pub async fn run_meta_https_server(
         });
     }
 
-    let http_svc = (
-        TraceLayer::new_for_http(),
-        AddRequiredResponseHeadersLayer::new()
-            .with_server_header_value(HeaderValue::from_static(crate::utils::env::project_name())),
-    )
-        .into_layer(http_router);
+    router
+}
 
-    let exec = Executor::graceful(guard.clone());
-    let http_server = HttpServer::auto(exec.clone()).service(Arc::new(http_svc));
-
-    let tcp_svc = TimeoutLayer::new(Duration::from_secs(60)).into_layer(
-        TlsPeekRouter::new(tls_acceptor.into_layer(http_server.clone())).with_fallback(http_server),
-    );
-
-    let tcp_listener = TcpListener::bind(args.meta_bind, exec)
+#[allow(clippy::too_many_arguments)]
+pub async fn run_meta_https_server(
+    bind: Interface,
+    data: &Path,
+    exec: Executor,
+    tls_acceptor: TlsAcceptorLayer,
+    root_ca: RootCA,
+    proxy_addr_rx: tokio::sync::oneshot::Receiver<SocketAddress>,
+    firewall: Firewall,
+    #[cfg(feature = "har")] har_client: HarClient,
+) -> Result<(), OpaqueError> {
+    let proxy_addr = tokio::time::timeout(Duration::from_secs(8), proxy_addr_rx)
         .await
-        .map_err(OpaqueError::from_boxed)
-        .context("bind proxy meta http(s) server")?;
+        .context("wait to recv proxy addr from proxy task")?
+        .context("recv proxy addr from proxy task")?;
+    tracing::info!("meta HTTP(S) server received proxy address from proxy task: {proxy_addr}");
 
-    let meta_addr = tcp_listener
-        .local_addr()
-        .context("get bound address for proxy meta http(s) server")?;
+    let server = build_meta_https_server(
+        bind,
+        exec,
+        tls_acceptor,
+        root_ca,
+        proxy_addr,
+        firewall,
+        #[cfg(feature = "har")]
+        har_client,
+    )
+    .await?;
 
-    tracing::info!("meta http(s) server bound to: {meta_addr}");
-    crate::server::write_server_socket_address_as_file(&args.data, "meta", meta_addr.into())
+    crate::server::write_server_socket_address_as_file(data, "meta", server.socket_address())
         .await?;
 
-    tcp_listener.serve(tcp_svc).await;
-
-    Ok(())
+    server.serve().await
 }
 
 const META_SITE_INDEX_HTML: &str = r##"<!doctype html>

@@ -6,6 +6,9 @@ use std::{
     time::Duration,
 };
 
+use super::events::BlockedEvent;
+use crate::utils::env;
+
 use rama::{
     Service,
     error::{ErrorContext as _, OpaqueError},
@@ -18,9 +21,7 @@ use rama::{
 
 use tokio::sync::{Semaphore, SemaphorePermit};
 
-use crate::firewall::version::{PackageVersion, PackageVersionKey};
-
-use super::events::BlockedEvent;
+use super::version::{PackageVersion, PackageVersionKey};
 
 const EVENT_DEDUP_WINDOW: Duration = Duration::from_secs(30);
 const MAX_EVENTS: u64 = 10_000;
@@ -70,8 +71,22 @@ impl std::fmt::Debug for EventNotifier {
 
 impl EventNotifier {
     pub fn try_new(exec: Executor, reporting_endpoint: Uri) -> Result<Self, OpaqueError> {
-        let client = crate::client::new_web_client()?.boxed();
-        let limit = Arc::new(Semaphore::const_new(compute_concurrent_request_count()));
+        let client =
+            crate::client::new_web_client(exec.clone(), crate::client::WebClientConfig::default())?
+                .boxed();
+        Self::try_new_with_client(exec, reporting_endpoint, client)
+    }
+
+    pub fn try_new_with_client<C>(
+        exec: Executor,
+        reporting_endpoint: Uri,
+        client: C,
+    ) -> Result<Self, OpaqueError>
+    where
+        C: Service<Request, Output = Response, Error = OpaqueError>,
+    {
+        let client = client.boxed();
+        let limit = Arc::new(Semaphore::const_new(env::compute_concurrent_request_count()));
         let dedup = moka::sync::CacheBuilder::new(MAX_EVENTS)
             .time_to_live(EVENT_DEDUP_WINDOW)
             .build();
@@ -117,18 +132,6 @@ impl EventNotifier {
             .fetch_add(1, atomic::Ordering::SeqCst)
             == 0
     }
-}
-
-fn compute_concurrent_request_count() -> usize {
-    std::env::var("MAX_CONCURRENT_REQUESTS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or_else(|| {
-            let cpus = std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1);
-            cpus * 64
-        })
 }
 
 async fn acquire_concurrency_guard<'a>(

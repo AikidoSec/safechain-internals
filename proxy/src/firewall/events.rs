@@ -43,6 +43,7 @@ fn now_unix_ms() -> u64 {
     static START: OnceLock<(Instant, u64)> = OnceLock::new();
 
     let (start_instant, start_unix_ms) = START.get_or_init(|| {
+        #[allow(clippy::unwrap_used, reason = "we require system time at least once")]
         let unix_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()

@@ -1,0 +1,265 @@
+name: proxy benchmark
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: proxy-benchmark-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NETBENCH_ORCHESTRATOR: proxy_netbench/run.py
+  BASELINE_ARTIFACT_NAME: netbench-baselines
+  BASELINE_DIR: baselines
+  RUN_DIR: run-metrics
+
+jobs:
+  bench:
+    name: bench (${{ matrix.scenario }}, proxy=${{ matrix.proxy }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [baseline, latency-jitter, flaky-upstream]
+        proxy: [direct, global, scoped]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561
+        with:
+          toolchain: stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Download baselines from latest successful main run
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$BASELINE_DIR"
+          python3 proxy_netbench/scripts/download_baselines.py \
+            --repo "${{ github.repository }}" \
+            --workflow "proxy-benchmark.yml" \
+            --artifact "$BASELINE_ARTIFACT_NAME" \
+            --out "$BASELINE_DIR" \
+            --branch "main"
+
+      - name: Run netbench (matrix)
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+          PROXY: ${{ matrix.proxy }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports "$RUN_DIR"
+
+          CUR_KV="$RUN_DIR/${SCENARIO}.${PROXY}.kv.txt"
+          BASE_KV="$BASELINE_DIR/${SCENARIO}.${PROXY}.kv.txt"
+          REPORT_PATH="reports/${SCENARIO}.${PROXY}.jsonl"
+
+          COMPARE_FLAG=""
+          if [ -f "$BASE_KV" ]; then
+            COMPARE_FLAG="--compare $BASE_KV"
+          fi
+
+          python3 "$NETBENCH_ORCHESTRATOR" \
+            --proxy "$PROXY" \
+            --scenario "$SCENARIO" \
+            --report-file "$REPORT_PATH" \
+            --save-baseline "$CUR_KV" \
+            $COMPARE_FLAG
+
+      - name: Upload run artifacts (jsonl, summary, kv)
+        uses: actions/upload-artifact@v4
+        with:
+          name: netbench-${{ matrix.scenario }}-proxy-${{ matrix.proxy }}
+          path: |
+            reports/${{ matrix.scenario }}.${{ matrix.proxy }}.jsonl
+            reports/${{ matrix.scenario }}.${{ matrix.proxy }}.jsonl.summary.txt
+            run-metrics/${{ matrix.scenario }}.${{ matrix.proxy }}.kv.txt
+          if-no-files-found: error
+
+  bench-replay:
+    name: bench replay (${{ matrix.name }}), proxy=${{ matrix.proxy }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: synthetic
+            har_fp: proxy_netbench/har_files/synthetic.har.json
+            proxy: direct
+          - name: synthetic
+            har_fp: proxy_netbench/har_files/synthetic.har.json
+            proxy: global
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561
+        with:
+          toolchain: stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Download baselines from latest successful main run
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$BASELINE_DIR"
+          python3 proxy_netbench/scripts/download_baselines.py \
+            --repo "${{ github.repository }}" \
+            --workflow "proxy-benchmark.yml" \
+            --artifact "$BASELINE_ARTIFACT_NAME" \
+            --out "$BASELINE_DIR" \
+            --branch "main"
+
+      - name: Run netbench (matrix)
+        env:
+          PROXY: ${{ matrix.proxy }}
+          REPLAY_NAME: ${{ matrix.name }}
+          REPLAY_HAR_FP: ${{ matrix.har_fp }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports "$RUN_DIR"
+
+          CUR_KV="$RUN_DIR/replay_${REPLAY_NAME}.${PROXY}.kv.txt"
+          BASE_KV="$BASELINE_DIR/replay_${REPLAY_NAME}.${PROXY}.kv.txt"
+          REPORT_PATH="reports/replay_${REPLAY_NAME}.${PROXY}.jsonl"
+
+          COMPARE_FLAG=""
+          if [ -f "$BASE_KV" ]; then
+            COMPARE_FLAG="--compare $BASE_KV"
+          fi
+
+          python3 "$NETBENCH_ORCHESTRATOR" \
+            --proxy "$PROXY" \
+            --har "$REPLAY_HAR_FP" \
+            --emulate \
+            --report-file "$REPORT_PATH" \
+            --save-baseline "$CUR_KV" \
+            $COMPARE_FLAG
+
+      - name: Upload run artifacts (jsonl, summary, kv)
+        uses: actions/upload-artifact@v4
+        with:
+          name: netbench-replay_${{ matrix.name }}-proxy-${{ matrix.proxy }}
+          path: |
+            reports/replay_${{ matrix.name }}.${{ matrix.proxy }}.jsonl
+            reports/replay_${{ matrix.name }}.${{ matrix.proxy }}.jsonl.summary.txt
+            run-metrics/replay_${{ matrix.name }}.${{ matrix.proxy }}.kv.txt
+          if-no-files-found: error
+
+  publish_baselines:
+    name: publish baselines
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [bench]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all matrix artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect baseline kv files
+        run: |
+          set -euo pipefail
+          mkdir -p baselines
+          find artifacts -type f -name "*.kv.txt" -print -exec cp {} baselines/ \;
+          ls -la baselines
+
+      - name: Upload baselines artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: netbench-baselines
+          path: baselines
+          if-no-files-found: error
+
+  pr_comment:
+    name: report to PR
+    if: github.event_name == 'pull_request'
+    needs: [bench]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Download all matrix artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Download baselines from latest successful main run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p baselines
+          python3 proxy_netbench/scripts/download_baselines.py \
+            --repo "${{ github.repository }}" \
+            --workflow "proxy-benchmark.yml" \
+            --artifact "$BASELINE_ARTIFACT_NAME" \
+            --out "baselines" \
+            --branch "main"
+
+      - name: Build markdown report
+        run: |
+          set -euo pipefail
+          python3 proxy_netbench/scripts/build_report.py \
+            --artifacts-dir "artifacts" \
+            --baselines-dir "baselines" \
+            --out "report.md" \
+            --sha "${{ github.sha }}"
+
+      - name: Post or update PR comment
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 proxy_netbench/scripts/post_pr_comment.py \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --report "report.md"
