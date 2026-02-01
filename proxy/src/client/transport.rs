@@ -8,7 +8,7 @@ pub type TcpConnector = tcp::client::service::TcpConnector<
     TcpStreamConnectorCloneFactory<TcpStreamConnector>,
 >;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct TcpConnectorConfig {
     #[cfg(all(not(test), feature = "bench"))]
     pub do_not_allow_overwrite: bool,
@@ -16,8 +16,8 @@ pub struct TcpConnectorConfig {
 
 pub fn new_tcp_connector(exec: Executor, cfg: TcpConnectorConfig) -> TcpConnector {
     tcp::client::service::TcpConnector::new(exec)
-        .with_connector(TcpStreamConnector::new(cfg))
-        .with_dns(new_dns_resolver())
+        .with_connector(TcpStreamConnector::new(cfg.clone()))
+        .with_dns(new_dns_resolver(cfg))
 }
 
 #[cfg(not(any(test, feature = "bench")))]
@@ -48,7 +48,7 @@ mod production {
     pub use ::rama::dns::GlobalDnsResolver as DnsResolver;
 
     #[inline(always)]
-    pub fn new_dns_resolver() -> DnsResolver {
+    pub fn new_dns_resolver(_cfg: super::TcpConnectorConfig) -> DnsResolver {
         DnsResolver::new()
     }
 
@@ -115,7 +115,15 @@ mod bench {
     pub struct DnsResolver(Option<::rama::dns::GlobalDnsResolver>);
 
     #[inline(always)]
-    pub fn new_dns_resolver() -> DnsResolver {
+    pub fn new_dns_resolver(cfg: super::TcpConnectorConfig) -> DnsResolver {
+        tracing::trace!("DnsResolver w/ tcp cfg: {cfg:?}");
+
+        #[cfg(all(not(test), feature = "bench"))]
+        if cfg.do_not_allow_overwrite {
+            // if not overwritten we do need the real DNS..
+            return DnsResolver(Some(::rama::dns::GlobalDnsResolver::new()));
+        }
+
         if is_eggress_address_overwritten() {
             DnsResolver(None)
         } else {
