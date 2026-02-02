@@ -92,12 +92,16 @@ func getNetworkServices(ctx context.Context) ([]string, error) {
 }
 
 func isProxyEnabledAndUrlSet(output string, proxyURL string) bool {
-	parsed, err := url.Parse(proxyURL)
-	if err != nil {
-		return false
+	host, port := "", ""
+	if proxyURL != "" {
+		parsed, err := url.Parse(proxyURL)
+		if err != nil {
+			return false
+		}
+		host = parsed.Hostname()
+		port = parsed.Port()
 	}
-	host := parsed.Hostname()
-	port := parsed.Port()
+
 	return strings.Contains(string(output), "Enabled: Yes") && strings.Contains(string(output), "Host: "+host) && strings.Contains(string(output), "Port: "+port)
 }
 
