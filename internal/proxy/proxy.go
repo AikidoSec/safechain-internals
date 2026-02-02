@@ -47,11 +47,6 @@ func (p *Proxy) WaitForProxyToBeReady() error {
 		case <-p.procDone:
 			return fmt.Errorf("proxy process exited unexpectedly: %v", p.procErr)
 		case <-ticker.C:
-			select {
-			case <-p.procDone:
-				return fmt.Errorf("proxy process exited unexpectedly: %v", p.procErr)
-			default:
-			}
 			err := LoadProxyConfig()
 			if err == nil {
 				return nil
