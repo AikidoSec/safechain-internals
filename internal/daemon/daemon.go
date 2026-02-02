@@ -205,12 +205,22 @@ func (d *Daemon) Uninstall(ctx context.Context, removeScanners bool) error {
 }
 
 func (d *Daemon) heartbeat() error {
-	if !proxy.ProxyCAInstalled() {
-		log.Println("Proxy CA not installed yet, skipping heartbeat checks...")
-		return nil
-	}
 	if !d.proxy.IsProxyRunning() {
 		log.Println("Proxy is not running, starting it...")
+		if err := d.proxy.Start(d.ctx, d.ingress.Addr()); err != nil {
+			return fmt.Errorf("failed to start proxy: %v", err)
+		}
+
+		if !proxy.ProxyCAInstalled() {
+			if err := proxy.InstallProxyCA(d.ctx); err != nil {
+				return fmt.Errorf("failed to install proxy CA: %v", err)
+			}
+		}
+		if d.proxy.IsProxyRunning() {
+			log.Println("Proxy started successfully")
+		} else {
+			log.Println("Failed to start proxy, will try again later")
+		}
 	} else {
 		log.Println("Proxy is running")
 	}
