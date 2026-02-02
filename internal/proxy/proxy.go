@@ -114,7 +114,9 @@ func (p *Proxy) Stop() error {
 		case <-time.After(10 * time.Second):
 			log.Println("Timeout waiting for proxy process to exit, killing...")
 			if p.cmd != nil && p.cmd.Process != nil {
-				_ = p.cmd.Process.Kill()
+				if err := p.cmd.Process.Kill(); err != nil {
+					log.Printf("Failed to kill proxy process: %v", err)
+				}
 			}
 		}
 	}
