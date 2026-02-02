@@ -287,6 +287,10 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (st
 	return runAsLoggedInUser(binaryPath, args)
 }
 
+func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
+	return RunAsCurrentUser(ctx, binaryPath, args)
+}
+
 func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 	scriptURL := fmt.Sprintf("%s/releases/download/%s/install-safe-chain.ps1", repoURL, version)
 	cmd := fmt.Sprintf(`iex (iwr "%s" -UseBasicParsing)`, scriptURL)
