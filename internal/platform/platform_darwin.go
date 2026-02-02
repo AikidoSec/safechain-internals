@@ -32,7 +32,7 @@ var deviceRegex = regexp.MustCompile(`Device:\s*(en\d+)`)
 
 func initConfig() error {
 	if RunningAsRoot() {
-		username, _, _, err := getConsoleUser(context.Background())
+		username, _, _, _, err := getConsoleUser(context.Background())
 		if err != nil {
 			return fmt.Errorf("failed to get console user: %v", err)
 		}
@@ -238,7 +238,7 @@ func UnsetSystemPAC(ctx context.Context, pacURL string) error {
 
 func InstallProxyCA(ctx context.Context, certPath string) error {
 	// CA needs to be installed as current user, in order to be prompted for security permissions
-	_, err := RunAsCurrentUser(ctx, "security", []string{"add-trusted-cert",
+	_, err := RunInAuditSessionOfCurrentUser(ctx, "security", []string{"add-trusted-cert",
 		"-d", // Add to admin cert store; default is user
 		"-r", "trustRoot",
 		"-k", "/Library/Keychains/System.keychain",
@@ -279,7 +279,7 @@ func UninstallProxyCA(ctx context.Context) error {
 				continue
 			}
 			hash := match[1]
-			_, err := RunAsCurrentUser(ctx, "security", []string{"delete-certificate",
+			_, err := RunInAuditSessionOfCurrentUser(ctx, "security", []string{"delete-certificate",
 				"-Z", hash,
 				"/Library/Keychains/System.keychain"})
 			if err != nil {
@@ -288,7 +288,7 @@ func UninstallProxyCA(ctx context.Context) error {
 		}
 	}
 
-	if _, err := RunAsCurrentUser(ctx, "security", []string{"delete-generic-password",
+	if _, err := RunInAuditSessionOfCurrentUser(ctx, "security", []string{"delete-generic-password",
 		"-l", "tls-root-ca-key",
 		"/Library/Keychains/System.keychain"}); err != nil {
 		errs = append(errs, err)
@@ -313,28 +313,28 @@ func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
 	return nil
 }
 
-func getConsoleUser(ctx context.Context) (string, int, int, error) {
-	output, err := exec.CommandContext(ctx, "stat", "-f", "%Su %u %Sg", "/dev/console").Output()
+func getConsoleUser(ctx context.Context) (string, int, string, int, error) {
+	output, err := exec.CommandContext(ctx, "stat", "-f", "%Su %u %Sg %g", "/dev/console").Output()
 	if err != nil {
-		return "", 0, 0, fmt.Errorf("failed to get console user: %v", err)
+		return "", 0, "", 0, fmt.Errorf("failed to get console user: %v", err)
 	}
 	parts := strings.Fields(string(output))
-	if len(parts) != 2 {
-		return "", 0, 0, fmt.Errorf("unexpected stat output: %s", output)
+	if len(parts) != 4 {
+		return "", 0, "", 0, fmt.Errorf("unexpected stat output: %s", output)
 	}
-	username, uid, gid := parts[0], parts[1], parts[2]
+	username, uid, group, gid := parts[0], parts[1], parts[2], parts[3]
 	if username == "" || username == "root" {
-		return "", 0, 0, fmt.Errorf("no interactive user logged in")
+		return "", 0, "", 0, fmt.Errorf("no interactive user logged in")
 	}
 	uidInt, err := strconv.Atoi(uid)
 	if err != nil {
-		return "", 0, 0, fmt.Errorf("failed to convert uid to int: %w", err)
+		return "", 0, "", 0, fmt.Errorf("failed to convert uid to int: %w", err)
 	}
 	gidInt, err := strconv.Atoi(gid)
 	if err != nil {
-		return "", 0, 0, fmt.Errorf("failed to convert gid to int: %w", err)
+		return "", 0, "", 0, fmt.Errorf("failed to convert gid to int: %w", err)
 	}
-	return username, uidInt, gidInt, nil
+	return username, uidInt, group, gidInt, nil
 }
 
 func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
@@ -342,14 +342,28 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (st
 		return utils.RunCommand(ctx, binaryPath, args...)
 	}
 
-	username, uid, _, err := getConsoleUser(ctx)
+	username, _, _, _, err := getConsoleUser(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get console user: %v", err)
 	}
 
-	homeDir := filepath.Join("/Users", username)
-	launchctlArgs := append([]string{"asuser", strconv.Itoa(uid), binaryPath}, args...)
-	return utils.RunCommandWithEnv(ctx, []string{fmt.Sprintf("HOME=%s", homeDir)}, "launchctl", launchctlArgs...)
+	suArgs := append([]string{"-u", username, binaryPath}, args...)
+	return utils.RunCommandWithEnv(ctx, []string{}, "sudo", suArgs...)
+}
+
+func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
+	if !RunningAsRoot() {
+		return utils.RunCommand(ctx, binaryPath, args...)
+	}
+
+	_, uid, _, _, err := getConsoleUser(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get console user: %v", err)
+	}
+
+	uidStr := fmt.Sprintf("%d", uid)
+	launchctlArgs := append([]string{"asuser", uidStr, binaryPath}, args...)
+	return utils.RunCommandWithEnv(ctx, []string{}, "launchctl", launchctlArgs...)
 }
 
 func RunningAsRoot() bool {
@@ -364,7 +378,7 @@ func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath); err != nil {
 		return fmt.Errorf("failed to download install script: %w", err)
 	}
-	_, uid, gid, err := getConsoleUser(ctx)
+	_, uid, _, gid, err := getConsoleUser(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get console user: %w", err)
 	}
