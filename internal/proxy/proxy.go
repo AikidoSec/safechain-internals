@@ -23,7 +23,8 @@ type Proxy struct {
 	cmd      *exec.Cmd
 	ctx      context.Context
 	cancel   context.CancelFunc
-	procDone chan error
+	procDone chan struct{}
+	procErr  error
 }
 
 func New() *Proxy {
@@ -39,8 +40,8 @@ func (p *Proxy) WaitForProxyToBeReady() error {
 		select {
 		case <-timeout:
 			return fmt.Errorf("timeout waiting for proxy to be ready after %s", ProxyReadyTimeout.String())
-		case err := <-p.procDone:
-			return fmt.Errorf("proxy process exited unexpectedly: %v", err)
+		case <-p.procDone:
+			return fmt.Errorf("proxy process exited unexpectedly: %v", p.procErr)
 		case <-ticker.C:
 			err := LoadProxyConfig()
 			if err == nil {
@@ -77,9 +78,10 @@ func (p *Proxy) Start(ctx context.Context, proxyIngressAddr string) error {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
-	p.procDone = make(chan error, 1)
+	p.procDone = make(chan struct{})
 	go func() {
-		p.procDone <- p.cmd.Wait()
+		p.procErr = p.cmd.Wait()
+		close(p.procDone)
 	}()
 
 	log.Println("Waiting for proxy to be ready...")
