@@ -32,6 +32,10 @@ func New() *Proxy {
 }
 
 func (p *Proxy) WaitForProxyToBeReady() error {
+	if p.procDone == nil {
+		return fmt.Errorf("procDone channel is nil")
+	}
+
 	timeout := time.After(ProxyReadyTimeout)
 	ticker := time.NewTicker(ProxyReadyInterval)
 	defer ticker.Stop()
@@ -43,6 +47,11 @@ func (p *Proxy) WaitForProxyToBeReady() error {
 		case <-p.procDone:
 			return fmt.Errorf("proxy process exited unexpectedly: %v", p.procErr)
 		case <-ticker.C:
+			select {
+			case <-p.procDone:
+				return fmt.Errorf("proxy process exited unexpectedly: %v", p.procErr)
+			default:
+			}
 			err := LoadProxyConfig()
 			if err == nil {
 				return nil
@@ -105,7 +114,14 @@ func (p *Proxy) Stop() error {
 		p.cancel()
 	}
 	if p.procDone != nil {
-		<-p.procDone
+		select {
+		case <-p.procDone:
+		case <-time.After(10 * time.Second):
+			log.Println("Timeout waiting for proxy process to exit, killing...")
+			if p.cmd != nil && p.cmd.Process != nil {
+				_ = p.cmd.Process.Kill()
+			}
+		}
 	}
 
 	log.Println("SafeChain Proxy stopped successfully!")
