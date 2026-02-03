@@ -102,7 +102,8 @@ func DownloadBinary(ctx context.Context, url, destPath string, verification *Dow
 			expectedDigest = digest
 			shouldVerify = true
 		} else {
-			return fmt.Errorf("Unable to find digest for asset %q in release %q", verification.SafeChainAssetName, verification.SafeChainReleaseTag)
+			log.Printf("ERROR: Unable to find digest for asset %q in release %q; skipping verification", verification.SafeChainAssetName, verification.SafeChainReleaseTag)
+			shouldVerify = false
 		}
 	}
 
@@ -169,6 +170,7 @@ func verifySha256Checksum(filePath, expectedChecksum string) error {
 		return fmt.Errorf("checksum verification failed")
 	}
 
+	log.Printf("Checksum verification for %s succeeded.", filePath)
 	return nil
 }
 

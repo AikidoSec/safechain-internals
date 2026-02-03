@@ -2,7 +2,9 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"log"
+	"net/http"
 	"strings"
 
 	"github.com/google/go-github/v82/github"
@@ -14,34 +16,40 @@ const (
 )
 
 func lookupSafeChainReleaseAssetDigest(ctx context.Context, releaseTag string, assetName string) (string, bool) {
-	releaseTag = strings.TrimSpace(releaseTag)
+	originalTag := strings.TrimSpace(releaseTag)
 	assetName = strings.TrimSpace(assetName)
-	if releaseTag == "" || assetName == "" {
+	if originalTag == "" || assetName == "" {
 		return "", false
 	}
-	if !strings.HasPrefix(releaseTag, "v") {
-		releaseTag = "v" + releaseTag
-	}
+
+	// tags might have a "v" prefix, but GitHub API requires the tag without the "v"
+	normalizedTag := strings.TrimPrefix(originalTag, "v")
 
 	client := github.NewClient(httpClient)
 
-	release, _, err := client.Repositories.GetReleaseByTag(ctx, safeChainGitHubOwner, safeChainGitHubRepo, releaseTag)
+	release, _, err := client.Repositories.GetReleaseByTag(ctx, safeChainGitHubOwner, safeChainGitHubRepo, normalizedTag)
 	if err != nil {
-		log.Printf("Unable to find digest for asset %q in release %q (failed to fetch GitHub release metadata): %v", assetName, releaseTag, err)
+		var apiErr *github.ErrorResponse
+		if errors.As(err, &apiErr) && apiErr.Response != nil && apiErr.Response.StatusCode == http.StatusNotFound {
+			log.Printf("Unable to find digest for asset %q in release %q (release tag %q not found)", assetName, originalTag, normalizedTag)
+			return "", false
+		}
+		log.Printf("Unable to find digest for asset %q in release %q (failed to fetch GitHub release metadata for tag %q): %v", assetName, originalTag, normalizedTag, err)
 		return "", false
 	}
 
 	for _, asset := range release.Assets {
-		if asset.GetName() == assetName {
-			digest := strings.TrimSpace(asset.GetDigest())
-			if digest == "" {
-				log.Printf("Unable to find digest for asset %q in release %q (digest missing in release metadata)", assetName, releaseTag)
-				return "", false
-			}
-			return digest, true
+		if asset.GetName() != assetName {
+			continue
 		}
+		digest := strings.TrimSpace(asset.GetDigest())
+		if digest == "" {
+			log.Printf("Unable to find digest for asset %q in release %q (digest missing in release metadata for tag %q)", assetName, originalTag, normalizedTag)
+			return "", false
+		}
+		return digest, true
 	}
 
-	log.Printf("Unable to find digest for asset %q in release %q (asset not present in release)", assetName, releaseTag)
+	log.Printf("Unable to find digest for asset %q in release %q (asset not present in release tag %q)", assetName, originalTag, normalizedTag)
 	return "", false
 }
