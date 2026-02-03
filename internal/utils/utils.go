@@ -2,6 +2,8 @@ package utils
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -12,6 +14,15 @@ import (
 	"runtime"
 	"strings"
 )
+
+var (
+	httpClient = http.DefaultClient
+)
+
+type DownloadVerification struct {
+	SafeChainReleaseTag string
+	SafeChainAssetName  string
+}
 
 type Command struct {
 	Command string
@@ -81,13 +92,26 @@ func DetectArch() string {
 	}
 }
 
-func DownloadBinary(ctx context.Context, url, destPath string) error {
+func DownloadBinary(ctx context.Context, url, destPath string, verification *DownloadVerification) error {
+	var expectedDigest string
+	var shouldVerify bool
+
+	if verification != nil && strings.TrimSpace(verification.SafeChainReleaseTag) != "" && strings.TrimSpace(verification.SafeChainAssetName) != "" {
+		digest, ok := lookupSafeChainReleaseAssetDigest(ctx, verification.SafeChainReleaseTag, verification.SafeChainAssetName)
+		if ok {
+			expectedDigest = digest
+			shouldVerify = true
+		} else {
+			return fmt.Errorf("Unable to find digest for asset %q in release %q", verification.SafeChainAssetName, verification.SafeChainReleaseTag)
+		}
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)
 	}
@@ -101,10 +125,20 @@ func DownloadBinary(ctx context.Context, url, destPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer outFile.Close()
 
 	if _, err := io.Copy(outFile, resp.Body); err != nil {
+		_ = outFile.Close()
 		return fmt.Errorf("failed to write file: %w", err)
+	}
+	if err := outFile.Close(); err != nil {
+		return fmt.Errorf("failed to close file: %w", err)
+	}
+
+	if shouldVerify {
+		if err := verifySha256Checksum(destPath, expectedDigest); err != nil {
+			_ = os.Remove(destPath)
+			return err
+		}
 	}
 
 	if err := os.Chown(destPath, os.Getuid(), os.Getgid()); err != nil {
@@ -112,6 +146,45 @@ func DownloadBinary(ctx context.Context, url, destPath string) error {
 	}
 
 	return nil
+}
+
+func verifySha256Checksum(filePath, expectedChecksum string) error {
+	expectedChecksum = strings.TrimSpace(expectedChecksum)
+	if expectedChecksum == "" {
+		return nil
+	}
+
+	// Format matches the CLI: "sha256:<hex>".
+	parts := strings.SplitN(expectedChecksum, ":", 2)
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "sha256" {
+		return fmt.Errorf("unsupported checksum format: %s", expectedChecksum)
+	}
+
+	actual, err := ComputeFileSha256Hex(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to compute sha256: %w", err)
+	}
+
+	if strings.ToLower(actual) != strings.ToLower(parts[1]) {
+		return fmt.Errorf("checksum verification failed")
+	}
+
+	return nil
+}
+
+func ComputeFileSha256Hex(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, file); err != nil {
+		return "", fmt.Errorf("failed to hash file: %w", err)
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func RunCommand(ctx context.Context, command string, args ...string) (string, error) {

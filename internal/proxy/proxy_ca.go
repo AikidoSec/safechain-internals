@@ -44,7 +44,7 @@ func DownloadCACertFromProxy() error {
 	}
 
 	caCertPath := filepath.Join(platform.GetRunDir(), "safechain-proxy-ca-crt.pem")
-	if err := utils.DownloadBinary(context.Background(), metaUrl+"/ca", caCertPath); err != nil {
+	if err := utils.DownloadBinary(context.Background(), metaUrl+"/ca", caCertPath, nil); err != nil {
 		return fmt.Errorf("failed to download ca cert: %v", err)
 	}
 
