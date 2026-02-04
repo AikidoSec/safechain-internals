@@ -1,7 +1,7 @@
 [package]
 name = "safechain-proxy"
 description = "MITM SafeChain HTTP(S)/SOCKS5 Proxy for Developer Security"
-version = "0.1.0"
+version = "1.0.0"  # keep in sync with GH releases
 edition = "2024"
 publish = false
 rust-version = "1.93"
