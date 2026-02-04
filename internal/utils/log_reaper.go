@@ -75,8 +75,6 @@ func (r *LogReaper) reapOldLogs(lf reapableLog) {
 	baseName := filepath.Base(lf.path)
 	ext := filepath.Ext(baseName)
 	baseNameWithoutExt := baseName[:len(baseName)-len(ext)]
-	prefix := baseNameWithoutExt + "."
-	suffix := ext
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -92,11 +90,11 @@ func (r *LogReaper) reapOldLogs(lf reapableLog) {
 		}
 
 		name := entry.Name()
-		if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, suffix) {
+		if !strings.HasPrefix(name, baseNameWithoutExt) || !strings.HasSuffix(name, ext) {
 			continue
 		}
 
-		timestampStr := strings.TrimSuffix(strings.TrimPrefix(name, prefix), suffix)
+		timestampStr := strings.TrimSuffix(strings.TrimPrefix(name, baseNameWithoutExt+"."), ext)
 		logTime, err := time.Parse("2006-01-02-15", timestampStr)
 		if err != nil {
 			log.Printf("Failed to parse log file timestamp: %s", timestampStr)
