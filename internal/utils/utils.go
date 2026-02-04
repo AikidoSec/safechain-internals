@@ -89,7 +89,7 @@ func DownloadBinary(ctx context.Context, url, destPath string) error {
 	}
 
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: 5 * time.Second,
 	}
 	resp, err := client.Do(req)
 	if err != nil {
