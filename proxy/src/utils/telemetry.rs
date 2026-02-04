@@ -42,10 +42,9 @@ pub async fn init_tracing(args: &Args) -> Result<TracingGuard, BoxError> {
                     }
                     Cow::Borrowed(parent)
                 }
-                // failed to fetch, using current directory as fallback log directory
                 _ => Cow::Owned(
                     current_dir()
-                        .context("failed to fetch current directory as fallback log directory")?,
+                        .context("failed to fetch, using current directory as fallback log directory")?,
                 ),
             };
 

@@ -90,7 +90,7 @@ func (r *LogReaper) reapOldLogs(lf reapableLog) {
 		}
 
 		name := entry.Name()
-		if !strings.HasPrefix(name, baseNameWithoutExt) || !strings.HasSuffix(name, ext) {
+		if !strings.HasPrefix(name, baseNameWithoutExt+".") || !strings.HasSuffix(name, ext) {
 			continue
 		}
 
