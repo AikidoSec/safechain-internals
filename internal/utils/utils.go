@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 )
 
 type Command struct {
@@ -87,7 +88,10 @@ func DownloadBinary(ctx context.Context, url, destPath string) error {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)
 	}
