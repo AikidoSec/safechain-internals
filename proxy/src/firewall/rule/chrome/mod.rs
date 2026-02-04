@@ -5,7 +5,7 @@ use rama::{
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
-    net::address::{Domain, DomainTrie},
+    net::address::Domain,
     telemetry::tracing,
     utils::str::arcstr::{ArcStr, arcstr},
     utils::str::smol_str::StrExt,
@@ -13,6 +13,7 @@ use rama::{
 
 use crate::{
     firewall::{
+        domain_matcher::DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
         malware_list::RemoteMalwareList,
         pac::PacScriptGenerator,
@@ -27,7 +28,7 @@ use super::{BlockedRequest, RequestAction, Rule};
 mod malware_key;
 
 pub(in crate::firewall) struct RuleChrome {
-    target_domains: DomainTrie<()>,
+    target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
 }
 
@@ -57,7 +58,6 @@ impl RuleChrome {
                 "clients2.googleusercontent.com",
             ]
             .into_iter()
-            .map(|domain| (Domain::from_static(domain), ()))
             .collect(),
             remote_malware_list,
         })
@@ -78,12 +78,12 @@ impl Rule for RuleChrome {
 
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
-        self.target_domains.is_match_parent(domain)
+        self.target_domains.is_match(domain)
     }
 
     #[inline(always)]
     fn collect_pac_domains(&self, generator: &mut PacScriptGenerator) {
-        for (domain, _) in self.target_domains.iter() {
+        for domain in self.target_domains.iter() {
             generator.write_domain(&domain);
         }
     }
