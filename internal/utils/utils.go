@@ -83,7 +83,6 @@ func DetectArch() string {
 }
 
 func DownloadBinary(ctx context.Context, url, destPath string) error {
-	log.Printf("DownloadBinary: starting download from %s to %s", url, destPath)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -92,13 +91,11 @@ func DownloadBinary(ctx context.Context, url, destPath string) error {
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
-	log.Println("DownloadBinary: sending HTTP request...")
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)
 	}
 	defer resp.Body.Close()
-	log.Printf("DownloadBinary: got response status %d", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
@@ -110,12 +107,10 @@ func DownloadBinary(ctx context.Context, url, destPath string) error {
 	}
 	defer outFile.Close()
 
-	log.Println("DownloadBinary: copying response body to file...")
 	if _, err := io.Copy(outFile, resp.Body); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
-	log.Println("DownloadBinary: download complete")
 	return nil
 }
 
