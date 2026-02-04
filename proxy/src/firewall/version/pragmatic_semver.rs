@@ -427,10 +427,15 @@ fn trim_optional_version_prefix(input: &str) -> (&str, Identifier) {
         return (input, Identifier::empty());
     }
 
-    if [b'v', b'r'].contains(&input.as_bytes()[0]) {
-        let prefix = Identifier::new_bytes(&input.as_bytes()[..1]);
+    let input_bytes = input.as_bytes();
+
+    if [b'v', b'r'].contains(&input_bytes[0]) {
+        let prefix = Identifier::new_bytes(&input_bytes[..1]);
+
         let trimmed_input = input[1..].trim_start();
-        if !trimmed_input.is_empty() && trimmed_input.as_bytes()[0].is_ascii_digit() {
+        let trimmed_input_bytes = trimmed_input.as_bytes();
+
+        if !trimmed_input_bytes.is_empty() && trimmed_input_bytes[0].is_ascii_digit() {
             return (trimmed_input, prefix);
         }
     }

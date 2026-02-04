@@ -5,6 +5,8 @@ use rama::{
     net::address::SocketAddress,
 };
 
+use crate::tls::RootCA;
+
 // Real servers
 //
 // These have their own (ingress) socket(s).
@@ -17,7 +19,7 @@ pub mod proxy;
 // but instead operate from within inside the proxy.
 pub mod connectivity;
 
-async fn write_server_socket_address_as_file(
+pub async fn write_server_socket_address_as_file(
     dir: &Path,
     name: &str,
     addr: SocketAddress,
@@ -31,4 +33,11 @@ async fn write_server_socket_address_as_file(
                 path.display()
             )
         })
+}
+
+pub async fn write_root_ca_as_file(dir: &Path, root_ca: &RootCA) -> Result<(), OpaqueError> {
+    let path = dir.join("root.ca.pem");
+    tokio::fs::write(&path, root_ca.as_str())
+        .await
+        .with_context(|| format!("write root CA to file '{}'", path.display()))
 }

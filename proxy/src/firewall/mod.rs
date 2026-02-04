@@ -1,12 +1,13 @@
 use std::{sync::Arc, time::Duration};
 
 use rama::{
-    Layer as _, Service as _,
+    Layer as _, Service,
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
     http::{
         Body, HeaderValue, Request, Response,
         header::CONTENT_TYPE,
+        headers::HeaderMapExt,
         layer::{
             decompression::DecompressionLayer,
             map_request_body::MapRequestBodyLayer,
@@ -30,9 +31,17 @@ pub mod notifier;
 pub mod rule;
 pub mod version;
 
+mod domain_matcher;
 mod pac;
 
-use crate::storage::SyncCompactDataStorage;
+#[cfg(test)]
+mod tests;
+
+pub use self::domain_matcher::DomainMatcher;
+
+use crate::{
+    firewall::notifier::EventNotifier, http::BlockedByHeader, storage::SyncCompactDataStorage,
+};
 
 use self::rule::{RequestAction, Rule};
 
@@ -41,7 +50,7 @@ pub struct Firewall {
     // NOTE: if we ever want to update these rules on the fly,
     // e.g. removing/adding them, we can ArcSwap these and have
     // a background task update these when needed..
-    block_rules: Arc<Vec<self::rule::DynRule>>,
+    block_rules: Arc<[self::rule::DynRule]>,
     notifier: Option<self::notifier::EventNotifier>,
 }
 
@@ -51,8 +60,48 @@ impl Firewall {
         data: SyncCompactDataStorage,
         reporting_endpoint: Option<rama::http::Uri>,
     ) -> Result<Self, OpaqueError> {
-        let inner_https_client = crate::client::new_web_client()?;
+        let notifier = match reporting_endpoint {
+            Some(endpoint) => match self::notifier::EventNotifier::try_new(
+                Executor::graceful(guard.clone()),
+                endpoint,
+            ) {
+                Ok(notifier) => Some(notifier),
+                Err(err) => {
+                    tracing::warn!(
+                        error = %err,
+                        "failed to initialize blocked-event notifier; reporting disabled"
+                    );
+                    None
+                }
+            },
+            None => None,
+        };
 
+        Self::try_new_with_event_notifier(guard, data, notifier).await
+    }
+
+    pub async fn try_new_with_event_notifier(
+        guard: ShutdownGuard,
+        data: SyncCompactDataStorage,
+        notifier: Option<EventNotifier>,
+    ) -> Result<Self, OpaqueError> {
+        let exec = Executor::graceful(guard.clone());
+
+        let inner_https_client = crate::client::new_web_client(
+            exec.clone(),
+            crate::client::WebClientConfig::without_overwrites(),
+        )?;
+
+        Self::try_new_with_event_notifier_and_web_client(guard, data, notifier, inner_https_client)
+            .await
+    }
+
+    pub async fn try_new_with_event_notifier_and_web_client(
+        guard: ShutdownGuard,
+        data: SyncCompactDataStorage,
+        notifier: Option<EventNotifier>,
+        inner_https_client: impl Service<Request, Output = Response, Error = OpaqueError>,
+    ) -> Result<Self, OpaqueError> {
         let shared_remote_malware_client = (
             MapResponseBodyLayer::new(Body::new),
             DecompressionLayer::new(),
@@ -74,25 +123,8 @@ impl Firewall {
             .into_layer(inner_https_client)
             .boxed();
 
-        let notifier = match reporting_endpoint {
-            Some(endpoint) => match self::notifier::EventNotifier::try_new(
-                Executor::graceful(guard.clone()),
-                endpoint,
-            ) {
-                Ok(notifier) => Some(notifier),
-                Err(err) => {
-                    tracing::warn!(
-                        error = %err,
-                        "failed to initialize blocked-event notifier; reporting disabled"
-                    );
-                    None
-                }
-            },
-            None => None,
-        };
-
         Ok(Self {
-            block_rules: Arc::new(vec![
+            block_rules: vec![
                 self::rule::vscode::RuleVSCode::try_new(
                     guard.clone(),
                     shared_remote_malware_client.clone(),
@@ -121,7 +153,8 @@ impl Firewall {
                     .await
                     .context("create block rule: pypi")?
                     .into_dyn(),
-            ]),
+            ]
+            .into(),
             notifier,
         })
     }
@@ -153,9 +186,13 @@ impl Firewall {
 
         for rule in self.block_rules.iter() {
             match rule.evaluate_request(mod_req).await? {
-                RequestAction::Allow(new_mod_req) => mod_req = new_mod_req,
-                RequestAction::Block(blocked) => {
+                RequestAction::Allow(new_mod_req) => {
+                    tracing::trace!("firewall rule for {} allows request", rule.product_name());
+                    mod_req = new_mod_req
+                }
+                RequestAction::Block(mut blocked) => {
                     self.record_blocked_event(blocked.info.clone()).await;
+                    blocked.response.headers_mut().typed_insert(BlockedByHeader);
                     return Ok(RequestAction::Block(blocked));
                 }
             }

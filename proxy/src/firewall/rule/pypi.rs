@@ -5,10 +5,7 @@ use rama::{
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
-    net::{
-        address::{Domain, DomainTrie},
-        uri::util::percent_encoding,
-    },
+    net::{address::Domain, uri::util::percent_encoding},
     telemetry::tracing,
     utils::{
         collections::smallvec::SmallVec,
@@ -20,8 +17,9 @@ use rama::utils::str::arcstr::{ArcStr, arcstr};
 
 use crate::{
     firewall::{
+        DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
-        malware_list::{MalwareEntry, RemoteMalwareList},
+        malware_list::{MALWARE_LIST_URI_STR_PYPI, MalwareEntry, RemoteMalwareList},
         pac::PacScriptGenerator,
         version::PackageVersion,
     },
@@ -47,7 +45,7 @@ impl PackageInfo {
 }
 
 pub(in crate::firewall) struct RulePyPI {
-    target_domains: DomainTrie<()>,
+    target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
 }
 
@@ -62,7 +60,7 @@ impl RulePyPI {
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
-            Uri::from_static("https://malware-list.aikido.dev/malware_pypi.json"),
+            Uri::from_static(MALWARE_LIST_URI_STR_PYPI),
             sync_storage,
             remote_malware_list_https_client,
             None,
@@ -72,7 +70,6 @@ impl RulePyPI {
 
         let target_domains = ["pypi.org", "files.pythonhosted.org", "pypi.python.org"]
             .into_iter()
-            .map(|d| (Domain::from_static(d), ()))
             .collect();
 
         Ok(Self {
@@ -84,6 +81,10 @@ impl RulePyPI {
     fn is_blocked(&self, package_info: &PackageInfo) -> Result<bool, OpaqueError> {
         let entries = self.remote_malware_list.find_entries(&package_info.name);
         let Some(entries) = entries.entries() else {
+            tracing::trace!(
+                "no malware entry found for pkg name: '{}'",
+                package_info.name
+            );
             return Ok(false);
         };
 
@@ -143,12 +144,12 @@ impl Rule for RulePyPI {
 
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
-        self.target_domains.is_match_parent(domain)
+        self.target_domains.is_match(domain)
     }
 
     #[inline(always)]
     fn collect_pac_domains(&self, generator: &mut PacScriptGenerator) {
-        for (domain, _) in self.target_domains.iter() {
+        for domain in self.target_domains.iter() {
             generator.write_domain(&domain);
         }
     }
@@ -221,12 +222,17 @@ fn parse_wheel_filename(filename: &str) -> Option<PackageInfo> {
     let version = rest.split('-').next()?;
 
     if version.eq_ignore_ascii_case("latest") || dist.is_empty() || version.is_empty() {
+        tracing::debug!(version, dist, "ignore pypi wheel");
         return None;
     }
 
     Some(PackageInfo {
         name: normalize_package_name(dist),
-        version: PackageVersion::from_str(version).unwrap(),
+        version: PackageVersion::from_str(version)
+            .inspect_err(|err| {
+                tracing::debug!("failed to parse package version: {err}");
+            })
+            .ok()?,
     })
 }
 
@@ -248,12 +254,17 @@ fn parse_source_dist_filename(filename: &str) -> Option<PackageInfo> {
 
     let (dist, version) = base.rsplit_once('-')?;
     if version.eq_ignore_ascii_case("latest") || dist.is_empty() || version.is_empty() {
+        tracing::debug!(version, dist, "ignore pypi dist filename");
         return None;
     }
 
     Some(PackageInfo {
         name: normalize_package_name(dist),
-        version: PackageVersion::from_str(version).unwrap(),
+        version: PackageVersion::from_str(version)
+            .inspect_err(|err| {
+                tracing::debug!("failed to parse package version: {err}");
+            })
+            .ok()?,
     })
 }
 

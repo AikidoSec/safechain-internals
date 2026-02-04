@@ -1,4 +1,4 @@
-use std::{borrow::Cow, env::current_dir, io::IsTerminal as _};
+use std::{borrow::Cow, env::current_dir, io::IsTerminal as _, path::Path};
 
 use rama::{
     error::{BoxError, ErrorContext as _},
@@ -14,7 +14,15 @@ use rama::{
 };
 use tokio::fs::create_dir_all;
 
-use crate::Args;
+#[derive(Debug, Default)]
+pub struct TelemetryConfig<'a> {
+    /// Log verbose (for more control use `RUST_LOG` env var)
+    pub verbose: bool,
+    /// Enable pretty logging (human-friendly, not for computer integestion)
+    pub pretty: bool,
+    /// Log to a file instead of stderr.
+    pub output: Option<&'a Path>,
+}
 
 #[derive(Debug)]
 pub struct TracingGuard {
@@ -25,15 +33,17 @@ pub struct TracingGuard {
 ///
 /// Defaults to INFO level to balance visibility with performance.
 /// Use `RUST_LOG=debug` or `RUST_LOG=trace` for troubleshooting.
-pub async fn init_tracing(args: &Args) -> Result<TracingGuard, BoxError> {
-    let directive = if args.verbose {
+pub async fn init_tracing(cfg: Option<TelemetryConfig<'_>>) -> Result<TracingGuard, BoxError> {
+    let cfg = cfg.unwrap_or_default();
+
+    let directive = if cfg.verbose {
         LevelFilter::DEBUG
     } else {
         LevelFilter::INFO
     }
     .into();
 
-    let (make_writer, _appender_guard) = match args.output.as_deref() {
+    let (make_writer, _appender_guard) = match cfg.output {
         Some(path) => {
             let log_dir = match path.parent() {
                 Some(parent) if !parent.as_os_str().is_empty() => {
@@ -65,7 +75,7 @@ pub async fn init_tracing(args: &Args) -> Result<TracingGuard, BoxError> {
     };
 
     let subscriber = tracing::subscriber::fmt()
-        .with_ansi(args.output.is_none() && std::io::stderr().is_terminal())
+        .with_ansi(cfg.output.is_none() && std::io::stderr().is_terminal())
         .with_env_filter(
             EnvFilter::builder()
                 .with_default_directive(directive)
@@ -73,7 +83,7 @@ pub async fn init_tracing(args: &Args) -> Result<TracingGuard, BoxError> {
         )
         .with_writer(make_writer);
 
-    if args.pretty {
+    if cfg.pretty {
         subscriber.pretty().try_init()?;
     } else {
         subscriber.try_init()?;

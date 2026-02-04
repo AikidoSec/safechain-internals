@@ -16,6 +16,7 @@ use rama::{
     },
     layer::{AddInputExtensionLayer, HijackLayer},
     net::{address::ProxyAddress, user::UserId},
+    rt::Executor,
     telemetry::tracing::{self, Instrument as _},
 };
 
@@ -27,6 +28,7 @@ pub(super) struct HttpClient<S> {
 }
 
 pub(super) fn new_https_client(
+    exec: Executor,
     firewall: Firewall,
     upstream_proxy_address: Option<ProxyAddress>,
 ) -> Result<HttpClient<impl Service<Request, Output = Response, Error = OpaqueError>>, OpaqueError>
@@ -44,7 +46,10 @@ pub(super) fn new_https_client(
         ),
         upstream_proxy_address.map(AddInputExtensionLayer::new),
     )
-        .into_layer(crate::client::new_web_client()?);
+        .into_layer(crate::client::new_web_client(
+            exec,
+            crate::client::WebClientConfig::default(),
+        )?);
 
     Ok(HttpClient { inner })
 }

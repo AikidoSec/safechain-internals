@@ -1,0 +1,26 @@
+[package]
+name = "netbench"
+description = "Network Benchmark tool in function of safechain-proxy"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+publish = false
+readme = "../docs/netbench.md"
+resolver = "3"
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["full"] }
+rand = { workspace = true }
+serde_json = { workspace = true }
+safechain-proxy-lib = { workspace = true, features = ["har", "bench"] }
+
+[target.'cfg(target_family = "unix")'.dependencies]
+jemallocator = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+mimalloc = { workspace = true }
+
+[dependencies.rama]
+workspace = true
+features = ["http-full", "proxy-full", "dns", "boring"]

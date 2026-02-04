@@ -15,7 +15,7 @@ use rama::{
 
 use secrecy::{ExposeSecret, SecretBox};
 
-use crate::{Args, storage::SyncCompactDataStorage};
+use crate::storage::{SyncCompactDataStorage, SyncSecrets};
 
 mod root;
 
@@ -28,6 +28,11 @@ struct PemKeyCrtPair {
 pub struct RootCA(Arc<SecretBox<String>>);
 
 impl RootCA {
+    pub fn as_str(&self) -> &str {
+        let ca = self.0.expose_secret();
+        ca.as_str()
+    }
+
     pub fn as_http_response(&self) -> Response {
         let ca = self.0.expose_secret();
         ca.clone().into_response()
@@ -35,11 +40,10 @@ impl RootCA {
 }
 
 pub fn new_tls_acceptor_layer(
-    args: &Args,
+    secrets: &SyncSecrets,
     data_storage: &SyncCompactDataStorage,
 ) -> Result<(TlsAcceptorLayer, RootCA), OpaqueError> {
-    let PemKeyCrtPair { crt, key } =
-        self::root::new_root_tls_crt_key_pair(&args.secrets, data_storage)?;
+    let PemKeyCrtPair { crt, key } = self::root::new_root_tls_crt_key_pair(secrets, data_storage)?;
 
     let root_ca = RootCA(Arc::new(SecretBox::new(Box::new(crt.as_ref().to_owned()))));
 

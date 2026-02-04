@@ -5,15 +5,16 @@ use rama::{
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
-    net::address::{Domain, DomainTrie},
+    net::address::Domain,
     telemetry::tracing,
     utils::str::arcstr::{ArcStr, arcstr},
 };
 
 use crate::{
     firewall::{
+        DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
-        malware_list::{MalwareEntry, RemoteMalwareList},
+        malware_list::{MALWARE_LIST_URI_STR_NPM, MalwareEntry, RemoteMalwareList},
         pac::PacScriptGenerator,
         version::{PackageVersion, PragmaticSemver},
     },
@@ -24,7 +25,7 @@ use crate::{
 use super::{BlockedRequest, RequestAction, Rule};
 
 pub(in crate::firewall) struct RuleNpm {
-    target_domains: DomainTrie<()>,
+    target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
 }
 
@@ -43,7 +44,7 @@ impl RuleNpm {
         // so it only gets updated once
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
-            Uri::from_static("https://malware-list.aikido.dev/malware_predictions.json"),
+            Uri::from_static(MALWARE_LIST_URI_STR_NPM),
             sync_storage,
             remote_malware_list_https_client,
             None,
@@ -59,7 +60,6 @@ impl RuleNpm {
                 "registry.yarnpkg.com",
             ]
             .into_iter()
-            .map(|domain| (Domain::from_static(domain), ()))
             .collect(),
             remote_malware_list,
         })
@@ -80,12 +80,12 @@ impl Rule for RuleNpm {
 
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
-        self.target_domains.is_match_parent(domain)
+        self.target_domains.is_match(domain)
     }
 
     #[inline(always)]
     fn collect_pac_domains(&self, generator: &mut PacScriptGenerator) {
-        for (domain, _) in self.target_domains.iter() {
+        for domain in self.target_domains.iter() {
             generator.write_domain(&domain);
         }
     }
