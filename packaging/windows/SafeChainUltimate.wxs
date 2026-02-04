@@ -11,7 +11,7 @@
     <Icon Id="SafeChainIcon.ico" SourceFile="$(var.ProjectDir)\packaging\shared\resources\SafeChain.ico" />
     <Property Id="ARPPRODUCTICON" Value="SafeChainIcon.ico" />
 
-    <MajorUpgrade AllowDowngrades="no" AllowSameVersionUpgrades="no" DowngradeErrorMessage="A newer version of SafeChain Ultimate is already installed." />
+    <MajorUpgrade AllowDowngrades="no" AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of SafeChain Ultimate is already installed." />
     
     <Media Id="1" Cabinet="SafeChainUltimate.cab" EmbedCab="yes" />
 
