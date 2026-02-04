@@ -61,6 +61,7 @@ func InstallProxyCA(ctx context.Context) error {
 	if err := DownloadCACertFromProxy(); err != nil {
 		return err
 	}
+	log.Println("Calling platform.InstallProxyCA...")
 	if err := platform.InstallProxyCA(ctx, GetCaCertPath()); err != nil {
 		return fmt.Errorf("failed to install ca cert: %v", err)
 	}
