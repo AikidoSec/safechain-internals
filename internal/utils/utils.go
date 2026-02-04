@@ -178,7 +178,7 @@ func verifySha256Checksum(filePath, expectedChecksum string) error {
 }
 
 func ComputeFileSha256Hex(filePath string) (string, error) {
-	file, err := os.Open(filePath)
+	file, err := os.OpenFile(filePath, os.O_RDONLY, 0)
 	if err != nil {
 		return "", fmt.Errorf("failed to open file: %w", err)
 	}
