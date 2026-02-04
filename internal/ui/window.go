@@ -31,7 +31,7 @@ func RunBlockedModal(title, subtitle, packageId, windowTitle string, width, heig
 		w.Option(app.Title(windowTitle))
 		w.Option(app.Size(width, height))
 
-		if err := runBlockedModal(w, title, subtitle, packageId, onBypass); err != nil {
+		if err := runBlockedModal(w, title, subtitle, packageId, windowTitle, onBypass); err != nil {
 			log.Fatal(err)
 		}
 		os.Exit(0)
@@ -40,7 +40,7 @@ func RunBlockedModal(title, subtitle, packageId, windowTitle string, width, heig
 	return nil
 }
 
-func runBlockedModal(w *app.Window, title, subtitle, packageId string, onBypass func()) error {
+func runBlockedModal(w *app.Window, title, subtitle, packageId, windowTitle string, onBypass func()) error {
 	th := theme.NewAikidoTheme()
 
 	closeWindow := func() {
@@ -90,6 +90,7 @@ func runBlockedModal(w *app.Window, title, subtitle, packageId string, onBypass 
 		case app.FrameEvent:
 			if firstFrame {
 				w.Perform(system.ActionRaise)
+				bringWindowToForeground(windowTitle)
 				firstFrame = false
 			}
 			gtx := app.NewContext(&ops, e)
