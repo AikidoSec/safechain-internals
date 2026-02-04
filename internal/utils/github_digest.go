@@ -25,7 +25,7 @@ func lookupSafeChainReleaseAssetDigest(ctx context.Context, releaseTag string, a
 	// tags might have a "v" prefix, but GitHub API requires the tag without the "v"
 	normalizedTag := strings.TrimPrefix(originalTag, "v")
 
-	client := github.NewClient(httpClient)
+	client := github.NewClient(http.DefaultClient)
 
 	release, _, err := client.Repositories.GetReleaseByTag(ctx, safeChainGitHubOwner, safeChainGitHubRepo, normalizedTag)
 	if err != nil {
