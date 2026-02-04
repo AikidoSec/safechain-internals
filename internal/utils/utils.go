@@ -142,8 +142,11 @@ func DownloadBinary(ctx context.Context, url, destPath string, verification *Dow
 		}
 	}
 
-	if err := os.Chown(destPath, os.Getuid(), os.Getgid()); err != nil {
-		return fmt.Errorf("failed to set file ownership: %w", err)
+	osName, _ := DetectOS()
+	if osName != "win" {
+		if err := os.Chown(destPath, os.Getuid(), os.Getgid()); err != nil {
+			return fmt.Errorf("failed to set file ownership: %w", err)
+		}
 	}
 
 	return nil
