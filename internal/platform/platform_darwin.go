@@ -25,7 +25,6 @@ const (
 	SafeChainProxyBinaryName    = "safechain-proxy"
 	SafeChainProxyLogName       = "safechain-proxy.log"
 	SafeChainProxyErrLogName    = "safechain-proxy.err"
-
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
 )
