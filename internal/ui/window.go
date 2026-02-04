@@ -80,6 +80,7 @@ func runBlockedModal(w *app.Window, title, subtitle, packageId string, onBypass 
 	)
 
 	var ops op.Ops
+	firstFrame := true
 
 	for {
 		e := w.Event()
@@ -87,6 +88,10 @@ func runBlockedModal(w *app.Window, title, subtitle, packageId string, onBypass 
 		case app.DestroyEvent:
 			return e.Err
 		case app.FrameEvent:
+			if firstFrame {
+				w.Perform(system.ActionRaise)
+				firstFrame = false
+			}
 			gtx := app.NewContext(&ops, e)
 			a.Layout(gtx)
 			e.Frame(gtx.Ops)
