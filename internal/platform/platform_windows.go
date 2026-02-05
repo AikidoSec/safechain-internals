@@ -317,7 +317,7 @@ func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 	}
 
 	log.Printf("Running PowerShell install script %s...", scriptPath)
-	if _, err := RunAsCurrentUser(ctx, "powershell", []string{"-ExecutionPolicy", "Bypass", "-File", scriptPath}); err != nil {
+	if _, err := RunAsCurrentUser(ctx, "powershell", []string{"-ExecutionPolicy", "RemoteSigned", "-File", scriptPath}); err != nil {
 		return fmt.Errorf("failed to run install script: %w", err)
 	}
 	return nil
@@ -347,7 +347,7 @@ func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 	}
 
 	log.Printf("Running PowerShell uninstall script %s...", scriptPath)
-	if _, err := RunAsCurrentUser(ctx, "powershell", []string{"-ExecutionPolicy", "Bypass", "-File", scriptPath}); err != nil {
+	if _, err := RunAsCurrentUser(ctx, "powershell", []string{"-ExecutionPolicy", "RemoteSigned", "-File", scriptPath}); err != nil {
 		return fmt.Errorf("failed to run uninstall script: %w", err)
 	}
 	return nil
