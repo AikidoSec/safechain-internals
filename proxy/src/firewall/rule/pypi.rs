@@ -5,10 +5,7 @@ use rama::{
     error::{ErrorContext as _, OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
-    net::{
-        address::{Domain, DomainTrie},
-        uri::util::percent_encoding,
-    },
+    net::{address::Domain, uri::util::percent_encoding},
     telemetry::tracing,
     utils::{
         collections::smallvec::SmallVec,
@@ -20,6 +17,7 @@ use rama::utils::str::arcstr::{ArcStr, arcstr};
 
 use crate::{
     firewall::{
+        domain_matcher::DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
         malware_list::{MalwareEntry, RemoteMalwareList},
         pac::PacScriptGenerator,
@@ -47,7 +45,7 @@ impl PackageInfo {
 }
 
 pub(in crate::firewall) struct RulePyPI {
-    target_domains: DomainTrie<()>,
+    target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
 }
 
@@ -72,7 +70,6 @@ impl RulePyPI {
 
         let target_domains = ["pypi.org", "files.pythonhosted.org", "pypi.python.org"]
             .into_iter()
-            .map(|d| (Domain::from_static(d), ()))
             .collect();
 
         Ok(Self {
@@ -143,12 +140,12 @@ impl Rule for RulePyPI {
 
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
-        self.target_domains.is_match_parent(domain)
+        self.target_domains.is_match(domain)
     }
 
     #[inline(always)]
     fn collect_pac_domains(&self, generator: &mut PacScriptGenerator) {
-        for (domain, _) in self.target_domains.iter() {
+        for domain in self.target_domains.iter() {
             generator.write_domain(&domain);
         }
     }

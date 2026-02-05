@@ -24,6 +24,7 @@ use rama::{
     utils::{backoff::ExponentialBackoff, rng::HasherRng},
 };
 
+pub mod domain_matcher;
 pub mod events;
 pub mod layer;
 pub mod malware_list;
