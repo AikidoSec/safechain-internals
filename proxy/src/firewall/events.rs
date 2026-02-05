@@ -24,7 +24,7 @@ pub struct BlockedEventInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockedEvent {
-    pub ts_ms: u64,
+    pub ts_ms: i64,
     pub artifact: BlockedArtifact,
 }
 
@@ -37,20 +37,30 @@ impl BlockedEvent {
     }
 }
 
-fn now_unix_ms() -> u64 {
+fn now_unix_ms() -> i64 {
     // Cache the initial unix instance,
     // as making this syscall for each call is pretty expensive
-    static START: OnceLock<(Instant, u64)> = OnceLock::new();
+    static START: OnceLock<(Instant, i64)> = OnceLock::new();
 
     let (start_instant, start_unix_ms) = START.get_or_init(|| {
-        let unix_ms = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        let unix_ms = unix_timestamp_millis();
         (Instant::now(), unix_ms)
     });
 
-    start_unix_ms + start_instant.elapsed().as_millis() as u64
+    start_unix_ms + start_instant.elapsed().as_millis() as i64
+}
+
+// inspired by chrono crate of Rust,
+// should always be positive unless your system clock is BEFORE epoch datetime (1970),
+// in which case it will be negative...
+//
+// i64 is also the type used by most systems,
+// and easily fits any real timestamp (by a margin of millions of years)
+fn unix_timestamp_millis() -> i64 {
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(d) => d.as_millis() as i64,
+        Err(e) => -(e.duration().as_millis() as i64),
+    }
 }
 
 #[cfg(test)]

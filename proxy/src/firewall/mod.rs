@@ -11,6 +11,7 @@ use rama::{
             decompression::DecompressionLayer,
             map_request_body::MapRequestBodyLayer,
             map_response_body::MapResponseBodyLayer,
+            required_header::AddRequiredRequestHeadersLayer,
             retry::{ManagedPolicy, RetryLayer},
             timeout::TimeoutLayer,
         },
@@ -23,6 +24,7 @@ use rama::{
     utils::{backoff::ExponentialBackoff, rng::HasherRng},
 };
 
+pub mod domain_matcher;
 pub mod events;
 pub mod layer;
 pub mod malware_list;
@@ -32,7 +34,7 @@ pub mod version;
 
 mod pac;
 
-use crate::storage::SyncCompactDataStorage;
+use crate::{storage::SyncCompactDataStorage, utils::env::network_service_identifier};
 
 use self::rule::{RequestAction, Rule};
 
@@ -68,6 +70,9 @@ impl Firewall {
                     )
                     .context("create exponential backoff impl")?,
                 ),
+            ),
+            AddRequiredRequestHeadersLayer::new().with_user_agent_header_value(
+                HeaderValue::from_static(network_service_identifier()),
             ),
             MapRequestBodyLayer::new(Body::new),
         )

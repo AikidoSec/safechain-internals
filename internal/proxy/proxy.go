@@ -20,9 +20,11 @@ const (
 )
 
 type Proxy struct {
-	cmd    *exec.Cmd
-	ctx    context.Context
-	cancel context.CancelFunc
+	cmd      *exec.Cmd
+	ctx      context.Context
+	cancel   context.CancelFunc
+	procDone chan struct{}
+	procErr  error
 }
 
 func New() *Proxy {
@@ -30,6 +32,10 @@ func New() *Proxy {
 }
 
 func (p *Proxy) WaitForProxyToBeReady() error {
+	if p.procDone == nil {
+		return fmt.Errorf("procDone channel is nil")
+	}
+
 	timeout := time.After(ProxyReadyTimeout)
 	ticker := time.NewTicker(ProxyReadyInterval)
 	defer ticker.Stop()
@@ -38,6 +44,8 @@ func (p *Proxy) WaitForProxyToBeReady() error {
 		select {
 		case <-timeout:
 			return fmt.Errorf("timeout waiting for proxy to be ready after %s", ProxyReadyTimeout.String())
+		case <-p.procDone:
+			return fmt.Errorf("proxy process exited unexpectedly: %v", p.procErr)
 		case <-ticker.C:
 			err := LoadProxyConfig()
 			if err == nil {
@@ -74,6 +82,12 @@ func (p *Proxy) Start(ctx context.Context, proxyIngressAddr string) error {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
+	p.procDone = make(chan struct{})
+	go func() {
+		p.procErr = p.cmd.Wait()
+		close(p.procDone)
+	}()
+
 	log.Println("Waiting for proxy to be ready...")
 	if err := p.WaitForProxyToBeReady(); err != nil {
 		return fmt.Errorf("failed to wait for proxy to be ready: %v", err)
@@ -94,8 +108,17 @@ func (p *Proxy) Stop() error {
 	if p.cancel != nil {
 		p.cancel()
 	}
-	if p.cmd != nil && p.cmd.Process != nil {
-		_ = p.cmd.Wait()
+	if p.procDone != nil {
+		select {
+		case <-p.procDone:
+		case <-time.After(10 * time.Second):
+			log.Println("Timeout waiting for proxy process to exit, killing...")
+			if p.cmd != nil && p.cmd.Process != nil {
+				if err := p.cmd.Process.Kill(); err != nil {
+					log.Printf("Failed to kill proxy process: %v", err)
+				}
+			}
+		}
 	}
 
 	log.Println("SafeChain Proxy stopped successfully!")

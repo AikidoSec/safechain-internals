@@ -81,6 +81,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 		log.Println("SafeChain Daemon main loop stopped")
 	case err := <-errCh:
 		if err != nil {
+			cancel()
 			d.wg.Wait()
 			return err
 		}
@@ -126,6 +127,24 @@ func (d *Daemon) Stop(ctx context.Context) error {
 	return err
 }
 
+func (d *Daemon) startProxyAndInstallCA(ctx context.Context) error {
+	ingressAddr := d.ingress.Addr()
+	if ingressAddr == "" {
+		return fmt.Errorf("ingress server failed to start")
+	}
+
+	if err := d.proxy.Start(ctx, ingressAddr); err != nil {
+		return fmt.Errorf("failed to start proxy: %v", err)
+	}
+
+	if !proxy.ProxyCAInstalled() {
+		if err := proxy.InstallProxyCA(ctx); err != nil {
+			return fmt.Errorf("failed to install proxy CA: %v", err)
+		}
+	}
+	return nil
+}
+
 func (d *Daemon) run(ctx context.Context) error {
 	defer d.wg.Done()
 
@@ -153,19 +172,9 @@ func (d *Daemon) run(ctx context.Context) error {
 
 	// Wait briefly for ingress server to bind
 	time.Sleep(100 * time.Millisecond)
-	ingressAddr := d.ingress.Addr()
-	if ingressAddr == "" {
-		return fmt.Errorf("ingress server failed to start")
-	}
 
-	if err := d.proxy.Start(ctx, ingressAddr); err != nil {
-		return fmt.Errorf("failed to start proxy: %v", err)
-	}
-
-	if !proxy.ProxyCAInstalled() {
-		if err := proxy.InstallProxyCA(ctx); err != nil {
-			return fmt.Errorf("failed to install proxy CA: %v", err)
-		}
+	if err := d.startProxyAndInstallCA(ctx); err != nil {
+		return fmt.Errorf("failed to start proxy and install CA: %v", err)
 	}
 
 	if err := setup.Install(ctx); err != nil {
@@ -205,12 +214,16 @@ func (d *Daemon) Uninstall(ctx context.Context, removeScanners bool) error {
 }
 
 func (d *Daemon) heartbeat() error {
-	if !proxy.ProxyCAInstalled() {
-		log.Println("Proxy CA not installed yet, skipping heartbeat checks...")
-		return nil
-	}
 	if !d.proxy.IsProxyRunning() {
 		log.Println("Proxy is not running, starting it...")
+		if err := d.startProxyAndInstallCA(d.ctx); err != nil {
+			return fmt.Errorf("failed to start proxy and install CA: %v", err)
+		}
+		if d.proxy.IsProxyRunning() {
+			log.Println("Proxy started successfully")
+		} else {
+			log.Println("Failed to start proxy, will try again later")
+		}
 	} else {
 		log.Println("Proxy is running")
 	}

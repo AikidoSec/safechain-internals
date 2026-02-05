@@ -82,8 +82,9 @@ pub async fn run_meta_https_server(
 
     let http_svc = (
         TraceLayer::new_for_http(),
-        AddRequiredResponseHeadersLayer::new()
-            .with_server_header_value(HeaderValue::from_static(crate::utils::env::project_name())),
+        AddRequiredResponseHeadersLayer::new().with_server_header_value(HeaderValue::from_static(
+            crate::utils::env::network_service_identifier(),
+        )),
     )
         .into_layer(http_router);
 
