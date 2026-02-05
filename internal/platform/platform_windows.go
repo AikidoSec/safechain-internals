@@ -295,7 +295,7 @@ func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args
 
 func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 	scriptURL := fmt.Sprintf("%s/releases/download/%s/%s", repoURL, version, SafeChainInstallScriptName)
-	verification := &utils.DownloadVerification{
+	verification := utils.DownloadVerification{
 		SafeChainReleaseTag: version,
 		SafeChainAssetName:  SafeChainInstallScriptName,
 	}
@@ -312,7 +312,7 @@ func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 	defer os.Remove(scriptPath)
 
 	log.Printf("Downloading PowerShell install script from %s...", scriptURL)
-	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath, verification); err != nil {
+	if err := utils.DownloadAndVerifyBinary(ctx, scriptURL, scriptPath, verification); err != nil {
 		return fmt.Errorf("failed to download install script: %w", err)
 	}
 
@@ -325,7 +325,7 @@ func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 
 func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 	scriptURL := fmt.Sprintf("%s/releases/download/%s/%s", repoURL, version, SafeChainUninstallScriptName)
-	verification := &utils.DownloadVerification{
+	verification := utils.DownloadVerification{
 		SafeChainReleaseTag: version,
 		SafeChainAssetName:  SafeChainUninstallScriptName,
 	}
@@ -342,7 +342,7 @@ func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 	defer os.Remove(scriptPath)
 
 	log.Printf("Downloading PowerShell uninstall script from %s...", scriptURL)
-	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath, verification); err != nil {
+	if err := utils.DownloadAndVerifyBinary(ctx, scriptURL, scriptPath, verification); err != nil {
 		return fmt.Errorf("failed to download uninstall script: %w", err)
 	}
 

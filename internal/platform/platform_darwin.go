@@ -375,13 +375,13 @@ func RunningAsRoot() bool {
 func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 	scriptURL := fmt.Sprintf("%s/releases/download/%s/%s", repoURL, version, SafeChainInstallScriptName)
 	scriptPath := filepath.Join(os.TempDir(), SafeChainInstallScriptName)
-	verification := &utils.DownloadVerification{
+	verification := utils.DownloadVerification{
 		SafeChainReleaseTag: version,
 		SafeChainAssetName:  SafeChainInstallScriptName,
 	}
 
 	log.Printf("Downloading install script from %s...", scriptURL)
-	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath, verification); err != nil {
+	if err := utils.DownloadAndVerifyBinary(ctx, scriptURL, scriptPath, verification); err != nil {
 		return fmt.Errorf("failed to download install script: %w", err)
 	}
 	_, uid, _, gid, err := getConsoleUser(ctx)
@@ -401,13 +401,13 @@ func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 	scriptURL := fmt.Sprintf("%s/releases/download/%s/%s", repoURL, version, SafeChainUninstallScriptName)
 	scriptPath := filepath.Join(os.TempDir(), SafeChainUninstallScriptName)
-	verification := &utils.DownloadVerification{
+	verification := utils.DownloadVerification{
 		SafeChainReleaseTag: version,
 		SafeChainAssetName:  SafeChainUninstallScriptName,
 	}
 
 	log.Printf("Downloading uninstall script from %s...", scriptURL)
-	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath, verification); err != nil {
+	if err := utils.DownloadAndVerifyBinary(ctx, scriptURL, scriptPath, verification); err != nil {
 		return fmt.Errorf("failed to download uninstall script: %w", err)
 	}
 	defer os.Remove(scriptPath)

@@ -88,21 +88,8 @@ func DetectArch() string {
 	}
 }
 
-func DownloadBinary(ctx context.Context, url, destPath string, verification *DownloadVerification) error {
-	var expectedDigest string
-	var shouldVerify bool
 
-	if verification != nil && strings.TrimSpace(verification.SafeChainReleaseTag) != "" && strings.TrimSpace(verification.SafeChainAssetName) != "" {
-		digest, ok := lookupSafeChainReleaseAssetDigest(ctx, verification.SafeChainReleaseTag, verification.SafeChainAssetName)
-		if ok {
-			expectedDigest = digest
-			shouldVerify = true
-		} else {
-			log.Printf("ERROR: Unable to find digest for asset %q in release %q; skipping verification", verification.SafeChainAssetName, verification.SafeChainReleaseTag)
-			shouldVerify = false
-		}
-	}
-
+func DownloadBinary(ctx context.Context, url, destPath string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -122,20 +109,10 @@ func DownloadBinary(ctx context.Context, url, destPath string, verification *Dow
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
+	defer outFile.Close()
 
 	if _, err := io.Copy(outFile, resp.Body); err != nil {
-		_ = outFile.Close()
 		return fmt.Errorf("failed to write file: %w", err)
-	}
-	if err := outFile.Close(); err != nil {
-		return fmt.Errorf("failed to close file: %w", err)
-	}
-
-	if shouldVerify {
-		if err := verifySha256Checksum(destPath, expectedDigest); err != nil {
-			_ = os.Remove(destPath)
-			return err
-		}
 	}
 
 	osName, _ := DetectOS()
@@ -144,15 +121,37 @@ func DownloadBinary(ctx context.Context, url, destPath string, verification *Dow
 			return fmt.Errorf("failed to set file ownership: %w", err)
 		}
 	}
+	return nil
+}
+
+func DownloadAndVerifyBinary(ctx context.Context, url, destPath string, verification DownloadVerification) error {
+	releaseTag := strings.TrimSpace(verification.SafeChainReleaseTag)
+	assetName := strings.TrimSpace(verification.SafeChainAssetName)
+	if releaseTag == "" || assetName == "" {
+		return fmt.Errorf("download verification requires release tag and asset name")
+	}
+
+	expectedDigest, digestFetched := lookupSafeChainReleaseAssetDigest(ctx, releaseTag, assetName)
+	if !digestFetched {
+		log.Printf("ERROR: Unable to find digest for asset %q in release %q; skipping verification", assetName, releaseTag)
+	}
+
+	if err := DownloadBinary(ctx, url, destPath); err != nil {
+		return err
+	}
+
+	if digestFetched {
+		if err := verifySha256Checksum(destPath, expectedDigest); err != nil {
+			_ = os.Remove(destPath)
+			return err
+		}
+	}
 
 	return nil
 }
 
 func verifySha256Checksum(filePath, expectedChecksum string) error {
 	expectedChecksum = strings.TrimSpace(expectedChecksum)
-	if expectedChecksum == "" {
-		return nil
-	}
 
 	// Format matches the CLI: "sha256:<hex>".
 	parts := strings.SplitN(expectedChecksum, ":", 2)
