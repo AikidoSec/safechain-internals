@@ -7,18 +7,32 @@ use std::{
 };
 
 use rama::{
-    Service,
+    Layer, Service,
     error::{ErrorContext as _, OpaqueError},
-    http::{Request, Response, Uri, service::client::HttpClientExt as _},
+    http::{
+        Body, HeaderValue, Request, Response, Uri,
+        layer::{
+            map_request_body::MapRequestBodyLayer,
+            map_response_body::MapResponseBodyLayer,
+            required_header::AddRequiredRequestHeadersLayer,
+            retry::{ManagedPolicy, RetryLayer},
+            timeout::TimeoutLayer,
+        },
+        service::client::HttpClientExt as _,
+    },
+    layer::MapErrLayer,
     rt::Executor,
     service::BoxService,
     telemetry::tracing,
-    utils::str::arcstr::ArcStr,
+    utils::{backoff::ExponentialBackoff, rng::HasherRng, str::arcstr::ArcStr},
 };
 
 use tokio::sync::{Semaphore, SemaphorePermit};
 
-use crate::firewall::version::{PackageVersion, PackageVersionKey};
+use crate::{
+    firewall::version::{PackageVersion, PackageVersionKey},
+    utils::env::{compute_concurrent_request_count, network_service_identifier},
+};
 
 use super::events::BlockedEvent;
 
@@ -70,7 +84,7 @@ impl std::fmt::Debug for EventNotifier {
 
 impl EventNotifier {
     pub fn try_new(exec: Executor, reporting_endpoint: Uri) -> Result<Self, OpaqueError> {
-        let client = crate::client::new_web_client()?.boxed();
+        let client = create_notifier_https_client()?;
         let limit = Arc::new(Semaphore::const_new(compute_concurrent_request_count()));
         let dedup = moka::sync::CacheBuilder::new(MAX_EVENTS)
             .time_to_live(EVENT_DEDUP_WINDOW)
@@ -117,18 +131,6 @@ impl EventNotifier {
             .fetch_add(1, atomic::Ordering::SeqCst)
             == 0
     }
-}
-
-fn compute_concurrent_request_count() -> usize {
-    std::env::var("MAX_CONCURRENT_REQUESTS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or_else(|| {
-            let cpus = std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1);
-            cpus * 64
-        })
 }
 
 async fn acquire_concurrency_guard<'a>(
@@ -179,4 +181,32 @@ async fn send_blocked_event(
     }
 
     tracing::debug!("event notification sent successfully");
+}
+
+fn create_notifier_https_client() -> Result<BoxService<Request, Response, OpaqueError>, OpaqueError>
+{
+    let core_client = crate::client::new_web_client()?;
+
+    let client_middleware = (
+        MapResponseBodyLayer::new(Body::new),
+        MapErrLayer::new(OpaqueError::from_std),
+        TimeoutLayer::new(Duration::from_secs(30)),
+        RetryLayer::new(
+            ManagedPolicy::default().with_backoff(
+                ExponentialBackoff::new(
+                    Duration::from_millis(100),
+                    Duration::from_secs(20),
+                    0.01,
+                    HasherRng::default,
+                )
+                .context("create exponential backoff impl")?,
+            ),
+        ),
+        AddRequiredRequestHeadersLayer::new()
+            .with_user_agent_header_value(HeaderValue::from_static(network_service_identifier())),
+        MapRequestBodyLayer::new(Body::new),
+    );
+
+    let client = client_middleware.into_layer(core_client);
+    Ok(client.boxed())
 }
