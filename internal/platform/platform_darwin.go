@@ -402,6 +402,13 @@ func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 	}
 	defer os.Remove(scriptPath)
 
+	_, uid, _, gid, err := getConsoleUser(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get console user: %w", err)
+	}
+	if err := os.Chown(scriptPath, uid, gid); err != nil {
+		return fmt.Errorf("failed to set install script ownership: %w", err)
+	}
 	if _, err := RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
 		return fmt.Errorf("failed to run uninstall script: %w", err)
 	}

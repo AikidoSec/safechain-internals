@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 )
 
 type Command struct {
@@ -87,7 +88,10 @@ func DownloadBinary(ctx context.Context, url, destPath string) error {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)
 	}
@@ -105,10 +109,6 @@ func DownloadBinary(ctx context.Context, url, destPath string) error {
 
 	if _, err := io.Copy(outFile, resp.Body); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
-	}
-
-	if err := os.Chown(destPath, os.Getuid(), os.Getgid()); err != nil {
-		return fmt.Errorf("failed to set file ownership: %w", err)
 	}
 
 	return nil
