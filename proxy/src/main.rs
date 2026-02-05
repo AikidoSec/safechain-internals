@@ -1,3 +1,9 @@
+#![cfg_attr(
+    not(test),
+    warn(clippy::print_stdout, clippy::dbg_macro),
+    deny(clippy::unwrap_used, clippy::expect_used)
+)]
+
 use std::{path::PathBuf, time::Duration};
 
 use rama::{
