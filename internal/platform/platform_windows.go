@@ -308,7 +308,9 @@ func downloadAndRunSafeChainPowerShellScript(ctx context.Context, repoURL, versi
 		return fmt.Errorf("failed to create temp script file: %w", err)
 	}
 	scriptPath := tmpFile.Name()
-	_ = tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		log.Printf("Failed to close temp script file %s: %v", scriptPath, err)
+	}
 	defer os.Remove(scriptPath)
 
 	log.Printf("Downloading PowerShell script %s from %s...", scriptName, scriptURL)
