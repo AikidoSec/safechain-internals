@@ -144,7 +144,6 @@ impl RuleNuget {
         if path.starts_with("/api/v2") {
             Self::parse_package_from_api_v2(path)
         } else {
-            tracing::info!("v3");
             Self::parse_package_from_api_v3(path)
         }
     }
