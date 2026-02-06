@@ -60,7 +60,7 @@
                         FirstFailureActionType="restart"
                         SecondFailureActionType="restart"
                         ThirdFailureActionType="restart"
-                        RestartServiceDelayInSeconds="60"
+                        RestartServiceDelayInSeconds="300"
                         ResetPeriodInDays="1" />
         <ServiceControl Id="SafeChainUltimateServiceControl"
                         Name="SafeChainUltimate"
