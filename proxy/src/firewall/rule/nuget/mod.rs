@@ -134,10 +134,14 @@ impl Rule for RuleNuget {
 impl RuleNuget {
     fn is_extension_malware(&self, nuget_package: NugetPackage) -> bool {
         let normalized_id = normalize_package_name(nuget_package.fully_qualified_name);
-        self.remote_malware_list
-            .find_entries(&normalized_id)
-            .entries()
-            .is_some()
+        let binding = self.remote_malware_list.find_entries(&normalized_id);
+        let Some(entries) = binding.entries() else {
+            return false;
+        };
+
+        entries
+            .iter()
+            .any(|entry| entry.version.eq(&nuget_package.version))
     }
 
     fn parse_package_from_path(path: &str) -> Option<NugetPackage<'_>> {
