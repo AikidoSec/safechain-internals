@@ -231,6 +231,15 @@ func (d *Daemon) logStatus() {
 	} else {
 		log.Println("\t- Proxy: not running")
 	}
+	for _, scannerName := range d.registry.List() {
+		scanner, err := d.registry.Get(scannerName)
+		if err != nil {
+			continue
+		}
+		if scanner.IsInstalled(d.ctx) {
+			log.Printf("\t- %s: %s", scannerName, scanner.Version(d.ctx))
+		}
+	}
 }
 
 func (d *Daemon) handleProxy() error {

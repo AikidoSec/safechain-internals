@@ -53,7 +53,13 @@
                         Start="auto"
                         Type="ownProcess"
                         ErrorControl="normal"
-                        Account="LocalSystem" />
+                        Account="LocalSystem">
+          <ServiceConfigFailureActions ResetPeriod="86400">
+            <Failure Action="restart" Delay="60000" />
+            <Failure Action="restart" Delay="60000" />
+            <Failure Action="restart" Delay="600000" />
+          </ServiceConfigFailureActions>
+        </ServiceInstall>
         <ServiceControl Id="SafeChainUltimateServiceControl"
                         Name="SafeChainUltimate"
                         Start="install"
