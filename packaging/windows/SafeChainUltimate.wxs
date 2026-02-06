@@ -54,7 +54,7 @@
                         Type="ownProcess"
                         ErrorControl="normal"
                         Account="LocalSystem">
-          <ServiceConfigFailureActions ResetPeriod="86400">
+          <ServiceConfigFailureActions OnInstall="yes" ResetPeriod="86400">
             <Failure Action="restart" Delay="60000" />
             <Failure Action="restart" Delay="60000" />
             <Failure Action="restart" Delay="600000" />
