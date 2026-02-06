@@ -168,7 +168,7 @@ impl RuleNuget {
         let (package_name, package_version_string) = remainder.split_once("/")?;
 
         let version = PragmaticSemver::parse(package_version_string).inspect_err(|err| {
-            tracing::debug!("failed to parse npm package ({package_name}) version (raw = {package_version_string}): err = {err}");
+            tracing::debug!("failed to parse nuget package ({package_name}) version (raw = {package_version_string}): err = {err}");
         }).ok()?;
 
         Some(NugetPackage {
@@ -194,7 +194,7 @@ impl RuleNuget {
         }
 
         let version = PragmaticSemver::parse(package_version_string).inspect_err(|err| {
-            tracing::debug!("failed to parse npm package ({package_name}) version (raw = {package_version_string}): err = {err}");
+            tracing::debug!("failed to parse nuget package ({package_name}) version (raw = {package_version_string}): err = {err}");
         }).ok()?;
 
         Some(NugetPackage {
