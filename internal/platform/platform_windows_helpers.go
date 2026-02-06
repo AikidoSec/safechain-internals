@@ -162,8 +162,6 @@ func runAsLoggedInUser(binaryPath string, args []string) (string, error) {
 		return "", err
 	}
 
-	log.Printf("Found active user session: %d", sessionID)
-
 	var userToken windows.Token
 	if err := windows.WTSQueryUserToken(sessionID, &userToken); err != nil {
 		return "", fmt.Errorf("WTSQueryUserToken failed: %v", err)
@@ -192,7 +190,6 @@ func runAsLoggedInUser(binaryPath string, args []string) (string, error) {
 		return "", fmt.Errorf("runProcessAsUser failed: %v", err)
 	}
 
-	log.Printf("Process %s completed successfully as logged-in user", binaryPath)
 	return output, nil
 }
 
