@@ -106,6 +106,14 @@ impl Firewall {
                 .await
                 .context("create block rule: vscode")?
                 .into_dyn(),
+                self::rule::nuget::RuleNuget::try_new(
+                    guard.clone(),
+                    shared_remote_malware_client.clone(),
+                    data.clone(),
+                )
+                .await
+                .context("create block rule: nuget")?
+                .into_dyn(),
                 self::rule::chrome::RuleChrome::try_new(
                     guard.clone(),
                     shared_remote_malware_client.clone(),
