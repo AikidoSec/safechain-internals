@@ -22,7 +22,7 @@ func New() scanner.Scanner {
 }
 
 func (s *SafechainScanner) Name() string {
-	return "safechain"
+	return "Safechain"
 }
 
 func (s *SafechainScanner) Version(ctx context.Context) string {

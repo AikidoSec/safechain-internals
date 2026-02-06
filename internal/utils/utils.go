@@ -135,14 +135,18 @@ func RunCommands(ctx context.Context, commands []Command) ([]string, error) {
 }
 
 func RunCommandWithEnv(ctx context.Context, env []string, command string, args ...string) (string, error) {
-	if !ctx.Value("disable_logging").(bool) {
+	disableLogging, ok := ctx.Value("disable_logging").(bool)
+	if !ok {
+		disableLogging = false
+	}
+	if !disableLogging {
 		log.Printf("Running command: %s %s", command, strings.Join(args, " "))
 	}
 	cmd := exec.CommandContext(ctx, command, args...)
 	cmd.Env = append(os.Environ(), env...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		if !ctx.Value("disable_logging").(bool) {
+		if !disableLogging {
 			log.Printf("\t- Command error: %v", err)
 			log.Printf("\t- Command output: %s", string(output))
 		}
