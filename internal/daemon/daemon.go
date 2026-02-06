@@ -227,10 +227,12 @@ func (d *Daemon) Uninstall(ctx context.Context, removeScanners bool) error {
 func (d *Daemon) logStatus() {
 	log.Println("Daemon status:")
 	if d.proxy.IsProxyRunning() {
-		log.Println("\t- Proxy: running")
+		proxyVersion, _ := d.proxy.Version()
+		log.Printf("\t- Proxy: %s", proxyVersion)
 	} else {
-		log.Println("\t- Proxy: not running")
+		log.Println("\t- Proxy: not running!")
 	}
+
 	for _, scannerName := range d.registry.List() {
 		scanner, err := d.registry.Get(scannerName)
 		if err != nil {
