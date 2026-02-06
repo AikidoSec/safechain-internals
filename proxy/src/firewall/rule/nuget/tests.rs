@@ -16,7 +16,7 @@ fn test_parse_package_from_nuget_api_v3_path() {
     assert_eq!(nuget_package.fully_qualified_name, "newtonsoft.json");
     assert_eq!(
         nuget_package.version,
-        PackageVersion::Semver(PragmaticSemver::parse("13.0.5-beta1").unwrap())
+        PragmaticSemver::parse("13.0.5-beta1").unwrap()
     );
 }
 
@@ -35,6 +35,6 @@ fn test_parse_package_from_nuget_api_v2_path() {
     assert_eq!(nuget_package.fully_qualified_name, "safechaintest");
     assert_eq!(
         nuget_package.version,
-        PackageVersion::Semver(PragmaticSemver::parse("0.0.1-security").unwrap())
+        PragmaticSemver::parse("0.0.1-security").unwrap()
     );
 }
