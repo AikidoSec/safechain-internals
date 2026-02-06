@@ -48,7 +48,7 @@ impl RuleNuget {
         .context("create remote malware list for nuget block rule")?;
 
         Ok(Self {
-            target_domains: ["api.nuget.org"].into_iter().collect(),
+            target_domains: ["api.nuget.org", "www.nuget.org"].into_iter().collect(),
             remote_malware_list,
         })
     }
@@ -141,16 +141,52 @@ impl RuleNuget {
     }
 
     fn parse_package_from_path(path: &str) -> Option<NugetPackage<'_>> {
+        if path.starts_with("/api/v2") {
+            Self::parse_package_from_api_v2(path)
+        } else {
+            tracing::info!("v3");
+            Self::parse_package_from_api_v3(path)
+        }
+    }
+
+    fn parse_package_from_api_v2(path: &str) -> Option<NugetPackage<'_>> {
+        // Example url: /api/v2/package/safechaintest/0.0.1-security
+        // 1st segment: matches "/api" and throw away
+        let (_, remainder) = path.trim_start_matches("/").split_once("/")?;
+
+        // 2nd segment: matches "v2"
+        let (_, remainder) = remainder.split_once("/")?;
+
+        // 3rd segment: matches "package"
+        let (package_string, remainder) = remainder.split_once("/")?;
+        if package_string != "package" {
+            return None;
+        }
+
+        // 4th segment: matches package_name
+        // 5th segment (remainder): matches package_version
+        let (package_name, package_version_string) = remainder.split_once("/")?;
+
+        let version = PragmaticSemver::parse(package_version_string).inspect_err(|err| {
+            tracing::debug!("failed to parse npm package ({package_name}) version (raw = {package_version_string}): err = {err}");
+        }).ok()?;
+
+        Some(NugetPackage {
+            fully_qualified_name: package_name,
+            version,
+        })
+    }
+
+    fn parse_package_from_api_v3(path: &str) -> Option<NugetPackage<'_>> {
         // Example url: /v3-flatcontainer/newtonsoft.json/13.0.5-beta1/newtonsoft.json.13.0.5-beta1.nupkg
         // 1st segment: matches /v3-flatcontainer and throw away
         let (_, remainder) = path.trim_start_matches("/").split_once("/")?;
 
         // 2nd segment: matches package_name
-        let (package_name, remainder) = remainder.trim_start_matches("/").split_once("/")?;
+        let (package_name, remainder) = remainder.split_once("/")?;
 
         // 3rd segment: matches package_version
-        let (package_version_string, remainder) =
-            remainder.trim_start_matches("/").split_once("/")?;
+        let (package_version_string, remainder) = remainder.split_once("/")?;
 
         // 4th segement (last): matches download name (packagename.version.nupkg)
         if !remainder.ends_with(".nupkg") {
