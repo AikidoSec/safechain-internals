@@ -26,7 +26,7 @@ func (s *SafechainScanner) Name() string {
 }
 
 func (s *SafechainScanner) Version(ctx context.Context) string {
-	output, err := platform.RunAsCurrentUser(context.WithValue(ctx, "log", false), platform.GetConfig().SafeChainBinaryPath, []string{"-v"})
+	output, err := platform.RunAsCurrentUser(context.WithValue(ctx, "disable_logging", true), platform.GetConfig().SafeChainBinaryPath, []string{"-v"})
 	if err != nil {
 		return ""
 	}
