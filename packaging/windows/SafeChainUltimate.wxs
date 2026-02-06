@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Package Name="SafeChain Ultimate"
            Manufacturer="Aikido Security BV"
            Version="$(var.Version)"
@@ -53,13 +54,14 @@
                         Start="auto"
                         Type="ownProcess"
                         ErrorControl="normal"
-                        Account="LocalSystem">
-          <ServiceConfigFailureActions OnInstall="yes" ResetPeriod="86400">
-            <Failure Action="restart" Delay="60000" />
-            <Failure Action="restart" Delay="60000" />
-            <Failure Action="restart" Delay="600000" />
-          </ServiceConfigFailureActions>
-        </ServiceInstall>
+                        Account="LocalSystem" />
+        <util:ServiceConfig
+                        ServiceName="SafeChainUltimate"
+                        FirstFailureActionType="restart"
+                        SecondFailureActionType="restart"
+                        ThirdFailureActionType="restart"
+                        RestartServiceDelayInSeconds="60"
+                        ResetPeriodInDays="1" />
         <ServiceControl Id="SafeChainUltimateServiceControl"
                         Name="SafeChainUltimate"
                         Start="install"
