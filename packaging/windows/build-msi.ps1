@@ -65,6 +65,7 @@ wix build $WxsFile `
     -d BinDir=$BinDir `
     -d ProjectDir=$ProjectDir `
     -ext WixToolset.UI.wixext `
+    -ext WixToolset.Util.wixext `
     -arch $WixArch `
     -o $OutputMsi
 
