@@ -25,6 +25,8 @@ const (
 	SafeChainProxyBinaryName    = "safechain-proxy"
 	SafeChainProxyLogName       = "safechain-proxy.log"
 	SafeChainProxyErrLogName    = "safechain-proxy.err"
+	SafeChainInstallScriptName   = "install-safe-chain.sh"
+	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
 )
 
 var serviceRegex = regexp.MustCompile(`^\((\d+)\)\s+(.+)$`)
@@ -370,13 +372,25 @@ func RunningAsRoot() bool {
 	return os.Getuid() == 0
 }
 
-func InstallSafeChain(ctx context.Context, repoURL, version string) error {
-	scriptURL := fmt.Sprintf("%s/releases/download/%s/install-safe-chain.sh", repoURL, version)
-	scriptPath := filepath.Join(os.TempDir(), "install-safe-chain.sh")
+func downloadSafeChainShellScript(ctx context.Context, repoURL, version string, scriptName string) (string, error) {
+	scriptURL := fmt.Sprintf("%s/releases/download/%s/%s", repoURL, version, scriptName)
+	scriptPath := filepath.Join(os.TempDir(), scriptName)
+	verification := utils.DownloadVerification{
+		SafeChainReleaseTag: version,
+		SafeChainAssetName:  scriptName,
+	}
 
-	log.Printf("Downloading install script from %s...", scriptURL)
-	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath); err != nil {
-		return fmt.Errorf("failed to download install script: %w", err)
+	log.Printf("Downloading script %s from %s...", scriptName, scriptURL)
+	if err := utils.DownloadAndVerifyBinary(ctx, scriptURL, scriptPath, verification); err != nil {
+		return "", fmt.Errorf("failed to download script %s: %w", scriptName, err)
+	}
+	return scriptPath, nil
+}
+
+func InstallSafeChain(ctx context.Context, repoURL, version string) error {
+	scriptPath, err := downloadSafeChainShellScript(ctx, repoURL, version, SafeChainInstallScriptName)
+	if err != nil {
+		return err
 	}
 	_, uid, _, gid, err := getConsoleUser(ctx)
 	if err != nil {
@@ -387,18 +401,15 @@ func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 	}
 	defer os.Remove(scriptPath)
 	if _, err := RunAsCurrentUser(ctx, "sh", []string{scriptPath}); err != nil {
-		return fmt.Errorf("failed to run uninstall script: %w", err)
+		return fmt.Errorf("failed to run install script: %w", err)
 	}
 	return nil
 }
 
 func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
-	scriptURL := fmt.Sprintf("%s/releases/download/%s/uninstall-safe-chain.sh", repoURL, version)
-	scriptPath := filepath.Join(os.TempDir(), "uninstall-safe-chain.sh")
-
-	log.Printf("Downloading uninstall script from %s...", scriptURL)
-	if err := utils.DownloadBinary(ctx, scriptURL, scriptPath); err != nil {
-		return fmt.Errorf("failed to download uninstall script: %w", err)
+	scriptPath, err := downloadSafeChainShellScript(ctx, repoURL, version, SafeChainUninstallScriptName)
+	if err != nil {
+		return err
 	}
 	defer os.Remove(scriptPath)
 
