@@ -107,10 +107,6 @@ func DownloadBinary(ctx context.Context, url, destPath string) error {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
-	if err := os.Chown(destPath, os.Getuid(), os.Getgid()); err != nil {
-		return fmt.Errorf("failed to set file ownership: %w", err)
-	}
-
 	return nil
 }
 
