@@ -4,7 +4,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"runtime"
 	"strings"
 )
 
@@ -19,17 +18,11 @@ const (
 	xmlProxiesEnd       = "</proxies>"
 	xmlPropertiesStart  = "<properties>"
 	xmlPropertiesEnd    = "</properties>"
-	mavenOptsValueDarwin  = "-Djavax.net.ssl.trustStoreType=KeychainStore"
-	mavenOptsValueWindows = "-Djavax.net.ssl.trustStoreType=Windows-ROOT"
 )
 
 // hasAikidoProxies checks if the content already contains Aikido proxies
 func hasAikidoProxies(content string) bool {
 	return strings.Contains(content, markerStart)
-}
-
-func hasAikidoMavenOpts(content string) bool {
-	return strings.Contains(content, mavenOptsMarkerStart)
 }
 
 // buildProxyBlock creates the Aikido proxy XML block with markers
@@ -51,13 +44,6 @@ func buildProxyBlock(host, port string) string {
   </proxy>
   %s
 `, markerStart, aikidoProxyHTTPID, host, port, aikidoProxyHTTPSID, host, port, markerEnd)
-}
-
-func buildMavenOptsBlock(mavenOptsValue string) string {
-	return fmt.Sprintf(`%s
-	<env.MAVEN_OPTS>%s</env.MAVEN_OPTS>
-	%s
-`, mavenOptsMarkerStart, mavenOptsValue, mavenOptsMarkerEnd)
 }
 
 // buildSettingsWithProxies creates a complete settings.xml from scratch with Aikido proxies
@@ -98,49 +84,17 @@ func addAikidoProxies(content string, host, port string) (string, error) {
 	return result, nil
 }
 
-func addAikidoMavenOptsWithValue(content string, mavenOptsValue string) (string, error) {
-	mavenOptsBlock := buildMavenOptsBlock(mavenOptsValue)
-
-	var result string
-	if strings.Contains(content, xmlPropertiesStart) {
-		result = strings.Replace(content, xmlPropertiesStart, xmlPropertiesStart+"\n"+mavenOptsBlock, 1)
-	} else {
-		propertiesBlock := fmt.Sprintf("%s\n%s%s\n", xmlPropertiesStart, mavenOptsBlock, xmlPropertiesEnd)
-		result = strings.Replace(content, "</settings>", propertiesBlock+"</settings>", 1)
-	}
-
-	if err := validateXMLWellFormedness(result); err != nil {
-		return "", fmt.Errorf("generated XML is not well-formed: %v", err)
-	}
-
-	return result, nil
-}
-
-func addAikidoMavenOpts(content string) (string, error) {
-	switch runtime.GOOS {
-	case "darwin":
-		return addAikidoMavenOptsWithValue(content, mavenOptsValueDarwin)
-	case "windows":
-		return addAikidoMavenOptsWithValue(content, mavenOptsValueWindows)
-	case "linux":
-		return "", fmt.Errorf("Linux requires a custom Java truststore path; no system truststore type is supported")
-	default:
-		return content, nil
-	}
-}
-
 func removeAikidoMavenOverrides(content string) (string, bool, error) {
-	result, removedProxies, err := removeAikidoBlock(content, markerStart, markerEnd)
+	result, removed, err := removeAikidoBlock(content, markerStart, markerEnd)
+	if err != nil {
+		return "", false, err
+	}
+	result, removedMavenOpts, err := removeAikidoMavenOptsPropertiesBlock(result)
 	if err != nil {
 		return "", false, err
 	}
 
-	result, removedMavenOpts, err := removeAikidoBlock(result, mavenOptsMarkerStart, mavenOptsMarkerEnd)
-	if err != nil {
-		return "", false, err
-	}
-
-	if !removedProxies && !removedMavenOpts {
+	if !removed && !removedMavenOpts {
 		return content, false, nil
 	}
 
@@ -148,6 +102,32 @@ func removeAikidoMavenOverrides(content string) (string, bool, error) {
 		return "", false, fmt.Errorf("result XML is not well-formed: %v", err)
 	}
 
+	return result, true, nil
+}
+
+func removeAikidoMavenOptsPropertiesBlock(content string) (string, bool, error) {
+	markerIdx := strings.Index(content, mavenOptsMarkerStart)
+	if markerIdx == -1 {
+		return content, false, nil
+	}
+
+	propertiesStartIdx := strings.LastIndex(content[:markerIdx], xmlPropertiesStart)
+	if propertiesStartIdx == -1 {
+		return removeAikidoBlock(content, mavenOptsMarkerStart, mavenOptsMarkerEnd)
+	}
+
+	propertiesEndIdx := strings.Index(content[markerIdx:], xmlPropertiesEnd)
+	if propertiesEndIdx == -1 {
+		return "", false, fmt.Errorf("found Maven properties start without end tag")
+	}
+	propertiesEndIdx = markerIdx + propertiesEndIdx + len(xmlPropertiesEnd)
+
+	endPos := propertiesEndIdx
+	if endPos < len(content) && content[endPos] == '\n' {
+		endPos++
+	}
+
+	result := content[:propertiesStartIdx] + content[endPos:]
 	return result, true, nil
 }
 

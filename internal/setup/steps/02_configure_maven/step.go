@@ -89,14 +89,15 @@ func (s *Step) Install(ctx context.Context) error {
 		return fmt.Errorf("failed to add proxy configuration: %v", err)
 	}
 	
-	newContent, err = addAikidoMavenOpts(newContent)
-	if err != nil {
-		return fmt.Errorf("failed to add Maven truststore configuration: %v", err)
-	}
-
 	// Write to file
 	if err := os.WriteFile(settingsPath, []byte(newContent), 0644); err != nil {
 		return fmt.Errorf("failed to write settings.xml: %v", err)
+	}
+
+	certPath := filepath.Join(platform.GetRunDir(), "safechain-proxy-ca-crt.pem")
+	if err := installJavaCA(ctx, certPath); err != nil {
+		log.Printf("Warning: failed to install proxy CA into Java truststore: %v", err)
+		log.Println("Maven HTTPS connections may fail. Manual installation may be required.")
 	}
 
 	log.Println("Maven configured successfully via settings.xml")
@@ -134,6 +135,10 @@ func (s *Step) Uninstall(ctx context.Context) error {
 	}
 
 	log.Println("Removed Maven configuration from settings.xml")
+
+	if err := uninstallJavaCA(ctx); err != nil {
+		log.Printf("Warning: failed to remove proxy CA from Java truststore: %v", err)
+	}
 
 	return nil
 }
