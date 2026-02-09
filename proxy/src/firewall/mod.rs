@@ -122,6 +122,14 @@ impl Firewall {
                 .await
                 .context("create block rule: npm")?
                 .into_dyn(),
+                self::rule::maven::RuleMaven::try_new(
+                    guard.clone(),
+                    shared_remote_malware_client.clone(),
+                    data.clone(),
+                )
+                .await
+                .context("create block rule: maven")?
+                .into_dyn(),
                 self::rule::pypi::RulePyPI::try_new(guard, shared_remote_malware_client, data)
                     .await
                     .context("create block rule: pypi")?
