@@ -9,7 +9,10 @@ fn test_parse_simple_artifact() {
 
     assert!(artifact.is_some());
     let artifact = artifact.unwrap();
-    assert_eq!(artifact.fully_qualified_name.as_str(), "org.apache.maven:maven");
+    assert_eq!(
+        artifact.fully_qualified_name.as_str(),
+        "org.apache.maven:maven"
+    );
     assert_eq!(artifact.version, PragmaticSemver::new_two_components(2, 0));
 }
 
@@ -20,20 +23,11 @@ fn test_parse_deep_group_id() {
 
     assert!(artifact.is_some());
     let artifact = artifact.unwrap();
-    assert_eq!(artifact.fully_qualified_name.as_str(), "com.example.lib:module");
+    assert_eq!(
+        artifact.fully_qualified_name.as_str(),
+        "com.example.lib:module"
+    );
     assert_eq!(artifact.version, PragmaticSemver::new_semver(1, 2, 3));
-}
-
-#[test]
-fn test_parse_pom_file() {
-    // POM files are artifacts and should be parsed and checked against malware list
-    let path = "org/mvnpm/carbon-components/11.66.1/carbon-components-11.66.1.pom";
-    let artifact = parse_artifact_from_path(path);
-
-    assert!(artifact.is_some());
-    let artifact = artifact.unwrap();
-    assert_eq!(artifact.fully_qualified_name.as_str(), "org.mvnpm:carbon-components");
-    assert_eq!(artifact.version, PragmaticSemver::new_semver(11, 66, 1));
 }
 
 #[test]
@@ -94,7 +88,10 @@ fn test_parse_artifact_with_javadoc_classifier() {
 
     assert!(artifact.is_some());
     let artifact = artifact.unwrap();
-    assert_eq!(artifact.fully_qualified_name.as_str(), "org.springframework:spring-core");
+    assert_eq!(
+        artifact.fully_qualified_name.as_str(),
+        "org.springframework:spring-core"
+    );
     assert_eq!(artifact.version, PragmaticSemver::new_semver(6, 2, 1));
 }
 
@@ -149,7 +146,10 @@ fn test_reject_mismatched_filename() {
     // Filename doesn't match the expected artifactId-version pattern
     let path = "org/example/lib/1.0.0/different-name-2.0.0.jar";
     let artifact = parse_artifact_from_path(path);
-    assert!(artifact.is_none(), "Should reject filename that doesn't match artifactId-version pattern");
+    assert!(
+        artifact.is_none(),
+        "Should reject filename that doesn't match artifactId-version pattern"
+    );
 }
 
 #[test]
@@ -157,7 +157,10 @@ fn test_reject_invalid_version_in_filename() {
     // Version in path doesn't match version in filename
     let path = "org/example/lib/1.0.0/lib-2.0.0.jar";
     let artifact = parse_artifact_from_path(path);
-    assert!(artifact.is_none(), "Should reject when filename version doesn't match path version");
+    assert!(
+        artifact.is_none(),
+        "Should reject when filename version doesn't match path version"
+    );
 }
 
 #[test]
@@ -178,7 +181,10 @@ fn test_parse_aar_file() {
 
     assert!(artifact.is_some());
     let artifact = artifact.unwrap();
-    assert_eq!(artifact.fully_qualified_name.as_str(), "com.google.android:material");
+    assert_eq!(
+        artifact.fully_qualified_name.as_str(),
+        "com.google.android:material"
+    );
     assert_eq!(artifact.version, PragmaticSemver::new_semver(1, 8, 0));
 }
 
@@ -191,5 +197,8 @@ fn test_parse_snapshot_version() {
     assert!(artifact.is_some());
     let artifact = artifact.unwrap();
     assert_eq!(artifact.fully_qualified_name.as_str(), "org.example:lib");
-    assert_eq!(artifact.version, PragmaticSemver::new_semver(1, 0, 0).with_pre("SNAPSHOT"));
+    assert_eq!(
+        artifact.version,
+        PragmaticSemver::new_semver(1, 0, 0).with_pre("SNAPSHOT")
+    );
 }

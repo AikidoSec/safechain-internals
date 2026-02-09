@@ -12,6 +12,8 @@ const (
 	aikidoProxyHTTPSID = "aikido-proxy-https"
 	markerStart        = "<!-- aikido-safe-chain-start -->"
 	markerEnd          = "<!-- aikido-safe-chain-end -->"
+	xmlProxiesStart     = "<proxies>"
+	xmlProxiesEnd       = "</proxies>"
 )
 
 // hasAikidoProxies checks if the content already contains Aikido proxies
@@ -61,22 +63,17 @@ func buildSettingsWithProxies(host, port string) (string, error) {
 
 // addAikidoProxies inserts Aikido proxy entries using string manipulation
 func addAikidoProxies(content string, host, port string) (string, error) {
-	// Build the proxy entries with markers
 	proxyBlock := buildProxyBlock(host, port)
 
 	var result string
 
-	// Check if <proxies> block already exists
-	if strings.Contains(content, "<proxies>") {
-		// Insert entries at the top of existing <proxies> block
-		result = strings.Replace(content, "<proxies>", "<proxies>\n"+proxyBlock, 1)
+	if strings.Contains(content, xmlProxiesStart) {
+		result = strings.Replace(content, xmlProxiesStart, xmlProxiesStart+"\n"+proxyBlock, 1)
 	} else {
-		// Create new <proxies> block before </settings>
-		proxiesBlock := fmt.Sprintf("<proxies>\n%s</proxies>\n", proxyBlock)
+		proxiesBlock := fmt.Sprintf("%s\n%s%s\n", xmlProxiesStart, proxyBlock, xmlProxiesEnd)
 		result = strings.Replace(content, "</settings>", proxiesBlock+"</settings>", 1)
 	}
 
-	// Validate the result is well-formed XML
 	if err := validateXMLWellFormedness(result); err != nil {
 		return "", fmt.Errorf("generated XML is not well-formed: %v", err)
 	}
@@ -86,13 +83,11 @@ func addAikidoProxies(content string, host, port string) (string, error) {
 
 // removeAikidoProxies removes Aikido proxy entries by removing everything between markers
 func removeAikidoProxies(content string) (string, bool, error) {
-	// Find the start marker
 	startIdx := strings.Index(content, markerStart)
 	if startIdx == -1 {
 		return content, false, nil // No Aikido proxies found
 	}
 
-	// Find the end marker
 	endIdx := strings.Index(content, markerEnd)
 	if endIdx == -1 {
 		return "", false, fmt.Errorf("found start marker but not end marker - corrupt configuration")
@@ -102,10 +97,7 @@ func removeAikidoProxies(content string) (string, bool, error) {
 		return "", false, fmt.Errorf("end marker appears before start marker - corrupt configuration")
 	}
 
-	// Calculate the end position (inclusive of the marker)
 	endPos := endIdx + len(markerEnd)
-
-	// Remove trailing newline if present
 	if endPos < len(content) && content[endPos] == '\n' {
 		endPos++
 	}

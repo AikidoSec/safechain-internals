@@ -170,7 +170,8 @@ fn parse_artifact_from_path(path: &str) -> Option<MavenArtifact> {
         return None;
     }
 
-    if !filename.ends_with(".jar") {
+    // Only process executable archive files (JAR, WAR, AAR)
+    if !filename.ends_with(".jar") && !filename.ends_with(".war") && !filename.ends_with(".aar") {
         return None;
     }
 
