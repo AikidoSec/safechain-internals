@@ -255,7 +255,7 @@ func (d *Daemon) handleProxy() (shouldRetry bool, err error) {
 	}
 
 	if !d.proxyLastRetryTime.IsZero() && time.Since(d.proxyLastRetryTime) < ProxyStartRetryInterval {
-		log.Printf("Proxy is not running, waiting for retry interval before next attempt")
+		log.Printf("Proxy is not running, waiting for retry interval (%s) before next attempt", ProxyStartRetryInterval)
 		return true, nil
 	}
 
