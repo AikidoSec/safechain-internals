@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
@@ -53,6 +54,23 @@ func (p *Proxy) WaitForProxyToBeReady() error {
 			}
 		}
 	}
+}
+
+func (p *Proxy) Version() (string, error) {
+	cmd := exec.Command(filepath.Join(platform.GetConfig().BinaryDir, platform.SafeChainProxyBinaryName), "--version")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get proxy version: %v", err)
+	}
+	trimmed := strings.TrimSpace(string(output))
+	if trimmed == "" {
+		return "", fmt.Errorf("proxy version output is empty")
+	}
+	parts := strings.Split(trimmed, " ")
+	if len(parts) == 0 {
+		return "", fmt.Errorf("failed to parse proxy version from output: %q", trimmed)
+	}
+	return parts[len(parts)-1], nil
 }
 
 func (p *Proxy) Start(ctx context.Context, proxyIngressAddr string) error {

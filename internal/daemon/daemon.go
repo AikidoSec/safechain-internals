@@ -17,6 +17,12 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/version"
 )
 
+const (
+	DaemonStatusLogInterval = 1 * time.Hour
+	ProxyStartMaxRetries    = 20
+	ProxyStartRetryInterval = 3 * time.Minute
+)
+
 type Config struct {
 	ConfigPath string
 	LogLevel   string
@@ -33,6 +39,11 @@ type Daemon struct {
 	ingress    *ingress.Server
 	logRotator *utils.LogRotator
 	logReaper  *utils.LogReaper
+
+	proxyRetryCount    int
+	proxyLastRetryTime time.Time
+
+	daemonLastStatusLogTime time.Time
 }
 
 func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
@@ -213,19 +224,72 @@ func (d *Daemon) Uninstall(ctx context.Context, removeScanners bool) error {
 	return nil
 }
 
-func (d *Daemon) heartbeat() error {
-	if !d.proxy.IsProxyRunning() {
-		log.Println("Proxy is not running, starting it...")
-		if err := d.startProxyAndInstallCA(d.ctx); err != nil {
-			return fmt.Errorf("failed to start proxy and install CA: %v", err)
-		}
-		if d.proxy.IsProxyRunning() {
-			log.Println("Proxy started successfully")
-		} else {
-			log.Println("Failed to start proxy, will try again later")
-		}
+func (d *Daemon) printDaemonStatus() {
+	log.Println("Daemon status:")
+	if d.proxy.IsProxyRunning() {
+		proxyVersion, _ := d.proxy.Version()
+		log.Printf("\t- Proxy: %s", proxyVersion)
 	} else {
-		log.Println("Proxy is running")
+		log.Println("\t- Proxy: not running!")
+	}
+
+	for _, scannerName := range d.registry.List() {
+		scanner, err := d.registry.Get(scannerName)
+		if err != nil {
+			continue
+		}
+		if scanner.IsInstalled(d.ctx) {
+			log.Printf("\t- %s: %s", scannerName, scanner.Version(d.ctx))
+		}
+	}
+}
+
+func (d *Daemon) handleProxy() (shouldRetry bool, err error) {
+	if d.proxy.IsProxyRunning() {
+		return true, nil
+	}
+
+	if d.proxyRetryCount >= ProxyStartMaxRetries {
+		// Exit daemon loop if proxy start retry limit is reached
+		return false, fmt.Errorf("proxy start retry limit reached (%d attempts), not retrying", d.proxyRetryCount)
+	}
+
+	if !d.proxyLastRetryTime.IsZero() && time.Since(d.proxyLastRetryTime) < ProxyStartRetryInterval {
+		log.Printf("Proxy is not running, waiting for retry interval (%s) before next attempt", ProxyStartRetryInterval)
+		return true, nil
+	}
+
+	d.proxyRetryCount++
+	d.proxyLastRetryTime = time.Now()
+	log.Printf("Proxy is not running, starting it... (attempt %d/%d)", d.proxyRetryCount, ProxyStartMaxRetries)
+
+	if err := d.startProxyAndInstallCA(d.ctx); err != nil {
+		log.Printf("Failed to start proxy and install CA: %v", err)
+		return true, nil
+	}
+
+	if d.proxy.IsProxyRunning() {
+		log.Println("Proxy started successfully")
+		d.proxyRetryCount = 0
+		d.proxyLastRetryTime = time.Time{}
+	} else {
+		log.Printf("Failed to start proxy, will try again later")
+	}
+	return true, nil
+}
+
+func (d *Daemon) heartbeat() error {
+	shouldRetry, err := d.handleProxy()
+	if !shouldRetry {
+		return fmt.Errorf("failed to handle proxy: %v", err)
+	}
+	if err != nil {
+		log.Printf("Failed to start proxy: %v", err)
+	}
+
+	if time.Since(d.daemonLastStatusLogTime) >= DaemonStatusLogInterval {
+		d.printDaemonStatus()
+		d.daemonLastStatusLogTime = time.Now()
 	}
 	return nil
 }
