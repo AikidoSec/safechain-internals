@@ -250,6 +250,7 @@ func (d *Daemon) handleProxy() error {
 	}
 
 	if d.proxyRetryCount >= ProxyStartMaxRetries {
+		// Exit daemon loop if proxy start retry limit is reached
 		return fmt.Errorf("proxy start retry limit reached (%d attempts), not retrying", d.proxyRetryCount)
 	}
 
