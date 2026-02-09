@@ -16,6 +16,10 @@ func (s *VSCodeScanner) Name() string {
 	return "vscode"
 }
 
+func (s *VSCodeScanner) Version(ctx context.Context) string {
+	return ""
+}
+
 func (s *VSCodeScanner) Install(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
