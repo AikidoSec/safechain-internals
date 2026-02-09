@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
@@ -94,13 +96,16 @@ func (s *Step) Install(ctx context.Context) error {
 		return fmt.Errorf("failed to write settings.xml: %v", err)
 	}
 
-	certPath := filepath.Join(platform.GetRunDir(), "safechain-proxy-ca-crt.pem")
-	if err := installJavaCA(ctx, certPath); err != nil {
-		log.Printf("Warning: failed to install proxy CA into Java truststore: %v", err)
-		log.Println("Maven HTTPS connections may fail. Manual installation may be required.")
+	// Create .mavenrc to set MAVEN_OPTS with system truststore configuration
+	mavenrcPath := filepath.Join(homeDir, ".mavenrc")
+	if err := createMavenrc(mavenrcPath); err != nil {
+		return fmt.Errorf("failed to create .mavenrc: %v", err)
 	}
 
-	log.Println("Maven configured successfully via settings.xml")
+	log.Println("Maven configured successfully")
+	log.Println("Proxy settings added to ~/.m2/settings.xml")
+	log.Println("MAVEN_OPTS configured in ~/.mavenrc to use system truststore")
+	log.Println("The proxy CA is managed by SafeChain and available in the system truststore")
 
 	return nil
 }
@@ -113,6 +118,11 @@ func (s *Step) Uninstall(ctx context.Context) error {
 	data, err := os.ReadFile(settingsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// Even if settings.xml doesn't exist, try to remove .mavenrc
+			mavenrcPath := filepath.Join(homeDir, ".mavenrc")
+			if errRemove := removeMavenrc(mavenrcPath); errRemove != nil {
+				log.Printf("Warning: failed to remove .mavenrc: %v", errRemove)
+			}
 			return nil
 		}
 		return fmt.Errorf("failed to read settings.xml: %v", err)
@@ -122,6 +132,12 @@ func (s *Step) Uninstall(ctx context.Context) error {
 	newContent, removed, err := removeAikidoMavenOverrides(string(data))
 	if err != nil {
 		return fmt.Errorf("failed to remove proxy configuration: %v", err)
+	}
+
+	// Remove .mavenrc
+	mavenrcPath := filepath.Join(homeDir, ".mavenrc")
+	if err := removeMavenrc(mavenrcPath); err != nil {
+		log.Printf("Warning: failed to remove .mavenrc: %v", err)
 	}
 
 	if !removed {
@@ -134,11 +150,82 @@ func (s *Step) Uninstall(ctx context.Context) error {
 		return fmt.Errorf("failed to write settings.xml: %v", err)
 	}
 
-	log.Println("Removed Maven configuration from settings.xml")
+	log.Println("Removed Maven configuration from settings.xml and .mavenrc")
 
-	if err := uninstallJavaCA(ctx); err != nil {
-		log.Printf("Warning: failed to remove proxy CA from Java truststore: %v", err)
+	return nil
+}
+
+// createMavenrc creates or updates the .mavenrc file with MAVEN_OPTS pointing to system truststore
+func createMavenrc(path string) error {
+	// Build MAVEN_OPTS based on OS
+	var mavenOpts string
+	switch runtime.GOOS {
+	case "darwin":
+		// macOS: Use Keychain store (contains certs from System.keychain where SafeChain installed the proxy CA)
+		mavenOpts = "-Djavax.net.ssl.trustStoreType=KeychainStore"
+	case "windows":
+		// Windows: Use Windows certificate store (where SafeChain installed the proxy CA)
+		mavenOpts = "-Djavax.net.ssl.trustStoreType=Windows-Root"
+	default:
+		// Linux: Use system CA bundle
+		mavenOpts = "-Djavax.net.ssl.trustStore=/etc/ssl/certs/ca-certificates.crt"
+	}
+
+	// Read existing .mavenrc if it exists
+	var content string
+	if data, err := os.ReadFile(path); err == nil {
+		content = string(data)
+	}
+
+	// Remove existing Aikido MAVEN_OPTS if present
+	content = removeExistingMavenOpts(content)
+
+	// Add new MAVEN_OPTS
+	mavenOptsLine := fmt.Sprintf("export MAVEN_OPTS=\"%s\"\n", mavenOpts)
+	content = strings.TrimRight(content, "\n") + "\n" + mavenOptsLine
+
+	// Write to file
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return err
 	}
 
 	return nil
+}
+
+// removeMavenrc removes the Aikido MAVEN_OPTS from .mavenrc
+func removeMavenrc(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	content := removeExistingMavenOpts(string(data))
+
+	// If file is now empty or only whitespace, remove it
+	if strings.TrimSpace(content) == "" {
+		return os.Remove(path)
+	}
+
+	return os.WriteFile(path, []byte(content), 0644)
+}
+
+// removeExistingMavenOpts removes Aikido's MAVEN_OPTS lines from .mavenrc content
+func removeExistingMavenOpts(content string) string {
+	lines := strings.Split(content, "\n")
+	var result []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip lines that are Aikido's MAVEN_OPTS (identified by truststore flags)
+		if strings.Contains(trimmed, "javax.net.ssl.trustStoreType") ||
+			strings.Contains(trimmed, "javax.net.ssl.trustStore=/etc/ssl/certs") {
+			continue
+		}
+		result = append(result, line)
+	}
+
+	return strings.Join(result, "\n")
 }

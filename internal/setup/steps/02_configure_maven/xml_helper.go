@@ -12,12 +12,8 @@ const (
 	aikidoProxyHTTPSID = "aikido-proxy-https"
 	markerStart        = "<!-- aikido-safe-chain-start -->"
 	markerEnd          = "<!-- aikido-safe-chain-end -->"
-	mavenOptsMarkerStart = "<!-- aikido-safe-chain-maven-opts-start -->"
-	mavenOptsMarkerEnd   = "<!-- aikido-safe-chain-maven-opts-end -->"
-	xmlProxiesStart     = "<proxies>"
-	xmlProxiesEnd       = "</proxies>"
-	xmlPropertiesStart  = "<properties>"
-	xmlPropertiesEnd    = "</properties>"
+	xmlProxiesStart    = "<proxies>"
+	xmlProxiesEnd      = "</proxies>"
 )
 
 // hasAikidoProxies checks if the content already contains Aikido proxies
@@ -70,6 +66,7 @@ func addAikidoProxies(content string, host, port string) (string, error) {
 
 	var result string
 
+	// Add proxies
 	if strings.Contains(content, xmlProxiesStart) {
 		result = strings.Replace(content, xmlProxiesStart, xmlProxiesStart+"\n"+proxyBlock, 1)
 	} else {
@@ -89,12 +86,8 @@ func removeAikidoMavenOverrides(content string) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
-	result, removedMavenOpts, err := removeAikidoMavenOptsPropertiesBlock(result)
-	if err != nil {
-		return "", false, err
-	}
 
-	if !removed && !removedMavenOpts {
+	if !removed {
 		return content, false, nil
 	}
 
@@ -102,32 +95,6 @@ func removeAikidoMavenOverrides(content string) (string, bool, error) {
 		return "", false, fmt.Errorf("result XML is not well-formed: %v", err)
 	}
 
-	return result, true, nil
-}
-
-func removeAikidoMavenOptsPropertiesBlock(content string) (string, bool, error) {
-	markerIdx := strings.Index(content, mavenOptsMarkerStart)
-	if markerIdx == -1 {
-		return content, false, nil
-	}
-
-	propertiesStartIdx := strings.LastIndex(content[:markerIdx], xmlPropertiesStart)
-	if propertiesStartIdx == -1 {
-		return removeAikidoBlock(content, mavenOptsMarkerStart, mavenOptsMarkerEnd)
-	}
-
-	propertiesEndIdx := strings.Index(content[markerIdx:], xmlPropertiesEnd)
-	if propertiesEndIdx == -1 {
-		return "", false, fmt.Errorf("found Maven properties start without end tag")
-	}
-	propertiesEndIdx = markerIdx + propertiesEndIdx + len(xmlPropertiesEnd)
-
-	endPos := propertiesEndIdx
-	if endPos < len(content) && content[endPos] == '\n' {
-		endPos++
-	}
-
-	result := content[:propertiesStartIdx] + content[endPos:]
 	return result, true, nil
 }
 
