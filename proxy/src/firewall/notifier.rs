@@ -8,9 +8,9 @@ use std::{
 
 use rama::{
     Layer, Service,
-    error::{ErrorContext as _, OpaqueError},
+    error::{BoxError, ErrorContext as _, extra::OpaqueError},
     http::{
-        Body, HeaderValue, Request, Response, Uri,
+        HeaderValue, Request, Response, Uri,
         layer::{
             map_request_body::MapRequestBodyLayer,
             map_response_body::MapResponseBodyLayer,
@@ -18,7 +18,7 @@ use rama::{
             retry::{ManagedPolicy, RetryLayer},
             timeout::TimeoutLayer,
         },
-        service::client::HttpClientExt as _,
+        service::client::HttpClientExt,
     },
     layer::MapErrLayer,
     rt::Executor,
@@ -83,7 +83,7 @@ impl std::fmt::Debug for EventNotifier {
 }
 
 impl EventNotifier {
-    pub fn try_new(exec: Executor, reporting_endpoint: Uri) -> Result<Self, OpaqueError> {
+    pub fn try_new(exec: Executor, reporting_endpoint: Uri) -> Result<Self, BoxError> {
         let client = create_notifier_https_client()?;
         let limit = Arc::new(Semaphore::const_new(compute_concurrent_request_count()));
         let dedup = moka::sync::CacheBuilder::new(MAX_EVENTS)
@@ -109,19 +109,21 @@ impl EventNotifier {
             return;
         }
 
-        let client = self.client.clone();
-        let reporting_endpoint = self.reporting_endpoint.clone();
-        let limits = self.limit.clone();
+        self.exec.spawn_task({
+            let client = self.client.clone();
+            let reporting_endpoint = self.reporting_endpoint.clone();
+            let limits = self.limit.clone();
 
-        self.exec.spawn_task(async move {
-            let _guard = match acquire_concurrency_guard(&limits).await {
-                Ok(guard) => guard,
-                Err(err) => {
-                    tracing::debug!("failed to send event notification (dropping it): {err}");
-                    return;
-                }
-            };
-            send_blocked_event(client, reporting_endpoint, event).await;
+            async move {
+                let _guard = match acquire_concurrency_guard(&limits).await {
+                    Ok(guard) => guard,
+                    Err(err) => {
+                        tracing::debug!("failed to send event notification (dropping it): {err}");
+                        return;
+                    }
+                };
+                send_blocked_event(client, reporting_endpoint, event).await
+            }
         });
     }
 
@@ -135,7 +137,7 @@ impl EventNotifier {
 
 async fn acquire_concurrency_guard<'a>(
     limits: &'a Semaphore,
-) -> Result<SemaphorePermit<'a>, OpaqueError> {
+) -> Result<SemaphorePermit<'a>, BoxError> {
     tokio::time::timeout(Duration::from_millis(500), limits.acquire())
         .await
         .context("concurrency guard acquisition timeout")?
@@ -154,7 +156,7 @@ async fn send_blocked_event(
     );
 
     let resp = match client
-        .post(reporting_endpoint.clone())
+        .into_post(reporting_endpoint.clone())
         .json(&event)
         .send()
         .await
@@ -183,13 +185,12 @@ async fn send_blocked_event(
     tracing::debug!("event notification sent successfully");
 }
 
-fn create_notifier_https_client() -> Result<BoxService<Request, Response, OpaqueError>, OpaqueError>
-{
+fn create_notifier_https_client() -> Result<BoxService<Request, Response, OpaqueError>, BoxError> {
     let core_client = crate::client::new_web_client()?;
 
     let client_middleware = (
-        MapResponseBodyLayer::new(Body::new),
-        MapErrLayer::new(OpaqueError::from_std),
+        MapResponseBodyLayer::new_boxed_streaming_body(),
+        MapErrLayer::into_opaque_error(),
         TimeoutLayer::new(Duration::from_secs(30)),
         RetryLayer::new(
             ManagedPolicy::default().with_backoff(
@@ -204,7 +205,7 @@ fn create_notifier_https_client() -> Result<BoxService<Request, Response, Opaque
         ),
         AddRequiredRequestHeadersLayer::new()
             .with_user_agent_header_value(HeaderValue::from_static(network_service_identifier())),
-        MapRequestBodyLayer::new(Body::new),
+        MapRequestBodyLayer::new_boxed_streaming_body(),
     );
 
     let client = client_middleware.into_layer(core_client);

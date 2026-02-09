@@ -2,7 +2,7 @@ use std::fmt;
 
 use rama::{
     Service,
-    error::{ErrorContext as _, OpaqueError},
+    error::{BoxError, ErrorContext as _},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
@@ -35,9 +35,9 @@ impl RuleVSCode {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-    ) -> Result<Self, OpaqueError>
+    ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = BoxError>,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
@@ -88,7 +88,7 @@ impl Rule for RuleVSCode {
         }
     }
 
-    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
+    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
         if !crate::http::try_get_domain_for_req(&req)
             .map(|domain| self.match_domain(&domain))
             .unwrap_or_default()
@@ -149,7 +149,7 @@ impl Rule for RuleVSCode {
         Ok(RequestAction::Allow(req))
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         Ok(resp)
     }
 }

@@ -3,7 +3,7 @@ use std::sync::{Arc, LazyLock};
 use rama::{
     Layer as _, Service,
     cli::service::echo::EchoServiceBuilder,
-    error::OpaqueError,
+    error::BoxError,
     http::{
         Request, Response,
         matcher::HttpMatcher,
@@ -24,7 +24,7 @@ static ASSERT_ENDPOINT_STATE: LazyLock<assert_endpoint::MockState> =
     LazyLock::new(assert_endpoint::MockState::new);
 
 pub fn new_mock_client()
--> Result<impl Service<Request, Output = Response, Error = OpaqueError> + Clone, OpaqueError> {
+-> Result<impl Service<Request, Output = Response, Error = BoxError> + Clone, BoxError> {
     let echo_svc_builder = EchoServiceBuilder::default();
     let echo_svc = Arc::new(echo_svc_builder.build_http(Executor::default()));
     let not_found_svc = service_fn(move |req| {
@@ -52,6 +52,6 @@ pub fn new_mock_client()
         "Mock (web) client created: do not use in production, only meant for automated testing!"
     );
     Ok(Arc::new(
-        MapErrLayer::new(OpaqueError::from_std).into_layer(mock_server),
+        MapErrLayer::into_box_error().into_layer(mock_server),
     ))
 }

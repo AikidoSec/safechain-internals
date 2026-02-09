@@ -2,10 +2,10 @@ use std::borrow::Cow;
 
 use rama::{
     Layer as _, Service,
-    error::OpaqueError,
+    error::BoxError,
     extensions::ExtensionsRef as _,
     http::{
-        Body, Request, Response, StatusCode,
+        Request, Response, StatusCode,
         layer::{
             decompression::DecompressionLayer,
             map_response_body::MapResponseBodyLayer,
@@ -29,14 +29,13 @@ pub(super) struct HttpClient<S> {
 pub(super) fn new_https_client(
     firewall: Firewall,
     upstream_proxy_address: Option<ProxyAddress>,
-) -> Result<HttpClient<impl Service<Request, Output = Response, Error = OpaqueError>>, OpaqueError>
-{
+) -> Result<HttpClient<impl Service<Request, Output = Response, Error = BoxError>>, BoxError> {
     let inner = (
         RemoveResponseHeaderLayer::hop_by_hop(),
         firewall.clone().into_evaluate_response_layer(),
         firewall.into_evaluate_request_layer(),
         RemoveRequestHeaderLayer::hop_by_hop(),
-        MapResponseBodyLayer::new(Body::new),
+        MapResponseBodyLayer::new_boxed_streaming_body(),
         DecompressionLayer::new(),
         HijackLayer::new(
             HttpMatcher::domain(CONNECTIVITY_DOMAIN),
@@ -51,7 +50,7 @@ pub(super) fn new_https_client(
 
 impl<S> Service<Request> for HttpClient<S>
 where
-    S: Service<Request, Output = Response, Error = OpaqueError>,
+    S: Service<Request, Output = Response, Error = BoxError>,
 {
     type Output = S::Output;
     type Error = S::Error;

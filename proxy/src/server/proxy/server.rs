@@ -2,11 +2,11 @@ use std::{convert::Infallible, sync::Arc};
 
 use rama::{
     Layer as _, Service,
-    error::{BoxError, OpaqueError},
+    error::BoxError,
     extensions::ExtensionsMut,
     graceful::ShutdownGuard,
     http::{
-        Body, Response, StatusCode,
+        Response, StatusCode,
         layer::{
             compression::CompressionLayer, map_response_body::MapResponseBodyLayer,
             trace::TraceLayer,
@@ -18,7 +18,7 @@ use rama::{
     net::{address::ProxyAddress, proxy::ProxyTarget, tls::server::TlsPeekRouter},
     rt::Executor,
     stream::Stream,
-    telemetry::tracing::{self, Level},
+    telemetry::tracing,
     tls::boring::server::TlsAcceptorLayer,
 };
 
@@ -59,16 +59,16 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
     tls_acceptor: TlsAcceptorLayer,
     firewall: Firewall,
     #[cfg(feature = "har")] har_export_layer: HARExportLayer,
-) -> Result<MitmServer<impl Service<S, Output = (), Error = BoxError> + Clone>, OpaqueError> {
+) -> Result<MitmServer<impl Service<S, Output = (), Error = BoxError> + Clone>, BoxError> {
     let https_svc = (
         TraceLayer::new_for_http(),
-        ConsumeErrLayer::trace(Level::DEBUG).with_response(StaticHttpProxyError),
+        ConsumeErrLayer::trace_as_debug().with_response(StaticHttpProxyError),
         #[cfg(feature = "har")]
         (
             AddInputExtensionLayer::new(RequestComment(arcstr!("http(s) MITM server"))),
             har_export_layer,
         ),
-        MapResponseBodyLayer::new(Body::new),
+        MapResponseBodyLayer::new_boxed_streaming_body(),
         CompressionLayer::new(),
     )
         .into_layer(super::client::new_https_client(
