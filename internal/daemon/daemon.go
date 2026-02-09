@@ -43,7 +43,7 @@ type Daemon struct {
 	proxyRetryCount    int
 	proxyLastRetryTime time.Time
 
-	daemonLastStatusLogTime time.Time // Last time the daemon status was logged
+	daemonLastStatusLogTime time.Time
 }
 
 func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
