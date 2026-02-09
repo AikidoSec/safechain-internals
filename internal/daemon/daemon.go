@@ -244,19 +244,19 @@ func (d *Daemon) printDaemonStatus() {
 	}
 }
 
-func (d *Daemon) handleProxy() error {
+func (d *Daemon) handleProxy() (shouldRetry bool, err error) {
 	if d.proxy.IsProxyRunning() {
-		return nil
+		return true, nil
 	}
 
 	if d.proxyRetryCount >= ProxyStartMaxRetries {
 		// Exit daemon loop if proxy start retry limit is reached
-		return fmt.Errorf("proxy start retry limit reached (%d attempts), not retrying", d.proxyRetryCount)
+		return false, fmt.Errorf("proxy start retry limit reached (%d attempts), not retrying", d.proxyRetryCount)
 	}
 
 	if !d.proxyLastRetryTime.IsZero() && time.Since(d.proxyLastRetryTime) < ProxyStartRetryInterval {
 		log.Printf("Proxy is not running, waiting for retry interval before next attempt")
-		return nil
+		return true, nil
 	}
 
 	d.proxyRetryCount++
@@ -265,7 +265,7 @@ func (d *Daemon) handleProxy() error {
 
 	if err := d.startProxyAndInstallCA(d.ctx); err != nil {
 		log.Printf("Failed to start proxy and install CA: %v", err)
-		return nil
+		return true, nil
 	}
 
 	if d.proxy.IsProxyRunning() {
@@ -275,12 +275,16 @@ func (d *Daemon) handleProxy() error {
 	} else {
 		log.Printf("Failed to start proxy, will try again later")
 	}
-	return nil
+	return true, nil
 }
 
 func (d *Daemon) heartbeat() error {
-	if err := d.handleProxy(); err != nil {
+	shouldRetry, err := d.handleProxy()
+	if !shouldRetry {
 		return fmt.Errorf("failed to handle proxy: %v", err)
+	}
+	if err != nil {
+		log.Printf("Failed to start proxy: %v", err)
 	}
 
 	if time.Since(d.daemonLastStatusLogTime) >= DaemonStatusLogInterval {
