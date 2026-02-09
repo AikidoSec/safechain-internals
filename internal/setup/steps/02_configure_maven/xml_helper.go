@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"runtime"
 	"strings"
 )
 
@@ -12,13 +13,23 @@ const (
 	aikidoProxyHTTPSID = "aikido-proxy-https"
 	markerStart        = "<!-- aikido-safe-chain-start -->"
 	markerEnd          = "<!-- aikido-safe-chain-end -->"
+	mavenOptsMarkerStart = "<!-- aikido-safe-chain-maven-opts-start -->"
+	mavenOptsMarkerEnd   = "<!-- aikido-safe-chain-maven-opts-end -->"
 	xmlProxiesStart     = "<proxies>"
 	xmlProxiesEnd       = "</proxies>"
+	xmlPropertiesStart  = "<properties>"
+	xmlPropertiesEnd    = "</properties>"
+	mavenOptsValueDarwin  = "-Djavax.net.ssl.trustStoreType=KeychainStore"
+	mavenOptsValueWindows = "-Djavax.net.ssl.trustStoreType=Windows-ROOT"
 )
 
 // hasAikidoProxies checks if the content already contains Aikido proxies
 func hasAikidoProxies(content string) bool {
 	return strings.Contains(content, markerStart)
+}
+
+func hasAikidoMavenOpts(content string) bool {
+	return strings.Contains(content, mavenOptsMarkerStart)
 }
 
 // buildProxyBlock creates the Aikido proxy XML block with markers
@@ -42,6 +53,13 @@ func buildProxyBlock(host, port string) string {
 `, markerStart, aikidoProxyHTTPID, host, port, aikidoProxyHTTPSID, host, port, markerEnd)
 }
 
+func buildMavenOptsBlock(mavenOptsValue string) string {
+	return fmt.Sprintf(`%s
+	<env.MAVEN_OPTS>%s</env.MAVEN_OPTS>
+	%s
+`, mavenOptsMarkerStart, mavenOptsValue, mavenOptsMarkerEnd)
+}
+
 // buildSettingsWithProxies creates a complete settings.xml from scratch with Aikido proxies
 func buildSettingsWithProxies(host, port string) (string, error) {
 	proxyBlock := buildProxyBlock(host, port)
@@ -61,7 +79,6 @@ func buildSettingsWithProxies(host, port string) (string, error) {
 	return settings, nil
 }
 
-// addAikidoProxies inserts Aikido proxy entries using string manipulation
 func addAikidoProxies(content string, host, port string) (string, error) {
 	proxyBlock := buildProxyBlock(host, port)
 
@@ -81,14 +98,66 @@ func addAikidoProxies(content string, host, port string) (string, error) {
 	return result, nil
 }
 
-// removeAikidoProxies removes Aikido proxy entries by removing everything between markers
-func removeAikidoProxies(content string) (string, bool, error) {
-	startIdx := strings.Index(content, markerStart)
-	if startIdx == -1 {
-		return content, false, nil // No Aikido proxies found
+func addAikidoMavenOptsWithValue(content string, mavenOptsValue string) (string, error) {
+	mavenOptsBlock := buildMavenOptsBlock(mavenOptsValue)
+
+	var result string
+	if strings.Contains(content, xmlPropertiesStart) {
+		result = strings.Replace(content, xmlPropertiesStart, xmlPropertiesStart+"\n"+mavenOptsBlock, 1)
+	} else {
+		propertiesBlock := fmt.Sprintf("%s\n%s%s\n", xmlPropertiesStart, mavenOptsBlock, xmlPropertiesEnd)
+		result = strings.Replace(content, "</settings>", propertiesBlock+"</settings>", 1)
 	}
 
-	endIdx := strings.Index(content, markerEnd)
+	if err := validateXMLWellFormedness(result); err != nil {
+		return "", fmt.Errorf("generated XML is not well-formed: %v", err)
+	}
+
+	return result, nil
+}
+
+func addAikidoMavenOpts(content string) (string, error) {
+	switch runtime.GOOS {
+	case "darwin":
+		return addAikidoMavenOptsWithValue(content, mavenOptsValueDarwin)
+	case "windows":
+		return addAikidoMavenOptsWithValue(content, mavenOptsValueWindows)
+	case "linux":
+		return "", fmt.Errorf("Linux requires a custom Java truststore path; no system truststore type is supported")
+	default:
+		return content, nil
+	}
+}
+
+func removeAikidoMavenOverrides(content string) (string, bool, error) {
+	result, removedProxies, err := removeAikidoBlock(content, markerStart, markerEnd)
+	if err != nil {
+		return "", false, err
+	}
+
+	result, removedMavenOpts, err := removeAikidoBlock(result, mavenOptsMarkerStart, mavenOptsMarkerEnd)
+	if err != nil {
+		return "", false, err
+	}
+
+	if !removedProxies && !removedMavenOpts {
+		return content, false, nil
+	}
+
+	if err := validateXMLWellFormedness(result); err != nil {
+		return "", false, fmt.Errorf("result XML is not well-formed: %v", err)
+	}
+
+	return result, true, nil
+}
+
+func removeAikidoBlock(content, startMarker, endMarker string) (string, bool, error) {
+	startIdx := strings.Index(content, startMarker)
+	if startIdx == -1 {
+		return content, false, nil
+	}
+
+	endIdx := strings.Index(content, endMarker)
 	if endIdx == -1 {
 		return "", false, fmt.Errorf("found start marker but not end marker - corrupt configuration")
 	}
@@ -97,23 +166,15 @@ func removeAikidoProxies(content string) (string, bool, error) {
 		return "", false, fmt.Errorf("end marker appears before start marker - corrupt configuration")
 	}
 
-	endPos := endIdx + len(markerEnd)
+	endPos := endIdx + len(endMarker)
 	if endPos < len(content) && content[endPos] == '\n' {
 		endPos++
 	}
 
-	// Remove everything from start to end
 	result := content[:startIdx] + content[endPos:]
-
-	// Validate the result is well-formed XML
-	if err := validateXMLWellFormedness(result); err != nil {
-		return "", false, fmt.Errorf("result XML is not well-formed: %v", err)
-	}
-
 	return result, true, nil
 }
 
-// validateXMLWellFormedness checks if the XML is well-formed by parsing all tokens
 func validateXMLWellFormedness(content string) error {
 	decoder := xml.NewDecoder(strings.NewReader(content))
 

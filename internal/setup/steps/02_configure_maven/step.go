@@ -31,7 +31,7 @@ func (s *Step) InstallName() string {
 }
 
 func (s *Step) InstallDescription() string {
-	return "Configures Maven proxy settings via settings.xml"
+	return "Configures Maven proxy settings and uses system truststore for Java"
 }
 
 func (s *Step) UninstallName() string {
@@ -39,7 +39,7 @@ func (s *Step) UninstallName() string {
 }
 
 func (s *Step) UninstallDescription() string {
-	return "Removes Maven proxy configuration from settings.xml"
+	return "Removes Maven proxy configuration and system truststore overrides"
 }
 
 func (s *Step) Install(ctx context.Context) error {
@@ -76,16 +76,22 @@ func (s *Step) Install(ctx context.Context) error {
 		content = string(data)
 	}
 
-	// Check if already configured
-	if hasAikidoProxies(content) {
-		log.Println("Maven proxy settings already configured")
-		return nil
+	newContent := content
+	var errRemoval error
+	newContent, _, errRemoval = removeAikidoMavenOverrides(newContent)
+	if errRemoval != nil {
+		log.Printf("Warning: failed to remove existing Maven configuration: %v", errRemoval)
+		newContent = content
 	}
 
-	// Add proxy configuration
-	newContent, err := addAikidoProxies(content, host, port)
+	newContent, err = addAikidoProxies(newContent, host, port)
 	if err != nil {
 		return fmt.Errorf("failed to add proxy configuration: %v", err)
+	}
+	
+	newContent, err = addAikidoMavenOpts(newContent)
+	if err != nil {
+		return fmt.Errorf("failed to add Maven truststore configuration: %v", err)
 	}
 
 	// Write to file
@@ -94,6 +100,7 @@ func (s *Step) Install(ctx context.Context) error {
 	}
 
 	log.Println("Maven configured successfully via settings.xml")
+
 	return nil
 }
 
@@ -111,7 +118,7 @@ func (s *Step) Uninstall(ctx context.Context) error {
 	}
 
 	// Remove proxy configuration
-	newContent, removed, err := removeAikidoProxies(string(data))
+	newContent, removed, err := removeAikidoMavenOverrides(string(data))
 	if err != nil {
 		return fmt.Errorf("failed to remove proxy configuration: %v", err)
 	}
@@ -126,6 +133,7 @@ func (s *Step) Uninstall(ctx context.Context) error {
 		return fmt.Errorf("failed to write settings.xml: %v", err)
 	}
 
-	log.Println("Removed Maven proxy configuration from settings.xml")
+	log.Println("Removed Maven configuration from settings.xml")
+
 	return nil
 }

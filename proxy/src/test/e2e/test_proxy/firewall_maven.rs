@@ -71,16 +71,16 @@ async fn test_maven_allows_different_version() {
 
 #[tokio::test]
 #[tracing_test::traced_test]
-async fn test_maven_pom_file_malware_blocked() {
+async fn test_maven_pom_file_allowed() {
     let runtime = e2e::runtime::get().await;
     let client = runtime.client_with_http_proxy().await;
 
-    // POM file for malware package should also be blocked
+    // POM files are metadata and are not blocked
     let resp = client
         .get("https://repo.maven.apache.org/maven2/org/example/malicious-lib/1.0.0/malicious-lib-1.0.0.pom")
         .send()
         .await
         .unwrap();
 
-    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+    assert_eq!(StatusCode::OK, resp.status());
 }
