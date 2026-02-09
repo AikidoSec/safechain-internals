@@ -18,10 +18,18 @@ jobs:
     strategy:
       matrix:
         include:
-          - arch: amd64
+          - os: darwin
+            arch: amd64
             runner: macos-14
-          - arch: arm64
+          - os: darwin
+            arch: arm64
             runner: macos-14
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+          - os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
 
     runs-on: ${{ matrix.runner }}
     steps:
@@ -36,26 +44,26 @@ jobs:
       - name: Run tests
         run: make test
 
-      - name: Build binaries for darwin/${{ matrix.arch }}
-        run: make build-darwin-${{ matrix.arch }} VERSION="${{ inputs.version || 'dev' }}"
+      - name: Build binaries for ${{ matrix.os }}/${{ matrix.arch }}
+        run: make build-${{ matrix.os }}-${{ matrix.arch }} VERSION="${{ inputs.version || 'dev' }}"
 
       - name: Prepare artifacts
         run: |
-          mv bin/safechain-ultimate-darwin-${{ matrix.arch }} safechain-ultimate-darwin-${{ matrix.arch }}
-          mv bin/safechain-ultimate-ui-darwin-${{ matrix.arch }} safechain-ultimate-ui-darwin-${{ matrix.arch }}
+          mv bin/safechain-ultimate-${{ matrix.os }}-${{ matrix.arch }} safechain-ultimate-${{ matrix.os }}-${{ matrix.arch }}
+          mv bin/safechain-ultimate-ui-${{ matrix.os }}-${{ matrix.arch }} safechain-ultimate-ui-${{ matrix.os }}-${{ matrix.arch }}
 
       - name: Upload safechain-ultimate artifact
         uses: actions/upload-artifact@v4
         with:
-          name: safechain-ultimate-darwin-${{ matrix.arch }}
+          name: safechain-ultimate-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            safechain-ultimate-darwin-${{ matrix.arch }}
+            safechain-ultimate-${{ matrix.os }}-${{ matrix.arch }}
       - name: Upload safechain-ultimate-ui artifact
         uses: actions/upload-artifact@v4
         with:
-          name: safechain-ultimate-ui-darwin-${{ matrix.arch }}
+          name: safechain-ultimate-ui-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            safechain-ultimate-ui-darwin-${{ matrix.arch }}
+            safechain-ultimate-ui-${{ matrix.os }}-${{ matrix.arch }}
 
   build-unix-proxy:
     strategy:

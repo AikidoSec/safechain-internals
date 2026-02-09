@@ -1,0 +1,78 @@
+name: Build Linux Packages
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+jobs:
+  build-unix:
+    uses: ./.github/workflows/build-unix.yml
+    with:
+      version: ${{ inputs.version || 'dev' }}
+
+  build-rpm:
+    needs: build-unix
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download agent artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: safechain-ultimate-linux-${{ matrix.arch }}
+          path: bin
+
+      - name: Download agent ui artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: safechain-ultimate-ui-linux-${{ matrix.arch }}
+          path: bin
+
+      - name: Download proxy artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: safechain-proxy-linux-${{ matrix.arch }}
+          path: bin
+
+      - name: Verify binaries exist
+        run: |
+          ls -lh bin/
+          ls -lh bin/safechain-ultimate-linux-${{ matrix.arch }}
+          ls -lh bin/safechain-ultimate-ui-linux-${{ matrix.arch }}
+          ls -lh bin/safechain-proxy-linux-${{ matrix.arch }}
+
+      - name: Install RPM tools
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Build RPM
+        run: |
+          cd packaging/rpm
+          ./build-rpm.sh -v "${{ inputs.version || 'dev' }}" -a "${{ matrix.arch }}" -b "../../bin" -o "../../dist"
+
+      - name: Rename package
+        run: |
+          mv dist/SafeChainUltimate-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.rpm dist/SafeChainUltimate-${{ matrix.arch }}.rpm
+
+      - name: Upload RPM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SafeChainUltimate-${{ matrix.arch }}.rpm
+          path: dist/SafeChainUltimate-${{ matrix.arch }}.rpm

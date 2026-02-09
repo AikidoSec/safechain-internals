@@ -1,4 +1,4 @@
-.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-sign-local install-pkg uninstall-pkg clean test run help
+.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-sign-local install-pkg uninstall-pkg build-rpm clean test run help
 
 BINARY_NAME=safechain-ultimate
 BINARY_NAME_UI=safechain-ultimate-ui
@@ -82,6 +82,12 @@ build-darwin-amd64:
 build-darwin-arm64:
 	@$(MAKE) GOOS=darwin GOARCH=arm64 build-release
 
+build-linux-amd64:
+	@$(MAKE) GOOS=linux GOARCH=amd64 build-release
+
+build-linux-arm64:
+	@$(MAKE) GOOS=linux GOARCH=arm64 build-release
+
 build-windows-amd64:
 	@$(MAKE) GOOS=windows GOARCH=amd64 build-release
 
@@ -102,6 +108,16 @@ ifeq ($(DETECTED_OS),darwin)
 	@echo "PKG built: $(DIST_DIR)/SafeChainUltimate-$(VERSION)-$(DETECTED_ARCH).pkg"
 else
 	@echo "Error: PKG building is only supported on macOS"
+	@exit 1
+endif
+
+build-rpm:
+ifeq ($(DETECTED_OS),linux)
+	@echo "Building Linux RPM installer..."
+	@cd packaging/rpm && ./build-rpm.sh -v $(VERSION) -a $(DETECTED_ARCH) -b ../../$(BIN_DIR) -o ../../$(DIST_DIR)
+	@echo "RPM built in $(DIST_DIR)/"
+else
+	@echo "Error: RPM building is only supported on Linux"
 	@exit 1
 endif
 

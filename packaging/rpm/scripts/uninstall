@@ -1,0 +1,93 @@
+#!/bin/bash
+
+set -e
+
+INSTALL_DIR="/opt/aikidosecurity/safechainultimate"
+LOGS_DIR="/var/log/aikidosecurity/safechainultimate"
+SERVICE_FILE="/usr/lib/systemd/system/safechain-ultimate.service"
+SERVICE_NAME="safechain-ultimate"
+BINARY="$INSTALL_DIR/bin/safechain-ultimate"
+
+echo "========================================="
+echo "SafeChain Ultimate - Uninstaller"
+echo "========================================="
+echo ""
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Error: This script must be run as root (use sudo)"
+    exit 1
+fi
+
+echo "Stopping SafeChain Ultimate processes..."
+
+if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    echo "  Stopping service..."
+    systemctl stop "$SERVICE_NAME" || true
+    echo "  ✓ Service stopped"
+else
+    echo "  Service not running"
+fi
+
+if systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
+    echo "  Disabling service..."
+    systemctl disable "$SERVICE_NAME" || true
+    echo "  ✓ Service disabled"
+fi
+
+pkill -f "safechain-ultimate-ui" 2>/dev/null && echo "  ✓ UI process stopped" || echo "  UI process not running"
+pkill -f "safechain-proxy" 2>/dev/null && echo "  ✓ Proxy process stopped" || echo "  Proxy process not running"
+pkill -f "safechain-ultimate" 2>/dev/null && echo "  ✓ Daemon process stopped" || echo "  Daemon process not running"
+
+echo ""
+
+if [ -f "$BINARY" ]; then
+    echo "Running teardown..."
+    "$BINARY" --teardown || {
+        echo "  Warning: Teardown command failed (may already be torn down)"
+    }
+    echo "  ✓ Teardown complete"
+else
+    echo "Warning: Binary not found at $BINARY, skipping teardown"
+fi
+
+echo ""
+echo "Removing installed files..."
+
+if [ -f "$SERVICE_FILE" ]; then
+    rm -f "$SERVICE_FILE"
+    echo "  ✓ Removed systemd service file"
+fi
+
+if [ -d "$INSTALL_DIR" ]; then
+    rm -rf "$INSTALL_DIR"
+    echo "  ✓ Removed application files"
+fi
+
+if [ -d "$LOGS_DIR" ]; then
+    rm -rf "$LOGS_DIR"
+    echo "  ✓ Removed log files"
+fi
+
+AIKIDO_DIR="/opt/aikidosecurity"
+if [ -d "$AIKIDO_DIR" ] && [ -z "$(ls -A "$AIKIDO_DIR" 2>/dev/null)" ]; then
+    rmdir "$AIKIDO_DIR" 2>/dev/null || true
+    echo "  ✓ Removed empty AikidoSecurity directory"
+fi
+
+AIKIDO_LOGS_DIR="/var/log/aikidosecurity"
+if [ -d "$AIKIDO_LOGS_DIR" ] && [ -z "$(ls -A "$AIKIDO_LOGS_DIR" 2>/dev/null)" ]; then
+    rmdir "$AIKIDO_LOGS_DIR" 2>/dev/null || true
+    echo "  ✓ Removed empty AikidoSecurity logs directory"
+fi
+
+echo ""
+echo "Reloading systemd..."
+systemctl daemon-reload
+
+echo ""
+echo "========================================="
+echo "✓ SafeChain Ultimate has been uninstalled"
+echo "========================================="
+echo ""
+
+exit 0
