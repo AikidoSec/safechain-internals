@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -56,4 +57,9 @@ func GetProxyLogPath() string {
 
 func GetProxyErrLogPath() string {
 	return filepath.Join(config.LogDir, SafeChainProxyErrLogName)
+}
+
+type ServiceRunner interface {
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
 }

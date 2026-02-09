@@ -1,4 +1,4 @@
-.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-sign-local install-pkg uninstall-pkg build-rpm clean test run help
+.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-sign-local install-pkg uninstall-pkg build-rpm build-deb build-apk clean test run help
 
 BINARY_NAME=safechain-ultimate
 BINARY_NAME_UI=safechain-ultimate-ui
@@ -118,6 +118,26 @@ ifeq ($(DETECTED_OS),linux)
 	@echo "RPM built in $(DIST_DIR)/"
 else
 	@echo "Error: RPM building is only supported on Linux"
+	@exit 1
+endif
+
+build-deb: build-rpm
+ifeq ($(DETECTED_OS),linux)
+	@echo "Converting RPM to DEB using alien..."
+	@cd $(DIST_DIR) && sudo alien --to-deb --keep-version SafeChainUltimate-$(VERSION)-$(DETECTED_ARCH).rpm
+	@echo "DEB built in $(DIST_DIR)/"
+else
+	@echo "Error: DEB building is only supported on Linux"
+	@exit 1
+endif
+
+build-apk: build-rpm
+ifeq ($(DETECTED_OS),linux)
+	@echo "Converting RPM to Alpine APK..."
+	@cd packaging/rpm && ./build-apk.sh -v $(VERSION) -a $(DETECTED_ARCH) -r ../../$(DIST_DIR)/SafeChainUltimate-$(VERSION)-$(DETECTED_ARCH).rpm -o ../../$(DIST_DIR)
+	@echo "APK built in $(DIST_DIR)/"
+else
+	@echo "Error: APK building is only supported on Linux"
 	@exit 1
 endif
 
