@@ -168,8 +168,8 @@ jobs:
 
       - name: Add WiX extensions
         run: |
-          wix extension add WixToolset.UI.wixext
-          wix extension add WixToolset.Util.wixext
+          wix extension add WixToolset.UI.wixext/6.0.2
+          wix extension add WixToolset.Util.wixext/6.0.2
 
       - name: Build MSI installer
         run: |
