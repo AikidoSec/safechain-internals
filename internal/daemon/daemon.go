@@ -224,7 +224,7 @@ func (d *Daemon) Uninstall(ctx context.Context, removeScanners bool) error {
 	return nil
 }
 
-func (d *Daemon) logStatus() {
+func (d *Daemon) printDaemonStatus() {
 	log.Println("Daemon status:")
 	if d.proxy.IsProxyRunning() {
 		proxyVersion, _ := d.proxy.Version()
@@ -283,7 +283,7 @@ func (d *Daemon) heartbeat() error {
 	}
 
 	if time.Since(d.daemonLastStatusLogTime) >= DaemonStatusLogInterval {
-		d.logStatus()
+		d.printDaemonStatus()
 		d.daemonLastStatusLogTime = time.Now()
 	}
 	return nil

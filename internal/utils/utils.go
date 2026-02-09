@@ -217,11 +217,9 @@ func RunCommandWithEnv(ctx context.Context, env []string, command string, args .
 	cmd := exec.CommandContext(ctx, command, args...)
 	cmd.Env = append(os.Environ(), env...)
 	output, err := cmd.CombinedOutput()
-	if err != nil {
-		if !disableLogging {
-			log.Printf("\t- Command error: %v", err)
-			log.Printf("\t- Command output: %s", string(output))
-		}
+	if err != nil && !disableLogging {
+		log.Printf("\t- Command error: %v", err)
+		log.Printf("\t- Command output: %s", string(output))
 	}
 	return string(output), err
 }

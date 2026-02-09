@@ -62,7 +62,14 @@ func (p *Proxy) Version() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get proxy version: %v", err)
 	}
-	parts := strings.Split(strings.TrimSpace(string(output)), " ")
+	trimmed := strings.TrimSpace(string(output))
+	if trimmed == "" {
+		return "", fmt.Errorf("proxy version output is empty")
+	}
+	parts := strings.Split(trimmed, " ")
+	if len(parts) == 0 {
+		return "", fmt.Errorf("failed to parse proxy version from output: %q", trimmed)
+	}
 	return parts[len(parts)-1], nil
 }
 
