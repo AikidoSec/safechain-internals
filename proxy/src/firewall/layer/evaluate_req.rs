@@ -1,6 +1,6 @@
 use rama::{
     Layer, Service,
-    error::{BoxError, OpaqueError},
+    error::{BoxError, ErrorContext},
     http::{Request, Response},
     telemetry::tracing,
 };
@@ -22,15 +22,11 @@ where
     S: Service<Request, Output = Response, Error: Into<BoxError>>,
 {
     type Output = Response;
-    type Error = OpaqueError;
+    type Error = BoxError;
 
     async fn serve(&self, req: Request) -> Result<Self::Output, Self::Error> {
         match self.firewall.evaluate_request(req).await? {
-            RequestAction::Allow(req) => self
-                .inner
-                .serve(req)
-                .await
-                .map_err(|err| OpaqueError::from_boxed(err.into())),
+            RequestAction::Allow(req) => self.inner.serve(req).await.into_box_error(),
             RequestAction::Block(blocked) => {
                 tracing::trace!(
                     "EvaluateRequestService: firewall blocked request with self-generated response"

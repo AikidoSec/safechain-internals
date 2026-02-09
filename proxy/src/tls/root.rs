@@ -1,5 +1,5 @@
 use rama::{
-    error::{ErrorContext, OpaqueError},
+    error::{BoxError, ErrorContext as _, ErrorExt as _},
     net::{address::Domain, tls::server::SelfSignedData},
     telemetry::tracing,
     tls::boring::{
@@ -39,7 +39,7 @@ enum DataProxyRootCACrt {
 }
 
 impl DataProxyRootCACrt {
-    fn try_crt_as_pem(&self, expected_fp: &[u8]) -> Result<NonEmptyStr, OpaqueError> {
+    fn try_crt_as_pem(&self, expected_fp: &[u8]) -> Result<NonEmptyStr, BoxError> {
         let crt_der = match self {
             DataProxyRootCACrt::V1 { crt } => crt.as_slice(),
         };
@@ -50,9 +50,9 @@ impl DataProxyRootCACrt {
             .context("(re)compute CA crt fingerprint (digest) for verification")?;
 
         if !crt_fp.eq(expected_fp) {
-            return Err(OpaqueError::from_display(format!(
-                "unexpected CA crt FP {crt_fp:x?}, expected: {expected_fp:x?}"
-            )));
+            return Err(BoxError::from("unexpected CA crt fingerprint")
+                .context_hex_field("computed_fingerprint", crt_fp)
+                .context_hex_field("expected_fingerprint", expected_fp.to_vec()));
         }
 
         String::from_utf8(crt.to_pem().context("generate PEM CA crt byte slice")?)
@@ -68,7 +68,7 @@ const AIKIDO_SECRET_ROOT_CA_CRT: &str = "proxy-ca-crt";
 pub(super) fn new_root_tls_crt_key_pair(
     secrets: &SyncSecrets,
     data_storage: &SyncCompactDataStorage,
-) -> Result<PemKeyCrtPair, OpaqueError> {
+) -> Result<PemKeyCrtPair, BoxError> {
     if let Some(key_data) = secrets.load_secret::<DataProxyRootCAKey>(AIKIDO_SECRET_ROOT_CA_KEY)? {
         // NOTE if we want to make this more resilient we can if cert is no longer found
         // try to recover it from system certificate storage. See note at the end of this file.

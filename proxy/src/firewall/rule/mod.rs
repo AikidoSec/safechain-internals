@@ -1,7 +1,7 @@
 use std::{pin::Pin, sync::Arc};
 
 use rama::{
-    error::OpaqueError,
+    error::BoxError,
     http::{Request, Response},
     net::address::Domain,
 };
@@ -115,7 +115,7 @@ pub trait Rule: Sized + Send + Sync + 'static {
     fn evaluate_request(
         &self,
         req: Request,
-    ) -> impl Future<Output = Result<RequestAction, OpaqueError>> + Send + '_;
+    ) -> impl Future<Output = Result<RequestAction, BoxError>> + Send + '_;
 
     /// Evaluates the [`Response`] received from the server before it reaches the client.
     ///
@@ -137,7 +137,7 @@ pub trait Rule: Sized + Send + Sync + 'static {
     fn evaluate_response(
         &self,
         resp: Response,
-    ) -> impl Future<Output = Result<Response, OpaqueError>> + Send + '_;
+    ) -> impl Future<Output = Result<Response, BoxError>> + Send + '_;
 
     /// Converts this [`Rule`] into a [`DynRule`] trait object.
     ///
@@ -164,12 +164,12 @@ trait DynRuleInner {
     fn dyn_evaluate_request(
         &self,
         req: Request,
-    ) -> Pin<Box<dyn Future<Output = Result<RequestAction, OpaqueError>> + Send + '_>>;
+    ) -> Pin<Box<dyn Future<Output = Result<RequestAction, BoxError>> + Send + '_>>;
 
     fn dyn_evaluate_response(
         &self,
         resp: Response,
-    ) -> Pin<Box<dyn Future<Output = Result<Response, OpaqueError>> + Send + '_>>;
+    ) -> Pin<Box<dyn Future<Output = Result<Response, BoxError>> + Send + '_>>;
 
     fn dyn_match_domain(&self, domain: &Domain) -> bool;
 
@@ -188,7 +188,7 @@ impl<R: Rule> DynRuleInner for R {
     fn dyn_evaluate_request(
         &self,
         req: Request,
-    ) -> Pin<Box<dyn Future<Output = Result<RequestAction, OpaqueError>> + Send + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<RequestAction, BoxError>> + Send + '_>> {
         Box::pin(self.evaluate_request(req))
     }
 
@@ -197,7 +197,7 @@ impl<R: Rule> DynRuleInner for R {
     fn dyn_evaluate_response(
         &self,
         resp: Response,
-    ) -> Pin<Box<dyn Future<Output = Result<Response, OpaqueError>> + Send + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Response, BoxError>> + Send + '_>> {
         Box::pin(self.evaluate_response(resp))
     }
 
@@ -248,7 +248,7 @@ impl Rule for DynRule {
     fn evaluate_request(
         &self,
         req: Request,
-    ) -> impl Future<Output = Result<RequestAction, OpaqueError>> + Send + '_ {
+    ) -> impl Future<Output = Result<RequestAction, BoxError>> + Send + '_ {
         self.inner.dyn_evaluate_request(req)
     }
 
@@ -256,7 +256,7 @@ impl Rule for DynRule {
     fn evaluate_response(
         &self,
         resp: Response,
-    ) -> impl Future<Output = Result<Response, OpaqueError>> + Send + '_ {
+    ) -> impl Future<Output = Result<Response, BoxError>> + Send + '_ {
         self.inner.dyn_evaluate_response(resp)
     }
 

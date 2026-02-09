@@ -8,9 +8,9 @@ use std::{
 use clap::Parser;
 use rama::{
     Layer as _, Service,
-    error::OpaqueError,
+    error::BoxError,
     http::{
-        Body, BodyExtractExt as _, HeaderMap, HeaderValue, Request, Response,
+        BodyExtractExt as _, HeaderMap, HeaderValue, Request, Response,
         client::{
             EasyHttpWebClient, ProxyConnectorLayer,
             proxy::layer::{HttpProxyConnectorLayer, SetProxyAuthHttpHeaderLayer},
@@ -75,16 +75,13 @@ impl Runtime {
     }
 
     #[inline(always)]
-    pub fn client(&self) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+    pub fn client(&self) -> impl Service<Request, Output = Response, Error = BoxError> {
         create_client_inner(None, None)
     }
 
     #[inline(always)]
-    pub fn client_fail_fast(
-        &self,
-    ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+    pub fn client_fail_fast(&self) -> impl Service<Request, Output = Response, Error = BoxError> {
         (
-            MapErrLayer::new(OpaqueError::from_boxed),
             TimeoutLayer::new(Duration::from_secs(30)),
             MapErrLayer::new(Into::into),
         )
@@ -93,14 +90,14 @@ impl Runtime {
 
     pub async fn client_with_ca_trust(
         &self,
-    ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+    ) -> impl Service<Request, Output = Response, Error = BoxError> {
         self.client_with_ca_trust_inner(None).await
     }
 
     async fn client_with_ca_trust_inner(
         &self,
         custom_http_proxy_headers: Option<HeaderMap>,
-    ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+    ) -> impl Service<Request, Output = Response, Error = BoxError> {
         let default_client = self.client();
 
         let resp = default_client
@@ -125,7 +122,7 @@ impl Runtime {
     #[inline(always)]
     pub async fn client_with_http_proxy(
         &self,
-    ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+    ) -> impl Service<Request, Output = Response, Error = BoxError> {
         let web_client = self.client_with_ca_trust().await;
         (
             AddInputExtensionLayer::new(self.http_proxy_addr()),
@@ -138,7 +135,7 @@ impl Runtime {
     pub async fn client_with_http_proxy_and_user_config_header(
         &self,
         cfg: FirewallUserConfig,
-    ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+    ) -> impl Service<Request, Output = Response, Error = BoxError> {
         let mut headers = HeaderMap::new();
         let cfg_header_value_str = serde_html_form::to_string(cfg).unwrap();
         let cfg_header_value = HeaderValue::from_str(&cfg_header_value_str).unwrap();
@@ -151,7 +148,7 @@ impl Runtime {
     pub async fn client_with_http_proxy_and_username(
         &self,
         username: &str,
-    ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+    ) -> impl Service<Request, Output = Response, Error = BoxError> {
         let web_client = self.client_with_ca_trust().await;
         (
             AddInputExtensionLayer::new(self.http_proxy_addr_with_username(username)),
@@ -174,7 +171,7 @@ impl Runtime {
     #[inline(always)]
     pub async fn client_with_socks5_proxy(
         &self,
-    ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+    ) -> impl Service<Request, Output = Response, Error = BoxError> {
         let web_client = self.client_with_ca_trust().await;
         AddInputExtensionLayer::new(self.socks5_proxy_addr()).into_layer(web_client)
     }
@@ -183,7 +180,7 @@ impl Runtime {
     pub async fn client_with_socks5_proxy_and_username(
         &self,
         username: &str,
-    ) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+    ) -> impl Service<Request, Output = Response, Error = BoxError> {
         let web_client = self.client_with_ca_trust().await;
         AddInputExtensionLayer::new(self.socks5_proxy_addr_with_username(username))
             .into_layer(web_client)
@@ -213,7 +210,7 @@ impl Runtime {
 fn create_client_inner(
     tls_config: Option<Arc<TlsConnectorDataBuilder>>,
     custom_http_proxy_headers: Option<HeaderMap>,
-) -> impl Service<Request, Output = Response, Error = OpaqueError> {
+) -> impl Service<Request, Output = Response, Error = BoxError> {
     let mut http_proxy_layer = HttpProxyConnectorLayer::required();
     if let Some(custom_headers) = custom_http_proxy_headers {
         let mut previous_name = None;
@@ -244,7 +241,6 @@ fn create_client_inner(
         .build_client();
 
     (
-        MapErrLayer::new(OpaqueError::from_boxed),
         // timeout needs to be high enough for this e2e test setup
         // ... windows machines in CI... can be ... slow
         TimeoutLayer::new(Duration::from_secs(180)),
@@ -260,7 +256,7 @@ fn create_client_inner(
                 .expect("create exponential backoff impl"),
             ),
         ),
-        MapRequestBodyLayer::new(Body::new),
+        MapRequestBodyLayer::new_boxed_streaming_body(),
     )
         .into_layer(inner_https_client)
 }
