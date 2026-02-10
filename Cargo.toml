@@ -4,4 +4,4 @@ resolver = "3"
 
 [workspace.dependencies.rama]
 git = "https://github.com/plabayo/rama"
-rev = "a87a7f9ec68e76ef12156b6278b132f847f03d56"
+rev = "0405ccbddd427c2cbda4af259b620cb0e1ee2d92"

@@ -2,15 +2,17 @@ use std::fmt;
 
 use rama::{
     Service,
-    error::{ErrorContext as _, OpaqueError},
+    error::{BoxError, ErrorContext as _},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
-    utils::str::smol_str::{SmolStr, format_smolstr},
+    utils::str::{
+        self as str_utils,
+        arcstr::{ArcStr, arcstr},
+        smol_str::{SmolStr, format_smolstr},
+    },
 };
-
-use rama::utils::str::arcstr::{ArcStr, arcstr};
 
 use crate::{
     firewall::{
@@ -35,9 +37,9 @@ impl RuleVSCode {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-    ) -> Result<Self, OpaqueError>
+    ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = BoxError>,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
@@ -88,7 +90,7 @@ impl Rule for RuleVSCode {
         }
     }
 
-    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
+    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
         if !crate::http::try_get_domain_for_req(&req)
             .map(|domain| self.match_domain(&domain))
             .unwrap_or_default()
@@ -149,7 +151,7 @@ impl Rule for RuleVSCode {
         Ok(RequestAction::Allow(req))
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         Ok(resp)
     }
 }
@@ -178,25 +180,17 @@ impl RuleVSCode {
             .is_some()
     }
 
-    fn ends_with_ignore_ascii_case(path: &str, suffix: &str) -> bool {
-        if path.len() < suffix.len() {
-            return false;
-        }
-
-        let start = path.len() - suffix.len();
-        path.get(start..)
-            .is_some_and(|tail| tail.eq_ignore_ascii_case(suffix))
-    }
-
     fn is_extension_install_asset_path(path: &str) -> bool {
         let path = path.trim_end_matches('/');
 
-        Self::ends_with_ignore_ascii_case(path, ".vsix")
-            || Self::ends_with_ignore_ascii_case(
-                path,
+        str_utils::any_ends_with_ignore_ascii_case(
+            path,
+            [
+                ".vsix",
                 "/Microsoft.VisualStudio.Services.VSIXPackage",
-            )
-            || Self::ends_with_ignore_ascii_case(path, "/vspackage")
+                "/vspackage",
+            ],
+        )
     }
 
     /// Parse extension ID (publisher.name) from .vsix download URL path.

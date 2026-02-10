@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use rama::error::{ErrorContext, OpaqueError};
+use rama::error::{BoxError, ErrorContext};
 use rama::graceful::ShutdownGuard;
 use rama::http::layer::har;
 use rama::http::layer::har::recorder::FileRecorder;
@@ -18,7 +18,7 @@ pub struct HarClient {
 
 impl HarClient {
     /// Toggles the har recording status and returns previous state of toggle.
-    pub async fn toggle(&self) -> Result<bool, OpaqueError> {
+    pub async fn toggle(&self) -> Result<bool, BoxError> {
         let previous = self.toggle_state.load(std::sync::atomic::Ordering::Relaxed);
         self.toggle_tx
             .send(())

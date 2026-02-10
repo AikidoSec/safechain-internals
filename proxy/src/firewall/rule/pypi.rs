@@ -2,7 +2,7 @@ use std::{borrow::Cow, fmt, str::FromStr};
 
 use rama::{
     Service,
-    error::{ErrorContext as _, OpaqueError},
+    error::{BoxError, ErrorContext as _},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::{address::Domain, uri::util::percent_encoding},
@@ -54,9 +54,9 @@ impl RulePyPI {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-    ) -> Result<Self, OpaqueError>
+    ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = BoxError>,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
@@ -78,7 +78,7 @@ impl RulePyPI {
         })
     }
 
-    fn is_blocked(&self, package_info: &PackageInfo) -> Result<bool, OpaqueError> {
+    fn is_blocked(&self, package_info: &PackageInfo) -> Result<bool, BoxError> {
         let entries = self.remote_malware_list.find_entries(&package_info.name);
         let Some(entries) = entries.entries() else {
             return Ok(false);
@@ -150,12 +150,12 @@ impl Rule for RulePyPI {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         // Pass through for now - response modification can be added in future PR
         Ok(resp)
     }
 
-    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
+    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
         if !crate::http::try_get_domain_for_req(&req)
             .map(|domain| self.match_domain(&domain))
             .unwrap_or_default()

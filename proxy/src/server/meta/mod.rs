@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use rama::{
     Layer,
-    error::{ErrorContext, OpaqueError},
+    error::{BoxError, ErrorContext},
     extensions::ExtensionsRef as _,
     graceful::ShutdownGuard,
     http::{
@@ -38,7 +38,7 @@ pub async fn run_meta_https_server(
     proxy_addr_rx: tokio::sync::oneshot::Receiver<SocketAddress>,
     firewall: Firewall,
     #[cfg(feature = "har")] har_client: HarClient,
-) -> Result<(), OpaqueError> {
+) -> Result<(), BoxError> {
     let proxy_addr = tokio::time::timeout(Duration::from_secs(8), proxy_addr_rx)
         .await
         .context("wait to recv proxy addr from proxy task")?
@@ -97,7 +97,6 @@ pub async fn run_meta_https_server(
 
     let tcp_listener = TcpListener::bind(args.meta_bind, exec)
         .await
-        .map_err(OpaqueError::from_boxed)
         .context("bind proxy meta http(s) server")?;
 
     let meta_addr = tcp_listener

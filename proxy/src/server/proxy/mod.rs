@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use rama::{
     Layer,
-    error::{ErrorContext as _, OpaqueError},
+    error::{BoxError, ErrorContext as _, ErrorExt as _},
     extensions::ExtensionsMut,
     graceful::ShutdownGuard,
     http::{
-        Body, Request, Response, StatusCode,
+        Request, Response, StatusCode,
         layer::{
             compression::CompressionLayer, header_config::extract_header_config,
             map_response_body::MapResponseBodyLayer, proxy_auth::ProxyAuthLayer, trace::TraceLayer,
@@ -26,7 +26,7 @@ use rama::{
     rt::Executor,
     service::service_fn,
     tcp::server::TcpListener,
-    telemetry::tracing::{self, Level},
+    telemetry::tracing::{self},
     tls::boring::server::TlsAcceptorLayer,
 };
 
@@ -63,13 +63,12 @@ pub async fn run_proxy_server(
     proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
     firewall: Firewall,
     #[cfg(feature = "har")] har_export_layer: HARExportLayer,
-) -> Result<(), OpaqueError> {
+) -> Result<(), BoxError> {
     let exec = Executor::graceful(guard.clone());
 
     let tcp_service = TcpListener::build(exec.clone())
         .bind(args.bind)
         .await
-        .map_err(OpaqueError::from_boxed)
         .context("bind TCP network interface for proxy")?;
 
     let proxy_addr = tcp_service
@@ -108,7 +107,7 @@ pub async fn run_proxy_server(
 
     let http_inner_svc = (
         TraceLayer::new_for_http(),
-        ConsumeErrLayer::trace(Level::DEBUG),
+        ConsumeErrLayer::trace_as_debug(),
         #[cfg(feature = "har")]
         (
             AddInputExtensionLayer::new(RequestComment(arcstr!("http(s) proxy connect"))),
@@ -130,7 +129,7 @@ pub async fn run_proxy_server(
         ),
         // =============================================
         // HTTP (plain-text) (proxy) connections
-        MapResponseBodyLayer::new(Body::new),
+        MapResponseBodyLayer::new_boxed_streaming_body(),
         CompressionLayer::new(),
         // =============================================
     )
@@ -144,9 +143,10 @@ pub async fn run_proxy_server(
     crate::server::write_server_socket_address_as_file(&args.data, "proxy", proxy_addr.into())
         .await?;
     if proxy_addr_tx.send(proxy_addr.into()).is_err() {
-        return Err(OpaqueError::from_display(
-            "failed to send proxy addr to meta server task",
-        ));
+        return Err(
+            BoxError::from("failed to send proxy address to meta server task")
+                .context_field("address", proxy_addr),
+        );
     }
 
     // sent proxy addr to firewall
