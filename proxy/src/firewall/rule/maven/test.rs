@@ -334,7 +334,7 @@ fn test_parse_jar_urls_seen_in_maven_debug_log() {
         (
             "https://repo1.maven.org/maven2/org/hdrhistogram/HdrHistogram/2.1.12/HdrHistogram-2.1.12.jar",
             "org.hdrhistogram",
-            "HdrHistogram",
+            "hdrhistogram",
             "2.1.12",
         ),
         (

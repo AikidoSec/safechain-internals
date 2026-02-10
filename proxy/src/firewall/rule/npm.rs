@@ -14,7 +14,7 @@ use crate::{
     firewall::{
         domain_matcher::DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
-        malware_list::{MalwareEntry, RemoteMalwareList},
+        malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
         pac::PacScriptGenerator,
         version::{PackageVersion, PragmaticSemver},
     },
@@ -47,7 +47,7 @@ impl RuleNpm {
             Uri::from_static("https://malware-list.aikido.dev/malware_predictions.json"),
             sync_storage,
             remote_malware_list_https_client,
-            None,
+            LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for npm block rule")?;
@@ -105,51 +105,57 @@ impl Rule for RuleNpm {
         }
 
         let path = req.uri().path().trim_start_matches('/');
-        let package = parse_package_from_path(path);
 
-        if let Some(package) = package {
-            if let Some(entries) = self
-                .remote_malware_list
-                .find_entries(package.fully_qualified_name)
-                .entries()
-                && entries.iter().any(|entry| package.matches(entry))
-            {
-                let package_name = package.fully_qualified_name.to_string();
-                let package_version = package.version.clone();
-                tracing::warn!("Blocked malware from {package_name}");
-                return Ok(RequestAction::Block(BlockedRequest {
-                    response: generate_generic_blocked_response_for_req(req),
-                    info: BlockedEventInfo {
-                        artifact: BlockedArtifact {
-                            product: arcstr!("npm"),
-                            identifier: ArcStr::from(package_name),
-                            version: Some(PackageVersion::Semver(package_version)),
-                        },
+        let Some(package) = parse_package_from_path(path) else {
+            tracing::debug!("Npm url: {path} is not a tarball download: passthrough");
+            return Ok(RequestAction::Allow(req));
+        };
+
+        if self.is_package_listed_as_malware(&package) {
+            let package_name = package.fully_qualified_name;
+            let package_version = package.version;
+            tracing::warn!("Blocked malware from {package_name}");
+            Ok(RequestAction::Block(BlockedRequest {
+                response: generate_generic_blocked_response_for_req(req),
+                info: BlockedEventInfo {
+                    artifact: BlockedArtifact {
+                        product: arcstr!("npm"),
+                        identifier: ArcStr::from(package_name),
+                        version: Some(PackageVersion::Semver(package_version)),
                     },
-                }));
-            } else {
-                tracing::debug!("Npm url: {path} does not contain malware: passthrough");
-                return Ok(RequestAction::Allow(req));
-            }
+                },
+            }))
+        } else {
+            tracing::debug!("Npm url: {path} does not contain malware: passthrough");
+            Ok(RequestAction::Allow(req))
         }
-
-        tracing::debug!("Npm url: {path} is not a tarball download: passthrough");
-        Ok(RequestAction::Allow(req))
     }
 }
 
-struct NpmPackage<'a> {
-    fully_qualified_name: &'a str,
+impl RuleNpm {
+    fn is_package_listed_as_malware(&self, npm_package: &NpmPackage) -> bool {
+        self.remote_malware_list.has_entries_with_version(
+            &npm_package.fully_qualified_name,
+            PackageVersion::Semver(npm_package.version.clone()),
+        )
+    }
+}
+
+struct NpmPackage {
+    fully_qualified_name: String,
     version: PragmaticSemver,
 }
 
-impl NpmPackage<'_> {
-    fn matches(&self, malware_entry: &MalwareEntry) -> bool {
-        malware_entry.version.eq(&self.version)
+impl NpmPackage {
+    fn new(name: &str, version: PragmaticSemver) -> NpmPackage {
+        Self {
+            fully_qualified_name: name.trim().to_ascii_lowercase(),
+            version,
+        }
     }
 }
 
-fn parse_package_from_path(path: &str) -> Option<NpmPackage<'_>> {
+fn parse_package_from_path(path: &str) -> Option<NpmPackage> {
     let (package_name, file_name) = path.trim_start_matches("/").split_once("/-/")?;
 
     let filename_prefix = if package_name.starts_with("@")
@@ -171,10 +177,7 @@ fn parse_package_from_path(path: &str) -> Option<NpmPackage<'_>> {
         tracing::debug!("failed to parse npm package ({package_name}) version (raw = {version}): err = {err}");
     }).ok()?;
 
-    Some(NpmPackage {
-        fully_qualified_name: package_name,
-        version,
-    })
+    Some(NpmPackage::new(package_name, version))
 }
 
 #[cfg(test)]
@@ -187,110 +190,110 @@ mod tests {
         for (path, expected) in [
             (
                 "lodash/-/lodash-4.17.21.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "lodash",
-                    version: PragmaticSemver::new_semver(4, 17, 21),
-                }),
+                Some(NpmPackage::new(
+                    "lodash",
+                    PragmaticSemver::new_semver(4, 17, 21),
+                )),
             ),
             (
                 "/lodash/-/lodash-4.17.21.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "lodash",
-                    version: PragmaticSemver::new_semver(4, 17, 21),
-                }),
+                Some(NpmPackage::new(
+                    "lodash",
+                    PragmaticSemver::new_semver(4, 17, 21),
+                )),
             ),
             ("lodash/-/lodash-4.17.21", None),
             ("lodash", None),
             (
                 "express/-/express-4.18.2.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "express",
-                    version: PragmaticSemver::new_semver(4, 18, 2),
-                }),
+                Some(NpmPackage::new(
+                    "express",
+                    PragmaticSemver::new_semver(4, 18, 2),
+                )),
             ),
             (
                 "safe-chain-test/-/safe-chain-test-1.0.0.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "safe-chain-test",
-                    version: PragmaticSemver::new_semver(1, 0, 0),
-                }),
+                Some(NpmPackage::new(
+                    "safe-chain-test",
+                    PragmaticSemver::new_semver(1, 0, 0),
+                )),
             ),
             (
                 "web-vitals/-/web-vitals-3.5.0.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "web-vitals",
-                    version: PragmaticSemver::new_semver(3, 5, 0),
-                }),
+                Some(NpmPackage::new(
+                    "web-vitals",
+                    PragmaticSemver::new_semver(3, 5, 0),
+                )),
             ),
             (
                 "safe-chain-test/-/safe-chain-test-0.0.1-security.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "safe-chain-test",
-                    version: PragmaticSemver::new_semver(0, 0, 1).with_pre("security"),
-                }),
+                Some(NpmPackage::new(
+                    "safe-chain-test",
+                    PragmaticSemver::new_semver(0, 0, 1).with_pre("security"),
+                )),
             ),
             (
                 "lodash/-/lodash-5.0.0-beta.1.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "lodash",
-                    version: PragmaticSemver::new_semver(5, 0, 0).with_pre("beta.1"),
-                }),
+                Some(NpmPackage::new(
+                    "lodash",
+                    PragmaticSemver::new_semver(5, 0, 0).with_pre("beta.1"),
+                )),
             ),
             (
                 "react/-/react-18.3.0-canary-abc123.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "react",
-                    version: PragmaticSemver::new_semver(18, 3, 0).with_pre("canary-abc123"),
-                }),
+                Some(NpmPackage::new(
+                    "react",
+                    PragmaticSemver::new_semver(18, 3, 0).with_pre("canary-abc123"),
+                )),
             ),
             (
                 "@babel/core/-/core-7.21.4.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "@babel/core",
-                    version: PragmaticSemver::new_semver(7, 21, 4),
-                }),
+                Some(NpmPackage::new(
+                    "@babel/core",
+                    PragmaticSemver::new_semver(7, 21, 4),
+                )),
             ),
             (
                 "@types/node/-/node-20.10.5.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "@types/node",
-                    version: PragmaticSemver::new_semver(20, 10, 5),
-                }),
+                Some(NpmPackage::new(
+                    "@types/node",
+                    PragmaticSemver::new_semver(20, 10, 5),
+                )),
             ),
             (
                 "@angular/common/-/common-17.0.8.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "@angular/common",
-                    version: PragmaticSemver::new_semver(17, 0, 8),
-                }),
+                Some(NpmPackage::new(
+                    "@angular/common",
+                    PragmaticSemver::new_semver(17, 0, 8),
+                )),
             ),
             (
                 "@safe-chain/test-package/-/test-package-2.1.0.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "@safe-chain/test-package",
-                    version: PragmaticSemver::new_semver(2, 1, 0),
-                }),
+                Some(NpmPackage::new(
+                    "@safe-chain/test-package",
+                    PragmaticSemver::new_semver(2, 1, 0),
+                )),
             ),
             (
                 "@aws-sdk/client-s3/-/client-s3-3.465.0.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "@aws-sdk/client-s3",
-                    version: PragmaticSemver::new_semver(3, 465, 0),
-                }),
+                Some(NpmPackage::new(
+                    "@aws-sdk/client-s3",
+                    PragmaticSemver::new_semver(3, 465, 0),
+                )),
             ),
             (
                 "@babel/core/-/core-8.0.0-alpha.1.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "@babel/core",
-                    version: PragmaticSemver::new_semver(8, 0, 0).with_pre("alpha.1"),
-                }),
+                Some(NpmPackage::new(
+                    "@babel/core",
+                    PragmaticSemver::new_semver(8, 0, 0).with_pre("alpha.1"),
+                )),
             ),
             (
                 "@safe-chain/security-test/-/security-test-1.0.0-security.tgz",
-                Some(NpmPackage {
-                    fully_qualified_name: "@safe-chain/security-test",
-                    version: PragmaticSemver::new_semver(1, 0, 0).with_pre("security"),
-                }),
+                Some(NpmPackage::new(
+                    "@safe-chain/security-test",
+                    PragmaticSemver::new_semver(1, 0, 0).with_pre("security"),
+                )),
             ),
         ] {
             let result = parse_package_from_path(path);

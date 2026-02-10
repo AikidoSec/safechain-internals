@@ -10,7 +10,6 @@ use rama::{
     utils::str::{
         self as str_utils,
         arcstr::{ArcStr, arcstr},
-        smol_str::{SmolStr, format_smolstr},
     },
 };
 
@@ -18,7 +17,7 @@ use crate::{
     firewall::{
         domain_matcher::DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
-        malware_list::RemoteMalwareList,
+        malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
         pac::PacScriptGenerator,
     },
     http::response::generate_malware_blocked_response_for_req,
@@ -46,7 +45,7 @@ impl RuleVSCode {
             Uri::from_static("https://malware-list.aikido.dev/malware_vscode.json"),
             sync_storage,
             remote_malware_list_https_client,
-            None,
+            LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for vscode block rule")?;
@@ -110,7 +109,7 @@ impl Rule for RuleVSCode {
             return Ok(RequestAction::Allow(req));
         }
 
-        let Some(extension_id) = Self::parse_extension_id_from_path(path) else {
+        let Some(vscode_extension) = Self::parse_extension_id_from_path(path) else {
             tracing::debug!(
                 http.url.path = %path,
                 "VSCode extension install asset path could not be parsed for extension ID: passthrough"
@@ -120,14 +119,14 @@ impl Rule for RuleVSCode {
 
         tracing::debug!(
             http.url.path = %path,
-            package = %extension_id,
+            package = %vscode_extension,
             "VSCode install asset request"
         );
 
-        if self.is_extension_id_malware(extension_id.as_str()) {
+        if self.is_package_listed_as_malware(&vscode_extension) {
             tracing::info!(
                 http.url.path = %path,
-                package = %extension_id,
+                package = %vscode_extension,
                 "blocked VSCode extension install asset download"
             );
             return Ok(RequestAction::Block(BlockedRequest {
@@ -135,7 +134,7 @@ impl Rule for RuleVSCode {
                 info: BlockedEventInfo {
                     artifact: BlockedArtifact {
                         product: arcstr!("vscode"),
-                        identifier: ArcStr::from(extension_id.as_str()),
+                        identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
                         version: None,
                     },
                 },
@@ -144,7 +143,7 @@ impl Rule for RuleVSCode {
 
         tracing::trace!(
             http.url.path = %path,
-            package = %extension_id,
+            package = %vscode_extension,
             "VSCode install asset does not contain malware: passthrough"
         );
 
@@ -157,25 +156,9 @@ impl Rule for RuleVSCode {
 }
 
 impl RuleVSCode {
-    fn is_extension_id_malware(&self, extension_id: &str) -> bool {
-        // Try exact match first (in case malware list has mixed case)
-        if self
-            .remote_malware_list
-            .find_entries(extension_id)
-            .entries()
-            .is_some()
-        {
-            return true;
-        }
-
-        // If the id is already ASCII-lowercase, a second lookup would be identical.
-        if !extension_id.as_bytes().iter().any(u8::is_ascii_uppercase) {
-            return false;
-        }
-
-        let normalized_id = extension_id.to_ascii_lowercase();
+    fn is_package_listed_as_malware(&self, vscode_extension: &VsCodeExtensionId) -> bool {
         self.remote_malware_list
-            .find_entries(&normalized_id)
+            .find_entries(&vscode_extension.extension_id)
             .entries()
             .is_some()
     }
@@ -194,7 +177,7 @@ impl RuleVSCode {
     }
 
     /// Parse extension ID (publisher.name) from .vsix download URL path.
-    fn parse_extension_id_from_path(path: &str) -> Option<SmolStr> {
+    fn parse_extension_id_from_path(path: &str) -> Option<VsCodeExtensionId> {
         let mut it = path.trim_start_matches('/').split('/');
 
         let first = it.next()?;
@@ -204,14 +187,14 @@ impl RuleVSCode {
             let publisher = it.next()?;
             let extension = it.next()?;
             let _ = it.next()?; // we require at least a fourth path
-            return Some(format_smolstr!("{publisher}.{extension}"));
+            return Some(VsCodeExtensionId::new(publisher, extension));
         }
 
         // Pattern: extensions/<publisher>/<extension>/...
         if first.eq_ignore_ascii_case("extensions") {
             let publisher = it.next()?;
             let extension = it.next()?;
-            return Some(format_smolstr!("{publisher}.{extension}"));
+            return Some(VsCodeExtensionId::new(publisher, extension));
         }
 
         // Pattern: _apis/public/gallery/publishers/<publisher>/vsextensions/<extension>/...
@@ -230,7 +213,7 @@ impl RuleVSCode {
                     || fifth.eq_ignore_ascii_case("extensions")
                 {
                     let extension = it.next()?;
-                    return Some(format_smolstr!("{publisher}.{extension}"));
+                    return Some(VsCodeExtensionId::new(publisher, extension));
                 }
             }
 
@@ -245,14 +228,32 @@ impl RuleVSCode {
 
                 if next.eq_ignore_ascii_case("extension") {
                     let extension = it.next()?;
-                    return Some(format_smolstr!("{publisher}.{extension}"));
+                    return Some(VsCodeExtensionId::new(publisher, extension));
                 }
 
-                return Some(format_smolstr!("{publisher}.{next}"));
+                return Some(VsCodeExtensionId::new(publisher, next));
             }
         }
 
         None
+    }
+}
+
+struct VsCodeExtensionId {
+    extension_id: String,
+}
+
+impl VsCodeExtensionId {
+    fn new(publisher: &str, extension: &str) -> VsCodeExtensionId {
+        Self {
+            extension_id: format!("{publisher}.{extension}"),
+        }
+    }
+}
+
+impl fmt::Display for VsCodeExtensionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.extension_id)
     }
 }
 

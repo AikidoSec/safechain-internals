@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 use rama::{
     Service,
@@ -14,7 +14,7 @@ use crate::{
     firewall::{
         domain_matcher::DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
-        malware_list::{MalwareEntry, RemoteMalwareList},
+        malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
         pac::PacScriptGenerator,
         version::{PackageVersion, PragmaticSemver},
     },
@@ -46,7 +46,7 @@ impl RuleMaven {
             Uri::from_static("https://malware-list.aikido.dev/malware_maven.json"),
             sync_storage,
             remote_malware_list_https_client,
-            None,
+            LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for maven block rule")?;
@@ -111,33 +111,33 @@ impl Rule for RuleMaven {
         let path = req.uri().path().trim_start_matches('/');
         let artifact = parse_artifact_from_path_for_domain(path, domain_str);
 
-        if let Some(artifact) = artifact {
-            if let Some(entries) = self
-                .remote_malware_list
-                .find_entries(artifact.fully_qualified_name.as_str())
-                .entries()
-                && entries.iter().any(|entry| artifact.matches(entry))
-            {
-                let artifact_name = artifact.fully_qualified_name.clone();
-                let artifact_version = artifact.version.clone();
-                tracing::warn!("Blocked malware from {artifact_name} (domain: {domain_str})");
-                return Ok(RequestAction::Block(BlockedRequest {
-                    response: generate_generic_blocked_response_for_req(req),
-                    info: BlockedEventInfo {
-                        artifact: BlockedArtifact {
-                            product: arcstr!("maven"),
-                            identifier: artifact_name,
-                            version: Some(PackageVersion::Semver(artifact_version)),
-                        },
+        let Some(artifact) = artifact else {
+            tracing::debug!("Maven url: {path} is not an artifact download: passthrough");
+            return Ok(RequestAction::Allow(req));
+        };
+
+        let artifact_version = PackageVersion::Semver(artifact.version.clone());
+        let is_malware = self.remote_malware_list.has_entries_with_version(
+            artifact.fully_qualified_name.as_str(),
+            artifact_version.clone(),
+        );
+
+        if is_malware {
+            let artifact_name = artifact.fully_qualified_name;
+            tracing::warn!("Blocked malware from {artifact_name} (domain: {domain_str})");
+            return Ok(RequestAction::Block(BlockedRequest {
+                response: generate_generic_blocked_response_for_req(req),
+                info: BlockedEventInfo {
+                    artifact: BlockedArtifact {
+                        product: arcstr!("maven"),
+                        identifier: artifact_name,
+                        version: Some(artifact_version),
                     },
-                }));
-            } else {
-                tracing::debug!("Maven url: {path} does not contain malware: passthrough");
-                return Ok(RequestAction::Allow(req));
-            }
+                },
+            }));
         }
 
-        tracing::debug!("Maven url: {path} is not an artifact download: passthrough");
+        tracing::debug!("Maven url: {path} does not contain malware: passthrough");
         Ok(RequestAction::Allow(req))
     }
 }
@@ -148,59 +148,49 @@ struct MavenArtifact {
 }
 
 impl MavenArtifact {
-    fn matches(&self, malware_entry: &MalwareEntry) -> bool {
-        malware_entry.version.eq(&self.version)
+    fn new(group_path: &str, artifact_id: &str, version: PragmaticSemver) -> Self {
+        let mut name = group_path.replace('/', ".");
+        name.reserve(1 + artifact_id.len());
+        name.push(':');
+        name.push_str(artifact_id.trim());
+        name.make_ascii_lowercase();
+
+        Self {
+            fully_qualified_name: ArcStr::from(name),
+            version,
+        }
     }
 }
 
 /// `/{groupId as directory}/{artifactId}/{version}/{artifactId}-{version}[-{classifier}].{extension}`
 fn parse_artifact_from_path(path: &str) -> Option<MavenArtifact> {
-    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    let path = path.trim_matches('/');
+    let (prefix, filename) = path.rsplit_once('/')?;
+    let (prefix, version_dir) = prefix.rsplit_once('/')?;
+    let (group_path, artifact_id) = prefix.rsplit_once('/')?;
 
-    // Must have at least groupId/artifactId/version/filename
-    if segments.len() < 4 {
+    if group_path.is_empty() || artifact_id.is_empty() || version_dir.is_empty() {
         return None;
     }
 
-    let n = segments.len();
-    let filename = segments.last().copied()?;
     let (_stem, extension) = filename.rsplit_once('.')?;
-
     if !matches!(extension, "jar" | "war" | "aar") {
         return None;
     }
 
-    // Verify path structure using directories (more reliable than guessing from dashes).
-    // Expected: .../{artifactId}/{version}/{artifactId}-{version}[-classifier].ext
-    let version_dir = segments[n - 2];
-    let artifact_id = segments[n - 3];
-
     let parsed_version = PragmaticSemver::from_str(version_dir).ok()?;
 
-    let expected_prefix = format!("{artifact_id}-{version_dir}");
-    if !filename.starts_with(&expected_prefix) {
-        return None;
-    }
+    // Verify filename starts with: {artifactId}-{version}
+    let remainder = filename
+        .strip_prefix(artifact_id)?
+        .strip_prefix('-')?
+        .strip_prefix(version_dir)?;
 
-    // Next char must be '-' (classifier) or '.' (extension)
-    let remainder = &filename[expected_prefix.len()..];
     if !(remainder.starts_with('-') || remainder.starts_with('.')) {
         return None;
     }
 
-    // Everything before artifactId directory is groupId
-    let group_id_segments = &segments[..n - 3];
-    if group_id_segments.is_empty() {
-        return None;
-    }
-
-    Some(MavenArtifact {
-        fully_qualified_name: ArcStr::from(format!(
-            "{}:{artifact_id}",
-            group_id_segments.join(".")
-        )),
-        version: parsed_version,
-    })
+    Some(MavenArtifact::new(group_path, artifact_id, parsed_version))
 }
 
 fn parse_artifact_from_path_for_domain(path: &str, domain: &str) -> Option<MavenArtifact> {
@@ -236,5 +226,3 @@ fn strip_path_prefix<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
         rest => rest.strip_prefix('/'),
     }
 }
-
-use std::str::FromStr;

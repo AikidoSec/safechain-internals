@@ -1,4 +1,4 @@
-use std::{fmt, str::FromStr, sync::Arc};
+use std::{fmt, str::FromStr};
 
 use rama::{
     Service,
@@ -46,7 +46,7 @@ impl RuleChrome {
             Uri::from_static("https://malware-list.aikido.dev/malware_chrome.json"),
             sync_storage,
             remote_malware_list_https_client,
-            Some(Arc::new(malware_key::ChromeMalwareListEntryFormatter)),
+            malware_key::ChromeMalwareListEntryFormatter,
         )
         .await
         .context("create remote malware list for chrome block rule")?;
