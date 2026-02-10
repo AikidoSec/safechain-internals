@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt, str::FromStr, sync::Arc};
+use std::{borrow::Cow, fmt, str::FromStr};
 
 use rama::{
     Service,
@@ -63,7 +63,7 @@ impl RulePyPI {
             Uri::from_static("https://malware-list.aikido.dev/malware_pypi.json"),
             sync_storage,
             remote_malware_list_https_client,
-            Arc::new(LowerCaseEntryFormatter),
+            LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for pypi block rule")?;

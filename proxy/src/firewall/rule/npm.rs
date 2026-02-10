@@ -1,4 +1,4 @@
-use std::{fmt, sync::Arc};
+use std::fmt;
 
 use rama::{
     Service,
@@ -47,7 +47,7 @@ impl RuleNpm {
             Uri::from_static("https://malware-list.aikido.dev/malware_predictions.json"),
             sync_storage,
             remote_malware_list_https_client,
-            Arc::new(LowerCaseEntryFormatter),
+            LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for npm block rule")?;

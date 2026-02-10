@@ -1,4 +1,4 @@
-use std::{fmt, sync::Arc};
+use std::fmt;
 
 use rama::{
     Service,
@@ -44,7 +44,7 @@ impl RuleVSCode {
             Uri::from_static("https://malware-list.aikido.dev/malware_vscode.json"),
             sync_storage,
             remote_malware_list_https_client,
-            Arc::new(LowerCaseEntryFormatter),
+            LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for vscode block rule")?;
