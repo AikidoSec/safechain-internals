@@ -94,16 +94,22 @@ impl Rule for RuleMaven {
     }
 
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
-        if !crate::http::try_get_domain_for_req(&req)
-            .map(|domain| self.match_domain(&domain))
-            .unwrap_or_default()
-        {
+        let domain = match crate::http::try_get_domain_for_req(&req) {
+            Some(domain) => domain,
+            None => {
+                tracing::trace!("Maven rule: no domain found in request");
+                return Ok(RequestAction::Allow(req));
+            }
+        };
+
+        if !self.match_domain(&domain) {
             tracing::trace!("Maven rule did not match incoming request: passthrough");
             return Ok(RequestAction::Allow(req));
         }
 
+        let domain_str = domain.as_str();
         let path = req.uri().path().trim_start_matches('/');
-        let artifact = parse_artifact_from_path(path);
+        let artifact = parse_artifact_from_path_for_domain(path, domain_str);
 
         if let Some(artifact) = artifact {
             if let Some(entries) = self
@@ -114,7 +120,7 @@ impl Rule for RuleMaven {
             {
                 let artifact_name = artifact.fully_qualified_name.clone();
                 let artifact_version = artifact.version.clone();
-                tracing::warn!("Blocked malware from {artifact_name}");
+                tracing::warn!("Blocked malware from {artifact_name} (domain: {domain_str})");
                 return Ok(RequestAction::Block(BlockedRequest {
                     response: generate_generic_blocked_response_for_req(req),
                     info: BlockedEventInfo {
@@ -147,64 +153,88 @@ impl MavenArtifact {
     }
 }
 
-/// Parse Maven artifact information from a repository path.
-///
-/// Maven repository layout:
 /// `/{groupId as directory}/{artifactId}/{version}/{artifactId}-{version}[-{classifier}].{extension}`
-///
-/// Example paths:
-/// - `/org/apache/maven/maven/2.0/maven-2.0.jar`
-/// - `/org/mvnpm/carbon-components/11.66.1/carbon-components-11.66.1.jar`
-/// - `/com/example/lib/1.0/lib-1.0-sources.jar` (with classifier)
 fn parse_artifact_from_path(path: &str) -> Option<MavenArtifact> {
     let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
 
-    // Maven paths must have at least: group/artifact/version/file
-    // Minimum structure: a/b/c/b-c.jar (4+ segments where last is filename)
+    // Must have at least groupId/artifactId/version/filename
     if segments.len() < 4 {
         return None;
     }
 
-    let filename = segments[segments.len() - 1];
-    if !filename.contains('.') {
+    let n = segments.len();
+    let filename = segments.last().copied()?;
+    let (_stem, extension) = filename.rsplit_once('.')?;
+
+    if !matches!(extension, "jar" | "war" | "aar") {
         return None;
     }
 
-    // Only process executable archive files (JAR, WAR, AAR)
-    if !filename.ends_with(".jar") && !filename.ends_with(".war") && !filename.ends_with(".aar") {
-        return None;
-    }
+    // Verify path structure using directories (more reliable than guessing from dashes).
+    // Expected: .../{artifactId}/{version}/{artifactId}-{version}[-classifier].ext
+    let version_dir = segments[n - 2];
+    let artifact_id = segments[n - 3];
 
-    let version_str = segments[segments.len() - 2];
-    let artifact_id = segments[segments.len() - 3];
-    let group_id_segments = &segments[..segments.len() - 3];
-    if group_id_segments.is_empty() {
-        return None;
-    }
-    let group_id = group_id_segments.join(".");
+    let parsed_version = PragmaticSemver::from_str(version_dir).ok()?;
 
-    // The filename must start with "{artifactId}-{version}"
-    let expected_prefix = format!("{}-{}", artifact_id, version_str);
+    let expected_prefix = format!("{artifact_id}-{version_dir}");
     if !filename.starts_with(&expected_prefix) {
         return None;
     }
 
-    // After the expected prefix, we should have either:
-    // - A dot (e.g., "lib-1.0.0.jar")
-    // - A hyphen followed by classifier (e.g., "lib-1.0.0-sources.jar")
+    // Next char must be '-' (classifier) or '.' (extension)
     let remainder = &filename[expected_prefix.len()..];
-    if !remainder.starts_with('.') && !remainder.starts_with('-') {
+    if !(remainder.starts_with('-') || remainder.starts_with('.')) {
         return None;
     }
 
-    let fully_qualified_name = ArcStr::from(format!("{}:{}", group_id, artifact_id));
-
-    let version = PragmaticSemver::from_str(version_str).ok()?;
+    // Everything before artifactId directory is groupId
+    let group_id_segments = &segments[..n - 3];
+    if group_id_segments.is_empty() {
+        return None;
+    }
 
     Some(MavenArtifact {
-        fully_qualified_name,
-        version,
+        fully_qualified_name: ArcStr::from(format!("{}:{artifact_id}", group_id_segments.join("."))),
+        version: parsed_version,
     })
+}
+
+fn parse_artifact_from_path_for_domain(path: &str, domain: &str) -> Option<MavenArtifact> {
+    let path = path.trim_start_matches('/');
+    prefix_candidates_for_domain(domain)
+        .iter()
+        .find_map(|prefix| strip_path_prefix(path, prefix).and_then(parse_artifact_from_path))
+}
+
+fn prefix_candidates_for_domain(domain: &str) -> &'static [&'static str] {
+    match domain {
+        // Maven Central
+        "repo.maven.apache.org" | "repo1.maven.org" | "central.maven.org" => &[
+            "maven2",
+            "",
+        ],
+
+        // Apache
+            "repository.apache.org" => &[
+            "content/repositories/releases",
+            "content/repositories/snapshots",
+            "content/groups/public",
+            "",
+        ],
+
+        _ => &[""],
+    }
+}
+
+fn strip_path_prefix<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
+    if prefix.is_empty() {
+        return Some(path);
+    }
+    match path.strip_prefix(prefix)? {
+        "" => Some(""),
+        rest => rest.strip_prefix('/'),
+    }
 }
 
 use std::str::FromStr;
