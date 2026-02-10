@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 use rama::{
     Service,
@@ -14,7 +14,7 @@ use crate::{
     firewall::{
         domain_matcher::DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
-        malware_list::{MalwareEntry, RemoteMalwareList},
+        malware_list::{LowerCaseEntryFormatter, MalwareEntry, RemoteMalwareList},
         pac::PacScriptGenerator,
         version::{PackageVersion, PragmaticSemver},
     },
@@ -47,7 +47,7 @@ impl RuleNpm {
             Uri::from_static("https://malware-list.aikido.dev/malware_predictions.json"),
             sync_storage,
             remote_malware_list_https_client,
-            None,
+            Arc::new(LowerCaseEntryFormatter),
         )
         .await
         .context("create remote malware list for npm block rule")?;

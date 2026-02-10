@@ -2,7 +2,7 @@ use std::{fmt, sync::Arc};
 
 use rama::{
     Service,
-    error::{ErrorContext, OpaqueError},
+    error::{BoxError, ErrorContext as _},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
@@ -33,16 +33,16 @@ impl RuleNuget {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-    ) -> Result<Self, OpaqueError>
+    ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = BoxError>,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_nuget.json"),
             sync_storage,
             remote_malware_list_https_client,
-            Some(Arc::new(LowerCaseEntryFormatter)),
+            Arc::new(LowerCaseEntryFormatter),
         )
         .await
         .context("create remote malware list for nuget block rule")?;
@@ -78,11 +78,11 @@ impl Rule for RuleNuget {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         Ok(resp)
     }
 
-    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
+    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
         if !crate::http::try_get_domain_for_req(&req)
             .map(|domain| self.match_domain(&domain))
             .unwrap_or_default()

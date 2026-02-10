@@ -46,7 +46,7 @@ impl RuleChrome {
             Uri::from_static("https://malware-list.aikido.dev/malware_chrome.json"),
             sync_storage,
             remote_malware_list_https_client,
-            Some(Arc::new(malware_key::ChromeMalwareListEntryFormatter)),
+            Arc::new(malware_key::ChromeMalwareListEntryFormatter),
         )
         .await
         .context("create remote malware list for chrome block rule")?;

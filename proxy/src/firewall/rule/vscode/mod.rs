@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 use rama::{
     Service,
@@ -16,7 +16,7 @@ use crate::{
     firewall::{
         domain_matcher::DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
-        malware_list::RemoteMalwareList,
+        malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
         pac::PacScriptGenerator,
     },
     http::response::generate_malware_blocked_response_for_req,
@@ -44,7 +44,7 @@ impl RuleVSCode {
             Uri::from_static("https://malware-list.aikido.dev/malware_vscode.json"),
             sync_storage,
             remote_malware_list_https_client,
-            None,
+            Arc::new(LowerCaseEntryFormatter),
         )
         .await
         .context("create remote malware list for vscode block rule")?;
