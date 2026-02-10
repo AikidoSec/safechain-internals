@@ -1,0 +1,7 @@
+{
+    "name": "SafeChain Ultimate - Debian",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "remoteUser": "root"
+}

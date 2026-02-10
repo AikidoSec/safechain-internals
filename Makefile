@@ -111,7 +111,7 @@ else
 	@exit 1
 endif
 
-build-rpm:
+build-rpm: build-release build-proxy
 ifeq ($(DETECTED_OS),linux)
 	@echo "Building Linux RPM installer..."
 	@cd packaging/rpm && ./build-rpm.sh -v $(VERSION) -a $(DETECTED_ARCH) -b ../../$(BIN_DIR) -o ../../$(DIST_DIR)
