@@ -54,7 +54,9 @@ if pidof systemd &>/dev/null; then
     echo ""
     echo "The agent is now running as a systemd service."
 else
-    /opt/aikidosecurity/safechainultimate/bin/safechain-ultimate &
+    /opt/aikidosecurity/safechainultimate/bin/safechain-ultimate \
+        >>/var/log/aikidosecurity/safechainultimate/safechain-ultimate.log \
+        2>>/var/log/aikidosecurity/safechainultimate/safechain-ultimate.error.log &
     echo ""
     echo "SafeChain Ultimate has been installed successfully!"
     echo "  Binaries: /opt/aikidosecurity/safechainultimate/bin"

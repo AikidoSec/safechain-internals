@@ -77,13 +77,12 @@ jobs:
       - name: Convert RPM to APK using fpm
         run: |
           cd dist
-          fpm -s rpm -t apk SafeChainUltimate-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.rpm
+          fpm -s rpm -t apk -p SafeChainUltimate-${{ matrix.arch }}.apk SafeChainUltimate-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.rpm
 
       - name: Rename packages
         run: |
           mv dist/SafeChainUltimate-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.rpm dist/SafeChainUltimate-${{ matrix.arch }}.rpm
           mv dist/safechain-ultimate_*.deb dist/SafeChainUltimate-${{ matrix.arch }}.deb
-          mv dist/safechain-ultimate-*.apk dist/SafeChainUltimate-${{ matrix.arch }}.apk
 
       - name: Upload RPM artifact
         uses: actions/upload-artifact@v4

@@ -13,6 +13,7 @@ RUN dnf install -y epel-release && \
     rpm-build \
     dpkg \
     ruby ruby-devel \
+    nodejs npm python3-pip \
     perl wget xz \
     wayland-devel libX11-devel libxkbcommon-devel libxkbcommon-x11-devel \
     mesa-libGLES-devel mesa-libEGL-devel libffi-devel libXcursor-devel vulkan-loader-devel \

@@ -25,9 +25,41 @@ const (
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
 
-	systemCertDir = "/usr/local/share/ca-certificates"
+	debianCertDir = "/usr/local/share/ca-certificates"
+	rhelCertDir   = "/etc/pki/ca-trust/source/anchors"
 	certFileName  = "aikidosafechain.crt"
 )
+
+func getCertDir() string {
+	if _, err := exec.LookPath("update-ca-trust"); err == nil {
+		return rhelCertDir
+	}
+	return debianCertDir
+}
+
+func updateCACertificates() error {
+	if path, err := exec.LookPath("update-ca-trust"); err == nil {
+		_, err := exec.Command(path, "extract").Output()
+		return err
+	}
+	if path, err := exec.LookPath("update-ca-certificates"); err == nil {
+		_, err := exec.Command(path).Output()
+		return err
+	}
+	return fmt.Errorf("no supported CA certificate update tool found (tried update-ca-trust, update-ca-certificates)")
+}
+
+func refreshCACertificates() error {
+	if path, err := exec.LookPath("update-ca-trust"); err == nil {
+		_, err := exec.Command(path, "extract").Output()
+		return err
+	}
+	if path, err := exec.LookPath("update-ca-certificates"); err == nil {
+		_, err := exec.Command(path, "--fresh").Output()
+		return err
+	}
+	return fmt.Errorf("no supported CA certificate update tool found (tried update-ca-trust, update-ca-certificates)")
+}
 
 func initConfig() error {
 	if RunningAsRoot() {
@@ -78,7 +110,10 @@ func getGsettingsAutoConfigURL(ctx context.Context) (string, error) {
 }
 
 func hasGsettings() bool {
-	_, err := exec.LookPath("gsettings")
+	if _, err := exec.LookPath("gsettings"); err != nil {
+		return false
+	}
+	err := exec.Command("gsettings", "get", "org.gnome.system.proxy", "mode").Run()
 	return err == nil
 }
 
@@ -188,8 +223,9 @@ func unsetEnvironmentProxy() error {
 }
 
 func InstallProxyCA(_ context.Context, certPath string) error {
-	destPath := filepath.Join(systemCertDir, certFileName)
-	if err := os.MkdirAll(systemCertDir, 0755); err != nil {
+	certDir := getCertDir()
+	destPath := filepath.Join(certDir, certFileName)
+	if err := os.MkdirAll(certDir, 0755); err != nil {
 		return fmt.Errorf("failed to create certificate directory: %v", err)
 	}
 	input, err := os.ReadFile(certPath)
@@ -199,14 +235,14 @@ func InstallProxyCA(_ context.Context, certPath string) error {
 	if err := os.WriteFile(destPath, input, 0644); err != nil {
 		return fmt.Errorf("failed to write certificate: %v", err)
 	}
-	if _, err := exec.Command("update-ca-certificates").Output(); err != nil {
+	if err := updateCACertificates(); err != nil {
 		return fmt.Errorf("failed to update ca certificates: %v", err)
 	}
 	return nil
 }
 
 func IsProxyCAInstalled(_ context.Context) error {
-	destPath := filepath.Join(systemCertDir, certFileName)
+	destPath := filepath.Join(getCertDir(), certFileName)
 	if _, err := os.Stat(destPath); os.IsNotExist(err) {
 		return fmt.Errorf("proxy CA certificate not found at %s", destPath)
 	}
@@ -237,12 +273,12 @@ func ClearProxyKeyring(ctx context.Context) error {
 func UninstallProxyCA(ctx context.Context) error {
 	errs := []error{}
 
-	destPath := filepath.Join(systemCertDir, certFileName)
+	destPath := filepath.Join(getCertDir(), certFileName)
 	if err := os.Remove(destPath); err != nil && !os.IsNotExist(err) {
 		errs = append(errs, fmt.Errorf("failed to remove certificate: %v", err))
 	}
 
-	if _, err := exec.Command("update-ca-certificates", "--fresh").Output(); err != nil {
+	if err := refreshCACertificates(); err != nil {
 		errs = append(errs, fmt.Errorf("failed to update ca certificates: %v", err))
 	}
 

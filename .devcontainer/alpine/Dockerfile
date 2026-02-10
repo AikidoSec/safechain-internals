@@ -10,6 +10,7 @@ RUN apk add --no-cache \
     build-base git make curl sudo pkgconf \
     rpm \
     ruby ruby-dev \
+    nodejs npm py3-pip \
     wayland-dev libx11-dev libxkbcommon-dev mesa-dev libxcursor-dev vulkan-loader-dev libffi-dev \
     perl dpkg dpkg-dev xz wget
 
