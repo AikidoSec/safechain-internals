@@ -14,7 +14,7 @@ use crate::{
     firewall::{
         domain_matcher::DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
-        malware_list::{ListDataEntry, MalwareListEntryFormatter, RemoteMalwareList},
+        malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
         pac::PacScriptGenerator,
         rule::{BlockedRequest, RequestAction, Rule},
         version::{PackageVersion, PragmaticSemver},
@@ -42,7 +42,7 @@ impl RuleNuget {
             Uri::from_static("https://malware-list.aikido.dev/malware_nuget.json"),
             sync_storage,
             remote_malware_list_https_client,
-            Some(Arc::new(NugetMalwareLisetEntryFormatter)),
+            Some(Arc::new(LowerCaseEntryFormatter)),
         )
         .await
         .context("create remote malware list for nuget block rule")?;
@@ -110,7 +110,7 @@ impl Rule for RuleNuget {
             "Nuget package download request"
         );
 
-        if self.is_extension_malware(nuget_package) {
+        if self.is_package_listed_as_malware(nuget_package) {
             Ok(RequestAction::Block(BlockedRequest {
                 response: generate_malware_blocked_response_for_req(req),
                 info: BlockedEventInfo {
@@ -132,16 +132,11 @@ impl Rule for RuleNuget {
 }
 
 impl RuleNuget {
-    fn is_extension_malware(&self, nuget_package: NugetPackage) -> bool {
-        let normalized_id = normalize_package_name(nuget_package.fully_qualified_name);
-        let binding = self.remote_malware_list.find_entries(&normalized_id);
-        let Some(entries) = binding.entries() else {
-            return false;
-        };
-
-        entries
-            .iter()
-            .any(|entry| entry.version.eq(&nuget_package.version))
+    fn is_package_listed_as_malware(&self, nuget_package: NugetPackage) -> bool {
+        self.remote_malware_list.has_entries_with_version(
+            &nuget_package.normalize_package_name(),
+            PackageVersion::Semver(nuget_package.version),
+        )
     }
 
     fn parse_package_from_path(path: &str) -> Option<NugetPackage<'_>> {
@@ -212,16 +207,10 @@ struct NugetPackage<'a> {
     version: PragmaticSemver,
 }
 
-struct NugetMalwareLisetEntryFormatter;
-
-impl MalwareListEntryFormatter for NugetMalwareLisetEntryFormatter {
-    fn format(&self, entry: &ListDataEntry) -> String {
-        normalize_package_name(&entry.package_name)
+impl NugetPackage<'_> {
+    fn normalize_package_name(&self) -> String {
+        self.fully_qualified_name.trim().to_ascii_lowercase()
     }
-}
-
-fn normalize_package_name(package_name: &str) -> String {
-    package_name.trim().to_ascii_lowercase()
 }
 
 #[cfg(test)]
