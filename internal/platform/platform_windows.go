@@ -23,6 +23,8 @@ const (
 	SafeChainProxyBinaryName       = "SafeChainProxy.exe"
 	SafeChainProxyLogName          = "SafeChainProxy.log"
 	SafeChainProxyErrLogName       = "SafeChainProxy.err"
+	SafeChainInstallScriptName     = "install-safe-chain.ps1"
+	SafeChainUninstallScriptName   = "uninstall-safe-chain.ps1"
 	registryInternetSettingsSuffix = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
 )
 
@@ -291,24 +293,54 @@ func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args
 	return RunAsCurrentUser(ctx, binaryPath, args)
 }
 
-func InstallSafeChain(ctx context.Context, repoURL, version string) error {
-	scriptURL := fmt.Sprintf("%s/releases/download/%s/install-safe-chain.ps1", repoURL, version)
-	cmd := fmt.Sprintf(`iex (iwr "%s" -UseBasicParsing)`, scriptURL)
+func downloadAndRunSafeChainPowerShellScript(ctx context.Context, repoURL, version string, scriptName string, tempFilePattern string) error {
+	scriptURL := fmt.Sprintf("%s/releases/download/%s/%s", repoURL, version, scriptName)
+	verification := utils.DownloadVerification{
+		SafeChainReleaseTag: version,
+		SafeChainAssetName:  scriptName,
+	}
+	if err := os.MkdirAll(config.RunDir, 0755); err != nil {
+		return fmt.Errorf("failed to create run dir: %w", err)
+	}
 
-	log.Printf("Running PowerShell install script from %s...", scriptURL)
-	if _, err := RunAsCurrentUser(ctx, "powershell", []string{"-Command", cmd}); err != nil {
-		return fmt.Errorf("failed to run install script: %w", err)
+	tmpFile, err := os.CreateTemp(config.RunDir, tempFilePattern)
+	if err != nil {
+		return fmt.Errorf("failed to create temp script file: %w", err)
+	}
+	scriptPath := tmpFile.Name()
+	if err := tmpFile.Close(); err != nil {
+		log.Printf("Failed to close temp script file %s: %v", scriptPath, err)
+	}
+	defer os.Remove(scriptPath)
+
+	log.Printf("Downloading PowerShell script %s from %s...", scriptName, scriptURL)
+	if err := utils.DownloadAndVerifyBinary(ctx, scriptURL, scriptPath, verification); err != nil {
+		return fmt.Errorf("failed to download script %s: %w", scriptName, err)
+	}
+
+	log.Printf("Running PowerShell script %s...", scriptPath)
+	if _, err := RunAsCurrentUser(ctx, "powershell", []string{"-ExecutionPolicy", "RemoteSigned", "-File", scriptPath}); err != nil {
+		return fmt.Errorf("failed to run script %s: %w", scriptName, err)
 	}
 	return nil
 }
 
-func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
-	scriptURL := fmt.Sprintf("%s/releases/download/%s/uninstall-safe-chain.ps1", repoURL, version)
-	cmd := fmt.Sprintf(`iex (iwr "%s" -UseBasicParsing)`, scriptURL)
+func InstallSafeChain(ctx context.Context, repoURL, version string) error {
+	return downloadAndRunSafeChainPowerShellScript(
+		ctx,
+		repoURL,
+		version,
+		SafeChainInstallScriptName,
+		"install-safe-chain-*.ps1",
+	)
+}
 
-	log.Printf("Running PowerShell uninstall script from %s...", scriptURL)
-	if _, err := RunAsCurrentUser(ctx, "powershell", []string{"-Command", cmd}); err != nil {
-		return fmt.Errorf("failed to run uninstall script: %w", err)
-	}
-	return nil
+func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
+	return downloadAndRunSafeChainPowerShellScript(
+		ctx,
+		repoURL,
+		version,
+		SafeChainUninstallScriptName,
+		"uninstall-safe-chain-*.ps1",
+	)
 }

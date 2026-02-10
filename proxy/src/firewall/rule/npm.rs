@@ -2,7 +2,7 @@ use std::fmt;
 
 use rama::{
     Service,
-    error::{ErrorContext as _, OpaqueError},
+    error::{BoxError, ErrorContext as _},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
@@ -34,9 +34,9 @@ impl RuleNpm {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-    ) -> Result<Self, OpaqueError>
+    ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = BoxError>,
     {
         // NOTE: should you ever need to share a remote malware list between different rules,
         // you would simply create it outside of the rule, clone and pass it in.
@@ -90,12 +90,12 @@ impl Rule for RuleNpm {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         // Pass through for now - response modification can be added in future PR
         Ok(resp)
     }
 
-    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
+    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
         if !crate::http::try_get_domain_for_req(&req)
             .map(|domain| self.match_domain(&domain))
             .unwrap_or_default()

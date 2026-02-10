@@ -2,6 +2,8 @@ package utils
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -12,6 +14,11 @@ import (
 	"runtime"
 	"strings"
 )
+
+type DownloadVerification struct {
+	SafeChainReleaseTag string
+	SafeChainAssetName  string
+}
 
 type Command struct {
 	Command string
@@ -107,11 +114,76 @@ func DownloadBinary(ctx context.Context, url, destPath string) error {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
-	if err := os.Chown(destPath, os.Getuid(), os.Getgid()); err != nil {
-		return fmt.Errorf("failed to set file ownership: %w", err)
+	osName, _ := DetectOS()
+	if osName != "win" {
+		if err := os.Chown(destPath, os.Getuid(), os.Getgid()); err != nil {
+			return fmt.Errorf("failed to set file ownership: %w", err)
+		}
+	}
+	return nil
+}
+
+func DownloadAndVerifyBinary(ctx context.Context, url, destPath string, verification DownloadVerification) error {
+	releaseTag := strings.TrimSpace(verification.SafeChainReleaseTag)
+	assetName := strings.TrimSpace(verification.SafeChainAssetName)
+	if releaseTag == "" || assetName == "" {
+		return fmt.Errorf("download verification requires release tag and asset name")
+	}
+
+	expectedDigest, digestFetched := lookupSafeChainReleaseAssetDigest(ctx, releaseTag, assetName)
+	if !digestFetched {
+		log.Printf("ERROR: Unable to find digest for asset %q in release %q; skipping verification", assetName, releaseTag)
+	}
+
+	if err := DownloadBinary(ctx, url, destPath); err != nil {
+		return err
+	}
+
+	if digestFetched {
+		if err := verifySha256Checksum(destPath, expectedDigest); err != nil {
+			_ = os.Remove(destPath)
+			return err
+		}
 	}
 
 	return nil
+}
+
+func verifySha256Checksum(filePath, expectedChecksum string) error {
+	expectedChecksum = strings.TrimSpace(expectedChecksum)
+
+	// Format matches the CLI: "sha256:<hex>".
+	parts := strings.SplitN(expectedChecksum, ":", 2)
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "sha256" {
+		return fmt.Errorf("unsupported checksum format: %s", expectedChecksum)
+	}
+
+	actual, err := ComputeFileSha256Hex(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to compute sha256: %w", err)
+	}
+
+	if strings.ToLower(actual) != strings.ToLower(parts[1]) {
+		return fmt.Errorf("checksum verification failed")
+	}
+
+	log.Printf("Checksum verification for %s succeeded.", filePath)
+	return nil
+}
+
+func ComputeFileSha256Hex(filePath string) (string, error) {
+	file, err := os.OpenFile(filePath, os.O_RDONLY, 0)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, file); err != nil {
+		return "", fmt.Errorf("failed to hash file: %w", err)
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func RunCommand(ctx context.Context, command string, args ...string) (string, error) {
@@ -135,11 +207,17 @@ func RunCommands(ctx context.Context, commands []Command) ([]string, error) {
 }
 
 func RunCommandWithEnv(ctx context.Context, env []string, command string, args ...string) (string, error) {
-	log.Printf("Running command: %s %s", command, strings.Join(args, " "))
+	disableLogging, ok := ctx.Value("disable_logging").(bool)
+	if !ok {
+		disableLogging = false
+	}
+	if !disableLogging {
+		log.Printf("Running command: %s %s", command, strings.Join(args, " "))
+	}
 	cmd := exec.CommandContext(ctx, command, args...)
 	cmd.Env = append(os.Environ(), env...)
 	output, err := cmd.CombinedOutput()
-	if err != nil {
+	if err != nil && !disableLogging {
 		log.Printf("\t- Command error: %v", err)
 		log.Printf("\t- Command output: %s", string(output))
 	}

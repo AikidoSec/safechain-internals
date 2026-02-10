@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use rama::{
-    error::{ErrorContext, OpaqueError},
+    error::{BoxError, ErrorContext as _},
     http::{Response, service::web::response::IntoResponse},
     net::tls::{
         ApplicationProtocol, DataEncoding,
@@ -37,7 +37,7 @@ impl RootCA {
 pub fn new_tls_acceptor_layer(
     args: &Args,
     data_storage: &SyncCompactDataStorage,
-) -> Result<(TlsAcceptorLayer, RootCA), OpaqueError> {
+) -> Result<(TlsAcceptorLayer, RootCA), BoxError> {
     let PemKeyCrtPair { crt, key } =
         self::root::new_root_tls_crt_key_pair(&args.secrets, data_storage)?;
 

@@ -14,7 +14,7 @@ use linux_keyutils_keyring_store::Store;
 use windows_native_keyring_store::Store;
 
 use rama::{
-    error::{ErrorContext, ErrorExt as _, OpaqueError},
+    error::{BoxError, ErrorContext, ErrorExt as _},
     telemetry::tracing,
 };
 use serde::{Serialize, de::DeserializeOwned};
@@ -63,7 +63,7 @@ impl SyncSecrets {
 }
 
 impl FromStr for SyncSecrets {
-    type Err = OpaqueError;
+    type Err = BoxError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.trim();
@@ -80,19 +80,17 @@ impl FromStr for SyncSecrets {
 
         let dir = PathBuf::from(s);
         if dir.as_os_str().is_empty() {
-            return Err(OpaqueError::from_display(
-                "empty secrets value is not allowed",
-            ));
+            return Err(BoxError::from("empty secrets value is not allowed"));
         }
 
         let meta = std::fs::metadata(&dir)
-            .with_context(|| format!("fetch metadata for dir @ '{}'", dir.display()))?;
+            .context("fetch metadata for dir")
+            .with_context_debug_field("path", || dir.clone())?;
 
         if !meta.is_dir() {
-            return Err(OpaqueError::from_display(format!(
-                "secrets path is not a directory: {}",
-                dir.display()
-            )));
+            return Err(
+                BoxError::from("secrets path is not a directory").context_debug_field("path", dir)
+            );
         }
 
         Ok(SyncSecrets(Backend::Fs { dir }))
@@ -100,9 +98,10 @@ impl FromStr for SyncSecrets {
 }
 
 impl SyncSecrets {
-    pub fn store_secret<T: Serialize>(&self, key: &str, value: &T) -> Result<(), OpaqueError> {
+    pub fn store_secret<T: Serialize>(&self, key: &str, value: &T) -> Result<(), BoxError> {
         let raw = postcard::to_allocvec(value)
-            .with_context(|| format!("(postcard) encode secret for key '{key}'"))?
+            .context("(postcard) encode secret")
+            .context_str_field("key", key)?
             .to_vec();
 
         match &self.0 {
@@ -115,13 +114,15 @@ impl SyncSecrets {
                 let path = dir.join(format!("{key}.secret"));
                 tracing::debug!("secrets FS store (store): {}", path.display());
                 std::fs::write(&path, &raw)
-                    .with_context(|| format!("set secret for FS path '{}'", path.display()))
+                    .context("write secret to FS")
+                    .context_debug_field("path", path)
             }
             Backend::KeyRing { store } => {
                 let entry = new_key_ring_entry(store, key)?;
                 entry
                     .set_secret(&raw)
-                    .with_context(|| format!("set secret for key '{key}'"))
+                    .context("set secret")
+                    .context_str_field("key", key)
             }
             Backend::InMemory { secrets } => {
                 tracing::warn!(
@@ -136,7 +137,7 @@ impl SyncSecrets {
         }
     }
 
-    pub fn load_secret<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, OpaqueError> {
+    pub fn load_secret<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, BoxError> {
         match &self.0 {
             Backend::Fs { dir } => {
                 tracing::warn!(
@@ -149,11 +150,9 @@ impl SyncSecrets {
                 match std::fs::read(&path) {
                     Ok(raw) => deserialize_secret(&raw, key),
                     Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
-                    Err(err) => {
-                        Err(err.with_context(|| {
-                            format!("get secret for FS path '{}'", path.display())
-                        }))
-                    }
+                    Err(err) => Err(err
+                        .context("read secret from FS")
+                        .context_debug_field("path", path)),
                 }
             }
             Backend::KeyRing { store } => {
@@ -161,7 +160,7 @@ impl SyncSecrets {
                 match entry.get_secret() {
                     Ok(raw) => deserialize_secret(&raw, key),
                     Err(keyring_core::Error::NoEntry) => Ok(None),
-                    Err(err) => Err(err.with_context(|| format!("get secret for key '{key}'"))),
+                    Err(err) => Err(err.context("get secret").context_str_field("key", key)),
                 }
             }
             Backend::InMemory { secrets } => {
@@ -175,17 +174,15 @@ impl SyncSecrets {
     }
 }
 
-fn deserialize_secret<T: DeserializeOwned>(
-    raw: &[u8],
-    key: &str,
-) -> Result<Option<T>, OpaqueError> {
+fn deserialize_secret<T: DeserializeOwned>(raw: &[u8], key: &str) -> Result<Option<T>, BoxError> {
     let value: T = postcard::from_bytes(raw)
-        .with_context(|| format!("(postcard) decode RAW read secret for key '{key}'"))?;
+        .context("(postcard) decode RAW read secret")
+        .context_str_field("key", key)?;
     Ok(Some(value))
 }
 
 #[cfg(target_os = "macos")]
-fn try_new_keychain_store() -> Result<Arc<Store>, OpaqueError> {
+fn try_new_keychain_store() -> Result<Arc<Store>, BoxError> {
     // NOTE: for production version you might prefer the 'protected' API Instead,
     // but this does require a proper bundle ID as app-group,
     // so certainly not possible for a test like this
@@ -205,16 +202,16 @@ fn try_new_keychain_store() -> Result<Arc<Store>, OpaqueError> {
 }
 
 #[cfg(target_os = "linux")]
-fn try_new_keychain_store() -> Result<Arc<Store>, OpaqueError> {
+fn try_new_keychain_store() -> Result<Arc<Store>, BoxError> {
     linux_keyutils_keyring_store::Store::new().context("create Linux KeyUtils Secret store")
 }
 
 #[cfg(target_os = "windows")]
-fn try_new_keychain_store() -> Result<Arc<Store>, OpaqueError> {
+fn try_new_keychain_store() -> Result<Arc<Store>, BoxError> {
     windows_native_keyring_store::Store::new().context("create Windows Native Secret store")
 }
 
-fn new_key_ring_entry(store: &Store, key: &str) -> Result<keyring_core::Entry, OpaqueError> {
+fn new_key_ring_entry(store: &Store, key: &str) -> Result<keyring_core::Entry, BoxError> {
     store
         .build(key, AIKIDO_SECRET_SVC, None)
         .context("create Root CA entry")

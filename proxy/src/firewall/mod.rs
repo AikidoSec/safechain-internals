@@ -2,10 +2,10 @@ use std::{sync::Arc, time::Duration};
 
 use rama::{
     Layer as _, Service as _,
-    error::{ErrorContext as _, OpaqueError},
+    error::{BoxError, ErrorContext as _},
     graceful::ShutdownGuard,
     http::{
-        Body, HeaderValue, Request, Response,
+        HeaderValue, Request, Response,
         header::CONTENT_TYPE,
         layer::{
             decompression::DecompressionLayer,
@@ -52,13 +52,13 @@ impl Firewall {
         guard: ShutdownGuard,
         data: SyncCompactDataStorage,
         reporting_endpoint: Option<rama::http::Uri>,
-    ) -> Result<Self, OpaqueError> {
+    ) -> Result<Self, BoxError> {
         let inner_https_client = crate::client::new_web_client()?;
 
         let shared_remote_malware_client = (
-            MapResponseBodyLayer::new(Body::new),
+            MapResponseBodyLayer::new_boxed_streaming_body(),
             DecompressionLayer::new(),
-            MapErrLayer::new(OpaqueError::from_std),
+            MapErrLayer::into_box_error(),
             TimeoutLayer::new(Duration::from_secs(60)), // NOTE: if you have slow servers this might need to be more
             RetryLayer::new(
                 ManagedPolicy::default().with_backoff(
@@ -74,7 +74,7 @@ impl Firewall {
             AddRequiredRequestHeadersLayer::new().with_user_agent_header_value(
                 HeaderValue::from_static(network_service_identifier()),
             ),
-            MapRequestBodyLayer::new(Body::new),
+            MapRequestBodyLayer::new_boxed_streaming_body(),
         )
             .into_layer(inner_https_client)
             .boxed();
@@ -161,7 +161,7 @@ impl Firewall {
         self::layer::evaluate_resp::EvaluateResponseLayer(self)
     }
 
-    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
+    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
         let mut mod_req = req;
 
         for rule in self.block_rules.iter() {
@@ -177,7 +177,7 @@ impl Firewall {
         Ok(RequestAction::Allow(mod_req))
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         let mut mod_resp = resp;
 
         // Iterate rules in reverse order for symmetry with request evaluation

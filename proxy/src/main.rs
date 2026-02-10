@@ -7,7 +7,7 @@
 use std::{path::PathBuf, time::Duration};
 
 use rama::{
-    error::{BoxError, ErrorContext, OpaqueError},
+    error::{BoxError, ErrorContext},
     graceful::{self, ShutdownGuard},
     http::Uri,
     net::{
@@ -145,14 +145,12 @@ where
 {
     tokio::fs::create_dir_all(&args.data)
         .await
-        .with_context(|| format!("create data directory at path '{}'", args.data.display()))?;
+        .context("create data directory")
+        .with_context_debug_field("path", || args.data.clone())?;
+
     let data_storage = self::storage::SyncCompactDataStorage::try_new(args.data.clone())
-        .with_context(|| {
-            format!(
-                "create compact data storage using dir at path '{}'",
-                args.data.display()
-            )
-        })?;
+        .context("create compact data storage using dir")
+        .with_context_debug_field("path", || args.data.clone())?;
     tracing::info!(path = ?args.data, "data directory ready to be used");
 
     let graceful_timeout = (args.graceful > 0.).then(|| Duration::from_secs_f64(args.graceful));
@@ -160,7 +158,7 @@ where
     let (tls_acceptor, root_ca) =
         self::tls::new_tls_acceptor_layer(&args, &data_storage).context("prepare TLS acceptor")?;
 
-    let (error_tx, error_rx) = tokio::sync::mpsc::channel::<OpaqueError>(1);
+    let (error_tx, error_rx) = tokio::sync::mpsc::channel::<BoxError>(1);
     let graceful = graceful::Shutdown::new(new_shutdown_signal(error_rx, base_shutdown_signal));
 
     #[cfg(feature = "har")]
@@ -180,9 +178,9 @@ where
         }
 
         _ = graceful.guard_weak().into_cancelled() => {
-            return Err(OpaqueError::from_display(
+            return Err(BoxError::from(
                 "shutdown initiated prior to firewall created; exit process immediately",
-            ).into());
+            ));
         }
     };
 
@@ -242,7 +240,7 @@ where
 async fn run_meta_https_server(
     args: Args,
     guard: ShutdownGuard,
-    error_tx: tokio::sync::mpsc::Sender<OpaqueError>,
+    error_tx: tokio::sync::mpsc::Sender<BoxError>,
     tls_acceptor: TlsAcceptorLayer,
     root_ca: self::tls::RootCA,
     proxy_addr_rx: tokio::sync::oneshot::Receiver<SocketAddress>,
@@ -276,7 +274,7 @@ async fn run_meta_https_server(
 async fn run_proxy_server(
     args: Args,
     guard: ShutdownGuard,
-    error_tx: tokio::sync::mpsc::Sender<OpaqueError>,
+    error_tx: tokio::sync::mpsc::Sender<BoxError>,
     tls_acceptor: TlsAcceptorLayer,
     proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
     firewall: self::firewall::Firewall,
@@ -306,7 +304,7 @@ async fn run_proxy_server(
 }
 
 fn new_shutdown_signal(
-    error_rx: tokio::sync::mpsc::Receiver<OpaqueError>,
+    error_rx: tokio::sync::mpsc::Receiver<BoxError>,
     base_shutdown_signal: impl Future<Output: Send + 'static> + Send + 'static,
 ) -> impl Future + Send + 'static {
     async move {

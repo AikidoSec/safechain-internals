@@ -3,7 +3,7 @@ use std::{fmt, sync::Arc};
 use rama::{
     Layer, Service,
     combinators::Either,
-    error::{BoxError, ErrorContext as _, ErrorExt as _, OpaqueError},
+    error::{BoxError, ErrorContext as _},
     extensions::ExtensionsMut,
     http::client::{ProxyConnector, ProxyConnectorLayer, proxy::layer::HttpProxyConnectorLayer},
     net::{
@@ -74,12 +74,11 @@ where
 
         let target = match &self.kind {
             ForwarderKind::Direct(connector) => {
-                let EstablishedClientConnection { conn: target, .. } =
-                    connector.connect(tcp_req).await.map_err(|err| {
-                        OpaqueError::from_boxed(err).with_context(|| {
-                            format!("establish direct tcp connection to {host_with_port}")
-                        })
-                    })?;
+                let EstablishedClientConnection { conn: target, .. } = connector
+                    .connect(tcp_req)
+                    .await
+                    .context("establish direct tcp connection")
+                    .with_context_field("target", || host_with_port.clone())?;
                 Either::A(target)
             }
             ForwarderKind::Proxied {
@@ -87,23 +86,18 @@ where
                 proxy_addr,
             } => {
                 tcp_req.extensions_mut().insert(proxy_addr.clone());
-                let EstablishedClientConnection { conn: target, .. } =
-                    connector.connect(tcp_req).await.map_err(|err| {
-                        OpaqueError::from_boxed(err).with_context(|| {
-                        format!(
-                            "establish proxied ({proxy_addr}) tcp connection to {host_with_port}"
-                        )
-                    })
-                    })?;
+                let EstablishedClientConnection { conn: target, .. } = connector
+                    .connect(tcp_req)
+                    .await
+                    .context("establish proxied tcp connection")
+                    .with_context_field("proxy", || proxy_addr.clone())
+                    .with_context_field("target", || host_with_port.clone())?;
                 Either::B(target)
             }
         };
 
         let proxy_req = ProxyRequest { source, target };
 
-        StreamForwardService::default()
-            .serve(proxy_req)
-            .await
-            .map_err(Into::into)
+        StreamForwardService::default().serve(proxy_req).await
     }
 }

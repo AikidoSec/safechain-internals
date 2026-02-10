@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use rama::error::{ErrorContext, ErrorExt as _, OpaqueError};
+use rama::error::{BoxError, ErrorContext, ErrorExt as _};
 use serde::{Serialize, de::DeserializeOwned};
 
 #[derive(Debug, Clone)]
@@ -15,57 +15,64 @@ pub struct SyncCompactDataStorage {
 }
 
 impl SyncCompactDataStorage {
-    pub fn try_new(dir: PathBuf) -> Result<Self, OpaqueError> {
+    pub fn try_new(dir: PathBuf) -> Result<Self, BoxError> {
         if dir.as_os_str().is_empty() {
-            return Err(OpaqueError::from_display(
+            return Err(BoxError::from(
                 "empty data storage dir value is not allowed",
             ));
         }
 
-        let meta = std::fs::metadata(&dir).with_context(|| {
-            format!("fetch metadata for data storage dir @ '{}'", dir.display())
-        })?;
-
-        if !meta.is_dir() {
-            return Err(OpaqueError::from_display(format!(
-                "data storage path is not a directory: {}",
-                dir.display()
-            )));
+        match std::fs::metadata(&dir) {
+            Ok(meta) => {
+                if !meta.is_dir() {
+                    return Err(BoxError::from("data storage path is not a directory")
+                        .context_debug_field("path", dir));
+                }
+            }
+            Err(err) => {
+                return Err(err
+                    .context("fetch metadata for data storage dir")
+                    .context_debug_field("path", dir));
+            }
         }
 
         Ok(Self { dir })
     }
 
-    pub fn store<T: Serialize>(&self, key: &str, value: &T) -> Result<(), OpaqueError> {
+    pub fn store<T: Serialize>(&self, key: &str, value: &T) -> Result<(), BoxError> {
         let raw = postcard::to_allocvec(value)
-            .with_context(|| format!("(postcard) encode data for key '{key}'"))?
+            .context("(postcard) encode data")
+            .context_str_field("key", key)?
             .to_vec();
         let raw_compressed = lz4_flex::compress_prepend_size(&raw);
 
         let path = self.dir.join(format!("{key}.data"));
 
         std::fs::write(&path, &raw_compressed)
-            .with_context(|| format!("set data for FS path '{}'", path.display()))
+            .context("write data to FS")
+            .context_debug_field("path", path)
     }
 
-    pub fn load<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, OpaqueError> {
+    pub fn load<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, BoxError> {
         let path = self.dir.join(format!("{key}.data"));
 
         let raw_compressed = match std::fs::read(&path) {
             Ok(v) => v,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(err) => {
-                return Err(
-                    err.with_context(|| format!("get data for FS path '{}'", path.display()))
-                );
+                return Err(err
+                    .context("read data from FS")
+                    .context_debug_field("path", path));
             }
         };
 
         let raw = lz4_flex::decompress_size_prepended(&raw_compressed)
-            .with_context(|| format!("(lz4-flex) decompress read data for key '{key}'"))?;
+            .context("(lz4-flex) decompress read data")
+            .context_str_field("key", key)?;
 
         let value: T = postcard::from_bytes(&raw)
-            .with_context(|| format!("(postcard) decode RAW read data for key '{key}'"))?;
+            .context("(postcard) decode RAW read data")
+            .context_str_field("key", key)?;
 
         Ok(Some(value))
     }

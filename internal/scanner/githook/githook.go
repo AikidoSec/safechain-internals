@@ -16,6 +16,10 @@ func (s *GitHookScanner) Name() string {
 	return "githook"
 }
 
+func (s *GitHookScanner) Version(ctx context.Context) string {
+	return ""
+}
+
 func (s *GitHookScanner) Install(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
