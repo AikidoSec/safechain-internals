@@ -9,7 +9,7 @@ ENV GOPATH="/root/go"
 RUN dnf install -y epel-release && \
     dnf config-manager --set-enabled crb && \
     dnf install -y \
-    gcc gcc-c++ git make curl sudo pkgconf \
+    gcc gcc-c++ git make cmake curl sudo pkgconf clang-devel \
     rpm-build \
     dpkg \
     ruby ruby-devel \
