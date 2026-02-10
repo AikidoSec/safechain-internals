@@ -1,0 +1,7 @@
+{
+    "name": "SafeChain Ultimate - CentOS Stream 10",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "remoteUser": "root"
+}

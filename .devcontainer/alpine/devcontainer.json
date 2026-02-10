@@ -1,0 +1,7 @@
+{
+    "name": "SafeChain Ultimate - Alpine",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "remoteUser": "root"
+}

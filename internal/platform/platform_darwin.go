@@ -19,12 +19,12 @@ import (
 )
 
 const (
-	SafeChainUltimateLogName    = "safechain-ultimate.log"
-	SafeChainUltimateErrLogName = "safechain-ultimate.error.log"
-	SafeChainUIBinaryName       = "safechain-ultimate-ui"
-	SafeChainProxyBinaryName    = "safechain-proxy"
-	SafeChainProxyLogName       = "safechain-proxy.log"
-	SafeChainProxyErrLogName    = "safechain-proxy.err"
+	SafeChainUltimateLogName     = "safechain-ultimate.log"
+	SafeChainUltimateErrLogName  = "safechain-ultimate.error.log"
+	SafeChainUIBinaryName        = "safechain-ultimate-ui"
+	SafeChainProxyBinaryName     = "safechain-proxy"
+	SafeChainProxyLogName        = "safechain-proxy.log"
+	SafeChainProxyErrLogName     = "safechain-proxy.err"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
 )
@@ -300,11 +300,6 @@ func UninstallProxyCA(ctx context.Context) error {
 		return fmt.Errorf("failed to uninstall proxy CA: %v", errs)
 	}
 	return nil
-}
-
-type ServiceRunner interface {
-	Start(ctx context.Context) error
-	Stop(ctx context.Context) error
 }
 
 func IsWindowsService() bool {
