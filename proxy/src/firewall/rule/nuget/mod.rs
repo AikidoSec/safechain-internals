@@ -134,20 +134,26 @@ impl Rule for RuleNuget {
 impl RuleNuget {
     fn is_package_listed_as_malware(&self, nuget_package: NugetPackage) -> bool {
         self.remote_malware_list.has_entries_with_version(
-            &nuget_package.normalize_package_name(),
+            &nuget_package.fully_qualified_name,
             PackageVersion::Semver(nuget_package.version),
         )
     }
 
-    fn parse_package_from_path(path: &str) -> Option<NugetPackage<'_>> {
+    fn parse_package_from_path(path: &str) -> Option<NugetPackage> {
         if path.starts_with("/api/v2") {
             Self::parse_package_from_api_v2(path)
         } else {
+            if !path.starts_with("/v3") {
+                tracing::warn!(
+                    http.url.path = %path,
+                    "Nuget: path not starting with v3, still treating the url as v3 for parsing"
+                );
+            }
             Self::parse_package_from_api_v3(path)
         }
     }
 
-    fn parse_package_from_api_v2(path: &str) -> Option<NugetPackage<'_>> {
+    fn parse_package_from_api_v2(path: &str) -> Option<NugetPackage> {
         // Example url: /api/v2/package/safechaintest/0.0.1-security
         // 1st segment: matches "/api" and throw away
         let (_, remainder) = path.trim_start_matches("/").split_once("/")?;
@@ -169,13 +175,10 @@ impl RuleNuget {
             tracing::debug!("failed to parse nuget package ({package_name}) version (raw = {package_version_string}): err = {err}");
         }).ok()?;
 
-        Some(NugetPackage {
-            fully_qualified_name: package_name,
-            version,
-        })
+        Some(NugetPackage::new(package_name, version))
     }
 
-    fn parse_package_from_api_v3(path: &str) -> Option<NugetPackage<'_>> {
+    fn parse_package_from_api_v3(path: &str) -> Option<NugetPackage> {
         // Example url: /v3-flatcontainer/newtonsoft.json/13.0.5-beta1/newtonsoft.json.13.0.5-beta1.nupkg
         // 1st segment: matches /v3-flatcontainer and throw away
         let (_, remainder) = path.trim_start_matches("/").split_once("/")?;
@@ -195,21 +198,21 @@ impl RuleNuget {
             tracing::debug!("failed to parse nuget package ({package_name}) version (raw = {package_version_string}): err = {err}");
         }).ok()?;
 
-        Some(NugetPackage {
-            fully_qualified_name: package_name,
-            version,
-        })
+        Some(NugetPackage::new(package_name, version))
     }
 }
 
-struct NugetPackage<'a> {
-    fully_qualified_name: &'a str,
+struct NugetPackage {
+    fully_qualified_name: String,
     version: PragmaticSemver,
 }
 
-impl NugetPackage<'_> {
-    fn normalize_package_name(&self) -> String {
-        self.fully_qualified_name.trim().to_ascii_lowercase()
+impl NugetPackage {
+    fn new(name: &str, version: PragmaticSemver) -> NugetPackage {
+        Self {
+            fully_qualified_name: name.trim().to_ascii_lowercase(),
+            version: version,
+        }
     }
 }
 
