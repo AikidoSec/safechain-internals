@@ -211,7 +211,7 @@ impl NugetPackage {
     fn new(name: &str, version: PragmaticSemver) -> NugetPackage {
         Self {
             fully_qualified_name: name.trim().to_ascii_lowercase(),
-            version: version,
+            version,
         }
     }
 }
