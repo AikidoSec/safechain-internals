@@ -213,7 +213,28 @@ func IsProxyCAInstalled(_ context.Context) error {
 	return nil
 }
 
-func UninstallProxyCA(_ context.Context) error {
+func ClearProxyKeyring(ctx context.Context) error {
+	keyDescription := "keyring:safechain-proxy@tls-root-ca-key"
+
+	output, err := exec.CommandContext(ctx, "keyctl", "search", "@s", "user", keyDescription).Output()
+	if err != nil {
+		return nil
+	}
+
+	keyID := strings.TrimSpace(string(output))
+	if keyID == "" {
+		return nil
+	}
+
+	if err := exec.CommandContext(ctx, "keyctl", "invalidate", keyID).Run(); err != nil {
+		return fmt.Errorf("failed to invalidate keyring entry %s: %v", keyID, err)
+	}
+
+	log.Printf("Cleared proxy keyring entry: %s (key ID: %s)", keyDescription, keyID)
+	return nil
+}
+
+func UninstallProxyCA(ctx context.Context) error {
 	errs := []error{}
 
 	destPath := filepath.Join(systemCertDir, certFileName)
@@ -223,6 +244,10 @@ func UninstallProxyCA(_ context.Context) error {
 
 	if _, err := exec.Command("update-ca-certificates", "--fresh").Output(); err != nil {
 		errs = append(errs, fmt.Errorf("failed to update ca certificates: %v", err))
+	}
+
+	if err := ClearProxyKeyring(ctx); err != nil {
+		errs = append(errs, fmt.Errorf("failed to clear proxy keyring: %v", err))
 	}
 
 	if len(errs) > 0 {
