@@ -122,7 +122,7 @@ impl Rule for RuleVSCode {
             "VSCode install asset request"
         );
 
-        if self.is_extension_id_malware(extension_id.as_str()) {
+        if self.is_package_listed_as_malware(extension_id.as_str()) {
             tracing::info!(
                 http.url.path = %path,
                 package = %extension_id,
@@ -155,22 +155,7 @@ impl Rule for RuleVSCode {
 }
 
 impl RuleVSCode {
-    fn is_extension_id_malware(&self, extension_id: &str) -> bool {
-        // Try exact match first (in case malware list has mixed case)
-        if self
-            .remote_malware_list
-            .find_entries(extension_id)
-            .entries()
-            .is_some()
-        {
-            return true;
-        }
-
-        // If the id is already ASCII-lowercase, a second lookup would be identical.
-        if !extension_id.as_bytes().iter().any(u8::is_ascii_uppercase) {
-            return false;
-        }
-
+    fn is_package_listed_as_malware(&self, extension_id: &str) -> bool {
         let normalized_id = extension_id.to_ascii_lowercase();
         self.remote_malware_list
             .find_entries(&normalized_id)
