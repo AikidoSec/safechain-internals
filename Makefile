@@ -133,8 +133,8 @@ endif
 
 build-apk: build-rpm
 ifeq ($(DETECTED_OS),linux)
-	@echo "Converting RPM to Alpine APK..."
-	@cd packaging/rpm && ./build-apk.sh -v $(VERSION) -a $(DETECTED_ARCH) -r ../../$(DIST_DIR)/SafeChainUltimate-$(VERSION)-$(DETECTED_ARCH).rpm -o ../../$(DIST_DIR)
+	@echo "Converting RPM to Alpine APK using fpm..."
+	@cd $(DIST_DIR) && fpm -s rpm -t apk SafeChainUltimate-$(VERSION)-$(DETECTED_ARCH).rpm
 	@echo "APK built in $(DIST_DIR)/"
 else
 	@echo "Error: APK building is only supported on Linux"

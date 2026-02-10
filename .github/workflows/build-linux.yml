@@ -60,7 +60,9 @@ jobs:
           ls -lh bin/safechain-proxy-linux-${{ matrix.arch }}
 
       - name: Install packaging tools
-        run: sudo apt-get update && sudo apt-get install -y rpm alien
+        run: |
+          sudo apt-get update && sudo apt-get install -y rpm alien ruby ruby-dev
+          sudo gem install fpm --no-document
 
       - name: Build RPM
         run: |
@@ -72,16 +74,16 @@ jobs:
           cd dist
           sudo alien --to-deb --keep-version SafeChainUltimate-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.rpm
 
-      - name: Convert RPM to APK
+      - name: Convert RPM to APK using fpm
         run: |
-          cd packaging/rpm
-          ./build-apk.sh -v "${{ inputs.version || 'dev' }}" -a "${{ matrix.arch }}" -r "../../dist/SafeChainUltimate-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.rpm" -o "../../dist"
+          cd dist
+          fpm -s rpm -t apk SafeChainUltimate-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.rpm
 
       - name: Rename packages
         run: |
           mv dist/SafeChainUltimate-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.rpm dist/SafeChainUltimate-${{ matrix.arch }}.rpm
           mv dist/safechain-ultimate_*.deb dist/SafeChainUltimate-${{ matrix.arch }}.deb
-          mv dist/SafeChainUltimate-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.apk dist/SafeChainUltimate-${{ matrix.arch }}.apk
+          mv dist/safechain-ultimate-*.apk dist/SafeChainUltimate-${{ matrix.arch }}.apk
 
       - name: Upload RPM artifact
         uses: actions/upload-artifact@v4
