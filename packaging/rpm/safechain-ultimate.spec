@@ -38,32 +38,47 @@ install -m 644 %{_sourcedir}/safechain-ultimate.service %{buildroot}/usr/lib/sys
 %attr(644, root, root) /usr/lib/systemd/system/safechain-ultimate.service
 
 %pre
-if systemctl is-active --quiet safechain-ultimate 2>/dev/null; then
+if pidof systemd &>/dev/null && systemctl is-active --quiet safechain-ultimate 2>/dev/null; then
     systemctl stop safechain-ultimate || true
 fi
 
 %post
-systemctl daemon-reload
-systemctl enable safechain-ultimate
-systemctl start safechain-ultimate
-
-echo ""
-echo "SafeChain Ultimate has been installed successfully!"
-echo "  Binaries: /opt/aikidosecurity/safechainultimate/bin"
-echo "  Logs:     /var/log/aikidosecurity/safechainultimate"
-echo ""
-echo "The agent is now running as a systemd service."
+if pidof systemd &>/dev/null; then
+    systemctl daemon-reload
+    systemctl enable safechain-ultimate
+    systemctl start safechain-ultimate
+    echo ""
+    echo "SafeChain Ultimate has been installed successfully!"
+    echo "  Binaries: /opt/aikidosecurity/safechainultimate/bin"
+    echo "  Logs:     /var/log/aikidosecurity/safechainultimate"
+    echo ""
+    echo "The agent is now running as a systemd service."
+else
+    /opt/aikidosecurity/safechainultimate/bin/safechain-ultimate &
+    echo ""
+    echo "SafeChain Ultimate has been installed successfully!"
+    echo "  Binaries: /opt/aikidosecurity/safechainultimate/bin"
+    echo "  Logs:     /var/log/aikidosecurity/safechainultimate"
+    echo ""
+    echo "The agent is now running in the background (PID: $!)."
+fi
 
 %preun
 if [ $1 -eq 0 ]; then
-    if systemctl is-active --quiet safechain-ultimate 2>/dev/null; then
-        systemctl stop safechain-ultimate || true
+    if pidof systemd &>/dev/null; then
+        if systemctl is-active --quiet safechain-ultimate 2>/dev/null; then
+            systemctl stop safechain-ultimate || true
+        fi
+        systemctl disable safechain-ultimate 2>/dev/null || true
+    else
+        pkill -f /opt/aikidosecurity/safechainultimate/bin/safechain-ultimate || true
     fi
-    systemctl disable safechain-ultimate 2>/dev/null || true
 fi
 
 %postun
-systemctl daemon-reload
+if pidof systemd &>/dev/null; then
+    systemctl daemon-reload
+fi
 if [ $1 -eq 0 ]; then
     rm -rf /var/log/aikidosecurity/safechainultimate
     rmdir /var/log/aikidosecurity 2>/dev/null || true

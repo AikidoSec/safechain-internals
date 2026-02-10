@@ -20,18 +20,22 @@ fi
 
 echo "Stopping SafeChain Ultimate processes..."
 
-if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-    echo "  Stopping service..."
-    systemctl stop "$SERVICE_NAME" || true
-    echo "  ✓ Service stopped"
-else
-    echo "  Service not running"
-fi
+if pidof systemd &>/dev/null; then
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        echo "  Stopping service..."
+        systemctl stop "$SERVICE_NAME" || true
+        echo "  ✓ Service stopped"
+    else
+        echo "  Service not running"
+    fi
 
-if systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
-    echo "  Disabling service..."
-    systemctl disable "$SERVICE_NAME" || true
-    echo "  ✓ Service disabled"
+    if systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
+        echo "  Disabling service..."
+        systemctl disable "$SERVICE_NAME" || true
+        echo "  ✓ Service disabled"
+    fi
+else
+    echo "  systemd not detected, skipping service management"
 fi
 
 pkill -f "safechain-ultimate-ui" 2>/dev/null && echo "  ✓ UI process stopped" || echo "  UI process not running"
@@ -80,9 +84,11 @@ if [ -d "$AIKIDO_LOGS_DIR" ] && [ -z "$(ls -A "$AIKIDO_LOGS_DIR" 2>/dev/null)" ]
     echo "  ✓ Removed empty AikidoSecurity logs directory"
 fi
 
-echo ""
-echo "Reloading systemd..."
-systemctl daemon-reload
+if pidof systemd &>/dev/null; then
+    echo ""
+    echo "Reloading systemd..."
+    systemctl daemon-reload
+fi
 
 echo ""
 echo "========================================="

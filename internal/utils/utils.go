@@ -66,6 +66,8 @@ func FetchLatestVersion(ctx context.Context, repoURL, binaryName string) (string
 
 func DetectOS() (string, string) {
 	switch runtime.GOOS {
+	case "linux":
+		return "linux", ""
 	case "darwin":
 		return "macos", ""
 	case "windows":

@@ -33,9 +33,11 @@ func initConfig() error {
 	if RunningAsRoot() {
 		username, err := getLoggedInUser(context.Background())
 		if err != nil {
-			return fmt.Errorf("failed to get logged in user: %v", err)
+			log.Printf("Warning: %v, falling back to root home directory", err)
+			config.HomeDir = "/root"
+		} else {
+			config.HomeDir = filepath.Join("/home", username)
 		}
-		config.HomeDir = filepath.Join("/home", username)
 	} else {
 		var err error
 		config.HomeDir, err = os.UserHomeDir()

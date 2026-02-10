@@ -1,4 +1,4 @@
-.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-sign-local install-pkg uninstall-pkg build-rpm build-deb build-apk clean test run help
+.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-proxy build-pkg build-pkg-sign-local install-pkg uninstall-pkg build-rpm build-deb build-apk install-rpm install-deb install-apk uninstall-rpm uninstall-deb uninstall-apk clean test run help
 
 BINARY_NAME=safechain-ultimate
 BINARY_NAME_UI=safechain-ultimate-ui
@@ -138,6 +138,66 @@ ifeq ($(DETECTED_OS),linux)
 	@echo "APK built in $(DIST_DIR)/"
 else
 	@echo "Error: APK building is only supported on Linux"
+	@exit 1
+endif
+
+install-rpm: build-rpm
+ifeq ($(DETECTED_OS),linux)
+	@echo "Installing RPM package..."
+	@sudo rpm -U --force $(DIST_DIR)/SafeChainUltimate-$(VERSION)-$(DETECTED_ARCH).rpm
+	@echo "RPM package installed."
+else
+	@echo "Error: RPM installation is only supported on Linux"
+	@exit 1
+endif
+
+uninstall-rpm:
+ifeq ($(DETECTED_OS),linux)
+	@echo "Uninstalling RPM package..."
+	@sudo rpm -e safechain-ultimate
+	@echo "RPM package uninstalled."
+else
+	@echo "Error: RPM uninstallation is only supported on Linux"
+	@exit 1
+endif
+
+install-deb: build-deb
+ifeq ($(DETECTED_OS),linux)
+	@echo "Installing DEB package..."
+	@sudo dpkg -i $(DIST_DIR)/safechain-ultimate_$(VERSION)*.deb
+	@echo "DEB package installed."
+else
+	@echo "Error: DEB installation is only supported on Linux"
+	@exit 1
+endif
+
+uninstall-deb:
+ifeq ($(DETECTED_OS),linux)
+	@echo "Uninstalling DEB package..."
+	@sudo dpkg -r safechain-ultimate
+	@echo "DEB package uninstalled."
+else
+	@echo "Error: DEB uninstallation is only supported on Linux"
+	@exit 1
+endif
+
+install-apk: build-apk
+ifeq ($(DETECTED_OS),linux)
+	@echo "Installing APK package..."
+	@sudo apk add --allow-untrusted $(DIST_DIR)/SafeChainUltimate-$(VERSION)*.apk
+	@echo "APK package installed."
+else
+	@echo "Error: APK installation is only supported on Linux"
+	@exit 1
+endif
+
+uninstall-apk:
+ifeq ($(DETECTED_OS),linux)
+	@echo "Uninstalling APK package..."
+	@sudo apk del safechain-ultimate
+	@echo "APK package uninstalled."
+else
+	@echo "Error: APK uninstallation is only supported on Linux"
 	@exit 1
 endif
 
