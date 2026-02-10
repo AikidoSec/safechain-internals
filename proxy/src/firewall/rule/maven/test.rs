@@ -369,7 +369,10 @@ fn test_parse_jar_urls_seen_in_maven_debug_log() {
             .unwrap_or_else(|| panic!("expected maven .jar to be parsed: {url}"));
 
         let expected_fqn = format!("{expected_group_id}:{expected_artifact_id}");
-        assert_eq!(artifact.fully_qualified_name.as_str(), expected_fqn.as_str());
+        assert_eq!(
+            artifact.fully_qualified_name.as_str(),
+            expected_fqn.as_str()
+        );
         assert_eq!(
             artifact.version,
             PragmaticSemver::parse(expected_version).unwrap()

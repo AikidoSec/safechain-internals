@@ -2,7 +2,7 @@ use std::fmt;
 
 use rama::{
     Service,
-    error::{ErrorContext as _, OpaqueError},
+    error::{BoxError, ErrorContext as _},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
@@ -37,9 +37,9 @@ impl RuleMaven {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-    ) -> Result<Self, OpaqueError>
+    ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = BoxError>,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
@@ -89,11 +89,11 @@ impl Rule for RuleMaven {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, OpaqueError> {
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         Ok(resp)
     }
 
-    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, OpaqueError> {
+    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
         let domain = match crate::http::try_get_domain_for_req(&req) {
             Some(domain) => domain,
             None => {
@@ -195,7 +195,10 @@ fn parse_artifact_from_path(path: &str) -> Option<MavenArtifact> {
     }
 
     Some(MavenArtifact {
-        fully_qualified_name: ArcStr::from(format!("{}:{artifact_id}", group_id_segments.join("."))),
+        fully_qualified_name: ArcStr::from(format!(
+            "{}:{artifact_id}",
+            group_id_segments.join(".")
+        )),
         version: parsed_version,
     })
 }
@@ -210,13 +213,10 @@ fn parse_artifact_from_path_for_domain(path: &str, domain: &str) -> Option<Maven
 fn prefix_candidates_for_domain(domain: &str) -> &'static [&'static str] {
     match domain {
         // Maven Central
-        "repo.maven.apache.org" | "repo1.maven.org" | "central.maven.org" => &[
-            "maven2",
-            "",
-        ],
+        "repo.maven.apache.org" | "repo1.maven.org" | "central.maven.org" => &["maven2", ""],
 
         // Apache
-            "repository.apache.org" => &[
+        "repository.apache.org" => &[
             "content/repositories/releases",
             "content/repositories/snapshots",
             "content/groups/public",
