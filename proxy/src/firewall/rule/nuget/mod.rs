@@ -100,24 +100,21 @@ impl Rule for RuleNuget {
             return Ok(RequestAction::Allow(req));
         };
 
-        let package_name = nuget_package.fully_qualified_name.to_string();
-        let package_version = nuget_package.version.clone();
-
         tracing::debug!(
             http.url.path = %path,
-            package.name = %package_name,
-            package.version = %package_version,
+            package.name = %nuget_package.fully_qualified_name,
+            package.version = %nuget_package.version,
             "Nuget package download request"
         );
 
-        if self.is_package_listed_as_malware(nuget_package) {
+        if self.is_package_listed_as_malware(&nuget_package) {
             Ok(RequestAction::Block(BlockedRequest {
                 response: generate_malware_blocked_response_for_req(req),
                 info: BlockedEventInfo {
                     artifact: BlockedArtifact {
                         product: arcstr!("nuget"),
-                        identifier: ArcStr::from(package_name),
-                        version: Some(PackageVersion::Semver(package_version)),
+                        identifier: ArcStr::from(nuget_package.fully_qualified_name.to_string()),
+                        version: Some(PackageVersion::Semver(nuget_package.version.clone())),
                     },
                 },
             }))
@@ -132,10 +129,10 @@ impl Rule for RuleNuget {
 }
 
 impl RuleNuget {
-    fn is_package_listed_as_malware(&self, nuget_package: NugetPackage) -> bool {
+    fn is_package_listed_as_malware(&self, nuget_package: &NugetPackage) -> bool {
         self.remote_malware_list.has_entries_with_version(
             &nuget_package.fully_qualified_name,
-            PackageVersion::Semver(nuget_package.version),
+            PackageVersion::Semver(nuget_package.version.clone()),
         )
     }
 

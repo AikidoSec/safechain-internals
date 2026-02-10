@@ -89,7 +89,7 @@ fn test_parse_extension_id_from_path() {
     ];
 
     for (input, expected) in test_cases {
-        let parsed = RuleVSCode::parse_extension_id_from_path(input);
+        let parsed = RuleVSCode::parse_extension_id_from_path(input).map(|v| v.extension_id);
         assert_eq!(parsed.as_deref(), expected, "input: '{input}'");
     }
 }
@@ -117,7 +117,7 @@ fn test_parse_extension_id_from_path_preserves_case() {
     ];
 
     for (input, expected) in test_cases {
-        let parsed = RuleVSCode::parse_extension_id_from_path(input);
+        let parsed = RuleVSCode::parse_extension_id_from_path(input).map(|v| v.extension_id);
         assert_eq!(
             parsed.as_deref(),
             expected,
