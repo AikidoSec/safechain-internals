@@ -94,14 +94,11 @@ func (s *Step) Install(ctx context.Context) error {
 		return fmt.Errorf("failed to write settings.xml: %v", err)
 	}
 
-	// Create .mavenrc to set MAVEN_OPTS with system truststore configuration
-	mavenrcPath := filepath.Join(homeDir, ".mavenrc")
-	if err := createMavenrc(mavenrcPath); err != nil {
-		return fmt.Errorf("failed to create .mavenrc: %v", err)
+	if err := ensureMavenOptsUsesSystemTrustStore(ctx, platform.GetConfig().HomeDir); err != nil {
+		log.Printf("Warning: failed to persist MAVEN_OPTS truststore override: %v", err)
 	}
 
 	log.Println("Proxy settings added to ~/.m2/settings.xml")
-	log.Println("MAVEN_OPTS configured in ~/.mavenrc to use system truststore")
 
 	return nil
 }
@@ -114,11 +111,6 @@ func (s *Step) Uninstall(ctx context.Context) error {
 	data, err := os.ReadFile(settingsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Even if settings.xml doesn't exist, try to remove .mavenrc
-			mavenrcPath := filepath.Join(homeDir, ".mavenrc")
-			if errRemove := removeMavenrc(mavenrcPath); errRemove != nil {
-				log.Printf("Warning: failed to remove .mavenrc: %v", errRemove)
-			}
 			return nil
 		}
 		return fmt.Errorf("failed to read settings.xml: %v", err)
@@ -128,12 +120,6 @@ func (s *Step) Uninstall(ctx context.Context) error {
 	newContent, removed, err := removeAikidoMavenOverrides(string(data))
 	if err != nil {
 		return fmt.Errorf("failed to remove proxy configuration: %v", err)
-	}
-
-	// Remove .mavenrc
-	mavenrcPath := filepath.Join(homeDir, ".mavenrc")
-	if err := removeMavenrc(mavenrcPath); err != nil {
-		log.Printf("Warning: failed to remove .mavenrc: %v", err)
 	}
 
 	if !removed {
@@ -146,7 +132,11 @@ func (s *Step) Uninstall(ctx context.Context) error {
 		return fmt.Errorf("failed to write settings.xml: %v", err)
 	}
 
-	log.Println("Removed Maven configuration from settings.xml and .mavenrc")
+	if err := removeMavenOptsSystemTrustStoreOverride(ctx, platform.GetConfig().HomeDir); err != nil {
+		log.Printf("Warning: failed to remove MAVEN_OPTS truststore override: %v", err)
+	}
+
+	log.Println("Removed Maven configuration from settings.xml")
 
 	return nil
 }
