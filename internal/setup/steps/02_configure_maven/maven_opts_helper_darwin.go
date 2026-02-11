@@ -3,8 +3,6 @@
 package configure_maven
 
 import (
-	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,17 +11,12 @@ import (
 const (
 	mavenRcMarkerStart = "# aikido-safe-chain-start"
 	mavenRcMarkerEnd   = "# aikido-safe-chain-end"
+	mavenRcBlock       = mavenRcMarkerStart + "\n" +
+		`export MAVEN_OPTS="$MAVEN_OPTS -Daikido.safechain.mavenopts=true -Djavax.net.ssl.trustStoreType=KeychainStore -Djavax.net.ssl.trustStore=NONE"` + "\n" +
+		mavenRcMarkerEnd + "\n"
 )
 
-func desiredMavenOptsTokens() []string {
-	return []string{
-		aikidoMavenOptsMarkerToken,
-		"-Djavax.net.ssl.trustStoreType=KeychainStore",
-		"-Djavax.net.ssl.trustStore=NONE",
-	}
-}
-
-func installMavenOptsOverride(_ context.Context, homeDir string) error {
+func installMavenOptsOverride(homeDir string) error {
 	mavenrcPath := filepath.Join(homeDir, ".mavenrc")
 
 	content := ""
@@ -34,37 +27,20 @@ func installMavenOptsOverride(_ context.Context, homeDir string) error {
 		return nil
 	}
 
-	block := buildMavenRcBlock(desiredMavenOptsTokens())
 	if content != "" && !strings.HasSuffix(content, "\n") {
 		content += "\n"
 	}
-	content += block
-
-	return os.WriteFile(mavenrcPath, []byte(content), 0644)
+	return os.WriteFile(mavenrcPath, []byte(content+mavenRcBlock), 0644)
 }
 
-func uninstallMavenOptsOverride(_ context.Context, homeDir string) error {
+func uninstallMavenOptsOverride(homeDir string) error {
 	mavenrcPath := filepath.Join(homeDir, ".mavenrc")
-	data, err := os.ReadFile(mavenrcPath)
-	if err != nil {
-		return nil
+	if data, err := os.ReadFile(mavenrcPath); err == nil {
+		newContent, removed, err := removeMarkedBlock(string(data), mavenRcMarkerStart, mavenRcMarkerEnd)
+		if !removed || err != nil {
+			return err
+		}
+		return os.WriteFile(mavenrcPath, []byte(newContent), 0644)
 	}
-
-	newContent, removed, err := removeAikidoBlock(string(data), mavenRcMarkerStart, mavenRcMarkerEnd)
-	if err != nil {
-		return err
-	}
-	if !removed {
-		return nil
-	}
-
-	return os.WriteFile(mavenrcPath, []byte(newContent), 0644)
-}
-
-func buildMavenRcBlock(tokens []string) string {
-	joined := strings.Join(tokens, " ")
-	return fmt.Sprintf(`%s
-export MAVEN_OPTS="$MAVEN_OPTS %s"
-%s
-`, mavenRcMarkerStart, joined, mavenRcMarkerEnd)
+	return nil
 }

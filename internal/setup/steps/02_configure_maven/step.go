@@ -5,22 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"os"
-	"path/filepath"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
 )
 
 type Step struct{}
-
-const backupSuffix = ".aikido-backup"
-
-var defaultSettingsTemplate = `<?xml version="1.0" encoding="UTF-8"?>
-<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
-          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
-</settings>`
 
 func New() *Step {
 	return &Step{}
@@ -43,18 +33,15 @@ func (s *Step) UninstallDescription() string {
 }
 
 func (s *Step) Install(ctx context.Context) error {
-	// Get proxy configuration
 	if err := proxy.LoadProxyConfig(); err != nil {
 		return fmt.Errorf("failed to load proxy config: %v", err)
 	}
 
-	// Parse the proxy URL to extract host and port
 	proxyURL, err := url.Parse(proxy.ProxyHttpUrl)
 	if err != nil {
 		return fmt.Errorf("failed to parse proxy URL: %v", err)
 	}
 
-	// Validate proxy URL components
 	host := proxyURL.Hostname()
 	port := proxyURL.Port()
 	if host == "" || port == "" {
@@ -62,81 +49,28 @@ func (s *Step) Install(ctx context.Context) error {
 	}
 
 	homeDir := platform.GetConfig().HomeDir
-	m2Dir := filepath.Join(homeDir, ".m2")
-	settingsPath := filepath.Join(m2Dir, "settings.xml")
-
-	// Create .m2 directory if it doesn't exist
-	if err := os.MkdirAll(m2Dir, 0755); err != nil {
-		return fmt.Errorf("failed to create .m2 directory: %v", err)
+	if err := installMavenProxySetting(homeDir, host, port); err != nil {
+		log.Printf("Warning: failed to configure Maven proxy settings: %v", err)
 	}
 
-	// Read existing file or use template
-	content := defaultSettingsTemplate
-	if data, err := os.ReadFile(settingsPath); err == nil {
-		content = string(data)
-	}
-
-	newContent := content
-	var errRemoval error
-	newContent, _, errRemoval = removeAikidoMavenOverrides(newContent)
-	if errRemoval != nil {
-		log.Printf("Warning: failed to remove existing Maven configuration: %v", errRemoval)
-		newContent = content
-	}
-
-	newContent, err = addAikidoProxies(newContent, host, port)
-	if err != nil {
-		return fmt.Errorf("failed to add proxy configuration: %v", err)
-	}
-
-	// Write to file
-	if err := os.WriteFile(settingsPath, []byte(newContent), 0644); err != nil {
-		return fmt.Errorf("failed to write settings.xml: %v", err)
-	}
-
-	if err := ensureMavenOptsUsesSystemTrustStore(ctx, platform.GetConfig().HomeDir); err != nil {
+	if err := installMavenOptsOverride(homeDir); err != nil {
 		log.Printf("Warning: failed to persist MAVEN_OPTS truststore override: %v", err)
 	}
 
 	log.Println("Proxy settings added to ~/.m2/settings.xml")
-
 	return nil
 }
 
 func (s *Step) Uninstall(ctx context.Context) error {
 	homeDir := platform.GetConfig().HomeDir
-	settingsPath := filepath.Join(homeDir, ".m2", "settings.xml")
 
-	// Read file
-	data, err := os.ReadFile(settingsPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("failed to read settings.xml: %v", err)
+	if err := uninstallMavenProxySetting(homeDir); err != nil {
+		log.Printf("Warning: failed to remove Maven proxy settings: %v", err)
 	}
 
-	// Remove proxy configuration
-	newContent, removed, err := removeAikidoMavenOverrides(string(data))
-	if err != nil {
-		return fmt.Errorf("failed to remove proxy configuration: %v", err)
-	}
-
-	if !removed {
-		log.Println("Maven proxy settings not found, nothing to remove")
-		return nil
-	}
-
-	// Write back
-	if err := os.WriteFile(settingsPath, []byte(newContent), 0644); err != nil {
-		return fmt.Errorf("failed to write settings.xml: %v", err)
-	}
-
-	if err := removeMavenOptsSystemTrustStoreOverride(ctx, platform.GetConfig().HomeDir); err != nil {
+	if err := uninstallMavenOptsOverride(homeDir); err != nil {
 		log.Printf("Warning: failed to remove MAVEN_OPTS truststore override: %v", err)
 	}
-
-	log.Println("Removed Maven configuration from settings.xml")
 
 	return nil
 }
