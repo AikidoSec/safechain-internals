@@ -27,17 +27,12 @@ const (
 
 func installMavenProxySetting(homeDir, host, port string) error {
 	settingsPath := filepath.Join(homeDir, ".m2", "settings.xml")
-	settingsDir := filepath.Dir(settingsPath)
 
-	if err := os.MkdirAll(settingsDir, 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0755); err != nil {
 		return fmt.Errorf("failed to create settings directory: %v", err)
 	}
-	// If we ran elevated, ensure user can edit later without sudo.
-	ensurePathOwnedByHomeUser(settingsDir, homeDir)
-	ensurePathOwnedByHomeUser(settingsPath, homeDir)
 
 	content := defaultSettingsTemplate
-	// #nosec G304 -- settingsPath is derived from a trusted homeDir + fixed filename.
 	if data, err := os.ReadFile(settingsPath); err == nil {
 		content = string(data)
 	}
@@ -55,19 +50,12 @@ func installMavenProxySetting(homeDir, host, port string) error {
 		return fmt.Errorf("failed to apply proxy settings: marker not found in result")
 	}
 
-	// #nosec G306 -- settings.xml is user config; 0644 is expected.
-	if err := os.WriteFile(settingsPath, []byte(result), 0644); err != nil {
-		return err
-	}
-	ensurePathOwnedByHomeUser(settingsPath, homeDir)
-	return nil
+	return os.WriteFile(settingsPath, []byte(result), 0644)
 }
 
 func uninstallMavenProxySetting(homeDir string) error {
 	settingsPath := filepath.Join(homeDir, ".m2", "settings.xml")
-	ensurePathOwnedByHomeUser(settingsPath, homeDir)
 
-	// #nosec G304 -- settingsPath is derived from a trusted homeDir + fixed filename.
 	data, err := os.ReadFile(settingsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -81,12 +69,7 @@ func uninstallMavenProxySetting(homeDir string) error {
 		return err
 	}
 
-	// #nosec G306 -- settings.xml is user config; 0644 is expected.
-	if err := os.WriteFile(settingsPath, []byte(newContent), 0644); err != nil {
-		return err
-	}
-	ensurePathOwnedByHomeUser(settingsPath, homeDir)
-	return nil
+	return os.WriteFile(settingsPath, []byte(newContent), 0644)
 }
 
 func applyProxyToSettings(content, host, port string) (string, error) {
