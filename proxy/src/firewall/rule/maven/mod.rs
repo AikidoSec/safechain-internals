@@ -103,35 +103,36 @@ impl Rule for RuleMaven {
         };
 
         if !self.match_domain(&domain) {
-            tracing::trace!("Maven rule did not match incoming request: passthrough");
             return Ok(RequestAction::Allow(req));
         }
 
         let domain_str = domain.as_str();
         let path = req.uri().path().trim_start_matches('/');
-        let artifact = parse_artifact_from_path_for_domain(path, domain_str);
+        let artifact = Self::parse_artifact_from_path_for_domain(path, domain_str);
 
         let Some(artifact) = artifact else {
-            tracing::debug!("Maven url: {path} is not an artifact download: passthrough");
+            tracing::debug!(
+                http.url.path = %path,
+                "Maven url is not an artifact download: passthrough"
+            );
             return Ok(RequestAction::Allow(req));
         };
 
-        let artifact_version = PackageVersion::Semver(artifact.version.clone());
-        let is_malware = self.remote_malware_list.has_entries_with_version(
-            artifact.fully_qualified_name.as_str(),
-            artifact_version.clone(),
+        tracing::debug!(
+            http.url.path = %path,
+            package.name = %artifact.fully_qualified_name,
+            package.version = %artifact.version,
+            "Maven package download request"
         );
 
-        if is_malware {
-            let artifact_name = artifact.fully_qualified_name;
-            tracing::warn!("Blocked malware from {artifact_name} (domain: {domain_str})");
+        if self.is_package_listed_as_malware(&artifact) {
             return Ok(RequestAction::Block(BlockedRequest {
                 response: generate_generic_blocked_response_for_req(req),
                 info: BlockedEventInfo {
                     artifact: BlockedArtifact {
                         product: arcstr!("maven"),
-                        identifier: artifact_name,
-                        version: Some(artifact_version),
+                        identifier: ArcStr::from(artifact.fully_qualified_name.as_str()),
+                        version: Some(PackageVersion::Semver(artifact.version.clone())),
                     },
                 },
             }));
@@ -163,67 +164,78 @@ impl MavenArtifact {
     }
 }
 
-/// `/{groupId as directory}/{artifactId}/{version}/{artifactId}-{version}[-{classifier}].{extension}`
-fn parse_artifact_from_path(path: &str) -> Option<MavenArtifact> {
-    let path = path.trim_matches('/');
-    let (prefix, filename) = path.rsplit_once('/')?;
-    let (prefix, version_dir) = prefix.rsplit_once('/')?;
-    let (group_path, artifact_id) = prefix.rsplit_once('/')?;
-
-    if group_path.is_empty() || artifact_id.is_empty() || version_dir.is_empty() {
-        return None;
+impl RuleMaven {
+    fn is_package_listed_as_malware(&self, artifact: &MavenArtifact) -> bool {
+        self.remote_malware_list.has_entries_with_version(
+            artifact.fully_qualified_name.as_str(),
+            PackageVersion::Semver(artifact.version.clone()),
+        )
     }
 
-    let (_stem, extension) = filename.rsplit_once('.')?;
-    if !matches!(extension, "jar" | "war" | "aar") {
-        return None;
+    /// `/{groupId as directory}/{artifactId}/{version}/{artifactId}-{version}[-{classifier}].{extension}`
+    fn parse_artifact_from_path(path: &str) -> Option<MavenArtifact> {
+        let path = path.trim_matches('/');
+        let (prefix, filename) = path.rsplit_once('/')?;
+        let (prefix, version_dir) = prefix.rsplit_once('/')?;
+        let (group_path, artifact_id) = prefix.rsplit_once('/')?;
+
+        if group_path.is_empty() || artifact_id.is_empty() || version_dir.is_empty() {
+            return None;
+        }
+
+        let (_stem, extension) = filename.rsplit_once('.')?;
+        if !matches!(extension, "jar" | "war" | "aar") {
+            return None;
+        }
+
+        let parsed_version = PragmaticSemver::from_str(version_dir).ok()?;
+
+        // Verify filename starts with: {artifactId}-{version}
+        let remainder = filename
+            .strip_prefix(artifact_id)?
+            .strip_prefix('-')?
+            .strip_prefix(version_dir)?;
+
+        if !(remainder.starts_with('-') || remainder.starts_with('.')) {
+            return None;
+        }
+
+        Some(MavenArtifact::new(group_path, artifact_id, parsed_version))
     }
 
-    let parsed_version = PragmaticSemver::from_str(version_dir).ok()?;
-
-    // Verify filename starts with: {artifactId}-{version}
-    let remainder = filename
-        .strip_prefix(artifact_id)?
-        .strip_prefix('-')?
-        .strip_prefix(version_dir)?;
-
-    if !(remainder.starts_with('-') || remainder.starts_with('.')) {
-        return None;
+    fn parse_artifact_from_path_for_domain(path: &str, domain: &str) -> Option<MavenArtifact> {
+        let path = path.trim_start_matches('/');
+        Self::prefix_candidates_for_domain(domain)
+            .iter()
+            .find_map(|prefix| {
+                Self::strip_path_prefix(path, prefix).and_then(Self::parse_artifact_from_path)
+            })
     }
 
-    Some(MavenArtifact::new(group_path, artifact_id, parsed_version))
-}
+    fn prefix_candidates_for_domain(domain: &str) -> &'static [&'static str] {
+        match domain {
+            // Maven Central
+            "repo.maven.apache.org" | "repo1.maven.org" | "central.maven.org" => &["maven2", ""],
 
-fn parse_artifact_from_path_for_domain(path: &str, domain: &str) -> Option<MavenArtifact> {
-    let path = path.trim_start_matches('/');
-    prefix_candidates_for_domain(domain)
-        .iter()
-        .find_map(|prefix| strip_path_prefix(path, prefix).and_then(parse_artifact_from_path))
-}
+            // Apache
+            "repository.apache.org" => &[
+                "content/repositories/releases",
+                "content/repositories/snapshots",
+                "content/groups/public",
+                "",
+            ],
 
-fn prefix_candidates_for_domain(domain: &str) -> &'static [&'static str] {
-    match domain {
-        // Maven Central
-        "repo.maven.apache.org" | "repo1.maven.org" | "central.maven.org" => &["maven2", ""],
-
-        // Apache
-        "repository.apache.org" => &[
-            "content/repositories/releases",
-            "content/repositories/snapshots",
-            "content/groups/public",
-            "",
-        ],
-
-        _ => &[""],
+            _ => &[""],
+        }
     }
-}
 
-fn strip_path_prefix<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
-    if prefix.is_empty() {
-        return Some(path);
-    }
-    match path.strip_prefix(prefix)? {
-        "" => Some(""),
-        rest => rest.strip_prefix('/'),
+    fn strip_path_prefix<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
+        if prefix.is_empty() {
+            return Some(path);
+        }
+        match path.strip_prefix(prefix)? {
+            "" => Some(""),
+            rest => rest.strip_prefix('/'),
+        }
     }
 }

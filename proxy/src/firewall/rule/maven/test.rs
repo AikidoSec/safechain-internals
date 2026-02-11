@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn test_parse_artifact_happy_paths_table() {
     fn assert_parsed(domain: &str, path: &str, expected_fqn: &str, expected_version: &str) {
-        let artifact = parse_artifact_from_path_for_domain(path, domain)
+        let artifact = RuleMaven::parse_artifact_from_path_for_domain(path, domain)
             .unwrap_or_else(|| panic!("expected artifact to parse: domain={domain} path={path}"));
 
         assert_eq!(artifact.fully_qualified_name.as_str(), expected_fqn);
@@ -74,11 +74,14 @@ fn test_parse_artifact_happy_paths_table() {
 #[test]
 fn test_strip_path_prefix_requires_segment_boundary() {
     assert_eq!(
-        strip_path_prefix("maven2/org/apache", "maven2"),
+        RuleMaven::strip_path_prefix("maven2/org/apache", "maven2"),
         Some("org/apache")
     );
-    assert_eq!(strip_path_prefix("maven2", "maven2"), Some(""));
-    assert_eq!(strip_path_prefix("maven2org/apache", "maven2"), None);
+    assert_eq!(RuleMaven::strip_path_prefix("maven2", "maven2"), Some(""));
+    assert_eq!(
+        RuleMaven::strip_path_prefix("maven2org/apache", "maven2"),
+        None
+    );
 }
 
 #[test]
@@ -98,7 +101,7 @@ fn test_reject_non_artifacts_table() {
 
     for path in rejects {
         assert!(
-            parse_artifact_from_path(path).is_none(),
+            RuleMaven::parse_artifact_from_path(path).is_none(),
             "expected rejection for path: {path}"
         );
     }
@@ -123,7 +126,7 @@ fn test_parse_real_world_full_urls_smoke() {
             .split_once('/')
             .unwrap_or_else(|| panic!("expected URL with path: {url}"));
 
-        let artifact = parse_artifact_from_path_for_domain(path, domain)
+        let artifact = RuleMaven::parse_artifact_from_path_for_domain(path, domain)
             .unwrap_or_else(|| panic!("expected maven .jar to be parsed: {url}"));
 
         // Ensure we didn't accidentally treat the repository prefix as part of the groupId.
