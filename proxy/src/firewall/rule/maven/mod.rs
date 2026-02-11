@@ -147,6 +147,7 @@ struct MavenArtifact {
     version: PragmaticSemver,
 }
 
+// Example: group_path = org/apache/commons/, artifact_id = commons-lang3, full name = org.apache.commons:commons-lang3
 impl MavenArtifact {
     fn new(group_path: &str, artifact_id: &str, version: PragmaticSemver) -> Self {
         let mut name = group_path.replace('/', ".");

@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+const (
+	aikidoMavenOptsBegin = "# AIKIDO SAFECHAIN MAVEN_OPTS BEGIN"
+	aikidoMavenOptsEnd   = "# AIKIDO SAFECHAIN MAVEN_OPTS END"
+)
+
 func createMavenrc(path string) error {
 	var mavenOpts string
 	switch runtime.GOOS {
@@ -27,15 +32,23 @@ func createMavenrc(path string) error {
 	// Remove existing Aikido MAVEN_OPTS if present
 	content = removeExistingMavenOpts(content)
 
-	// Add new MAVEN_OPTS
-	mavenOptsLine := fmt.Sprintf("export MAVEN_OPTS=\"%s\"\n", mavenOpts)
-	content = strings.TrimRight(content, "\n") + "\n" + mavenOptsLine
+	// Add new MAVEN_OPTS (wrapped in Aikido markers so we can safely remove it later)
+	block := fmt.Sprintf(
+		"%s\nexport MAVEN_OPTS=\"%s\"\n%s\n",
+		aikidoMavenOptsBegin,
+		mavenOpts,
+		aikidoMavenOptsEnd,
+	)
+	content = strings.TrimRight(content, "\n")
+	if content != "" {
+		content += "\n"
+	}
+	content += block
 
 	// Write to file
 	return os.WriteFile(path, []byte(content), 0644)
 }
 
-// removeMavenrc removes the Aikido MAVEN_OPTS from .mavenrc
 func removeMavenrc(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -47,26 +60,32 @@ func removeMavenrc(path string) error {
 
 	content := removeExistingMavenOpts(string(data))
 
-	// If file is now empty or only whitespace, remove it
-	if strings.TrimSpace(content) == "" {
-		return os.Remove(path)
-	}
-
 	return os.WriteFile(path, []byte(content), 0644)
 }
 
-// removeExistingMavenOpts removes Aikido's MAVEN_OPTS lines from .mavenrc content
+// removeExistingMavenOpts removes Aikido's MAVEN_OPTS content from .mavenrc content.
+//
+// Removal is done via the marker-wrapped block.
 func removeExistingMavenOpts(content string) string {
 	lines := strings.Split(content, "\n")
 	var result []string
+	inAikidoBlock := false
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		// Skip lines that are Aikido's MAVEN_OPTS (identified by truststore flags)
-		if strings.Contains(trimmed, "javax.net.ssl.trustStoreType") ||
-			strings.Contains(trimmed, "javax.net.ssl.trustStore=/etc/ssl/certs") {
+
+		// Remove marker-wrapped block
+		if trimmed == aikidoMavenOptsBegin {
+			inAikidoBlock = true
 			continue
 		}
+		if inAikidoBlock {
+			if trimmed == aikidoMavenOptsEnd {
+				inAikidoBlock = false
+			}
+			continue
+		}
+
 		result = append(result, line)
 	}
 
