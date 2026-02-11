@@ -20,6 +20,7 @@ func installMavenOptsOverride(homeDir string) error {
 	mavenrcPath := filepath.Join(homeDir, ".mavenrc")
 
 	content := ""
+	// #nosec G304 -- mavenrcPath is derived from a trusted homeDir + fixed filename.
 	if data, err := os.ReadFile(mavenrcPath); err == nil {
 		content = string(data)
 	}
@@ -35,6 +36,7 @@ func installMavenOptsOverride(homeDir string) error {
 
 func uninstallMavenOptsOverride(homeDir string) error {
 	mavenrcPath := filepath.Join(homeDir, ".mavenrc")
+	// #nosec G304 -- mavenrcPath is derived from a trusted homeDir + fixed filename.
 	if data, err := os.ReadFile(mavenrcPath); err == nil {
 		newContent, removed, err := removeMarkedBlock(string(data), mavenRcMarkerStart, mavenRcMarkerEnd)
 		if !removed || err != nil {
