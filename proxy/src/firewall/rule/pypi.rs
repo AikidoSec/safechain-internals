@@ -19,7 +19,7 @@ use crate::{
     firewall::{
         domain_matcher::DomainMatcher,
         events::{BlockedArtifact, BlockedEventInfo},
-        malware_list::{MalwareEntry, RemoteMalwareList},
+        malware_list::{LowerCaseEntryFormatter, MalwareEntry, RemoteMalwareList},
         pac::PacScriptGenerator,
         version::PackageVersion,
     },
@@ -63,7 +63,7 @@ impl RulePyPI {
             Uri::from_static("https://malware-list.aikido.dev/malware_pypi.json"),
             sync_storage,
             remote_malware_list_https_client,
-            None,
+            LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for pypi block rule")?;

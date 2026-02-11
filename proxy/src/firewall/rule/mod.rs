@@ -17,6 +17,7 @@ pub use super::pac::PacScriptGenerator;
 
 pub mod chrome;
 pub mod npm;
+pub mod nuget;
 pub mod pypi;
 pub mod vscode;
 
