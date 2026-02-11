@@ -7,9 +7,12 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
+    utils::str::{
+        self as str_utils,
+        arcstr::{ArcStr, arcstr},
+        smol_str::{SmolStr, format_smolstr},
+    },
 };
-
-use rama::utils::str::arcstr::{ArcStr, arcstr};
 
 use crate::{
     firewall::{
@@ -161,25 +164,17 @@ impl RuleVSCode {
             .is_some()
     }
 
-    fn ends_with_ignore_ascii_case(path: &str, suffix: &str) -> bool {
-        if path.len() < suffix.len() {
-            return false;
-        }
-
-        let start = path.len() - suffix.len();
-        path.get(start..)
-            .is_some_and(|tail| tail.eq_ignore_ascii_case(suffix))
-    }
-
     fn is_extension_install_asset_path(path: &str) -> bool {
         let path = path.trim_end_matches('/');
 
-        Self::ends_with_ignore_ascii_case(path, ".vsix")
-            || Self::ends_with_ignore_ascii_case(
-                path,
+        str_utils::any_ends_with_ignore_ascii_case(
+            path,
+            [
+                ".vsix",
                 "/Microsoft.VisualStudio.Services.VSIXPackage",
-            )
-            || Self::ends_with_ignore_ascii_case(path, "/vspackage")
+                "/vspackage",
+            ],
+        )
     }
 
     /// Parse extension ID (publisher.name) from .vsix download URL path.
