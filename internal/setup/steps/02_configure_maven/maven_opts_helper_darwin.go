@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+// We set JVM truststore properties so Maven can trust the
+// SafeChain MITM certificate via the macOS Keychain.
+//
+// `trustStoreType=KeychainStore` selects the macOS Keychain-backed provider.
+// `trustStore=NONE` is to avoid the JVM trying to open a file-based truststore at a configured path.
 const (
 	mavenRcMarkerStart = "# aikido-safe-chain-start"
 	mavenRcMarkerEnd   = "# aikido-safe-chain-end"

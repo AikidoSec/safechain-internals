@@ -49,10 +49,12 @@ func (s *Step) Install(ctx context.Context) error {
 	}
 
 	homeDir := platform.GetConfig().HomeDir
+	// Configure Maven proxy settings
 	if err := installMavenProxySetting(homeDir, host, port); err != nil {
 		log.Printf("Warning: failed to configure Maven proxy settings: %v", err)
 	}
 
+	// Configure MAVEN_OPTS to use system truststore on macOS
 	if err := installMavenOptsOverride(homeDir); err != nil {
 		log.Printf("Warning: failed to persist MAVEN_OPTS truststore override: %v", err)
 	}
