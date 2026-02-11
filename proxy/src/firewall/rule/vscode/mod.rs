@@ -10,7 +10,6 @@ use rama::{
     utils::str::{
         self as str_utils,
         arcstr::{ArcStr, arcstr},
-        smol_str::{SmolStr, format_smolstr},
     },
 };
 
