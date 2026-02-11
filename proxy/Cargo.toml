@@ -1,59 +1,58 @@
 [package]
 name = "safechain-proxy"
 description = "MITM SafeChain HTTP(S)/SOCKS5 Proxy for Developer Security"
-version = "1.0.0"  # keep in sync with GH releases
-edition = "2024"
+version = { workspace = true }  # keep in sync with GH releases
+edition = { workspace = true }
 publish = false
-rust-version = "1.93"
+rust-version = { workspace = true }
 readme = "../docs/proxy.md"
-resolver = "3"
 
 [features]
 har = []
 
 [dependencies]
-arc-swap = "1.7"
-clap = { version = "4.5", features = ["derive"] }
-keyring-core = "0.7"
-humantime = "2.3"
-secrecy = "0.10"
-tokio = { version = "1.48", features = ["full"] }
-serde = "1.0"
-postcard = { version = "1.1", features = ["alloc"] }
-lz4_flex = "0.12"
-serde_test = "1"
-radix_trie = "0.3"
-serde_json = "1"
-moka = "0.12"
-rand = "0.10"
-parking_lot = "0.12.5"
-serde_html_form = "0.4"
-rustls-platform-verifier = "0.6"
+arc-swap = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+keyring-core = { workspace = true }
+humantime = { workspace = true }
+secrecy = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+postcard = { workspace = true, features = ["alloc"] }
+lz4_flex = { workspace = true }
+serde_test = { workspace = true }
+radix_trie = { workspace = true }
+serde_json = { workspace = true }
+moka = { workspace = true }
+rand = { workspace = true }
+parking_lot = { workspace = true }
+serde_html_form = { workspace = true }
+rustls-platform-verifier = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-linux-keyutils-keyring-store = "0.2"
+linux-keyutils-keyring-store = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-apple-native-keyring-store = { version = "0.2", features = ["keychain"] }
-sudo = "0.6"
+apple-native-keyring-store = { workspace = true, features = ["keychain"] }
+sudo = { workspace = true }
 
 [target.'cfg(target_family = "unix")'.dependencies]
-jemallocator = { package = "tikv-jemallocator", version = "0.6" }
-libc = "0.2"
+jemallocator = { workspace = true }
+libc = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-native-keyring-store = "0.5"
-mimalloc = { version = "0.1", default-features = false }
+windows-native-keyring-store = { workspace = true }
+mimalloc = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.build-dependencies]
-static_vcruntime = "3.0"
+static_vcruntime = { workspace = true }
 
 [dependencies.rama]
 workspace = true
 features = ["http-full", "proxy-full", "dns", "boring", "rustls"]
 
 [dev-dependencies]
-tracing-test = "0.2"
+tracing-test = { workspace = true }
 
 [dev-dependencies.rama]
 workspace = true
