@@ -21,7 +21,7 @@ pub struct TracingGuard {
 
 #[derive(Debug, Default)]
 pub struct TelemetryConfig<'a> {
-    /// Log verbose (for more control use `RUST_LOG` env var)
+    /// Log verbose (for more control, use `RUST_LOG` env var)
     pub verbose: bool,
     /// Enable pretty logging (human-friendly, not for computer integestion)
     pub pretty: bool,
