@@ -89,8 +89,9 @@ fn test_parse_artifact_for_repository_apache_all_known_prefixes() {
     ];
 
     for (path, expected_version) in cases {
-        let artifact = RuleMaven::parse_artifact_from_path_for_domain(path, "repository.apache.org")
-            .unwrap_or_else(|| panic!("expected apache repository path to parse: {path}"));
+        let artifact =
+            RuleMaven::parse_artifact_from_path_for_domain(path, "repository.apache.org")
+                .unwrap_or_else(|| panic!("expected apache repository path to parse: {path}"));
         assert_eq!(artifact.fully_qualified_name.as_str(), "org.example:lib");
         assert_eq!(
             artifact.version,
