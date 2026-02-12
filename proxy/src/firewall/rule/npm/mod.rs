@@ -16,6 +16,7 @@ use crate::{
         events::{BlockedArtifact, BlockedEventInfo},
         malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
         pac::PacScriptGenerator,
+        rule::npm::min_package_age::MinPackageAge,
         version::{PackageVersion, PragmaticSemver},
     },
     http::response::generate_generic_blocked_response_for_req,
@@ -23,6 +24,8 @@ use crate::{
 };
 
 use super::{BlockedRequest, RequestAction, Rule};
+
+mod min_package_age;
 
 pub(in crate::firewall) struct RuleNpm {
     target_domains: DomainMatcher,
@@ -90,12 +93,13 @@ impl Rule for RuleNpm {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
+    async fn evaluate_response(&self, mut resp: Response) -> Result<Response, BoxError> {
         // Pass through for now - response modification can be added in future PR
+        MinPackageAge::remove_new_packages(&mut resp);
         Ok(resp)
     }
 
-    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
+    async fn evaluate_request(&self, mut req: Request) -> Result<RequestAction, BoxError> {
         if !crate::http::try_get_domain_for_req(&req)
             .map(|domain| self.match_domain(&domain))
             .unwrap_or_default()
@@ -104,6 +108,23 @@ impl Rule for RuleNpm {
             return Ok(RequestAction::Allow(req));
         }
 
+        if self.is_tarball_download(&req) {
+            return self.evaluate_tarball_request(req).await;
+        }
+
+        MinPackageAge::modify_request_headers(&mut req);
+
+        Ok(RequestAction::Allow(req))
+    }
+}
+
+impl RuleNpm {
+    fn is_tarball_download(&self, req: &Request) -> bool {
+        let path = req.uri().path();
+        path.ends_with(".tgz") && path.contains("/-/")
+    }
+
+    async fn evaluate_tarball_request(&self, req: Request) -> Result<RequestAction, BoxError> {
         let path = req.uri().path().trim_start_matches('/');
 
         let Some(package) = parse_package_from_path(path) else {
@@ -130,9 +151,7 @@ impl Rule for RuleNpm {
             Ok(RequestAction::Allow(req))
         }
     }
-}
 
-impl RuleNpm {
     fn is_package_listed_as_malware(&self, npm_package: &NpmPackage) -> bool {
         self.remote_malware_list.has_entries_with_version(
             &npm_package.fully_qualified_name,
