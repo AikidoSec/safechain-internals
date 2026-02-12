@@ -120,18 +120,12 @@ func applyProxyToSettings(content, host, port string) (string, error) {
 
 func insertProxyBlock(content, proxyBlock string) (string, error) {
 	if loc := proxiesOpenTagRE.FindStringIndex(content); loc != nil {
-		openTag := content[loc[0]:loc[1]]
-		if isSelfClosingTag(openTag) {
-			replacement := xmlProxiesStart + "\n" + proxyBlock + xmlProxiesEnd
-			return content[:loc[0]] + replacement + content[loc[1]:], nil
-		}
-
-		// Normal <proxies ...> tag: insert immediately after it.
+		// Insert immediately after <proxies ...> opening tag.
 		insertAt := loc[1]
 		return content[:insertAt] + "\n" + proxyBlock + content[insertAt:], nil
 	}
 
-	// 3) No proxies section at all: insert one before </settings>.
+	// No proxies section at all: insert one before </settings>.
 	closeIdx := strings.LastIndex(content, "</settings>")
 	if closeIdx == -1 {
 		return "", fmt.Errorf("invalid settings.xml: missing </settings> closing tag")
@@ -139,12 +133,6 @@ func insertProxyBlock(content, proxyBlock string) (string, error) {
 
 	proxiesSection := xmlProxiesStart + "\n" + proxyBlock + xmlProxiesEnd + "\n"
 	return content[:closeIdx] + proxiesSection + content[closeIdx:], nil
-}
-
-func isSelfClosingTag(tag string) bool {
-	// Works for "<proxies/>", "<proxies />", "<proxies foo='bar'/>", etc.
-	tag = strings.TrimSpace(tag)
-	return strings.HasSuffix(tag, "/>")
 }
 
 func stripProxyFromSettings(content string) (string, bool, error) {
@@ -164,9 +152,6 @@ func stripProxyFromSettings(content string) (string, bool, error) {
 }
 
 func buildProxyBlock(host, port string) string {
-	host = xmlEscape(host)
-	port = xmlEscape(port)
-
 	return fmt.Sprintf(`%s
   <proxy>
     <id>%s</id>
@@ -196,12 +181,6 @@ func validateProxyInputs(host, port string) error {
 		return fmt.Errorf("invalid proxy port")
 	}
 	return nil
-}
-
-func xmlEscape(s string) string {
-	var b strings.Builder
-	_ = xml.EscapeText(&b, []byte(s))
-	return b.String()
 }
 
 func removeMarkedBlock(content, startMarker, endMarker string) (string, bool, error) {
