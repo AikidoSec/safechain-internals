@@ -3,6 +3,7 @@
 package configure_maven
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,25 +28,39 @@ func installMavenOptsOverride(homeDir string) error {
 	content := ""
 	if data, err := os.ReadFile(mavenrcPath); err == nil {
 		content = string(data)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to read .mavenrc: %w", err)
 	}
 	if strings.Contains(content, mavenRcMarkerStart) {
+		if !strings.Contains(content, mavenRcMarkerEnd) {
+			return fmt.Errorf("found start marker in .mavenrc but not end marker - corrupt configuration")
+		}
 		return nil
 	}
 
 	if content != "" && !strings.HasSuffix(content, "\n") {
 		content += "\n"
 	}
-	return os.WriteFile(mavenrcPath, []byte(content+mavenRcBlock), 0644)
+	return os.WriteFile(mavenrcPath, []byte(content+mavenRcBlock), filePerm)
 }
 
 func uninstallMavenOptsOverride(homeDir string) error {
 	mavenrcPath := filepath.Join(homeDir, ".mavenrc")
-	if data, err := os.ReadFile(mavenrcPath); err == nil {
-		newContent, removed, err := removeMarkedBlock(string(data), mavenRcMarkerStart, mavenRcMarkerEnd)
-		if !removed || err != nil {
-			return err
+	data, err := os.ReadFile(mavenrcPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
 		}
-		return os.WriteFile(mavenrcPath, []byte(newContent), 0644)
+		return fmt.Errorf("failed to read .mavenrc: %w", err)
 	}
-	return nil
+
+	newContent, removed, err := removeMarkedBlock(string(data), mavenRcMarkerStart, mavenRcMarkerEnd)
+	if err != nil {
+		return err
+	}
+	if !removed {
+		return nil
+	}
+
+	return os.WriteFile(mavenrcPath, []byte(newContent), filePerm)
 }
