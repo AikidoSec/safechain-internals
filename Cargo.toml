@@ -5,3 +5,12 @@ resolver = "3"
 [workspace.dependencies.rama]
 git = "https://github.com/plabayo/rama"
 rev = "0405ccbddd427c2cbda4af259b620cb0e1ee2d92"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+
+[profile.release.package.safechain-proxy-fuzz]
+strip = false
+codegen-units = 16
