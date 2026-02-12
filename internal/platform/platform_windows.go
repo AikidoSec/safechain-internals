@@ -20,9 +20,9 @@ const (
 	SafeChainUltimateLogName       = "SafeChainUltimate.log"
 	SafeChainUltimateErrLogName    = "SafeChainUltimate.err"
 	SafeChainUIBinaryName          = "SafeChainUltimateUI.exe"
-	SafeChainProxyBinaryName       = "SafeChainProxy.exe"
-	SafeChainProxyLogName          = "SafeChainProxy.log"
-	SafeChainProxyErrLogName       = "SafeChainProxy.err"
+	SafeChainL7ProxyBinaryName     = "SafeChainProxy.exe"
+	SafeChainL7ProxyLogName        = "SafeChainProxy.log"
+	SafeChainL7ProxyErrLogName     = "SafeChainProxy.err"
 	SafeChainInstallScriptName     = "install-safe-chain.ps1"
 	SafeChainUninstallScriptName   = "uninstall-safe-chain.ps1"
 	registryInternetSettingsSuffix = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`

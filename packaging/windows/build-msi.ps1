@@ -4,13 +4,13 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$Version,
-    
+
     [Parameter(Mandatory=$true)]
     [string]$Arch,
-    
+
     [Parameter(Mandatory=$false)]
     [string]$BinDir = ".\bin",
-    
+
     [Parameter(Mandatory=$false)]
     [string]$OutputDir = ".\dist"
 )
@@ -39,7 +39,7 @@ Write-Host "  Project directory: $ProjectDir"
 # Verify required binaries exist
 $AgentExe = Join-Path $BinDir "SafeChainUltimate.exe"
 $AgentUIExe = Join-Path $BinDir "SafeChainUltimateUI.exe"
-$ProxyExe = Join-Path $BinDir "SafeChainProxy.exe"
+$ProxyExe = Join-Path $BinDir "SafeChainL7Proxy.exe"
 
 if (-not (Test-Path $AgentExe)) {
     Write-Host "Error: SafeChainUltimate.exe not found at $AgentExe" -ForegroundColor Red
@@ -52,7 +52,7 @@ if (-not (Test-Path $AgentUIExe)) {
 }
 
 if (-not (Test-Path $ProxyExe)) {
-    Write-Host "Error: SafeChainProxy.exe not found at $ProxyExe" -ForegroundColor Red
+    Write-Host "Error: SafeChainL7Proxy.exe not found at $ProxyExe" -ForegroundColor Red
     exit 1
 }
 
@@ -71,11 +71,11 @@ wix build $WxsFile `
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "MSI built successfully: $OutputMsi" -ForegroundColor Green
-    
+
     # Calculate checksum
     $hash = Get-FileHash -Path $OutputMsi -Algorithm SHA256
     Write-Host "SHA256: $($hash.Hash)"
-    
+
     # Save checksum to file
     $hash.Hash | Out-File -FilePath "$OutputMsi.sha256" -NoNewline
 } else {

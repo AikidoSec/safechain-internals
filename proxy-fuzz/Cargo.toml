@@ -1,6 +1,6 @@
 [package]
 name = "safechain-proxy-fuzz"
-description = "fuzzing modules for safechain-proxy utils"
+description = "fuzzing modules for safechain-proxy-lib code"
 version = { workspace = true }
 edition = { workspace = true }
 publish = false

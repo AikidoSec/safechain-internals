@@ -57,7 +57,7 @@ func (p *Proxy) WaitForProxyToBeReady() error {
 }
 
 func (p *Proxy) Version() (string, error) {
-	cmd := exec.Command(filepath.Join(platform.GetConfig().BinaryDir, platform.SafeChainProxyBinaryName), "--version")
+	cmd := exec.Command(filepath.Join(platform.GetConfig().BinaryDir, platform.SafeChainL7ProxyBinaryName), "--version")
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get proxy version: %v", err)
@@ -77,16 +77,16 @@ func (p *Proxy) Start(ctx context.Context, proxyIngressAddr string) error {
 	config := platform.GetConfig()
 	p.ctx, p.cancel = context.WithCancel(ctx)
 	p.cmd = exec.CommandContext(p.ctx,
-		filepath.Join(config.BinaryDir, platform.SafeChainProxyBinaryName),
+		filepath.Join(config.BinaryDir, platform.SafeChainL7ProxyBinaryName),
 		"--bind", ProxyBind,
 		"--meta", ProxyMeta,
 		"--data", platform.GetRunDir(),
-		"--output", filepath.Join(config.LogDir, platform.SafeChainProxyLogName),
+		"--output", filepath.Join(config.LogDir, platform.SafeChainL7ProxyLogName),
 		"--secrets", "keyring",
 		"--reporting-endpoint", fmt.Sprintf("http://%s/block", proxyIngressAddr),
 	)
 
-	stderrLogPath := filepath.Join(config.LogDir, platform.SafeChainProxyErrLogName)
+	stderrLogPath := filepath.Join(config.LogDir, platform.SafeChainL7ProxyErrLogName)
 	stderrFile, err := os.OpenFile(stderrLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open stderr log file: %v", err)

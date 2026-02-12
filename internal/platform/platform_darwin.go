@@ -19,12 +19,12 @@ import (
 )
 
 const (
-	SafeChainUltimateLogName    = "safechain-ultimate.log"
-	SafeChainUltimateErrLogName = "safechain-ultimate.error.log"
-	SafeChainUIBinaryName       = "safechain-ultimate-ui"
-	SafeChainProxyBinaryName    = "safechain-proxy"
-	SafeChainProxyLogName       = "safechain-proxy.log"
-	SafeChainProxyErrLogName    = "safechain-proxy.err"
+	SafeChainUltimateLogName     = "safechain-ultimate.log"
+	SafeChainUltimateErrLogName  = "safechain-ultimate.error.log"
+	SafeChainUIBinaryName        = "safechain-ultimate-ui"
+	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
+	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
+	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
 )

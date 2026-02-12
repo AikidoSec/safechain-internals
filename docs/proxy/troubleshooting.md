@@ -6,7 +6,7 @@
 
 If you get a "port already in use" error:
 - Try running without `--port` to let the OS assign an available port
-- Or choose a different port: `./safechain-proxy --port 8080`
+- Or choose a different port: `./safechain-l7-proxy --port 8080`
 
 ### Proxy Not Working
 
@@ -74,15 +74,15 @@ Enable debug (or trace even) logging to troubleshoot issues:
 
 ```bash
 # macOS/Linux
-RUST_LOG=debug ./safechain-proxy
+RUST_LOG=debug ./safechain-l7-proxy
 
 # Windows (Command Prompt)
 set RUST_LOG=trace
-safechain-proxy.exe
+SafeChainL7Proxy.exe
 
 # Windows (PowerShell)
 $env:RUST_LOG = "debug,safechain_proxy=trace"
-.\safechain-proxy.exe
+.\SafeChainL7Proxy.exe
 ```
 
 'debug,safechain_proxy=trace' might as well be the default trace directive.

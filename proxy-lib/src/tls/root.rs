@@ -153,7 +153,7 @@ pub(super) fn new_root_tls_crt_key_pair(
 
 // NOTE:
 //
-// For now it is agreed and assumed that the Proxy (safechain-proxy)
+// For now it is agreed and assumed that the Proxy (e.g. safechain-l7-proxy)
 // generates the root CA as well as the server CA. While at the same time
 // the proxy is at the moment (by design) not responsible for
 // "installing" the root CA.

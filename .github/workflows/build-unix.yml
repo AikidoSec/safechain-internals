@@ -113,21 +113,21 @@ jobs:
 
       - name: Build proxy binary for linux musl
         if: ${{ contains(matrix.target, 'unknown-linux-musl') }}
-        run: cargo zigbuild --release -p safechain-proxy --target "${{ matrix.target }}"
+        run: cargo zigbuild --release -p safechain-l7-proxy --target "${{ matrix.target }}"
         env:
           AWS_LC_SYS_CMAKE_BUILDER: "0"
 
       - name: Build proxy binary for ${{ matrix.os }}/${{ matrix.arch }}
         if: ${{ !(contains(matrix.target, 'unknown-linux-musl')) }}
-        run: cargo build --release -p safechain-proxy --target ${{ matrix.target }}
+        run: cargo build --release -p safechain-l7-proxy --target ${{ matrix.target }}
 
       - name: Prepare artifacts
         run: |
-          mv target/${{ matrix.target }}/release/safechain-proxy safechain-proxy-${{ matrix.os }}-${{ matrix.arch }}
+          mv target/${{ matrix.target }}/release/safechain-l7-proxy safechain-l7-proxy-${{ matrix.os }}-${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: safechain-proxy-${{ matrix.os }}-${{ matrix.arch }}
+          name: safechain-l7-proxy-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            safechain-proxy-${{ matrix.os }}-${{ matrix.arch }}
+            safechain-l7-proxy-${{ matrix.os }}-${{ matrix.arch }}

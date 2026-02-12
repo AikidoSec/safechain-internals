@@ -1,5 +1,5 @@
 [package]
-name = "safechain-proxy"
+name = "safechain-l7-proxy"
 description = "MITM SafeChain HTTP(S)/SOCKS5 l7 Proxy for Developer Security"
 version = { workspace = true }  # keep in sync with GH releases
 edition = { workspace = true }
