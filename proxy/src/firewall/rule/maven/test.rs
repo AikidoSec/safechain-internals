@@ -15,7 +15,7 @@ fn test_parse_artifact_happy_paths_table() {
         );
     }
 
-    let cases: [(&str, &str, &str, &str); 8] = [
+    let cases = &[
         (
             "repo.maven.apache.org",
             "org/apache/maven/maven/2.0/maven-2.0.jar",
@@ -73,7 +73,7 @@ fn test_parse_artifact_happy_paths_table() {
 
 #[test]
 fn test_parse_artifact_for_repository_apache_all_known_prefixes() {
-    let cases: [(&str, &str); 3] = [
+    let cases = &[
         (
             "content/repositories/releases/org/example/lib/1.0.0/lib-1.0.0.jar",
             "1.0.0",
@@ -127,7 +127,7 @@ fn test_strip_path_prefix_requires_segment_boundary() {
 
 #[test]
 fn test_reject_non_artifacts_table() {
-    let rejects: [&str; 11] = [
+    let rejects = &[
         "org/example/lib/1.0.0/lib-1.0.0",
         "org/example/lib",
         "org/springframework/spring-core/maven-metadata.xml",
@@ -151,7 +151,7 @@ fn test_reject_non_artifacts_table() {
 
 #[test]
 fn test_parse_real_world_full_urls_smoke() {
-    let urls: [&str; 6] = [
+    let urls = &[
         "https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpclient/4.5.13/httpclient-4.5.13.jar",
         "https://repo1.maven.org/maven2/com/google/guava/guava/33.0.0-jre/guava-33.0.0-jre.jar",
         "https://repo1.maven.org/maven2/org/hibernate/orm/hibernate-core/6.4.2.Final/hibernate-core-6.4.2.Final.jar",
