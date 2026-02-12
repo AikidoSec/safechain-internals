@@ -46,6 +46,10 @@ features = ["http-full", "proxy-full", "dns", "boring", "rustls"]
 [dev-dependencies]
 tracing-test = { workspace = true }
 
+[dev-dependencies.safechain-proxy-lib]
+workspace = true
+features = ["test-utils"]
+
 [dev-dependencies.rama]
 workspace = true
 features = ["cli"]

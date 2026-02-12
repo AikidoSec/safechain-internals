@@ -45,21 +45,21 @@ const AIKIDO_SECRET_SVC: &str = crate::utils::env::project_name();
 
 impl SyncSecrets {
     #[inline(always)]
-    pub fn try_new_keyring() -> Result<Self, BoxError> {
+    pub(crate) fn try_new_keyring() -> Result<Self, BoxError> {
         Ok(Self(Backend::KeyRing {
             store: try_new_keychain_store()?,
         }))
     }
 
     #[inline(always)]
-    pub fn new_in_memory() -> Self {
+    pub(crate) fn new_in_memory() -> Self {
         Self(Backend::InMemory {
             secrets: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
     #[inline(always)]
-    pub fn new_fs(dir: PathBuf) -> Self {
+    pub(crate) fn new_fs(dir: PathBuf) -> Self {
         Self(Backend::Fs { dir })
     }
 }

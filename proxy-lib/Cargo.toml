@@ -10,6 +10,7 @@ readme = "../docs/proxy.md"
 [features]
 har = []
 pac = []
+test-utils = []
 
 [dependencies]
 arc-swap = { workspace = true }
