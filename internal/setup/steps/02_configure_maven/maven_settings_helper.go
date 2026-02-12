@@ -120,7 +120,8 @@ func applyProxyToSettings(content, host, port string) (string, error) {
 
 func insertProxyBlock(content, proxyBlock string) (string, error) {
 	if loc := proxiesOpenTagRE.FindStringIndex(content); loc != nil {
-		// Insert immediately after <proxies ...> opening tag.
+		// Keep existing <proxies> attributes untouched; only inject managed proxy entries.
+		// Prefixing with "\n" keeps the block on its own lines for readable xml output.
 		insertAt := loc[1]
 		return content[:insertAt] + "\n" + proxyBlock + content[insertAt:], nil
 	}

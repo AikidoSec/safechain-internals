@@ -175,7 +175,10 @@ impl RuleMaven {
         )
     }
 
-    /// `/{groupId as directory}/{artifactId}/{version}/{artifactId}-{version}[-{classifier}].{extension}`
+    /// Parses a Maven repository artifact path into a normalized package identifier and version.
+    ///
+    /// Expected path shape:
+    /// `/{groupId as directories}/{artifactId}/{version}/{artifactId}-{version}[-{classifier}].{extension}`
     fn parse_artifact_from_path(path: &str) -> Option<MavenArtifact> {
         let path = path.trim_matches('/');
         let (prefix, filename) = path.rsplit_once('/')?;
