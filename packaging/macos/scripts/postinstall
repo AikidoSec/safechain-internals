@@ -24,16 +24,6 @@ echo "Setting ownership..."
 chown -R root:wheel "$INSTALL_DIR"
 chown -R root:wheel "$LOGS_DIR"
 
-if [ -z "$AIKIDO_TOKEN" ] && [ ! -f "$INSTALL_DIR/.token" ]; then
-    AIKIDO_TOKEN=$(osascript <<'EOF'
-set dialogResult to display dialog "Enter your Aikido token to activate SafeChain Ultimate:" default answer "" with title "SafeChain Ultimate Setup" buttons {"Skip", "OK"} default button "OK"
-if button returned of dialogResult is "OK" then
-    return text returned of dialogResult
-end if
-EOF
-    2>/dev/null) || true
-fi
-
 if [ -n "$AIKIDO_TOKEN" ]; then
     echo "Storing Aikido token..."
     TOKEN_FILE="$INSTALL_DIR/.token"

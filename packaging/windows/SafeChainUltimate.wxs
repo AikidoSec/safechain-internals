@@ -131,35 +131,10 @@
       </Component>
     </DirectoryRef>
 
-    <!-- UI with license and token dialog -->
+    <!-- UI with license -->
     <WixVariable Id="WixUILicenseRtf" Value="$(var.ProjectDir)\packaging\windows\license.rtf" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
     <ui:WixUI Id="WixUI_InstallDir" />
-
-    <UI>
-      <Dialog Id="AikidoTokenDlg" Width="370" Height="270" Title="[ProductName] Setup">
-        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
-        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
-        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
-
-        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Aikido Token" />
-        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes" Text="Enter your Aikido token to activate the agent." />
-
-        <Control Id="TokenLabel" Type="Text" X="20" Y="60" Width="330" Height="40" NoPrefix="yes" Text="Paste your Aikido token below. This step is optional — you can configure the token later." />
-        <Control Id="TokenEdit" Type="Edit" X="20" Y="110" Width="330" Height="18" Property="AIKIDO_TOKEN" />
-
-        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
-        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)" />
-        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
-          <Publish Event="SpawnDialog" Value="CancelDlg" />
-        </Control>
-      </Dialog>
-
-      <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="AikidoTokenDlg" Order="5">LicenseAccepted = "1"</Publish>
-      <Publish Dialog="AikidoTokenDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg">1</Publish>
-      <Publish Dialog="AikidoTokenDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg">1</Publish>
-      <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="AikidoTokenDlg" Order="5">1</Publish>
-    </UI>
 
   </Package>
 </Wix>
