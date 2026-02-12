@@ -24,6 +24,14 @@ echo "Setting ownership..."
 chown -R root:wheel "$INSTALL_DIR"
 chown -R root:wheel "$LOGS_DIR"
 
+if [ -n "$AIKIDO_TOKEN" ]; then
+    echo "Storing Aikido token..."
+    TOKEN_FILE="$INSTALL_DIR/.token"
+    printf '%s' "$AIKIDO_TOKEN" > "$TOKEN_FILE"
+    chmod 600 "$TOKEN_FILE"
+    chown root:wheel "$TOKEN_FILE"
+fi
+
 # Load and start the LaunchDaemon
 if [ -f "$LAUNCHDAEMON_PLIST" ]; then
     echo "Loading LaunchDaemon..."
