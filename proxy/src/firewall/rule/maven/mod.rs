@@ -131,7 +131,7 @@ impl Rule for RuleMaven {
                 info: BlockedEventInfo {
                     artifact: BlockedArtifact {
                         product: arcstr!("maven"),
-                        identifier: ArcStr::from(artifact.fully_qualified_name.as_str()),
+                        identifier: artifact.fully_qualified_name.clone(),
                         version: Some(PackageVersion::Semver(artifact.version.clone())),
                     },
                 },
