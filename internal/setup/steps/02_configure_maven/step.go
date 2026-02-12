@@ -49,6 +49,7 @@ func (s *Step) Install(ctx context.Context) error {
 	}
 
 	homeDir := platform.GetConfig().HomeDir
+
 	// Configure Maven proxy settings
 	if err := installMavenProxySetting(homeDir, host, port); err != nil {
 		log.Printf("Warning: failed to configure Maven proxy settings: %v", err)
@@ -59,7 +60,7 @@ func (s *Step) Install(ctx context.Context) error {
 		log.Printf("Warning: failed to persist MAVEN_OPTS truststore override: %v", err)
 	}
 
-	log.Println("Proxy settings added to ~/.m2/settings.xml")
+	log.Println("Maven configuration complete")
 	return nil
 }
 
@@ -74,5 +75,6 @@ func (s *Step) Uninstall(ctx context.Context) error {
 		log.Printf("Warning: failed to remove MAVEN_OPTS truststore override: %v", err)
 	}
 
+	log.Println("Maven configuration removed")
 	return nil
 }
