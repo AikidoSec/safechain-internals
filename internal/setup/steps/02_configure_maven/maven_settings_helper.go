@@ -101,6 +101,9 @@ func applyProxyToSettings(content, host, port string) (string, error) {
 		return "", err
 	}
 
+	host = strings.TrimSpace(host)
+	port = strings.TrimSpace(port)
+
 	proxyBlock := buildProxyBlock(host, port)
 
 	result, err := insertProxyBlock(content, proxyBlock)
@@ -188,11 +191,10 @@ func validateProxyInputs(host, port string) error {
 		return fmt.Errorf("invalid proxy host")
 	}
 
-	portNum, err := strconv.Atoi(strings.TrimSpace(port))
+	_, err := strconv.Atoi(strings.TrimSpace(port))
 	if err != nil {
 		return fmt.Errorf("invalid proxy port")
 	}
-
 	return nil
 }
 
