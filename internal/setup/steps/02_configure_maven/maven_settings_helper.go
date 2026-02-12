@@ -31,7 +31,7 @@ const (
 )
 
 // Match an opening <proxies ...> tag.
-var proxiesOpenTagRE = regexp.MustCompile(`(?i)<\s*(?!/)\s*proxies\b[^>]*>`)
+var proxiesOpenTagRE = regexp.MustCompile(`(?i)<\s*proxies\b[^>]*>`)
 
 func ensureDirForFile(path string) error {
 	return os.MkdirAll(filepath.Dir(path), dirPerm)
