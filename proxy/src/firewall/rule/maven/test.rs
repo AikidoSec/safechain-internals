@@ -72,6 +72,46 @@ fn test_parse_artifact_happy_paths_table() {
 }
 
 #[test]
+fn test_parse_artifact_for_repository_apache_all_known_prefixes() {
+    let cases: [(&str, &str); 3] = [
+        (
+            "content/repositories/releases/org/example/lib/1.0.0/lib-1.0.0.jar",
+            "1.0.0",
+        ),
+        (
+            "content/repositories/snapshots/org/example/lib/1.0.1-SNAPSHOT/lib-1.0.1-SNAPSHOT.jar",
+            "1.0.1-SNAPSHOT",
+        ),
+        (
+            "content/groups/public/org/example/lib/2.0.0/lib-2.0.0.jar",
+            "2.0.0",
+        ),
+    ];
+
+    for (path, expected_version) in cases {
+        let artifact = RuleMaven::parse_artifact_from_path_for_domain(path, "repository.apache.org")
+            .unwrap_or_else(|| panic!("expected apache repository path to parse: {path}"));
+        assert_eq!(artifact.fully_qualified_name.as_str(), "org.example:lib");
+        assert_eq!(
+            artifact.version,
+            PragmaticSemver::parse(expected_version).unwrap()
+        );
+    }
+}
+
+#[test]
+fn test_parse_artifact_handles_leading_slash_paths() {
+    let artifact = RuleMaven::parse_artifact_from_path_for_domain(
+        "/maven2/org/example/lib/1.2.3/lib-1.2.3.jar",
+        "repo1.maven.org",
+    )
+    .unwrap_or_else(|| panic!("expected leading-slash path to parse"));
+
+    assert_eq!(artifact.fully_qualified_name.as_str(), "org.example:lib");
+    assert_eq!(artifact.version, PragmaticSemver::parse("1.2.3").unwrap());
+}
+
+#[test]
 fn test_strip_path_prefix_requires_segment_boundary() {
     assert_eq!(
         RuleMaven::strip_path_prefix("maven2/org/apache", "maven2"),
@@ -86,7 +126,7 @@ fn test_strip_path_prefix_requires_segment_boundary() {
 
 #[test]
 fn test_reject_non_artifacts_table() {
-    let rejects: [&str; 10] = [
+    let rejects: [&str; 11] = [
         "org/example/lib/1.0.0/lib-1.0.0",
         "org/example/lib",
         "org/springframework/spring-core/maven-metadata.xml",
@@ -96,6 +136,7 @@ fn test_reject_non_artifacts_table() {
         "org/example/lib/1.0.0/lib-1.0.0.jar.asc",
         "org/example/lib/1.0.0/different-name-2.0.0.jar",
         "org/example/lib/1.0.0/lib-2.0.0.jar",
+        "org/example/lib/1.0.0/lib-1.0.0extra.jar",
         "org/example/lib/1.0.0/lib-1.0.0.pom",
     ];
 

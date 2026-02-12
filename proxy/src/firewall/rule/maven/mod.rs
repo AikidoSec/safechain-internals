@@ -151,10 +151,13 @@ struct MavenArtifact {
 // Example: group_path = org/apache/commons/, artifact_id = commons-lang3, full name = org.apache.commons:commons-lang3
 impl MavenArtifact {
     fn new(group_path: &str, artifact_id: &str, version: PragmaticSemver) -> Self {
-        let mut name = group_path.replace('/', ".");
-        name.reserve(1 + artifact_id.len());
+        let artifact_id = artifact_id.trim();
+        let mut name = String::with_capacity(group_path.len() + 1 + artifact_id.len());
+        for ch in group_path.chars() {
+            name.push(if ch == '/' { '.' } else { ch });
+        }
         name.push(':');
-        name.push_str(artifact_id.trim());
+        name.push_str(artifact_id);
         name.make_ascii_lowercase();
 
         Self {
