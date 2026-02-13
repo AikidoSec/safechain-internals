@@ -1,6 +1,12 @@
 name: Build Unix
 
 on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
   workflow_call:
     inputs:
       version:
@@ -8,7 +14,7 @@ on:
         type: string
 
 concurrency:
-  group: build-unix-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
