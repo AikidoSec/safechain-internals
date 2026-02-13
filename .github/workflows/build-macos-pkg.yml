@@ -51,7 +51,7 @@ jobs:
       - name: Download proxy artifact
         uses: actions/download-artifact@v4
         with:
-          name: safechain-proxy-darwin-${{ matrix.arch }}
+          name: safechain-l7-proxy-darwin-${{ matrix.arch }}
           path: bin
 
       - name: Verify binaries exist
@@ -59,7 +59,7 @@ jobs:
           ls -lh bin/
           ls -lh bin/safechain-ultimate-darwin-${{ matrix.arch }}
           ls -lh bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}
-          ls -lh bin/safechain-proxy-darwin-${{ matrix.arch }}
+          ls -lh bin/safechain-l7-proxy-darwin-${{ matrix.arch }}
 
       - name: Make scripts executable
         run: chmod +x .github/scripts/macos/**/*.sh
@@ -88,7 +88,7 @@ jobs:
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-proxy-darwin-${{ matrix.arch }}
+        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-l7-proxy-darwin-${{ matrix.arch }}
 
       - name: Build distribution .pkg installer
         run: |

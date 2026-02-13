@@ -92,7 +92,7 @@ impl Authorizer<Basic> for ZeroAuthority {
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
-/// Config which allows the user of the safechain-proxy
+/// Config which allows the user of the safechain-l7-proxy
 /// by means of (proxy basic auth) username labels to adapt
 /// some configuration for its connection(s).
 pub struct FirewallUserConfig {

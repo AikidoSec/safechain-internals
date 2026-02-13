@@ -40,8 +40,8 @@ pub mod test;
 
 /// CLI arguments for configuring proxy behavior.
 #[derive(Debug, Clone, Parser)]
-#[command(name = "safechain-proxy")]
-#[command(bin_name = "safechain-proxy")]
+#[command(name = "safechain-l7-proxy")]
+#[command(bin_name = "safechain-l7-proxy")]
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// network interface to bind the proxy to
@@ -87,9 +87,9 @@ pub struct Args {
         short = 'D',
         default_value = {
             #[cfg(not(target_os = "windows"))]
-            { ".aikido/safechain-proxy" }
+            { ".aikido/safechain-l7-proxy" }
             #[cfg(target_os = "windows")]
-            { ".aikido\\safechain-proxy" }
+            { ".aikido\\safechain-l7-proxy" }
         },
     )]
     pub data: PathBuf,
@@ -137,7 +137,7 @@ async fn main() -> Result<(), BoxError> {
     Ok(())
 }
 
-/// Runs all the safechain-proxy services and blocks until
+/// Runs all the safechain-l7-proxy services and blocks until
 /// a critical error occurs or the (graceful) shutdown has been initiated.
 ///
 /// This entry point is used by both the (binary) `main` function as well as
