@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
@@ -52,6 +53,7 @@ func NewDeviceInfo() *DeviceInfo {
 		log.Println("failed to get device ID:", err)
 		return nil
 	}
+	rawDeviceID = strings.ToUpper(rawDeviceID)
 	hash := sha256.Sum256([]byte(rawDeviceID))
 	d.DeviceID = hex.EncodeToString(hash[:])
 	return d
