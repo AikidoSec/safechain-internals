@@ -13,6 +13,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-windows-ultimate:
     strategy:
@@ -93,29 +97,29 @@ jobs:
           cargo update --package cmake --precise 0.1.54
 
       - name: cargo check
-        run: cargo check -p safechain-proxy --target ${{ matrix.target }}
+        run: cargo check -p safechain-l7-proxy --target ${{ matrix.target }}
 
       - name: clippy
-        run: cargo clippy -p safechain-proxy --target ${{ matrix.target }}
+        run: cargo clippy -p safechain-l7-proxy --target ${{ matrix.target }}
 
       - name: rustfmt
         run: cargo fmt --check
 
       - name: Build proxy binary for windows/${{ matrix.arch }}
-        run: cargo build --release -p safechain-proxy --target ${{ matrix.target }}
+        run: cargo build --release -p safechain-l7-proxy --target ${{ matrix.target }}
 
       - name: Copy proxy binary to bin
         run: |
           New-Item -ItemType Directory -Force -Path bin | Out-Null
-          Copy-Item -Path "target\${{ matrix.target }}\release\safechain-proxy.exe" -Destination "SafeChainProxy.${{ matrix.arch }}.exe" -Force
+          Copy-Item -Path "target\${{ matrix.target }}\release\safechain-l7-proxy.exe" -Destination "SafeChainL7Proxy.${{ matrix.arch }}.exe" -Force
         shell: pwsh
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SafeChainProxy.${{ matrix.arch }}.exe
+          name: SafeChainL7Proxy.${{ matrix.arch }}.exe
           path: |
-            SafeChainProxy.${{ matrix.arch }}.exe
+            SafeChainL7Proxy.${{ matrix.arch }}.exe
 
   build-msi:
     needs: [build-windows-ultimate, build-windows-proxy]
@@ -142,17 +146,17 @@ jobs:
           name: SafeChainUltimateUI.${{ matrix.arch }}.exe
           path: bin
 
-      - name: Download SafeChainProxy artifact
+      - name: Download SafeChainL7Proxy artifact
         uses: actions/download-artifact@v4
         with:
-          name: SafeChainProxy.${{ matrix.arch }}.exe
+          name: SafeChainL7Proxy.${{ matrix.arch }}.exe
           path: bin
 
       - name: Rename binaries for packaging
         run: |
           mv bin/SafeChainUltimate.${{ matrix.arch }}.exe bin/SafeChainUltimate.exe
           mv bin/SafeChainUltimateUI.${{ matrix.arch }}.exe bin/SafeChainUltimateUI.exe
-          mv bin/SafeChainProxy.${{ matrix.arch }}.exe bin/SafeChainProxy.exe
+          mv bin/SafeChainL7Proxy.${{ matrix.arch }}.exe bin/SafeChainL7Proxy.exe
         shell: bash
 
       - name: Sign binaries
@@ -160,7 +164,7 @@ jobs:
           dotnet tool install --global AzureSignTool --version 6.0.1
           AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "bin/SafeChainUltimate.exe"
           AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "bin/SafeChainUltimateUI.exe"
-          AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "bin/SafeChainProxy.exe"
+          AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "bin/SafeChainL7Proxy.exe"
         shell: bash
 
       - name: Install WiX Toolset
