@@ -26,7 +26,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Print(version.Info())
+		fmt.Print(version.NewVersionInfo().String())
 		os.Exit(0)
 	}
 

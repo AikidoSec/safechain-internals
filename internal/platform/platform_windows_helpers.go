@@ -11,16 +11,17 @@ import (
 
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
 
 const PROCESS_TIMEOUT_MS = 60000 // 1 minute
 
-func getActiveUserSessionID() (uint32, error) {
+func getCurrentUserToken() (*windows.Token, error) {
 	var sessionInfo *windows.WTS_SESSION_INFO
 	var count uint32
 
 	if err := windows.WTSEnumerateSessions(0, 0, 1, &sessionInfo, &count); err != nil {
-		return 0, fmt.Errorf("WTSEnumerateSessions failed: %v", err)
+		return nil, fmt.Errorf("WTSEnumerateSessions failed: %v", err)
 	}
 	defer windows.WTSFreeMemory(uintptr(unsafe.Pointer(sessionInfo)))
 
@@ -30,13 +31,12 @@ func getActiveUserSessionID() (uint32, error) {
 		if session.State == windows.WTSActive && session.SessionID != 0 {
 			var token windows.Token
 			if err := windows.WTSQueryUserToken(session.SessionID, &token); err == nil {
-				token.Close()
-				return session.SessionID, nil
+				return &token, nil
 			}
 		}
 	}
 
-	return 0, fmt.Errorf("no active user session found")
+	return nil, fmt.Errorf("no active user session found")
 }
 
 func getLoggedInUserSIDs(ctx context.Context) ([]string, error) {
@@ -157,19 +157,14 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 }
 
 func runAsLoggedInUser(binaryPath string, args []string) (string, error) {
-	sessionID, err := getActiveUserSessionID()
+	userToken, err := getCurrentUserToken()
 	if err != nil {
-		return "", err
-	}
-
-	var userToken windows.Token
-	if err := windows.WTSQueryUserToken(sessionID, &userToken); err != nil {
-		return "", fmt.Errorf("WTSQueryUserToken failed: %v", err)
+		return "", fmt.Errorf("getCurrentUserToken failed: %v", err)
 	}
 	defer userToken.Close()
 
 	var duplicatedToken windows.Token
-	if err := windows.DuplicateTokenEx(userToken, 0, nil, windows.SecurityImpersonation, windows.TokenPrimary, &duplicatedToken); err != nil {
+	if err := windows.DuplicateTokenEx(*userToken, 0, nil, windows.SecurityImpersonation, windows.TokenPrimary, &duplicatedToken); err != nil {
 		return "", fmt.Errorf("DuplicateTokenEx failed: %v", err)
 	}
 	defer duplicatedToken.Close()
@@ -216,4 +211,18 @@ func registryValueContains(ctx context.Context, path string, value string, toCon
 func deleteRegistryValue(ctx context.Context, path string, value string) error {
 	_, err := utils.RunCommand(ctx, "reg", "delete", path, "/v", value, "/f")
 	return err
+}
+
+func readRegistryValue(key registry.Key, path string, valueName string) (string, error) {
+	k, err := registry.OpenKey(key, path, registry.QUERY_VALUE)
+	if err != nil {
+		return "", fmt.Errorf("failed to open registry key: %w", err)
+	}
+	defer k.Close()
+
+	val, _, err := k.GetStringValue(valueName)
+	if err != nil {
+		return "", fmt.Errorf("failed to read registry value %q: %w", valueName, err)
+	}
+	return val, nil
 }
