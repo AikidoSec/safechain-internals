@@ -2946,23 +2946,15 @@ dependencies = [
  "arc-swap",
  "clap",
  "humantime",
- "keyring-core",
  "libc",
  "linux-keyutils-keyring-store",
- "lz4_flex",
  "mimalloc",
- "moka",
- "parking_lot",
- "postcard",
- "radix_trie",
  "rama",
- "rand 0.10.0",
  "rustls-platform-verifier",
- "secrecy",
+ "safechain-proxy-lib",
  "serde",
  "serde_html_form",
  "serde_json",
- "serde_test",
  "static_vcruntime",
  "sudo",
  "tikv-jemallocator",
@@ -2973,11 +2965,36 @@ dependencies = [
 
 [[package]]
 name = "safechain-proxy-fuzz"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "libfuzzer-sys",
+ "safechain-proxy-lib",
+]
+
+[[package]]
+name = "safechain-proxy-lib"
+version = "1.0.0"
+dependencies = [
+ "apple-native-keyring-store",
+ "arc-swap",
+ "keyring-core",
+ "libc",
+ "linux-keyutils-keyring-store",
+ "lz4_flex",
+ "moka",
+ "parking_lot",
+ "postcard",
+ "radix_trie",
  "rama",
+ "rand 0.10.0",
+ "secrecy",
  "serde",
+ "serde_json",
+ "serde_test",
+ "sudo",
+ "tokio",
+ "tracing-test",
+ "windows-native-keyring-store",
 ]
 
 [[package]]
