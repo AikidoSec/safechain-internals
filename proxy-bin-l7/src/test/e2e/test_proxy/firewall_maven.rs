@@ -59,7 +59,7 @@ async fn test_maven_allows_different_version() {
     let runtime = e2e::runtime::get().await;
     let client = runtime.client_with_http_proxy().await;
 
-    // Same package but different version (1.0.0 instead of 1.0.0) should be allowed
+    // Same package but different version (1.0.0 instead of 2.0.0) should be allowed
     let resp = client
         .get("https://repo.maven.apache.org/maven2/org/example/malicious-lib/2.0.0/malicious-lib-2.0.0.jar")
         .send()

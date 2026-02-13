@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
 const (
@@ -53,7 +55,7 @@ func UninstallMavenOptsOverride(homeDir string) error {
 		return fmt.Errorf("failed to read .mavenrc: %w", err)
 	}
 
-	newContent, removed, err := removeMarkedBlock(string(data), mavenRcMarkerStart, mavenRcMarkerEnd)
+	newContent, removed, err := utils.RemoveMarkedBlock(string(data), mavenRcMarkerStart, mavenRcMarkerEnd)
 	if err != nil {
 		return err
 	}
@@ -62,19 +64,4 @@ func UninstallMavenOptsOverride(homeDir string) error {
 	}
 
 	return os.WriteFile(mavenrcPath, []byte(newContent), mavenRcFilePerm)
-}
-
-func removeMarkedBlock(content, startMarker, endMarker string) (string, bool, error) {
-	before, rest, found := strings.Cut(content, startMarker)
-	if !found {
-		return content, false, nil
-	}
-
-	_, after, found := strings.Cut(rest, endMarker)
-	if !found {
-		return "", false, fmt.Errorf("found start marker but not end marker - corrupt configuration")
-	}
-
-	after = strings.TrimLeft(after, "\r\n")
-	return before + after, true, nil
 }

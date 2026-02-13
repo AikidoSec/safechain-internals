@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
 const (
@@ -137,7 +139,7 @@ func insertProxyBlock(content, proxyBlock string) (string, error) {
 }
 
 func stripProxyFromSettings(content string) (string, bool, error) {
-	result, removed, err := removeMarkedBlock(content, markerStart, markerEnd)
+	result, removed, err := utils.RemoveMarkedBlock(content, markerStart, markerEnd)
 	if err != nil {
 		return "", false, err
 	}
@@ -182,21 +184,6 @@ func validateProxyInputs(host, port string) error {
 		return fmt.Errorf("invalid proxy port")
 	}
 	return nil
-}
-
-func removeMarkedBlock(content, startMarker, endMarker string) (string, bool, error) {
-	before, rest, found := strings.Cut(content, startMarker)
-	if !found {
-		return content, false, nil
-	}
-
-	_, after, found := strings.Cut(rest, endMarker)
-	if !found {
-		return "", false, fmt.Errorf("found start marker but not end marker - corrupt configuration")
-	}
-
-	after = strings.TrimLeft(after, "\r\n")
-	return before + after, true, nil
 }
 
 func validateXMLWellFormedness(content string) error {
