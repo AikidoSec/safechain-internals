@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, time::Duration};
 
 use rama::{
     Service,
@@ -93,10 +93,8 @@ impl Rule for RuleNpm {
         }
     }
 
-    async fn evaluate_response(&self, mut resp: Response) -> Result<Response, BoxError> {
-        // Pass through for now - response modification can be added in future PR
-        MinPackageAge::remove_new_packages(&mut resp);
-        Ok(resp)
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
+        MinPackageAge::remove_new_packages(resp, Duration::from_hours(24)).await
     }
 
     async fn evaluate_request(&self, mut req: Request) -> Result<RequestAction, BoxError> {
