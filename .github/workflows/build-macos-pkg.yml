@@ -13,6 +13,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-unix:
     uses: ./.github/workflows/build-unix.yml
@@ -59,7 +63,7 @@ jobs:
 
       - name: Make scripts executable
         run: chmod +x .github/scripts/macos/**/*.sh
-      
+
         # --- macOS signing + notarization (no entitlements for CLI) ---
       - name: Import macOS certificate
         env:
