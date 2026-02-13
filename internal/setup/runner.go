@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	set_system_proxy "github.com/AikidoSec/safechain-internals/internal/setup/steps/01_set_system_proxy"
+	configure_maven "github.com/AikidoSec/safechain-internals/internal/setup/steps/02_configure_maven"
 )
 
 type Runner struct {
@@ -19,6 +20,7 @@ func NewRunner(uninstall bool) *Runner {
 	return &Runner{
 		steps: []Step{
 			set_system_proxy.New(),
+			configure_maven.New(),
 		},
 		uninstall: uninstall,
 	}
