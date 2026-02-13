@@ -56,7 +56,7 @@ func (s *Step) Install(ctx context.Context) error {
 	}
 
 	// Configure MAVEN_OPTS to use system truststore on macOS
-	if err := installMavenOptsOverride(homeDir); err != nil {
+	if err := platform.InstallMavenOptsOverride(homeDir); err != nil {
 		log.Printf("Warning: failed to persist MAVEN_OPTS truststore override: %v", err)
 	}
 
@@ -71,7 +71,7 @@ func (s *Step) Uninstall(ctx context.Context) error {
 		log.Printf("Warning: failed to remove Maven proxy settings: %v", err)
 	}
 
-	if err := uninstallMavenOptsOverride(homeDir); err != nil {
+	if err := platform.UninstallMavenOptsOverride(homeDir); err != nil {
 		log.Printf("Warning: failed to remove MAVEN_OPTS truststore override: %v", err)
 	}
 

@@ -1,6 +1,6 @@
 //go:build darwin
 
-package configure_maven
+package platform
 
 import (
 	"fmt"
@@ -9,20 +9,16 @@ import (
 	"strings"
 )
 
-// We set JVM truststore properties so Maven can trust the
-// SafeChain MITM certificate via the macOS Keychain.
-//
-// `trustStoreType=KeychainStore` selects the macOS Keychain-backed provider.
-// `trustStore=NONE` is to avoid the JVM trying to open a file-based truststore at a configured path.
 const (
 	mavenRcMarkerStart = "# aikido-safe-chain-start"
 	mavenRcMarkerEnd   = "# aikido-safe-chain-end"
 	mavenRcBlock       = mavenRcMarkerStart + "\n" +
 		`export MAVEN_OPTS="$MAVEN_OPTS -Daikido.safechain.mavenopts=true -Djavax.net.ssl.trustStoreType=KeychainStore -Djavax.net.ssl.trustStore=NONE"` + "\n" +
 		mavenRcMarkerEnd + "\n"
+	mavenRcFilePerm = 0o644
 )
 
-func installMavenOptsOverride(homeDir string) error {
+func InstallMavenOptsOverride(homeDir string) error {
 	mavenrcPath := filepath.Join(homeDir, ".mavenrc")
 
 	content := ""
@@ -31,6 +27,7 @@ func installMavenOptsOverride(homeDir string) error {
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("failed to read .mavenrc: %w", err)
 	}
+
 	if strings.Contains(content, mavenRcMarkerStart) {
 		if !strings.Contains(content, mavenRcMarkerEnd) {
 			return fmt.Errorf("found start marker in .mavenrc but not end marker - corrupt configuration")
@@ -41,11 +38,13 @@ func installMavenOptsOverride(homeDir string) error {
 	if content != "" && !strings.HasSuffix(content, "\n") {
 		content += "\n"
 	}
-	return os.WriteFile(mavenrcPath, []byte(content+mavenRcBlock), filePerm)
+
+	return os.WriteFile(mavenrcPath, []byte(content+mavenRcBlock), mavenRcFilePerm)
 }
 
-func uninstallMavenOptsOverride(homeDir string) error {
+func UninstallMavenOptsOverride(homeDir string) error {
 	mavenrcPath := filepath.Join(homeDir, ".mavenrc")
+
 	data, err := os.ReadFile(mavenrcPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -62,5 +61,20 @@ func uninstallMavenOptsOverride(homeDir string) error {
 		return nil
 	}
 
-	return os.WriteFile(mavenrcPath, []byte(newContent), filePerm)
+	return os.WriteFile(mavenrcPath, []byte(newContent), mavenRcFilePerm)
+}
+
+func removeMarkedBlock(content, startMarker, endMarker string) (string, bool, error) {
+	before, rest, found := strings.Cut(content, startMarker)
+	if !found {
+		return content, false, nil
+	}
+
+	_, after, found := strings.Cut(rest, endMarker)
+	if !found {
+		return "", false, fmt.Errorf("found start marker but not end marker - corrupt configuration")
+	}
+
+	after = strings.TrimLeft(after, "\r\n")
+	return before + after, true, nil
 }
