@@ -236,15 +236,6 @@ async fn no_dist_tags_is_unchanged() {
     );
 }
 
-// fn make_json_response_with_headers(body: &str, headers: &[(&str, &str)]) -> Response {
-//     let mut builder = Response::builder().header("content-type", "application/json");
-//     for (name, value) in headers {
-//         builder = builder.header(*name, *value);
-//     }
-//     builder.body(Body::from(body.to_owned())).unwrap()
-// }
-// const MINIMAL_JSON: &str = r#"{{"time":{{"created":"2020-01-01T00:00:00.000Z","modified":"2020-01-02T00:00:00.000Z","1.0.0":"2020-01-01T00:00:00.000Z","1.0.1":"2026-02-13T10:00:00.000Z"}}}}"#;
-
 #[tokio::test]
 async fn removes_response_caching() {
     let recent = timestamp_hours_ago(1);
