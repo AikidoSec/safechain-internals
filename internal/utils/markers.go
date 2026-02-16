@@ -17,6 +17,7 @@ func RemoveMarkedBlock(content, startMarker, endMarker string) (string, bool, er
 		return "", false, fmt.Errorf("found start marker but not end marker - corrupt configuration")
 	}
 
+	// Trim leading newlines from the remaining content to avoid leaving blank lines after removal.
 	after = strings.TrimLeft(after, "\r\n")
 	return before + after, true, nil
 }
