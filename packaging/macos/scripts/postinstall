@@ -17,12 +17,28 @@ chmod 755 "$LOGS_DIR"
 echo "Setting permissions on binaries..."
 chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
 chmod 755 "$INSTALL_DIR/bin/safechain-ultimate-ui"
-chmod 755 "$INSTALL_DIR/bin/safechain-proxy"
+chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 
 # Set proper ownership (root:wheel for system daemon)
 echo "Setting ownership..."
 chown -R root:wheel "$INSTALL_DIR"
 chown -R root:wheel "$LOGS_DIR"
+
+AIKIDO_TOKEN=""
+TOKEN_STAGING_FILE="/tmp/aikido_endpoint_token.txt"
+
+if [ -z "$AIKIDO_TOKEN" ] && [ -f "$TOKEN_STAGING_FILE" ]; then
+    AIKIDO_TOKEN="$(cat "$TOKEN_STAGING_FILE")"
+    rm -f "$TOKEN_STAGING_FILE"
+fi
+
+if [ -n "$AIKIDO_TOKEN" ]; then
+    echo "Storing Aikido token..."
+    TOKEN_FILE="$INSTALL_DIR/.token"
+    printf '%s' "$AIKIDO_TOKEN" > "$TOKEN_FILE"
+    chmod 600 "$TOKEN_FILE"
+    chown root:wheel "$TOKEN_FILE"
+fi
 
 # Load and start the LaunchDaemon
 if [ -f "$LAUNCHDAEMON_PLIST" ]; then

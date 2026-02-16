@@ -1,0 +1,52 @@
+[package]
+name = "safechain-proxy-lib"
+description = "SafeChain Common Proxy Lib"
+version = { workspace = true }  # keep in sync with GH releases
+edition = { workspace = true }
+publish = false
+rust-version = { workspace = true }
+readme = "../docs/proxy.md"
+
+[features]
+har = []
+pac = []
+test-utils = []
+
+[dependencies]
+arc-swap = { workspace = true }
+keyring-core = { workspace = true }
+secrecy = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+postcard = { workspace = true, features = ["alloc"] }
+lz4_flex = { workspace = true }
+serde_test = { workspace = true }
+radix_trie = { workspace = true }
+serde_json = { workspace = true }
+moka = { workspace = true }
+rand = { workspace = true }
+parking_lot = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+linux-keyutils-keyring-store = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { workspace = true, features = ["keychain"] }
+sudo = { workspace = true }
+
+[target.'cfg(target_family = "unix")'.dependencies]
+libc = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = { workspace = true }
+
+[dependencies.rama]
+workspace = true
+features = ["http-full", "proxy-full", "dns", "boring", "rustls"]
+
+[dev-dependencies]
+tracing-test = { workspace = true }
+
+[dev-dependencies.rama]
+workspace = true
+features = ["cli"]

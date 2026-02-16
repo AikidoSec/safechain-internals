@@ -22,10 +22,10 @@ Run the executable:
 
 ```bash
 # Unix
-./safechain-proxy
+./safechain-l7-proxy
 
 # Windows
-safechain-proxy.exe
+SafeChainL7Proxy.exe
 ```
 
 The proxy will automatically find an available port and display it:
@@ -38,17 +38,17 @@ Or you can get the address from the local data file where it is stored as wel.
 
 ### Custom interface
 
-By default the safechain-proxy will run on the local Ipv4 interface (127.0.0.1),
+By default the safechain-l7-proxy will run on the local Ipv4 interface (127.0.0.1),
 on an available port. You can specify a specific (network) "interface" to bind to:
 
 Use the `--bind` or `-b` flag:
 
 ```bash
 # Long form
-./safechain-proxy --bind 127.0.0.1:3128
+./safechain-l7-proxy --bind 127.0.0.1:3128
 
 # Short form
-./safechain-proxy -b '[::]:3128'
+./safechain-l7-proxy -b '[::]:3128'
 ```
 
 The meta server's interface can be chosen the same using the `--meta` / `-m` flag.
@@ -58,7 +58,7 @@ that a config is accepted.
 ### Usage Command
 
 ```bash
-./safechain-proxy --help
+./safechain-l7-proxy --help
 ```
 
 ## Using the Proxy
@@ -171,7 +171,7 @@ just run-proxy
 ### Har support
 
 Safechain Proxy supports HAR exports,
-but it does require that you compile the `safechain-proxy` binary
+but it does require that you compile the `safechain-l7-proxy` binary
 using `--features har`, which is for you done when running (locally) `just run-proxy`.
 
 > In case it is the first time that you run the proxy

@@ -12,7 +12,6 @@ RELEASE_LDFLAGS=$(LDFLAGS) -s -w
 
 BIN_DIR=bin
 DIST_DIR=dist
-PROXY_DIR=proxy
 
 UNAME_S := $(shell uname -s 2>/dev/null || echo Windows)
 UNAME_M := $(shell uname -m 2>/dev/null || echo x86_64)
@@ -88,12 +87,12 @@ build-windows-amd64:
 build-windows-arm64:
 	@$(MAKE) GOOS=windows GOARCH=arm64 build-release
 
-build-proxy:
-	@echo "Building safechain-proxy..."
-	@cd $(PROXY_DIR) && cargo build --release
+build-l7-proxy:
+	@echo "Building safechain-l7-proxy..."
+	@cargo build --release --bin safechain-l7-proxy
 	@mkdir -p $(BIN_DIR)
-	@cp target/release/safechain-proxy $(BIN_DIR)/safechain-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)
-	@echo "Proxy built: $(BIN_DIR)/safechain-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)"
+	@cp target/release/safechain-l7-proxy $(BIN_DIR)/safechain-l7-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)
+	@echo "Proxy built: $(BIN_DIR)/safechain-l7-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)"
 
 build-pkg:
 ifeq ($(DETECTED_OS),darwin)
