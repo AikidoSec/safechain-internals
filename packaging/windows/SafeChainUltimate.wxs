@@ -11,6 +11,7 @@
 
     <Icon Id="SafeChainIcon.ico" SourceFile="$(var.ProjectDir)\packaging\shared\resources\SafeChain.ico" />
     <Property Id="ARPPRODUCTICON" Value="SafeChainIcon.ico" />
+    <Property Id="AIKIDO_TOKEN" Secure="yes" />
 
     <MajorUpgrade Schedule="afterInstallValidate" DowngradeErrorMessage="A newer version of SafeChain Ultimate is already installed." AllowSameVersionUpgrades="yes" />
 
@@ -21,6 +22,7 @@
       <Directory Id="INSTALLDIR" Name="AikidoSecurity">
         <Directory Id="AGENTDIR" Name="SafeChainUltimate">
           <Directory Id="BINDIR" Name="bin" />
+          <Directory Id="SCRIPTSDIR" Name="scripts" />
         </Directory>
       </Directory>
     </StandardDirectory>
@@ -41,6 +43,7 @@
       <ComponentGroupRef Id="ProductComponents" />
       <ComponentRef Id="PathComponent" />
       <ComponentRef Id="CleanupProgramData" />
+      <ComponentRef Id="StoreTokenScript" />
     </Feature>
 
     <!-- Components -->
@@ -77,6 +80,12 @@
       </Component>
     </ComponentGroup>
 
+    <DirectoryRef Id="SCRIPTSDIR">
+      <Component Id="StoreTokenScript" Guid="d1e2f3a4-5b6c-7d8e-9f0a-1b2c3d4e5f6a">
+        <File Id="StoreTokenPs1" Source="$(var.ProjectDir)\packaging\windows\scripts\StoreToken.ps1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
     <!-- Add to PATH -->
     <DirectoryRef Id="BINDIR">
       <Component Id="PathComponent" Guid="5809b6b6-57a0-4c2a-9d55-7b274ceb916a">
@@ -91,8 +100,20 @@
                   Execute="deferred"
                   Impersonate="no"
                   Return="ignore" />
+
+    <SetProperty Id="WriteAikidoToken" Before="WriteAikidoToken" Sequence="execute"
+                 Condition="AIKIDO_TOKEN"
+                 Value="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[SCRIPTSDIR]StoreToken.ps1&quot; -Token &quot;[AIKIDO_TOKEN]&quot;" />
+    <CustomAction Id="WriteAikidoToken"
+                  DllEntry="WixQuietExec64"
+                  BinaryRef="Wix4UtilCA_X86"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
     <InstallExecuteSequence>
       <Custom Action="RunTeardown" Before="RemoveFiles" Condition="(REMOVE~=&quot;ALL&quot;)" />
+      <Custom Action="WriteAikidoToken" Before="StartServices" Condition="AIKIDO_TOKEN" />
     </InstallExecuteSequence>
 
     <!-- Cleanup ProgramData on uninstall -->
