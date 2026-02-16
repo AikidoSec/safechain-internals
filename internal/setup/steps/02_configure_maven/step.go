@@ -55,7 +55,7 @@ func (s *Step) Install(ctx context.Context) error {
 		log.Printf("Warning: failed to configure Maven proxy settings: %v", err)
 	}
 
-	// Configure MAVEN_OPTS to use system truststore on macOS
+	// Configure MAVEN_OPTS to use the OS truststore
 	if err := platform.InstallMavenOptsOverride(homeDir); err != nil {
 		log.Printf("Warning: failed to persist MAVEN_OPTS truststore override: %v", err)
 	}
