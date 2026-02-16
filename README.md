@@ -11,7 +11,7 @@ Download and run the latest PKG installer from the [releases page](https://githu
 Or install via command line:
 ```bash
 curl -LO "https://github.com/AikidoSec/safechain-internals/releases/latest/download/SafeChainUltimate-macos-arm64.pkg"
-echo "YOUR_TOKEN" > /tmp/.aikido_token_staging && sudo installer -pkg SafeChainUltimate.arm64.pkg -target /
+echo "YOUR_TOKEN" > /tmp/aikido_endpoint_token.txt && sudo installer -pkg SafeChainUltimate.arm64.pkg -target /
 ```
 
 ### Windows
