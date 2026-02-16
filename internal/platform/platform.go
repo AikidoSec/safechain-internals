@@ -51,9 +51,9 @@ func GetUltimateErrLogPath() string {
 }
 
 func GetProxyLogPath() string {
-	return filepath.Join(config.LogDir, SafeChainProxyLogName)
+	return filepath.Join(config.LogDir, SafeChainL7ProxyLogName)
 }
 
 func GetProxyErrLogPath() string {
-	return filepath.Join(config.LogDir, SafeChainProxyErrLogName)
+	return filepath.Join(config.LogDir, SafeChainL7ProxyErrLogName)
 }

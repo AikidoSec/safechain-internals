@@ -14,7 +14,7 @@
     <Property Id="AIKIDO_TOKEN" Secure="yes" />
 
     <MajorUpgrade Schedule="afterInstallValidate" DowngradeErrorMessage="A newer version of SafeChain Ultimate is already installed." AllowSameVersionUpgrades="yes" />
-    
+
     <Media Id="1" Cabinet="SafeChainUltimate.cab" EmbedCab="yes" />
 
     <!-- Define installation directory structure -->
@@ -75,8 +75,8 @@
       <Component Id="SafeChainUltimateUIExe" Guid="ceafd8b2-da4d-4c92-ace7-8736cdd67162">
         <File Id="SafeChainUltimateUIExe" Source="$(var.BinDir)\SafeChainUltimateUI.exe" KeyPath="yes" />
       </Component>
-      <Component Id="SafeChainProxyExe" Guid="8a745110-05f7-4bb8-8013-5fca733409ef">
-        <File Id="SafeChainProxyExeFile" Source="$(var.BinDir)\SafeChainProxy.exe" KeyPath="yes" />
+      <Component Id="SafeChainL7ProxyExe" Guid="8a745110-05f7-4bb8-8013-5fca733409ef">
+        <File Id="SafeChainL7ProxyExeFile" Source="$(var.BinDir)\SafeChainL7Proxy.exe" KeyPath="yes" />
       </Component>
     </ComponentGroup>
 
@@ -138,4 +138,3 @@
 
   </Package>
 </Wix>
-
