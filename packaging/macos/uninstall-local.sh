@@ -31,21 +31,7 @@ fi
 
 echo ""
 
-# Run preuninstall script (stops daemon and runs teardown)
-if [ -f "$PREUNINSTALL_SCRIPT" ]; then
-    echo "Running pre-uninstall script..."
-    sudo "$PREUNINSTALL_SCRIPT"
-    echo ""
-else
-    echo "Warning: preuninstall script not found at $PREUNINSTALL_SCRIPT"
-fi
-
-echo "Removing files..."
-sudo rm -rf "/Library/Application Support/AikidoSecurity/SafeChainUltimate"
-echo "✓ Removed application files"
-
-sudo rm -rf /Library/Logs/AikidoSecurity/SafeChainUltimate
-echo "✓ Removed log files"
+sudo "/Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall"
 
 echo ""
 echo "========================================="

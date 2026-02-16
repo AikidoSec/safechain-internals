@@ -40,6 +40,7 @@ Write-Host "  Project directory: $ProjectDir"
 $AgentExe = Join-Path $BinDir "SafeChainUltimate.exe"
 $AgentUIExe = Join-Path $BinDir "SafeChainUltimateUI.exe"
 $ProxyExe = Join-Path $BinDir "SafeChainL7Proxy.exe"
+$StoreTokenScript = Join-Path $ProjectDir "packaging\windows\scripts\StoreToken.ps1"
 
 if (-not (Test-Path $AgentExe)) {
     Write-Host "Error: SafeChainUltimate.exe not found at $AgentExe" -ForegroundColor Red
@@ -53,6 +54,11 @@ if (-not (Test-Path $AgentUIExe)) {
 
 if (-not (Test-Path $ProxyExe)) {
     Write-Host "Error: SafeChainL7Proxy.exe not found at $ProxyExe" -ForegroundColor Red
+    exit 1
+}
+
+if (-not (Test-Path $StoreTokenScript)) {
+    Write-Host "Error: StoreToken.ps1 not found at $StoreTokenScript" -ForegroundColor Red
     exit 1
 }
 

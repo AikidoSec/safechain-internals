@@ -38,7 +38,7 @@ echo "✓ Agent UI built: bin/safechain-ultimate-ui-darwin-$ARCH"
 
 # Build Rust proxy
 echo "Building safechain-l7-proxy..."
-cd "$PROJECT_DIR/proxy"
+cd "$PROJECT_DIR/proxy-bin-l7"
 cargo build --release --bin safechain-l7-proxy
 cp "../target/release/safechain-l7-proxy" "../bin/safechain-l7-proxy-darwin-$ARCH"
 cd "$PROJECT_DIR"
