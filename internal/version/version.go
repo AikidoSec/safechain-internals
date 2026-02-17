@@ -17,17 +17,13 @@ var (
 	BuildTime = "unknown"
 	GitCommit = "unknown"
 
-	VersionInfoData = &VersionInfo{
+	Info = &VersionInfo{
 		Version:   Version,
 		BuildTime: BuildTime,
 		GitCommit: GitCommit,
 		GoVersion: runtime.Version(),
 	}
 )
-
-func NewVersionInfo() *VersionInfo {
-	return VersionInfoData
-}
 
 func (v *VersionInfo) String() string {
 	b, _ := json.MarshalIndent(v, "", "  ")

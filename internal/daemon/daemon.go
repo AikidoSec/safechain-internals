@@ -51,7 +51,7 @@ type Daemon struct {
 
 func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
 	d := &Daemon{
-		versionInfo: version.NewVersionInfo(),
+		versionInfo: version.Info,
 		ctx:         ctx,
 		cancel:      cancel,
 		config:      config,
