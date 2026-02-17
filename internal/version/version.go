@@ -5,12 +5,6 @@ import (
 	"runtime"
 )
 
-var (
-	Version   = "dev"
-	BuildTime = "unknown"
-	GitCommit = "unknown"
-)
-
 type VersionInfo struct {
 	Version   string `json:"version"`
 	BuildTime string `json:"build_time"`
@@ -18,13 +12,21 @@ type VersionInfo struct {
 	GoVersion string `json:"go_version"`
 }
 
-func NewVersionInfo() *VersionInfo {
-	return &VersionInfo{
+var (
+	Version   = "dev"
+	BuildTime = "unknown"
+	GitCommit = "unknown"
+
+	VersionInfoData = &VersionInfo{
 		Version:   Version,
 		BuildTime: BuildTime,
 		GitCommit: GitCommit,
 		GoVersion: runtime.Version(),
 	}
+)
+
+func NewVersionInfo() *VersionInfo {
+	return VersionInfoData
 }
 
 func (v *VersionInfo) String() string {
