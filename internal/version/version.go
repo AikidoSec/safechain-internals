@@ -1,18 +1,31 @@
 package version
 
 import (
-	"fmt"
+	"encoding/json"
 	"runtime"
 )
+
+type VersionInfo struct {
+	Version   string `json:"version"`
+	BuildTime string `json:"build_time"`
+	GitCommit string `json:"git_commit"`
+	GoVersion string `json:"go_version"`
+}
 
 var (
 	Version   = "dev"
 	BuildTime = "unknown"
 	GitCommit = "unknown"
-	GoVersion = runtime.Version()
+
+	Info = &VersionInfo{
+		Version:   Version,
+		BuildTime: BuildTime,
+		GitCommit: GitCommit,
+		GoVersion: runtime.Version(),
+	}
 )
 
-func Info() string {
-	return fmt.Sprintf("Version: %s\nBuild Time: %s\nGit Commit: %s\nGo Version: %s",
-		Version, BuildTime, GitCommit, GoVersion)
+func (v *VersionInfo) String() string {
+	b, _ := json.MarshalIndent(v, "", "  ")
+	return string(b)
 }

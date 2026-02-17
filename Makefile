@@ -123,7 +123,7 @@ endif
 
 uninstall-pkg:
 ifeq ($(DETECTED_OS),darwin)
-	@cd packaging/macos && ./uninstall-local.sh
+	sudo "/Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall"
 else
 	@echo "Error: PKG uninstallation is only supported on macOS"
 	@exit 1
