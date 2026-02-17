@@ -415,7 +415,7 @@ func GetOSVersion() string {
 	return strings.TrimSpace(version)
 }
 
-func GetDeviceID() (string, error) {
+func GetRawDeviceID() (string, error) {
 	output, err := exec.Command("ioreg", "-rd1", "-c", "IOPlatformExpertDevice").Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to run ioreg: %w", err)

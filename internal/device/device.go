@@ -48,14 +48,14 @@ func NewDeviceInfo() *DeviceInfo {
 	}
 
 	d.OSVersion = platform.GetOSVersion()
-	rawDeviceID, err := platform.GetDeviceID()
+	rawDeviceID, err := platform.GetRawDeviceID()
 	if err != nil {
 		log.Println("failed to get device ID:", err)
 		return nil
 	}
 	rawDeviceID = strings.ToUpper(rawDeviceID)
-	hash := sha256.Sum256([]byte(rawDeviceID))
-	d.DeviceID = hex.EncodeToString(hash[:])
+	hashedDeviceID := sha256.Sum256([]byte(rawDeviceID))
+	d.DeviceID = hex.EncodeToString(hashedDeviceID[:])
 	return d
 }
 
