@@ -8,12 +8,13 @@ const (
 	mavenRcMarkerStart = "REM aikido-safe-chain-start"
 	mavenRcMarkerEnd   = "REM aikido-safe-chain-end"
 	mavenRcFilePerm    = 0o644
+	mavenRcFilename    = "mavenrc_pre.cmd"
 	mavenRcLine        = `set "MAVEN_OPTS=%MAVEN_OPTS% -Daikido.safechain.mavenopts=true -Djavax.net.ssl.trustStoreType=Windows-ROOT -Djavax.net.ssl.trustStore=NONE"`
 )
 
 func InstallMavenOptsOverride(homeDir string) error {
 	return installMavenRcOverride(
-		filepath.Join(homeDir, "mavenrc_pre.cmd"),
+		filepath.Join(homeDir, mavenRcFilename),
 		mavenRcMarkerStart,
 		mavenRcMarkerEnd,
 		mavenRcLine,
@@ -23,7 +24,7 @@ func InstallMavenOptsOverride(homeDir string) error {
 
 func UninstallMavenOptsOverride(homeDir string) error {
 	return uninstallMavenRcOverride(
-		filepath.Join(homeDir, "mavenrc_pre.cmd"),
+		filepath.Join(homeDir, mavenRcFilename),
 		mavenRcMarkerStart,
 		mavenRcMarkerEnd,
 		mavenRcFilePerm,
