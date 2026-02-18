@@ -48,9 +48,9 @@ func (s *Step) Install(ctx context.Context) error {
 		return fmt.Errorf("invalid proxy URL: missing host or port (got host=%q, port=%q)", host, port)
 	}
 
-	homeDir, err := platform.GetActiveUserHomeDir()
+	homeDir, err := platform.GetMavenHomeDir()
 	if err != nil {
-		return fmt.Errorf("failed to resolve active user home directory: %v", err)
+		return fmt.Errorf("failed to resolve user home directory: %v", err)
 	}
 
 	// Configure Maven proxy settings
@@ -68,9 +68,9 @@ func (s *Step) Install(ctx context.Context) error {
 }
 
 func (s *Step) Uninstall(ctx context.Context) error {
-	homeDir, err := platform.GetActiveUserHomeDir()
+	homeDir, err := platform.GetMavenHomeDir()
 	if err != nil {
-		return fmt.Errorf("failed to resolve active user home directory: %v", err)
+		return fmt.Errorf("failed to resolve user home directory: %v", err)
 	}
 
 	if err := uninstallMavenProxySetting(homeDir); err != nil {

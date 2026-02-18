@@ -165,7 +165,26 @@ func isSystemProxySetForSid(ctx context.Context, sid string) bool {
 
 func isSystemPACSetForSid(ctx context.Context, sid string, pacURL string) bool {
 	regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
-	return registryValueContains(ctx, regPath, "AutoConfigURL", pacURL)
+	output, err := utils.RunCommand(ctx, "reg", "query", regPath, "/v", "AutoConfigURL")
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "AutoConfigURL") {
+			continue
+		}
+		parts := strings.SplitN(line, "REG_SZ", 2)
+		if len(parts) < 2 {
+			return false
+		}
+		val := strings.TrimSpace(parts[1])
+		if pacURL == "" {
+			return val != ""
+		}
+		return val == pacURL
+	}
+	return false
 }
 
 func IsSystemPACSet(ctx context.Context, pacURL string) error {

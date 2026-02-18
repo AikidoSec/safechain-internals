@@ -2,7 +2,10 @@
 
 package platform
 
-import "path/filepath"
+import (
+	"os"
+	"path/filepath"
+)
 
 const (
 	mavenRcMarkerStart = "# aikido-safe-chain-start"
@@ -19,4 +22,11 @@ func InstallMavenOptsOverride(homeDir string) error {
 func UninstallMavenOptsOverride(homeDir string) error {
 	mavenrcPath := filepath.Join(homeDir, ".mavenrc")
 	return uninstallMavenRcOverride(mavenrcPath, mavenRcMarkerStart, mavenRcMarkerEnd, mavenRcFilePerm)
+}
+
+func GetMavenHomeDir() (string, error) {
+	if config.HomeDir != "" {
+		return config.HomeDir, nil
+	}
+	return os.UserHomeDir()
 }

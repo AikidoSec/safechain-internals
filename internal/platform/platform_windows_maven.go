@@ -29,3 +29,7 @@ func UninstallMavenOptsOverride(homeDir string) error {
 		mavenRcFilePerm,
 	)
 }
+
+func GetMavenHomeDir() (string, error) {
+	return GetActiveUserHomeDir()
+}
