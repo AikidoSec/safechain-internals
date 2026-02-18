@@ -73,32 +73,27 @@ pub(super) fn new_root_tls_crt_key_pair(
         // NOTE if we want to make this more resilient we can if cert is no longer found
         // try to recover it from system certificate storage. See note at the end of this file.
         tracing::debug!("root ca key found — assumption: Cert MUST exist as well!");
-        let crt_data: Option<DataProxyRootCACrt> = data_storage
+        let data_storage: DataProxyRootCACrt = data_storage
             .load(AIKIDO_SECRET_ROOT_CA_CRT)
-            .context("read root ca crt data")?;
-        if let Some(crt_data) = crt_data {
-            tracing::debug!("root ca crt found... re-encoding it all so callee can make use of it");
+            .context("read root ca crt data")?
+            .context("assume root ca crt exists")?;
+        tracing::debug!("root ca crt found... re-encoding it all so callee can make use of it");
 
-            let crt = crt_data
-                .try_crt_as_pem(key_data.crt_fingerprint())
-                .context("compute PEM for found crt in data")?;
+        let crt = data_storage
+            .try_crt_as_pem(key_data.crt_fingerprint())
+            .context("compute PEM for found crt in data")?;
 
-            let key = String::from_utf8(
-                PKey::private_key_from_der(key_data.key())
-                    .context("parse (secret) private key from DER")?
-                    .private_key_to_pem_pkcs8()
-                    .context("generate PEM CA key byte slice")?,
-            )
-            .context("PEM CA key byte slice as String")?
-            .try_into()
-            .context("PEM CA key string as NonEmpty variant")?;
+        let key = String::from_utf8(
+            PKey::private_key_from_der(key_data.key())
+                .context("parse (secret) private key from DER")?
+                .private_key_to_pem_pkcs8()
+                .context("generate PEM CA key byte slice")?,
+        )
+        .context("PEM CA key byte slice as String")?
+        .try_into()
+        .context("PEM CA key string as NonEmpty variant")?;
 
-            return Ok(PemKeyCrtPair { crt, key });
-        }
-
-        tracing::warn!(
-            "root ca key found but crt missing; regenerating new CA pair to recover"
-        );
+        return Ok(PemKeyCrtPair { crt, key });
     }
 
     tracing::debug!("no CA key was present in secret storage, generate + store pair now...");
