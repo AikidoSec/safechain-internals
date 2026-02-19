@@ -5,6 +5,7 @@
 )]
 
 pub mod diagnostics;
+pub mod endpoint_protection;
 pub mod http;
 pub mod package;
 pub mod storage;
