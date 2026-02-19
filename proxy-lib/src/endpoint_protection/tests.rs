@@ -1,5 +1,4 @@
 use super::*;
-use rama::http::Uri;
 
 #[test]
 fn test_parse_endpoint_config_npm() {
