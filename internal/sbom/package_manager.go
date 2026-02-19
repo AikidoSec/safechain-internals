@@ -10,8 +10,8 @@ type InstalledVersion struct {
 }
 
 type Package struct {
-	Name    string
-	Version string
+	Name    string `json:"name"`
+	Version string `json:"version"`
 }
 
 type PackageManager interface {

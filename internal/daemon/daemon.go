@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -290,8 +291,16 @@ func (d *Daemon) handleProxy() (shouldRetry bool, err error) {
 	return true, nil
 }
 
-func (d *Daemon) collectSBOM() map[string][]sbom.Package {
-	return d.sbomManager.CollectAll(d.ctx)
+func (d *Daemon) reportSBOM() error {
+	packages := d.sbomManager.CollectAllPackages(d.ctx)
+
+	packagesJSON, err := json.MarshalIndent(packages, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal packages to JSON: %w", err)
+	}
+
+	log.Printf("SBOM packages: %s", packagesJSON)
+	return nil
 }
 
 func (d *Daemon) heartbeat() error {
@@ -303,16 +312,22 @@ func (d *Daemon) heartbeat() error {
 		log.Printf("Failed to start proxy: %v", err)
 	}
 
-	if time.Since(d.daemonLastStatusLogTime) >= constants.DaemonStatusLogInterval {
+	runAtInterval(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() {
 		d.printDaemonStatus()
-		d.daemonLastStatusLogTime = time.Now()
-	}
-	if time.Since(d.daemonLastSBOMReportTime) >= constants.SBOMReportInterval {
-		sbom := d.collectSBOM()
-		log.Printf("SBOM collected: %v", sbom)
-		d.daemonLastSBOMReportTime = time.Now()
-	}
+	})
+	runAtInterval(&d.daemonLastSBOMReportTime, constants.SBOMReportInterval, func() {
+		if err := d.reportSBOM(); err != nil {
+			log.Printf("Failed to report SBOM: %v", err)
+		}
+	})
 	return nil
+}
+
+func runAtInterval(lastRun *time.Time, interval time.Duration, fn func()) {
+	if time.Since(*lastRun) >= interval {
+		fn()
+		*lastRun = time.Now()
+	}
 }
 
 func (d *Daemon) initLogging() {

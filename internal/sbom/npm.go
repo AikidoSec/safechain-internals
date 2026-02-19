@@ -51,7 +51,7 @@ func (n *Npm) Installations(ctx context.Context) ([]InstalledVersion, error) {
 			log.Printf("Skipping npm at %s: %v", path, err)
 			continue
 		}
-		log.Printf("Found npm %s at %s", version, path)
+		log.Printf("Found npm %s at: %s", version, path)
 		installations = append(installations, InstalledVersion{
 			Version: version,
 			Path:    path,

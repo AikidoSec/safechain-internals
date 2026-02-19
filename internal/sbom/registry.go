@@ -39,7 +39,7 @@ func (r *Registry) List() []string {
 	return names
 }
 
-func (r *Registry) CollectAll(ctx context.Context) map[string][]Package {
+func (r *Registry) CollectAllPackages(ctx context.Context) map[string][]Package {
 	result := make(map[string][]Package)
 
 	for name, pm := range r.managers {
