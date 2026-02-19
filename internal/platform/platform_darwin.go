@@ -340,9 +340,9 @@ func GetCurrentUser(ctx context.Context) (string, int, string, int, error) {
 	return username, uidInt, group, gidInt, nil
 }
 
-func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
+func RunAsCurrentUserWithEnv(ctx context.Context, env []string, binaryPath string, args []string) (string, error) {
 	if !RunningAsRoot() {
-		return utils.RunCommand(ctx, binaryPath, args...)
+		return utils.RunCommandWithEnv(ctx, env, binaryPath, args...)
 	}
 
 	username, _, _, _, err := GetCurrentUser(ctx)
@@ -350,8 +350,18 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (st
 		return "", fmt.Errorf("failed to get console user: %v", err)
 	}
 
-	suArgs := append([]string{"-u", username, binaryPath}, args...)
-	return utils.RunCommandWithEnv(ctx, []string{}, "sudo", suArgs...)
+	suArgs := []string{"-u", username}
+	if len(env) > 0 {
+		suArgs = append(suArgs, "env")
+		suArgs = append(suArgs, env...)
+	}
+	suArgs = append(suArgs, binaryPath)
+	suArgs = append(suArgs, args...)
+	return utils.RunCommand(ctx, "sudo", suArgs...)
+}
+
+func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
+	return RunAsCurrentUserWithEnv(ctx, []string{}, binaryPath, args)
 }
 
 func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {

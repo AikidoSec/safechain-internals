@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
-	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
 const (
@@ -187,7 +186,7 @@ func runNpm(ctx context.Context, npmPath string, args ...string) (string, error)
 
 	pathEnv = pathEnv + string(os.PathListSeparator) + os.Getenv("PATH")
 	env := []string{"PATH=" + pathEnv}
-	return utils.RunCommandWithEnv(ctx, env, npmPath, args...)
+	return platform.RunAsCurrentUserWithEnv(ctx, env, npmPath, args)
 }
 
 func getNpmVersion(ctx context.Context, path string) (string, error) {

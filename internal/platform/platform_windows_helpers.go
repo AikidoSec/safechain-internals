@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"runtime"
 	"strings"
 	"unsafe"
 
@@ -156,7 +157,20 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 	return string(output), nil
 }
 
-func runAsLoggedInUser(binaryPath string, args []string) (string, error) {
+func buildEnvironmentBlock(envs []string) ([]uint16, error) {
+	var block []uint16
+	for _, env := range envs {
+		utf16Str, err := windows.UTF16FromString(env)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode env var %q: %v", env, err)
+		}
+		block = append(block, utf16Str...)
+	}
+	block = append(block, 0)
+	return block, nil
+}
+
+func runAsLoggedInUserWithEnv(env []string, binaryPath string, args []string) (string, error) {
 	userToken, err := getCurrentUserToken()
 	if err != nil {
 		return "", fmt.Errorf("getCurrentUserToken failed: %v", err)
@@ -170,10 +184,19 @@ func runAsLoggedInUser(binaryPath string, args []string) (string, error) {
 	defer duplicatedToken.Close()
 
 	var envBlock *uint16
-	if err := windows.CreateEnvironmentBlock(&envBlock, duplicatedToken, false); err != nil {
-		return "", fmt.Errorf("CreateEnvironmentBlock failed: %v", err)
+	var customEnvBlock []uint16
+	if len(env) > 0 {
+		customEnvBlock, err = buildEnvironmentBlock(env)
+		if err != nil {
+			return "", fmt.Errorf("buildEnvironmentBlock failed: %v", err)
+		}
+		envBlock = &customEnvBlock[0]
+	} else {
+		if err := windows.CreateEnvironmentBlock(&envBlock, duplicatedToken, false); err != nil {
+			return "", fmt.Errorf("CreateEnvironmentBlock failed: %v", err)
+		}
+		defer windows.DestroyEnvironmentBlock(envBlock)
 	}
-	defer windows.DestroyEnvironmentBlock(envBlock)
 
 	cmdLinePtr := buildCommandLineForWindowsProcess(binaryPath, args)
 	if cmdLinePtr == nil {
@@ -181,6 +204,7 @@ func runAsLoggedInUser(binaryPath string, args []string) (string, error) {
 	}
 
 	output, err := runProcessAsUser(duplicatedToken, cmdLinePtr, envBlock)
+	runtime.KeepAlive(customEnvBlock)
 	if err != nil {
 		return "", fmt.Errorf("runProcessAsUser failed: %v", err)
 	}
