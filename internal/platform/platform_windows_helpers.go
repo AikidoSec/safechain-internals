@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"runtime"
 	"strings"
 	"unsafe"
 
@@ -157,6 +156,22 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 	return string(output), nil
 }
 
+func parseEnvironmentBlock(block *uint16) []string {
+	var envs []string
+	offset := uintptr(0)
+	for {
+		p := (*uint16)(unsafe.Pointer(uintptr(unsafe.Pointer(block)) + offset))
+		s := windows.UTF16PtrToString(p)
+		if s == "" {
+			break
+		}
+		envs = append(envs, s)
+		utf16Str, _ := windows.UTF16FromString(s)
+		offset += uintptr(len(utf16Str) * 2)
+	}
+	return envs
+}
+
 func buildEnvironmentBlock(envs []string) ([]uint16, error) {
 	var block []uint16
 	for _, env := range envs {
@@ -183,19 +198,22 @@ func runAsLoggedInUserWithEnv(env []string, binaryPath string, args []string) (s
 	}
 	defer duplicatedToken.Close()
 
-	var envBlock *uint16
+	var userEnvBlock *uint16
+	if err := windows.CreateEnvironmentBlock(&userEnvBlock, duplicatedToken, false); err != nil {
+		return "", fmt.Errorf("CreateEnvironmentBlock failed: %v", err)
+	}
+	defer windows.DestroyEnvironmentBlock(userEnvBlock)
+
+	envBlock := userEnvBlock
 	var customEnvBlock []uint16
 	if len(env) > 0 {
-		customEnvBlock, err = buildEnvironmentBlock(env)
+		baseEnv := parseEnvironmentBlock(userEnvBlock)
+		merged := append(baseEnv, env...)
+		customEnvBlock, err = buildEnvironmentBlock(merged)
 		if err != nil {
 			return "", fmt.Errorf("buildEnvironmentBlock failed: %v", err)
 		}
 		envBlock = &customEnvBlock[0]
-	} else {
-		if err := windows.CreateEnvironmentBlock(&envBlock, duplicatedToken, false); err != nil {
-			return "", fmt.Errorf("CreateEnvironmentBlock failed: %v", err)
-		}
-		defer windows.DestroyEnvironmentBlock(envBlock)
 	}
 
 	cmdLinePtr := buildCommandLineForWindowsProcess(binaryPath, args)
@@ -204,7 +222,6 @@ func runAsLoggedInUserWithEnv(env []string, binaryPath string, args []string) (s
 	}
 
 	output, err := runProcessAsUser(duplicatedToken, cmdLinePtr, envBlock)
-	runtime.KeepAlive(customEnvBlock)
 	if err != nil {
 		return "", fmt.Errorf("runProcessAsUser failed: %v", err)
 	}
