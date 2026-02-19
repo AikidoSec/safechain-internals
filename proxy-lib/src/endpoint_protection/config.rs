@@ -36,8 +36,11 @@ impl RemoteEndpointConfig {
     ///
     /// * `guard` - Graceful shutdown guard for background task
     /// * `uri` - Config endpoint URL (e.g., `https://config.aikido.dev/api/endpoint_protection/config`)
+    ///   TODO: Confirm final endpoint URL
     /// * `token` - Permission group token from installation command.
+    ///   TODO: Verify token format and authentication mechanism
     /// * `device_id` - Unique device identifier (UUID).
+    ///   TODO: Confirm device_id header name and format requirements
     /// * `sync_storage` - Storage for caching config
     /// * `client` - HTTP client for fetching config
     pub async fn try_new<C>(
@@ -174,6 +177,7 @@ where
         let req_builder = self.client.get(self.uri.clone());
 
         // Add authentication headers
+        // TODO: Confirm header names and auth scheme
         let req_builder = req_builder
             .header("Authorization", self.token.as_str())
             .header("X-Device-Id", self.device_id.as_str());
@@ -192,7 +196,6 @@ where
             .context_debug_field("tt", start.elapsed())
             .with_context_field("uri", || self.uri.clone())?;
 
-        // Handle 304 Not Modified
         if resp.status() == StatusCode::NOT_MODIFIED {
             tracing::debug!(
                 "endpoint config endpoint '{}' reported config is not modified; (tt: {:?})",
@@ -334,8 +337,7 @@ fn with_jitter(refresh: Duration) -> Duration {
     refresh + Duration::from_secs_f64(jitter_secs)
 }
 
-// ===== Data Structures =====
-
+// TODO: Finalize JSON schema
 #[derive(Serialize, Deserialize)]
 struct CachedEndpointConfig {
     pub e_tag: Option<ArcStr>,
