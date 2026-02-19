@@ -11,7 +11,7 @@ use rama::{
     utils::str::arcstr::ArcStr,
 };
 
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, Guard};
 use rand::RngExt as _;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
@@ -116,10 +116,20 @@ impl RemoteEndpointConfig {
         self.config.load_full()
     }
 
-    /// Get config for a specific ecosystem.
-    pub fn get_ecosystem_config(&self, ecosystem: &str) -> Option<EcosystemConfig> {
-        let config = self.config.load();
-        config.ecosystems.get(ecosystem).cloned()
+    pub fn get_ecosystem_config<'a>(&self, ecosystem: &'a str) -> EcosystemConfigResult<'a> {
+        let guard = self.config.load();
+        EcosystemConfigResult { ecosystem, guard }
+    }
+}
+
+pub struct EcosystemConfigResult<'a> {
+    ecosystem: &'a str,
+    guard: Guard<Arc<EndpointConfig>>,
+}
+
+impl EcosystemConfigResult<'_> {
+    pub fn config(&self) -> Option<&EcosystemConfig> {
+        self.guard.ecosystems.get(self.ecosystem)
     }
 }
 
