@@ -169,7 +169,6 @@ where
 
         let req_builder = self.client.get(self.uri.clone());
 
-        // Add authentication header
         let req_builder = req_builder.header("Authorization", self.token.as_str());
 
         let req_builder = if let Some(e_tag) = previous_e_tag {
