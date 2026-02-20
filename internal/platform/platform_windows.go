@@ -320,6 +320,8 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (st
 }
 
 func RunAsCurrentUserWithEnv(ctx context.Context, _ []string, binaryPath string, args []string) (string, error) {
+	// We keep this simple for now, without supporting environment variables for running as current user
+	// It's not needed for the current use cases and would overcomplicate the code.
 	return RunAsCurrentUser(ctx, binaryPath, args)
 }
 
