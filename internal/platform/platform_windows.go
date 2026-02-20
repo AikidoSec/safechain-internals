@@ -102,7 +102,7 @@ func GetActiveUserHomeDir() (string, error) {
 // such as modifying the PowerShell profile for shell integration.
 // As safe-chain will run as the current user, we need to set the PowerShell execution policy for the current user.
 func PrepareShellEnvironment(ctx context.Context) error {
-	_, err := runAsLoggedInUserWithEnv([]string{}, "powershell", []string{"-Command",
+	_, err := RunAsCurrentUser(ctx, "powershell", []string{"-Command",
 		"Set-ExecutionPolicy", "-ExecutionPolicy", "RemoteSigned", "-Scope", "CurrentUser", "-Force"})
 	return err
 }
@@ -311,20 +311,20 @@ func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
 	return svc.Run(serviceName, &windowsService{runner: runner})
 }
 
-func RunAsCurrentUserWithEnv(ctx context.Context, env []string, binaryPath string, args []string) (string, error) {
+func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
 	if !IsWindowsService() {
-		return utils.RunCommandWithEnv(ctx, env, binaryPath, args...)
+		return utils.RunCommand(ctx, binaryPath, args...)
 	}
 
-	return runAsLoggedInUserWithEnv(env, binaryPath, args)
+	return runAsLoggedInUser(binaryPath, args)
 }
 
-func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
-	return RunAsCurrentUserWithEnv(ctx, []string{}, binaryPath, args)
+func RunAsCurrentUserWithEnv(ctx context.Context, _ []string, binaryPath string, args []string) (string, error) {
+	return RunAsCurrentUser(ctx, binaryPath, args)
 }
 
 func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
-	return runAsLoggedInUserWithEnv([]string{}, binaryPath, args)
+	return RunAsCurrentUser(ctx, binaryPath, args)
 }
 
 func downloadAndRunSafeChainPowerShellScript(ctx context.Context, repoURL, version string, scriptName string, tempFilePattern string) error {

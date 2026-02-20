@@ -156,36 +156,7 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 	return string(output), nil
 }
 
-func parseEnvironmentBlock(block *uint16) []string {
-	var envs []string
-	offset := uintptr(0)
-	for {
-		p := (*uint16)(unsafe.Pointer(uintptr(unsafe.Pointer(block)) + offset))
-		s := windows.UTF16PtrToString(p)
-		if s == "" {
-			break
-		}
-		envs = append(envs, s)
-		utf16Str, _ := windows.UTF16FromString(s)
-		offset += uintptr(len(utf16Str) * 2)
-	}
-	return envs
-}
-
-func buildEnvironmentBlock(envs []string) ([]uint16, error) {
-	var block []uint16
-	for _, env := range envs {
-		utf16Str, err := windows.UTF16FromString(env)
-		if err != nil {
-			return nil, fmt.Errorf("failed to encode env var %q: %v", env, err)
-		}
-		block = append(block, utf16Str...)
-	}
-	block = append(block, 0)
-	return block, nil
-}
-
-func runAsLoggedInUserWithEnv(env []string, binaryPath string, args []string) (string, error) {
+func runAsLoggedInUser(binaryPath string, args []string) (string, error) {
 	userToken, err := getCurrentUserToken()
 	if err != nil {
 		return "", fmt.Errorf("getCurrentUserToken failed: %v", err)
@@ -198,23 +169,11 @@ func runAsLoggedInUserWithEnv(env []string, binaryPath string, args []string) (s
 	}
 	defer duplicatedToken.Close()
 
-	var userEnvBlock *uint16
-	if err := windows.CreateEnvironmentBlock(&userEnvBlock, duplicatedToken, false); err != nil {
+	var envBlock *uint16
+	if err := windows.CreateEnvironmentBlock(&envBlock, duplicatedToken, false); err != nil {
 		return "", fmt.Errorf("CreateEnvironmentBlock failed: %v", err)
 	}
-	defer windows.DestroyEnvironmentBlock(userEnvBlock)
-
-	envBlock := userEnvBlock
-	var customEnvBlock []uint16
-	if len(env) > 0 {
-		baseEnv := parseEnvironmentBlock(userEnvBlock)
-		merged := append(baseEnv, env...)
-		customEnvBlock, err = buildEnvironmentBlock(merged)
-		if err != nil {
-			return "", fmt.Errorf("buildEnvironmentBlock failed: %v", err)
-		}
-		envBlock = &customEnvBlock[0]
-	}
+	defer windows.DestroyEnvironmentBlock(envBlock)
 
 	cmdLinePtr := buildCommandLineForWindowsProcess(binaryPath, args)
 	if cmdLinePtr == nil {
