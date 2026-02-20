@@ -332,7 +332,6 @@ fn with_jitter(refresh: Duration) -> Duration {
     refresh + Duration::from_secs_f64(jitter_secs)
 }
 
-
 #[derive(Serialize, Deserialize)]
 struct CachedEndpointConfig {
     pub e_tag: Option<ArcStr>,
