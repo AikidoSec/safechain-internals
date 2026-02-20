@@ -14,6 +14,17 @@ type Package struct {
 	Version string `json:"version"`
 }
 
+type EcosystemEntry struct {
+	Ecosystem string    `json:"ecosystem"`
+	Version   string    `json:"version"`
+	Path      string    `json:"path"`
+	Packages  []Package `json:"packages"`
+}
+
+type SBOM struct {
+	Entries []EcosystemEntry `json:"sbom"`
+}
+
 type PackageManager interface {
 	Name() string
 	Installations(ctx context.Context) ([]InstalledVersion, error)

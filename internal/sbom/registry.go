@@ -39,8 +39,8 @@ func (r *Registry) List() []string {
 	return names
 }
 
-func (r *Registry) CollectAllPackages(ctx context.Context) map[string][]Package {
-	result := make(map[string][]Package)
+func (r *Registry) CollectAllPackages(ctx context.Context) SBOM {
+	var entries []EcosystemEntry
 
 	for name, pm := range r.managers {
 		installations, err := pm.Installations(ctx)
@@ -50,15 +50,19 @@ func (r *Registry) CollectAllPackages(ctx context.Context) map[string][]Package 
 		}
 
 		for _, inst := range installations {
-			key := fmt.Sprintf("%s@%s", name, inst.Version)
 			packages, err := pm.SBOM(ctx, inst)
 			if err != nil {
 				log.Printf("Failed to collect SBOM for '%s' (%s): %v", name, inst.Version, err)
 				continue
 			}
-			result[key] = packages
+			entries = append(entries, EcosystemEntry{
+				Ecosystem: name,
+				Version:   inst.Version,
+				Path:      inst.Path,
+				Packages:  packages,
+			})
 		}
 	}
 
-	return result
+	return SBOM{Entries: entries}
 }

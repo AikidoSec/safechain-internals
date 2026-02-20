@@ -292,14 +292,14 @@ func (d *Daemon) handleProxy() (shouldRetry bool, err error) {
 }
 
 func (d *Daemon) reportSBOM() error {
-	packages := d.sbomManager.CollectAllPackages(d.ctx)
+	sbom := d.sbomManager.CollectAllPackages(d.ctx)
 
-	packagesJSON, err := json.MarshalIndent(packages, "", "  ")
+	sbomJSON, err := json.MarshalIndent(sbom, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal packages to JSON: %w", err)
+		return fmt.Errorf("failed to marshal SBOM to JSON: %w", err)
 	}
 
-	log.Printf("SBOM packages: %s", packagesJSON)
+	log.Printf("SBOM: %s", sbomJSON)
 	return nil
 }
 
