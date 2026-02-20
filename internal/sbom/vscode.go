@@ -69,15 +69,11 @@ func (v *VSCodeExtensions) Installations(ctx context.Context) ([]InstalledVersio
 		}
 
 		version := getEditorVersion(ctx, variant)
-		versionLabel := variant.name
-		if version != "" {
-			versionLabel = variant.name + "/" + version
-		}
-
-		log.Printf("Found %s extensions at: %s (version: %s)", variant.name, extPath, versionLabel)
+		log.Printf("Found %s extensions at: %s (version: %s)", variant.name, extPath, version)
 		installations = append(installations, InstalledVersion{
-			Version: versionLabel,
-			Path:    extPath,
+			Ecosystem: variant.name,
+			Version:   version,
+			Path:      extPath,
 		})
 	}
 
