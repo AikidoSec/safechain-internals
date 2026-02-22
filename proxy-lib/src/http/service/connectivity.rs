@@ -1,6 +1,6 @@
 use rama::{
     Service,
-    error::BoxError,
+    error::extra::OpaqueError,
     http::{
         Request, Response,
         headers::{self, HeaderMapExt as _},
@@ -21,7 +21,7 @@ pub const CONNECTIVITY_DOMAIN: Domain = Domain::from_static("proxy.safechain.int
 /// as a pseudo service to easily test as an end-user
 /// if connectivity to proxy is as expected.
 pub fn new_connectivity_http_svc<Body: Send + 'static>()
--> impl Service<Request<Body>, Output = Response, Error = BoxError> + Clone {
+-> impl Service<Request<Body>, Output = Response, Error = OpaqueError> + Clone {
     service_fn(async |req: Request<Body>| Ok(generate_connectivity_page(&req)))
 }
 

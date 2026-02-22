@@ -12,7 +12,7 @@
 #[cfg(not(test))]
 use rama::{
     Service,
-    error::{BoxError, ErrorContext as _},
+    error::{BoxError, ErrorContext as _, extra::OpaqueError},
     http::{Request, Response, Version, client::EasyHttpWebClient},
     rt::Executor,
 };
@@ -26,7 +26,7 @@ pub use self::mock_client::new_mock_client as new_web_client;
 /// Create a new web client that can be cloned and shared.
 #[cfg(not(test))]
 pub fn new_web_client()
--> Result<impl Service<Request, Output = Response, Error = BoxError> + Clone, BoxError> {
+-> Result<impl Service<Request, Output = Response, Error = OpaqueError> + Clone, BoxError> {
     use rama::tls::rustls::dep::rustls::ClientConfig;
     use rustls_platform_verifier::ConfigVerifierExt;
 
