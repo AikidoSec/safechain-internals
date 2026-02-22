@@ -1,5 +1,5 @@
 [workspace]
-members = ["proxy-bin-l7", "proxy-fuzz", "proxy-lib"]
+members = ["proxy-bin-l4", "proxy-bin-l7", "proxy-fuzz", "proxy-lib"]
 resolver = "3"
 
 [workspace.package]

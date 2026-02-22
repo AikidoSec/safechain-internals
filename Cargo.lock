@@ -2940,15 +2940,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
+name = "safechain-l4-proxy"
+version = "1.0.0"
+dependencies = [
+ "clap",
+ "mimalloc",
+ "rama",
+ "safechain-proxy-lib",
+ "static_vcruntime",
+ "tikv-jemallocator",
+ "tokio",
+]
+
+[[package]]
 name = "safechain-l7-proxy"
 version = "1.0.0"
 dependencies = [
- "apple-native-keyring-store",
  "arc-swap",
  "clap",
  "humantime",
  "libc",
- "linux-keyutils-keyring-store",
  "mimalloc",
  "rama",
  "rustls-platform-verifier",
@@ -2957,11 +2968,9 @@ dependencies = [
  "serde_html_form",
  "serde_json",
  "static_vcruntime",
- "sudo",
  "tikv-jemallocator",
  "tokio",
  "tracing-test",
- "windows-native-keyring-store",
 ]
 
 [[package]]

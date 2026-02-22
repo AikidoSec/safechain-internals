@@ -26,7 +26,10 @@ use serde::{Serialize, de::DeserializeOwned};
 ///
 /// Use this storage at the start of the app,
 /// or from a tokio blocking thread!
-pub struct SyncSecrets(Backend);
+pub struct SyncSecrets {
+    backend: Backend,
+    account: &'static str,
+}
 
 #[derive(Debug, Clone)]
 enum Backend {
@@ -41,40 +44,65 @@ enum Backend {
     },
 }
 
-const AIKIDO_SECRET_SVC: &str = crate::utils::env::project_name();
-
 impl SyncSecrets {
     #[inline(always)]
-    pub(crate) fn try_new_keyring() -> Result<Self, BoxError> {
-        Ok(Self(Backend::KeyRing {
-            store: try_new_keychain_store()?,
-        }))
+    pub fn try_new(account: &'static str, storage: StorageKind) -> Result<Self, BoxError> {
+        match storage {
+            StorageKind::Keyring => Self::try_new_keyring(account),
+            StorageKind::Memory => Ok(Self::new_in_memory(account)),
+            StorageKind::Fs(dir) => Self::try_new_fs(account, dir),
+        }
     }
 
     #[inline(always)]
-    pub(crate) fn new_in_memory() -> Self {
-        Self(Backend::InMemory {
-            secrets: Arc::new(RwLock::new(HashMap::new())),
+    pub(crate) fn try_new_keyring(account: &'static str) -> Result<Self, BoxError> {
+        Ok(Self {
+            backend: Backend::KeyRing {
+                store: try_new_keychain_store()?,
+            },
+            account,
         })
     }
 
     #[inline(always)]
-    pub(crate) fn new_fs(dir: PathBuf) -> Self {
-        Self(Backend::Fs { dir })
+    pub(crate) fn new_in_memory(account: &'static str) -> Self {
+        Self {
+            backend: Backend::InMemory {
+                secrets: Arc::new(RwLock::new(HashMap::new())),
+            },
+            account,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn try_new_fs(account: &'static str, dir: PathBuf) -> Result<Self, BoxError> {
+        let dir = dir.join("secrets").join(account);
+        std::fs::create_dir_all(&dir).context("create new fs dir")?;
+        Ok(Self {
+            backend: Backend::Fs { dir },
+            account,
+        })
     }
 }
 
-impl FromStr for SyncSecrets {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StorageKind {
+    Keyring,
+    Memory,
+    Fs(PathBuf),
+}
+
+impl FromStr for StorageKind {
     type Err = BoxError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.trim();
         if s.eq_ignore_ascii_case("keyring") {
-            return Self::try_new_keyring();
+            return Ok(Self::Keyring);
         }
 
         if s.eq_ignore_ascii_case("memory") {
-            return Ok(Self::new_in_memory());
+            return Ok(Self::Memory);
         }
 
         let dir = PathBuf::from(s);
@@ -92,7 +120,7 @@ impl FromStr for SyncSecrets {
             );
         }
 
-        Ok(Self::new_fs(dir))
+        Ok(Self::Fs(dir))
     }
 }
 
@@ -103,7 +131,7 @@ impl SyncSecrets {
             .context_str_field("key", key)?
             .to_vec();
 
-        match &self.0 {
+        match &self.backend {
             Backend::Fs { dir } => {
                 tracing::warn!(
                     "secrets storage (store) is using FS @ '{}' (key = '{key}'), ensure to use 'keyring' in production!!!",
@@ -117,7 +145,7 @@ impl SyncSecrets {
                     .context_debug_field("path", path)
             }
             Backend::KeyRing { store } => {
-                let entry = new_key_ring_entry(store, key)?;
+                let entry = new_key_ring_entry(store, key, self.account)?;
                 entry
                     .set_secret(&raw)
                     .context("set secret")
@@ -137,7 +165,7 @@ impl SyncSecrets {
     }
 
     pub fn load_secret<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, BoxError> {
-        match &self.0 {
+        match &self.backend {
             Backend::Fs { dir } => {
                 tracing::warn!(
                     "secrets storage (load) is using FS @ '{}' (key = '{key}'), ensure to use 'keyring' in production!!!",
@@ -155,7 +183,7 @@ impl SyncSecrets {
                 }
             }
             Backend::KeyRing { store } => {
-                let entry = new_key_ring_entry(store, key)?;
+                let entry = new_key_ring_entry(store, key, self.account)?;
                 match entry.get_secret() {
                     Ok(raw) => deserialize_secret(&raw, key),
                     Err(keyring_core::Error::NoEntry) => Ok(None),
@@ -210,9 +238,13 @@ fn try_new_keychain_store() -> Result<Arc<Store>, BoxError> {
     windows_native_keyring_store::Store::new().context("create Windows Native Secret store")
 }
 
-fn new_key_ring_entry(store: &Store, key: &str) -> Result<keyring_core::Entry, BoxError> {
+fn new_key_ring_entry(
+    store: &Store,
+    key: &str,
+    account: &str,
+) -> Result<keyring_core::Entry, BoxError> {
     store
-        .build(key, AIKIDO_SECRET_SVC, None)
+        .build(key, account, None)
         .context("create Root CA entry")
 }
 
@@ -231,7 +263,7 @@ mod tests {
     #[test]
     fn test_secret_storage_fs_number_store_can_load() {
         let dir = tmp_dir::try_new("test_secret_storage_fs_number_store_can_load").unwrap();
-        let data_storage = SyncSecrets::new_fs(dir);
+        let data_storage = SyncSecrets::try_new_fs(crate::utils::env::project_name(), dir).unwrap();
 
         const NUMBER: usize = 42;
 
@@ -263,7 +295,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_secret_storage_keyring_number_store_can_load() {
-        let data_storage = SyncSecrets::try_new_keyring().unwrap();
+        let data_storage = SyncSecrets::try_new_keyring(crate::utils::env::project_name()).unwrap();
 
         const NUMBER: usize = 42;
 
@@ -295,7 +327,7 @@ mod tests {
     #[traced_test]
     #[test]
     fn test_secret_storage_inmemory_number_store_can_load() {
-        let data_storage = SyncSecrets::from_str("memory").unwrap();
+        let data_storage = SyncSecrets::new_in_memory(crate::utils::env::project_name());
 
         const NUMBER: usize = 42;
 
