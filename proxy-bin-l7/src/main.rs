@@ -111,7 +111,7 @@ pub struct Args {
     #[cfg(target_family = "unix")]
     /// Set the limit of max open file descriptors for this process and its children.
     #[arg(long, value_name = "N", default_value_t = 262_144)]
-    pub ulimit: utils::os::rlim_t,
+    pub ulimit: rama::unix::utils::rlim_t,
 }
 
 #[tokio::main]
@@ -126,7 +126,7 @@ async fn main() -> Result<(), BoxError> {
     .await?;
 
     #[cfg(target_family = "unix")]
-    utils::os::raise_nofile(args.ulimit).context("set file descriptor limit")?;
+    rama::unix::utils::raise_nofile(args.ulimit).context("set file descriptor limit")?;
 
     let base_shutdown_signal = graceful::default_signal();
     if let Err(err) = run_with_args(base_shutdown_signal, args).await {
