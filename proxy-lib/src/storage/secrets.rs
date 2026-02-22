@@ -75,8 +75,8 @@ impl SyncSecrets {
     }
 
     #[inline(always)]
-    pub(crate) fn try_new_fs(account: &'static str, dir: PathBuf) -> Result<Self, BoxError> {
-        let dir = dir.join("secrets").join(account);
+    pub(crate) fn try_new_fs(account: &'static str, base_dir: PathBuf) -> Result<Self, BoxError> {
+        let dir = base_dir.join("secrets").join(account);
         std::fs::create_dir_all(&dir).context("create new fs dir")?;
         Ok(Self {
             backend: Backend::Fs { dir },
