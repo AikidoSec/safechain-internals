@@ -45,6 +45,7 @@ workspace = true
 features = ["http-full", "proxy-full", "dns", "boring", "rustls"]
 
 [dev-dependencies]
+tempfile = "3"
 tracing-test = { workspace = true }
 
 [dev-dependencies.rama]

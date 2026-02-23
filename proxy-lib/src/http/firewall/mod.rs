@@ -48,6 +48,7 @@ pub struct Firewall {
     // a background task update these when needed..
     block_rules: Arc<Vec<self::rule::DynRule>>,
     notifier: Option<self::notifier::EventNotifier>,
+    _aikido_token: Option<String>,
 }
 
 impl Firewall {
@@ -56,6 +57,7 @@ impl Firewall {
         client: impl Service<Request, Output = Response, Error = OpaqueError> + Clone,
         data: SyncCompactDataStorage,
         reporting_endpoint: Option<rama::http::Uri>,
+        aikido_token: Option<String>,
     ) -> Result<Self, BoxError> {
         let layered_client = (
             MapResponseBodyLayer::new_boxed_streaming_body(),
@@ -147,6 +149,7 @@ impl Firewall {
                     .into_dyn(),
             ]),
             notifier,
+            _aikido_token: aikido_token,
         })
     }
 

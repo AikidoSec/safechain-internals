@@ -125,11 +125,30 @@ async fn main() -> Result<(), BoxError> {
     }))
     .await?;
 
+    let aikido_token = match utils::token::load_token() {
+        Ok(token) => token,
+        Err(err) => {
+            tracing::warn!(
+                error = %err,
+                "Error occurred while loading Aikido authentication token; continuing without token"
+            );
+            None
+        }
+    };
+
+    if aikido_token.is_some() {
+        tracing::info!("Aikido authentication token loaded");
+    } else {
+        tracing::info!(
+            "No Aikido authentication token found; endpoint protection features disabled"
+        );
+    }
+
     #[cfg(target_family = "unix")]
     rama::unix::utils::raise_nofile(args.ulimit).context("set file descriptor limit")?;
 
     let base_shutdown_signal = graceful::default_signal();
-    if let Err(err) = run_with_args(base_shutdown_signal, args).await {
+    if let Err(err) = run_with_args(base_shutdown_signal, args, aikido_token).await {
         eprintln!("🚩 exit with error: {err}");
         std::process::exit(1);
     }
@@ -142,7 +161,11 @@ async fn main() -> Result<(), BoxError> {
 ///
 /// This entry point is used by both the (binary) `main` function as well as
 /// for the e2e test suite found in the test module.
-async fn run_with_args<F>(base_shutdown_signal: F, args: Args) -> Result<(), BoxError>
+async fn run_with_args<F>(
+    base_shutdown_signal: F,
+    args: Args,
+    aikido_token: Option<String>,
+) -> Result<(), BoxError>
 where
     F: Future<Output: Send + 'static> + Send + 'static,
 {
@@ -184,6 +207,7 @@ where
             client::new_web_client()?,
             data_storage,
             args.reporting_endpoint.clone(),
+            aikido_token,
         ) => {
             result?
         }

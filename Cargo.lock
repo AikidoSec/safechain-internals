@@ -2993,6 +2993,7 @@ dependencies = [
  "serde_json",
  "serde_test",
  "sudo",
+ "tempfile",
  "tokio",
  "tracing-test",
  "windows-native-keyring-store",

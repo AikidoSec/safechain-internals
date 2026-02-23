@@ -395,7 +395,7 @@ fn spawn_safechain_proxy_app_with_args(extra_args: &[&str]) -> PathBuf {
             .build()
             .unwrap();
 
-        let server_future = crate::run_with_args(std::future::pending::<()>(), args);
+        let server_future = crate::run_with_args(std::future::pending::<()>(), args, None);
 
         notify_server_ready.set(()).expect("waiter to be nofified");
 
