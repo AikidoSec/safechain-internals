@@ -20,7 +20,7 @@ func binaryNames() []string {
 	return defaultBinaryNames
 }
 
-func run(ctx context.Context, pipPath string, args ...string) (string, error) {
+func runPip(ctx context.Context, pipPath string, args ...string) (string, error) {
 	binDir := filepath.Dir(pipPath)
 	pathEnv := binDir
 
@@ -39,7 +39,7 @@ func run(ctx context.Context, pipPath string, args ...string) (string, error) {
 
 func getVersion(ctx context.Context, path string) (string, error) {
 	quietCtx := context.WithValue(ctx, "disable_logging", true)
-	output, err := run(quietCtx, path, "--version")
+	output, err := runPip(quietCtx, path, "--version")
 	if err != nil {
 		return "", err
 	}

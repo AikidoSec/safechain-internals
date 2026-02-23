@@ -52,7 +52,7 @@ func (p *Pip) Installations(ctx context.Context) ([]sbom.InstalledVersion, error
 }
 
 func (p *Pip) SBOM(ctx context.Context, installation sbom.InstalledVersion) ([]sbom.Package, error) {
-	output, err := run(ctx, installation.Path, "list", "--format=json")
+	output, err := runPip(ctx, installation.Path, "list", "--format=json")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list packages: %w", err)
 	}
