@@ -54,7 +54,7 @@ func (n *Npm) Installations(ctx context.Context) ([]sbom.InstalledVersion, error
 }
 
 func (n *Npm) SBOM(ctx context.Context, installation sbom.InstalledVersion) ([]sbom.Package, error) {
-	output, err := run(ctx, installation.Path, "list", "-g", "--json")
+	output, err := runNpm(ctx, installation.Path, "list", "-g", "--json")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list global packages: %w", err)
 	}

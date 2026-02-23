@@ -22,7 +22,7 @@ func binaryName() string {
 	return unixBinaryName
 }
 
-func run(ctx context.Context, npmPath string, args ...string) (string, error) {
+func runNpm(ctx context.Context, npmPath string, args ...string) (string, error) {
 	binDir := filepath.Dir(npmPath)
 	pathEnv := binDir
 
@@ -41,7 +41,7 @@ func run(ctx context.Context, npmPath string, args ...string) (string, error) {
 
 func getVersion(ctx context.Context, path string) (string, error) {
 	quietCtx := context.WithValue(ctx, "disable_logging", true)
-	output, err := run(quietCtx, path, "--version")
+	output, err := runNpm(quietCtx, path, "--version")
 	if err != nil {
 		return "", err
 	}
