@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -302,7 +303,12 @@ func (d *Daemon) reportSBOM() error {
 		return fmt.Errorf("failed to marshal SBOM to JSON: %w", err)
 	}
 
-	log.Printf("SBOM: %s", sbomJSON)
+	sbomJSONPath := platform.GetSbomJSONPath()
+	if err := os.WriteFile(sbomJSONPath, sbomJSON, 0644); err != nil {
+		return fmt.Errorf("failed to write SBOM to file: %w", err)
+	}
+
+	log.Printf("SBOM written to %s", sbomJSONPath)
 	return nil
 }
 

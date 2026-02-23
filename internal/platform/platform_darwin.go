@@ -26,6 +26,7 @@ const (
 	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
 	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
 	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
+	SafeChainSbomJSONName        = "safechain-ultimate-sbom.json"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
 )

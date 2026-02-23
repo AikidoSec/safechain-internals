@@ -26,6 +26,7 @@ const (
 	SafeChainL7ProxyBinaryName     = "SafeChainL7Proxy.exe"
 	SafeChainL7ProxyLogName        = "SafeChainL7Proxy.log"
 	SafeChainL7ProxyErrLogName     = "SafeChainL7Proxy.err"
+	SafeChainSbomJSONName          = "SafeChainUltimateSBOM.json"
 	SafeChainInstallScriptName     = "install-safe-chain.ps1"
 	SafeChainUninstallScriptName   = "uninstall-safe-chain.ps1"
 	registryInternetSettingsSuffix = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
