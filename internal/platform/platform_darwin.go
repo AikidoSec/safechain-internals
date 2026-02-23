@@ -26,6 +26,7 @@ const (
 	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
 	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
 	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
+	SafeChainSbomJSONName        = "safechain-ultimate-sbom.json"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
 )
@@ -340,9 +341,9 @@ func GetCurrentUser(ctx context.Context) (string, int, string, int, error) {
 	return username, uidInt, group, gidInt, nil
 }
 
-func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
+func RunAsCurrentUserWithEnv(ctx context.Context, env []string, binaryPath string, args []string) (string, error) {
 	if !RunningAsRoot() {
-		return utils.RunCommand(ctx, binaryPath, args...)
+		return utils.RunCommandWithEnv(ctx, env, binaryPath, args...)
 	}
 
 	username, _, _, _, err := GetCurrentUser(ctx)
@@ -350,8 +351,39 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (st
 		return "", fmt.Errorf("failed to get console user: %v", err)
 	}
 
-	suArgs := append([]string{"-u", username, binaryPath}, args...)
-	return utils.RunCommandWithEnv(ctx, []string{}, "sudo", suArgs...)
+	suArgs := []string{"-u", username}
+	if len(env) > 0 {
+		suArgs = append(suArgs, "env")
+		suArgs = append(suArgs, env...)
+	}
+	suArgs = append(suArgs, binaryPath)
+	suArgs = append(suArgs, args...)
+	return utils.RunCommand(ctx, "sudo", suArgs...)
+}
+
+// RunAsCurrentUserWithPathEnv runs a binary as the current user with the appropriate environment.
+// On macOS, sudo strips the environment when dropping privileges, so we
+// explicitly construct PATH to include the binary's directory (and its symlink
+// target) to ensure sibling tools (python3, node, etc.) remain discoverable.
+func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ...string) (string, error) {
+	binDir := filepath.Dir(binaryPath)
+	pathEnv := binDir
+
+	resolved, err := filepath.EvalSymlinks(binaryPath)
+	if err == nil {
+		resolvedDir := filepath.Dir(resolved)
+		if resolvedDir != binDir {
+			pathEnv = binDir + string(os.PathListSeparator) + resolvedDir
+		}
+	}
+
+	pathEnv = pathEnv + string(os.PathListSeparator) + os.Getenv("PATH")
+	env := []string{"PATH=" + pathEnv}
+	return RunAsCurrentUserWithEnv(ctx, env, binaryPath, args)
+}
+
+func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
+	return RunAsCurrentUserWithEnv(ctx, []string{}, binaryPath, args)
 }
 
 func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {

@@ -1,0 +1,126 @@
+package vscode
+
+import (
+	"context"
+	"log"
+	"os"
+	"path/filepath"
+	"runtime"
+
+	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/sbom"
+)
+
+type variant struct {
+	name   string
+	extDir string
+	bins   []string
+}
+
+var variants = []variant{
+	{
+		name:   "code",
+		extDir: filepath.Join(".vscode", "extensions"),
+		bins:   []string{"code"},
+	},
+	{
+		name:   "code-insiders",
+		extDir: filepath.Join(".vscode-insiders", "extensions"),
+		bins:   []string{"code-insiders"},
+	},
+	{
+		name:   "cursor",
+		extDir: filepath.Join(".cursor", "extensions"),
+		bins:   []string{"cursor"},
+	},
+	{
+		name:   "vscodium",
+		extDir: filepath.Join(".vscode-oss", "extensions"),
+		bins:   []string{"codium", "vscodium"},
+	},
+}
+
+func findInstallations(ctx context.Context) ([]sbom.InstalledVersion, error) {
+	homeDir := platform.GetConfig().HomeDir
+	var installations []sbom.InstalledVersion
+
+	for _, v := range variants {
+		extPath := filepath.Join(homeDir, v.extDir)
+		if _, err := os.Stat(extPath); err != nil {
+			continue
+		}
+
+		binaryPath, version := getEditorBinaryAndVersion(ctx, v)
+		log.Printf("Found %s extensions at: %s (binary: %s, version: %s)", v.name, extPath, binaryPath, version)
+		installations = append(installations, sbom.InstalledVersion{
+			Ecosystem: v.name,
+			Version:   version,
+			Path:      binaryPath,
+			DataPath:  extPath,
+		})
+	}
+
+	return installations, nil
+}
+
+func getEditorBinaryAndVersion(ctx context.Context, v variant) (binaryPath string, version string) {
+	for _, bin := range v.bins {
+		paths := findEditorBinary(bin)
+		for _, p := range paths {
+			ver, err := runEditorVersion(ctx, p)
+			if err != nil {
+				continue
+			}
+			return p, ver
+		}
+	}
+	return "", ""
+}
+
+func findEditorBinary(name string) []string {
+	var candidates []string
+
+	if runtime.GOOS == "darwin" {
+		appPaths := map[string]string{
+			"code":          "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
+			"code-insiders": "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code-insiders",
+			"cursor":        "/Applications/Cursor.app/Contents/Resources/app/bin/cursor",
+			"codium":        "/Applications/VSCodium.app/Contents/Resources/app/bin/codium",
+			"vscodium":      "/Applications/VSCodium.app/Contents/Resources/app/bin/codium",
+		}
+		if p, ok := appPaths[name]; ok {
+			candidates = append(candidates, p)
+		}
+	}
+
+	if runtime.GOOS == "windows" {
+		cmdName := name + ".cmd"
+		localAppData := os.Getenv("LOCALAPPDATA")
+		if localAppData != "" {
+			candidates = append(candidates,
+				filepath.Join(localAppData, "Programs", "Microsoft VS Code", "bin", cmdName),
+				filepath.Join(localAppData, "Programs", "Microsoft VS Code Insiders", "bin", cmdName),
+			)
+			if name == "cursor" {
+				candidates = append(candidates,
+					filepath.Join(localAppData, "Programs", "cursor", "resources", "app", "bin", cmdName),
+				)
+			}
+		}
+	}
+
+	candidates = append(candidates,
+		"/usr/local/bin/"+name,
+		"/usr/bin/"+name,
+		"/snap/bin/"+name,
+	)
+
+	var found []string
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			found = append(found, c)
+			break
+		}
+	}
+	return found
+}
