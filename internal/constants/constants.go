@@ -10,4 +10,5 @@ const (
 	SBOMReportInterval      = 24 * time.Hour
 	ProxyStartMaxRetries    = 20
 	ProxyStartRetryInterval = 3 * time.Minute
+	CloudHeartbeatInterval  = 30 * time.Minute
 )

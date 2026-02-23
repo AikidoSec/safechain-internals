@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AikidoSec/safechain-internals/internal/cloud"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
 	"github.com/AikidoSec/safechain-internals/internal/device"
 	"github.com/AikidoSec/safechain-internals/internal/ingress"
@@ -49,8 +50,9 @@ type Daemon struct {
 	proxyRetryCount    int
 	proxyLastRetryTime time.Time
 
-	daemonLastStatusLogTime  time.Time
-	daemonLastSBOMReportTime time.Time
+	daemonLastStatusLogTime      time.Time
+	daemonLastSBOMReportTime     time.Time
+	daemonLastCloudHeartbeatTime time.Time
 }
 
 func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
@@ -295,7 +297,14 @@ func (d *Daemon) handleProxy() (shouldRetry bool, err error) {
 	return true, nil
 }
 
-func (d *Daemon) reportSBOM() error {
+func (d *Daemon) sendHeartbeat() error {
+	return cloud.SendHeartbeat(d.ctx, &cloud.HeartbeatEvent{
+		DeviceInfo:  *d.deviceInfo,
+		VersionInfo: *d.versionInfo,
+	})
+}
+
+func (d *Daemon) sendSBOM() error {
 	sbom := d.sbomManager.CollectAllPackages(d.ctx)
 
 	sbomJSON, err := json.MarshalIndent(sbom, "", "  ")
@@ -309,7 +318,11 @@ func (d *Daemon) reportSBOM() error {
 	}
 
 	log.Printf("SBOM written to %s", sbomJSONPath)
-	return nil
+
+	return cloud.SendSBOM(d.ctx, &cloud.SBOMEvent{
+		DeviceInfo: *d.deviceInfo,
+		SBOM:       sbom,
+	})
 }
 
 func (d *Daemon) heartbeat() error {
@@ -324,9 +337,18 @@ func (d *Daemon) heartbeat() error {
 	runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() {
 		d.printDaemonStatus()
 	})
+	runIfIntervalExceeded(&d.daemonLastCloudHeartbeatTime, constants.CloudHeartbeatInterval, func() {
+		if err := d.sendHeartbeat(); err != nil {
+			log.Printf("Failed to send heartbeat: %v", err)
+		} else {
+			log.Printf("Heartbeat sent successfully")
+		}
+	})
 	runIfIntervalExceeded(&d.daemonLastSBOMReportTime, constants.SBOMReportInterval, func() {
-		if err := d.reportSBOM(); err != nil {
-			log.Printf("Failed to report SBOM: %v", err)
+		if err := d.sendSBOM(); err != nil {
+			log.Printf("Failed to send SBOM: %v", err)
+		} else {
+			log.Printf("SBOM sent successfully")
 		}
 	})
 	return nil
