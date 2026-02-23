@@ -14,6 +14,7 @@ INSTALL_DIR="/Library/Application Support/AikidoSecurity/SafeChainUltimate"
 LOGS_DIR="/Library/Logs/AikidoSecurity/SafeChainUltimate"
 LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist"
 DAEMON_LABEL="com.aikidosecurity.safechainultimate"
+APP_BUNDLE="$INSTALL_DIR/SafeChainUltimate.app"
 BINARY="$INSTALL_DIR/bin/safechain-ultimate"
 
 echo "========================================="
@@ -61,6 +62,11 @@ echo "Removing installed files..."
 if [ -f "$LAUNCHDAEMON_PLIST" ]; then
     rm -f "$LAUNCHDAEMON_PLIST"
     echo "  ✓ Removed LaunchDaemon plist"
+fi
+
+if [ -d "$APP_BUNDLE" ]; then
+    rm -rf "$APP_BUNDLE"
+    echo "  ✓ Removed app bundle"
 fi
 
 if [ -d "$INSTALL_DIR" ]; then

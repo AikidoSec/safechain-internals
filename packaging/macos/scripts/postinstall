@@ -5,6 +5,7 @@ set -e
 echo "SafeChain Ultimate Installer - Post-installation"
 
 INSTALL_DIR="/Library/Application Support/AikidoSecurity/SafeChainUltimate"
+APP_BUNDLE="$INSTALL_DIR/SafeChainUltimate.app"
 LOGS_DIR="/Library/Logs/AikidoSecurity/SafeChainUltimate"
 LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist"
 
@@ -56,7 +57,7 @@ fi
 echo "Post-installation completed"
 echo ""
 echo "SafeChain Ultimate has been installed successfully!"
-echo "  Binaries: $INSTALL_DIR/bin"
+echo "  App Bundle: $APP_BUNDLE"
 echo "  Logs: $LOGS_DIR"
 echo ""
 echo "The agent is now running as a system daemon."

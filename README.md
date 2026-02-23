@@ -28,7 +28,7 @@ msiexec /i SafeChainUltimate.msi /qn /norestart AIKIDO_TOKEN=YOUR_TOKEN
 
 Run the uninstall script that was installed with the package:
 ```bash
-sudo "/Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall"
+sudo "Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall"
 ```
 
 ### Windows
