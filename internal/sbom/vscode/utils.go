@@ -15,7 +15,7 @@ func runEditorVersion(ctx context.Context, binaryPath string) (string, error) {
 		return "", err
 	}
 
-	// `code --version` outputs: version\ncommit\narch
+	// Extract only the version string from the first line, ignoring commit and architecture details
 	lines := strings.SplitN(strings.TrimSpace(output), "\n", 2)
 	if len(lines) == 0 || lines[0] == "" {
 		return "", fmt.Errorf("empty version output")
