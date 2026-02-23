@@ -315,10 +315,10 @@ func (d *Daemon) heartbeat() error {
 		log.Printf("Failed to start proxy: %v", err)
 	}
 
-	runAtInterval(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() {
+	runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() {
 		d.printDaemonStatus()
 	})
-	runAtInterval(&d.daemonLastSBOMReportTime, constants.SBOMReportInterval, func() {
+	runIfIntervalExceeded(&d.daemonLastSBOMReportTime, constants.SBOMReportInterval, func() {
 		if err := d.reportSBOM(); err != nil {
 			log.Printf("Failed to report SBOM: %v", err)
 		}
@@ -334,7 +334,7 @@ func newSBOMRegistry() *sbom.Registry {
 	return r
 }
 
-func runAtInterval(lastRun *time.Time, interval time.Duration, fn func()) {
+func runIfIntervalExceeded(lastRun *time.Time, interval time.Duration, fn func()) {
 	if time.Since(*lastRun) >= interval {
 		fn()
 		*lastRun = time.Now()
