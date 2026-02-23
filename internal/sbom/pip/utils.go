@@ -3,8 +3,6 @@ package pip
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -21,20 +19,7 @@ func binaryNames() []string {
 }
 
 func runPip(ctx context.Context, pipPath string, args ...string) (string, error) {
-	binDir := filepath.Dir(pipPath)
-	pathEnv := binDir
-
-	resolved, err := filepath.EvalSymlinks(pipPath)
-	if err == nil {
-		resolvedDir := filepath.Dir(resolved)
-		if resolvedDir != binDir {
-			pathEnv = binDir + string(os.PathListSeparator) + resolvedDir
-		}
-	}
-
-	pathEnv = pathEnv + string(os.PathListSeparator) + os.Getenv("PATH")
-	env := []string{"PATH=" + pathEnv}
-	return platform.RunAsCurrentUserWithEnv(ctx, env, pipPath, args)
+	return platform.RunAsCurrentUserWithPathEnv(ctx, pipPath, args...)
 }
 
 func getVersion(ctx context.Context, path string) (string, error) {

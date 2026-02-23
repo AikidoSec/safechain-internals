@@ -360,6 +360,27 @@ func RunAsCurrentUserWithEnv(ctx context.Context, env []string, binaryPath strin
 	return utils.RunCommand(ctx, "sudo", suArgs...)
 }
 
+// RunAsCurrentUserWithPathEnv runs a binary as the current user with the appropriate environment.
+// On macOS, sudo strips the environment when dropping privileges, so we
+// explicitly construct PATH to include the binary's directory (and its symlink
+// target) to ensure sibling tools (python3, node, etc.) remain discoverable.
+func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ...string) (string, error) {
+	binDir := filepath.Dir(binaryPath)
+	pathEnv := binDir
+
+	resolved, err := filepath.EvalSymlinks(binaryPath)
+	if err == nil {
+		resolvedDir := filepath.Dir(resolved)
+		if resolvedDir != binDir {
+			pathEnv = binDir + string(os.PathListSeparator) + resolvedDir
+		}
+	}
+
+	pathEnv = pathEnv + string(os.PathListSeparator) + os.Getenv("PATH")
+	env := []string{"PATH=" + pathEnv}
+	return RunAsCurrentUserWithEnv(ctx, env, binaryPath, args)
+}
+
 func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
 	return RunAsCurrentUserWithEnv(ctx, []string{}, binaryPath, args)
 }

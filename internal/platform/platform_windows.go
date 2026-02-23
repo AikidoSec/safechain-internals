@@ -319,9 +319,9 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (st
 	return runAsLoggedInUser(binaryPath, args)
 }
 
-func RunAsCurrentUserWithEnv(ctx context.Context, _ []string, binaryPath string, args []string) (string, error) {
-	// We keep this simple for now, without supporting environment variables for running as current user
-	// It's not needed for the current use cases and would overcomplicate the code.
+// On Windows, CreateEnvironmentBlock provides the full user environment
+// automatically, so no PATH manipulation is needed.
+func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ...string) (string, error) {
 	return RunAsCurrentUser(ctx, binaryPath, args)
 }
 
