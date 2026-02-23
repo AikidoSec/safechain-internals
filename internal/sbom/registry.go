@@ -16,6 +16,7 @@ func NewRegistry() *Registry {
 	}
 
 	registry.Register(NewNpmPackageManager())
+	registry.Register(NewPipPackageManager())
 	return registry
 }
 
