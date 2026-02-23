@@ -11,14 +11,9 @@ type Registry struct {
 }
 
 func NewRegistry() *Registry {
-	registry := &Registry{
+	return &Registry{
 		managers: make(map[string]PackageManager),
 	}
-
-	registry.Register(NewNpmPackageManager())
-	registry.Register(NewPipPackageManager())
-	registry.Register(NewVSCodeExtensionsManager())
-	return registry
 }
 
 func (r *Registry) Register(pm PackageManager) {

@@ -14,6 +14,9 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
 	"github.com/AikidoSec/safechain-internals/internal/sbom"
+	"github.com/AikidoSec/safechain-internals/internal/sbom/npm"
+	"github.com/AikidoSec/safechain-internals/internal/sbom/pip"
+	"github.com/AikidoSec/safechain-internals/internal/sbom/vscode"
 	"github.com/AikidoSec/safechain-internals/internal/scannermanager"
 	"github.com/AikidoSec/safechain-internals/internal/setup"
 	"github.com/AikidoSec/safechain-internals/internal/utils"
@@ -57,7 +60,7 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 		config:      config,
 		proxy:       proxy.New(),
 		registry:    scannermanager.NewRegistry(),
-		sbomManager: sbom.NewRegistry(),
+		sbomManager: newSBOMRegistry(),
 		ingress:     ingress.New(),
 		logRotator:  utils.NewLogRotator(),
 		logReaper:   utils.NewLogReaper(),
@@ -321,6 +324,14 @@ func (d *Daemon) heartbeat() error {
 		}
 	})
 	return nil
+}
+
+func newSBOMRegistry() *sbom.Registry {
+	r := sbom.NewRegistry()
+	r.Register(npm.New())
+	r.Register(pip.New())
+	r.Register(vscode.New())
+	return r
 }
 
 func runAtInterval(lastRun *time.Time, interval time.Duration, fn func()) {
