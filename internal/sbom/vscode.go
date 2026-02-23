@@ -68,12 +68,13 @@ func (v *VSCodeExtensions) Installations(ctx context.Context) ([]InstalledVersio
 			continue
 		}
 
-		version := getEditorVersion(ctx, variant)
-		log.Printf("Found %s extensions at: %s (version: %s)", variant.name, extPath, version)
+		binaryPath, version := getEditorBinaryAndVersion(ctx, variant)
+		log.Printf("Found %s extensions at: %s (binary: %s, version: %s)", variant.name, extPath, binaryPath, version)
 		installations = append(installations, InstalledVersion{
 			Ecosystem: variant.name,
 			Version:   version,
-			Path:      extPath,
+			Path:      binaryPath,
+			DataPath:  extPath,
 		})
 	}
 
@@ -81,7 +82,7 @@ func (v *VSCodeExtensions) Installations(ctx context.Context) ([]InstalledVersio
 }
 
 func (v *VSCodeExtensions) SBOM(_ context.Context, installation InstalledVersion) ([]Package, error) {
-	entries, err := os.ReadDir(installation.Path)
+	entries, err := os.ReadDir(installation.DataPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read extensions directory: %w", err)
 	}
@@ -92,7 +93,7 @@ func (v *VSCodeExtensions) SBOM(_ context.Context, installation InstalledVersion
 			continue
 		}
 
-		pkg, err := readExtensionManifest(filepath.Join(installation.Path, entry.Name()))
+		pkg, err := readExtensionManifest(filepath.Join(installation.DataPath, entry.Name()))
 		if err != nil {
 			log.Printf("Skipping extension %s: %v", entry.Name(), err)
 			continue
@@ -129,18 +130,18 @@ func readExtensionManifest(extDir string) (*Package, error) {
 	}, nil
 }
 
-func getEditorVersion(ctx context.Context, variant vscodeVariant) string {
+func getEditorBinaryAndVersion(ctx context.Context, variant vscodeVariant) (binaryPath string, version string) {
 	for _, bin := range variant.bins {
 		paths := findEditorBinary(bin)
 		for _, p := range paths {
-			version, err := runEditorVersion(ctx, p)
+			v, err := runEditorVersion(ctx, p)
 			if err != nil {
 				continue
 			}
-			return version
+			return p, v
 		}
 	}
-	return ""
+	return "", ""
 }
 
 func findEditorBinary(name string) []string {

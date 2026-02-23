@@ -8,6 +8,7 @@ type InstalledVersion struct {
 	Ecosystem string
 	Version   string
 	Path      string
+	DataPath  string
 }
 
 type Package struct {
