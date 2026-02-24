@@ -19,12 +19,12 @@ import (
 )
 
 const (
-	SafeChainUltimateLogName    = "safechain-ultimate.log"
-	SafeChainUltimateErrLogName = "safechain-ultimate.error.log"
-	SafeChainUIBinaryName       = "safechain-ultimate-ui"
-	SafeChainProxyBinaryName    = "safechain-proxy"
-	SafeChainProxyLogName       = "safechain-proxy.log"
-	SafeChainProxyErrLogName    = "safechain-proxy.err"
+	SafeChainUltimateLogName     = "safechain-ultimate.log"
+	SafeChainUltimateErrLogName  = "safechain-ultimate.error.log"
+	SafeChainUIAppName           = "safechain-ultimate-ui.app/Contents/MacOS/safechain-ultimate-ui"
+	SafeChainProxyBinaryName     = "safechain-proxy"
+	SafeChainProxyLogName        = "safechain-proxy.log"
+	SafeChainProxyErrLogName     = "safechain-proxy.err"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
 )
@@ -366,6 +366,29 @@ func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args
 	uidStr := fmt.Sprintf("%d", uid)
 	launchctlArgs := append([]string{"asuser", uidStr, binaryPath}, args...)
 	return utils.RunCommandWithEnv(ctx, []string{}, "launchctl", launchctlArgs...)
+}
+
+// StartUIProcessInAuditSessionOfCurrentUser starts the process as the current user and returns its PID.
+// The process is not waited on; the caller may kill it later using the PID.
+func StartUIProcessInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (int, error) {
+	if !RunningAsRoot() {
+		cmd := exec.CommandContext(ctx, binaryPath, args...)
+		if err := cmd.Start(); err != nil {
+			return 0, err
+		}
+		return cmd.Process.Pid, nil
+	}
+	_, uid, _, _, err := getConsoleUser(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get console user: %v", err)
+	}
+	uidStr := fmt.Sprintf("%d", uid)
+	launchctlArgs := append([]string{"asuser", uidStr, binaryPath}, args...)
+	cmd := exec.CommandContext(ctx, "launchctl", launchctlArgs...)
+	if err := cmd.Start(); err != nil {
+		return 0, err
+	}
+	return cmd.Process.Pid, nil
 }
 
 func RunningAsRoot() bool {

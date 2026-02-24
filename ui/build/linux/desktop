@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=safechain-ultimate-ui
+Comment=A safechain-ultimate-ui application
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/safechain-ultimate-ui %u
+Terminal=false
+Type=Application
+Icon=safechain-ultimate-ui
+Categories=Utility;
+StartupWMClass=safechain-ultimate-ui
+
+ 

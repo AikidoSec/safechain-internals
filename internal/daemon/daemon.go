@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
 	"github.com/AikidoSec/safechain-internals/internal/scannermanager"
 	"github.com/AikidoSec/safechain-internals/internal/setup"
+	"github.com/AikidoSec/safechain-internals/internal/uiconfig"
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 	"github.com/AikidoSec/safechain-internals/internal/version"
 )
@@ -28,6 +31,39 @@ type Config struct {
 	LogLevel   string
 }
 
+// uiProcess holds the tray UI process PID so the daemon can kill it on Stop.
+type uiProcess struct {
+	mu  sync.Mutex
+	pid int
+}
+
+func (u *uiProcess) setPID(pid int) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.pid = pid
+}
+
+// Kill sends SIGKILL (Unix) or TerminateProcess (Windows) to the UI process if it was started.
+func (u *uiProcess) Kill() {
+	u.mu.Lock()
+	pid := u.pid
+	u.pid = 0
+	u.mu.Unlock()
+	if pid <= 0 {
+		return
+	}
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		log.Printf("Failed to find UI process %d: %v", pid, err)
+		return
+	}
+	if err := proc.Kill(); err != nil {
+		log.Printf("Failed to kill UI process %d: %v", pid, err)
+		return
+	}
+	log.Printf("Stopped UI tray process (PID %d)", pid)
+}
+
 type Daemon struct {
 	config     *Config
 	ctx        context.Context
@@ -39,11 +75,14 @@ type Daemon struct {
 	ingress    *ingress.Server
 	logRotator *utils.LogRotator
 	logReaper  *utils.LogReaper
+	uiProcess  *uiProcess
 
 	proxyRetryCount    int
 	proxyLastRetryTime time.Time
 
-	daemonLastStatusLogTime time.Time
+	daemonLastStatusLogTime    time.Time
+	proxyStatusSentToTray      bool // last proxy running state sent to tray
+	proxyStatusTrayInitialized bool // true after we've sent at least once
 }
 
 func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
@@ -56,6 +95,7 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 		ingress:    ingress.New(),
 		logRotator: utils.NewLogRotator(),
 		logReaper:  utils.NewLogReaper(),
+		uiProcess:  &uiProcess{},
 	}
 
 	if err := platform.Init(); err != nil {
@@ -106,6 +146,8 @@ func (d *Daemon) Stop(ctx context.Context) error {
 	var err error
 	d.stopOnce.Do(func() {
 		log.Println("Stopping SafeChain Daemon...")
+
+		d.uiProcess.Kill()
 
 		if err := setup.Teardown(ctx); err != nil {
 			log.Printf("Error teardown setup: %v", err)
@@ -183,6 +225,13 @@ func (d *Daemon) run(ctx context.Context) error {
 
 	// Wait briefly for ingress server to bind
 	time.Sleep(100 * time.Millisecond)
+
+	// Launch UI tray application once at startup (generates token and passes it to the UI)
+	go func() {
+		if err := d.launchUI(ctx); err != nil {
+			log.Printf("Failed to launch UI: %v", err)
+		}
+	}()
 
 	if err := d.startProxyAndInstallCA(ctx); err != nil {
 		return fmt.Errorf("failed to start proxy and install CA: %v", err)
@@ -287,10 +336,46 @@ func (d *Daemon) heartbeat() error {
 		log.Printf("Failed to start proxy: %v", err)
 	}
 
+	// Notify tray of proxy status whenever it changes
+	running := proxy.IsProxyRunning()
+	if !d.proxyStatusTrayInitialized || d.proxyStatusSentToTray != running {
+		sendProxyStatusToTray(running)
+		d.proxyStatusSentToTray = running
+		d.proxyStatusTrayInitialized = true
+	}
+
 	if time.Since(d.daemonLastStatusLogTime) >= DaemonStatusLogInterval {
 		d.printDaemonStatus()
 		d.daemonLastStatusLogTime = time.Now()
 	}
+	return nil
+}
+
+func (d *Daemon) launchUI(ctx context.Context) error {
+	ingressAddr := d.ingress.Addr()
+	if ingressAddr == "" {
+		return fmt.Errorf("ingress server address not available")
+	}
+
+	// Generate token and set it so daemon↔UI requests use the same token
+	token := uiconfig.GenerateAndSetToken()
+	daemonURL := "http://" + ingressAddr
+
+	cfg := platform.GetConfig()
+	binaryPath := filepath.Join(cfg.BinaryDir, platform.SafeChainUIAppName)
+	args := []string{
+		"--daemon_url", daemonURL,
+		"--token", token,
+	}
+
+	// Launch UI as current user (non-blocking); save PID so Stop can kill it
+	pid, err := platform.StartUIProcessInAuditSessionOfCurrentUser(ctx, binaryPath, args)
+	if err != nil {
+		log.Printf("Failed to launch UI (will retry): %v", err)
+		return nil
+	}
+	d.uiProcess.setPID(pid)
+	log.Println("UI tray application launched")
 	return nil
 }
 

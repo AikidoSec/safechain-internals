@@ -156,6 +156,49 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 	return string(output), nil
 }
 
+// runProcessAsUserNoWait creates a process as the given user and returns its PID without waiting.
+// The process continues running; the caller may kill it later using the PID.
+func runProcessAsUserNoWait(duplicatedToken windows.Token, cmdLinePtr *uint16, envBlock *uint16) (uint32, error) {
+	var si windows.StartupInfo
+	si.Cb = uint32(unsafe.Sizeof(si))
+	si.Desktop, _ = windows.UTF16PtrFromString("winsta0\\default")
+
+	var pi windows.ProcessInformation
+	if err := windows.CreateProcessAsUser(duplicatedToken, nil, cmdLinePtr, nil, nil, true, windows.CREATE_UNICODE_ENVIRONMENT, envBlock, nil, &si, &pi); err != nil {
+		return 0, fmt.Errorf("CreateProcessAsUser failed: %v", err)
+	}
+	windows.CloseHandle(pi.Thread)
+	windows.CloseHandle(pi.Process)
+	return pi.ProcessId, nil
+}
+
+func runAsLoggedInUserNoWait(binaryPath string, args []string) (uint32, error) {
+	sessionID, err := getActiveUserSessionID()
+	if err != nil {
+		return 0, err
+	}
+	var userToken windows.Token
+	if err := windows.WTSQueryUserToken(sessionID, &userToken); err != nil {
+		return 0, fmt.Errorf("WTSQueryUserToken failed: %v", err)
+	}
+	defer userToken.Close()
+	var duplicatedToken windows.Token
+	if err := windows.DuplicateTokenEx(userToken, 0, nil, windows.SecurityImpersonation, windows.TokenPrimary, &duplicatedToken); err != nil {
+		return 0, fmt.Errorf("DuplicateTokenEx failed: %v", err)
+	}
+	defer duplicatedToken.Close()
+	var envBlock *uint16
+	if err := windows.CreateEnvironmentBlock(&envBlock, duplicatedToken, false); err != nil {
+		return 0, fmt.Errorf("CreateEnvironmentBlock failed: %v", err)
+	}
+	defer windows.DestroyEnvironmentBlock(envBlock)
+	cmdLinePtr := buildCommandLineForWindowsProcess(binaryPath, args)
+	if cmdLinePtr == nil {
+		return 0, fmt.Errorf("failed to get command line for process")
+	}
+	return runProcessAsUserNoWait(duplicatedToken, cmdLinePtr, envBlock)
+}
+
 func runAsLoggedInUser(binaryPath string, args []string) (string, error) {
 	sessionID, err := getActiveUserSessionID()
 	if err != nil {

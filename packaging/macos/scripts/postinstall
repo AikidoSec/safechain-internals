@@ -16,8 +16,12 @@ chmod 755 "$LOGS_DIR"
 # Set proper permissions on binaries
 echo "Setting permissions on binaries..."
 chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
-chmod 755 "$INSTALL_DIR/bin/safechain-ultimate-ui"
 chmod 755 "$INSTALL_DIR/bin/safechain-proxy"
+if [ -d "$INSTALL_DIR/bin/safechain-ultimate-ui.app" ]; then
+    chmod -R 755 "$INSTALL_DIR/bin/safechain-ultimate-ui.app"
+else
+    echo "Warning: UI app bundle not found at $INSTALL_DIR/bin/safechain-ultimate-ui.app"
+fi
 
 # Set proper ownership (root:wheel for system daemon)
 echo "Setting ownership..."

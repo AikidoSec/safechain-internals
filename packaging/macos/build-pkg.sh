@@ -64,7 +64,7 @@ echo "  Project directory: $PROJECT_DIR"
 
 # Verify binaries exist
 AGENT_BIN="$BIN_DIR/safechain-ultimate-darwin-$ARCH"
-AGENT_UI_BIN="$BIN_DIR/safechain-ultimate-ui-darwin-$ARCH"
+AGENT_UI_APP="$BIN_DIR/safechain-ultimate-ui-darwin-$ARCH.app"
 PROXY_BIN="$BIN_DIR/safechain-proxy-darwin-$ARCH"
 
 if [ ! -f "$AGENT_BIN" ]; then
@@ -72,8 +72,8 @@ if [ ! -f "$AGENT_BIN" ]; then
     exit 1
 fi
 
-if [ ! -f "$AGENT_UI_BIN" ]; then
-    echo "Error: safechain-ultimate-ui binary not found at $AGENT_UI_BIN" >&2
+if [ ! -d "$AGENT_UI_APP" ]; then
+    echo "Error: safechain-ultimate-ui app not found at $AGENT_UI_APP" >&2
     exit 1
 fi
 
@@ -107,10 +107,10 @@ chmod 644 "$LOGS_DIR/.keep"
 # Copy binaries
 echo "Copying binaries..."
 cp "$AGENT_BIN" "$INSTALL_DIR/bin/safechain-ultimate"
-cp "$AGENT_UI_BIN" "$INSTALL_DIR/bin/safechain-ultimate-ui"
+cp -R "$AGENT_UI_APP" "$INSTALL_DIR/bin/safechain-ultimate-ui.app"
 cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-proxy"
 chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
-chmod 755 "$INSTALL_DIR/bin/safechain-ultimate-ui"
+chmod -R 755 "$INSTALL_DIR/bin/safechain-ultimate-ui.app"
 chmod 755 "$INSTALL_DIR/bin/safechain-proxy"
 
 # Copy scripts
@@ -135,10 +135,21 @@ chmod 755 "$PKG_SCRIPTS/postinstall"
 OUTPUT_PKG="$OUTPUT_DIR/SafeChainUltimate.$ARCH.pkg"
 IDENTIFIER="com.aikidosecurity.safechainultimate"
 
+COMPONENT_PLIST="$BUILD_DIR/component.plist"
+
+# Prevent macOS from relocating the UI app bundle out of INSTALL_DIR/bin.
+pkgbuild --analyze --root "$PKG_ROOT" "$COMPONENT_PLIST"
+if /usr/libexec/PlistBuddy -c "Print" "$COMPONENT_PLIST" >/dev/null 2>&1; then
+    /usr/libexec/PlistBuddy -c "Set :0:BundleHasStrictIdentifier false" "$COMPONENT_PLIST" >/dev/null 2>&1 || true
+    /usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$COMPONENT_PLIST" >/dev/null 2>&1 || true
+    /usr/libexec/PlistBuddy -c "Set :0:BundleIsVersionChecked false" "$COMPONENT_PLIST" >/dev/null 2>&1 || true
+fi
+
 echo "Building package..."
 pkgbuild \
     --root "$PKG_ROOT" \
     --scripts "$PKG_SCRIPTS" \
+    --component-plist "$COMPONENT_PLIST" \
     --identifier "$IDENTIFIER" \
     --version "$PKG_VERSION" \
     --install-location "/" \
