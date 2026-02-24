@@ -13,9 +13,10 @@ import (
 )
 
 type extensionManifest struct {
-	Name      string `json:"name"`
-	Version   string `json:"version"`
-	Publisher string `json:"publisher"`
+	Name        string `json:"name"`
+	DisplayName string `json:"displayName"`
+	Version     string `json:"version"`
+	Publisher   string `json:"publisher"`
 }
 
 type VSCodeExtensions struct{}
@@ -70,12 +71,18 @@ func readExtensionManifest(extDir string) (*sbom.Package, error) {
 		return nil, fmt.Errorf("missing name or version in package.json")
 	}
 
-	name := manifest.Name
+	id := manifest.Name
 	if manifest.Publisher != "" {
-		name = manifest.Publisher + "." + name
+		id = manifest.Publisher + "." + manifest.Name
+	}
+
+	name := manifest.DisplayName
+	if name == "" {
+		name = manifest.Name
 	}
 
 	return &sbom.Package{
+		Id:      id,
 		Name:    name,
 		Version: manifest.Version,
 	}, nil
