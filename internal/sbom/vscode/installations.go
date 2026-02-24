@@ -51,7 +51,7 @@ func findInstallations(ctx context.Context) ([]sbom.InstalledVersion, error) {
 		}
 
 		binaryPath, version := getEditorBinaryAndVersion(ctx, variant, homeDir)
-		log.Printf("Found %s extensions at: %s (binary: %s, version: %s)", variant.name, extPath, binaryPath, version)
+		log.Printf("Found %s %s at: %s (extensions at: %s)", variant.name, version, binaryPath, extPath)
 		installations = append(installations, sbom.InstalledVersion{
 			Variant:  variant.name,
 			Version:  version,

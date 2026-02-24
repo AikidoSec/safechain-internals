@@ -21,7 +21,7 @@ func binaryName() string {
 }
 
 func runNpm(ctx context.Context, npmPath string, args ...string) (string, error) {
-	return platform.RunAsCurrentUserWithPathEnv(ctx, npmPath, args...)
+	return platform.RunAsCurrentUserWithPathEnv(context.WithValue(ctx, "disable_logging", true), npmPath, args...)
 }
 
 func getVersion(ctx context.Context, path string) (string, error) {

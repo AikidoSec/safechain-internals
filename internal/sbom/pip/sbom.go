@@ -32,7 +32,6 @@ func (p *Pip) Installations(ctx context.Context) ([]sbom.InstalledVersion, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to find pip binaries: %w", err)
 	}
-	log.Printf("Found %d pip binaries: %v", len(paths), paths)
 
 	var installations []sbom.InstalledVersion
 	for _, path := range paths {

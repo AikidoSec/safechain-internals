@@ -19,12 +19,11 @@ func binaryNames() []string {
 }
 
 func runPip(ctx context.Context, pipPath string, args ...string) (string, error) {
-	return platform.RunAsCurrentUserWithPathEnv(ctx, pipPath, args...)
+	return platform.RunAsCurrentUserWithPathEnv(context.WithValue(ctx, "disable_logging", true), pipPath, args...)
 }
 
 func getVersion(ctx context.Context, path string) (string, error) {
-	quietCtx := context.WithValue(ctx, "disable_logging", true)
-	output, err := runPip(quietCtx, path, "--version")
+	output, err := runPip(ctx, path, "--version")
 	if err != nil {
 		return "", err
 	}
