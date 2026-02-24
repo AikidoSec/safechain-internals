@@ -29,7 +29,12 @@ impl PermissionToken {
 }
 
 pub fn load_token() -> Option<PermissionToken> {
-    let token = load_token_inner();
+    let system_path = app_path::resolve(".token");
+    let token = try_load_from_path(&system_path).or_else(|| {
+        // Fallback: try relative path in CWD
+        try_load_from_path(Path::new(".token"))
+    });
+
     if token.is_some() {
         tracing::info!("Aikido authentication token loaded");
     } else {
@@ -37,17 +42,8 @@ pub fn load_token() -> Option<PermissionToken> {
             "No Aikido authentication token found; Some endpoint protection features will be disabled"
         );
     }
+
     token
-}
-
-fn load_token_inner() -> Option<PermissionToken> {
-    let system_path = app_path::resolve(".token");
-    if let Some(token) = try_load_from_path(&system_path) {
-        return Some(token);
-    }
-
-    // Fallback: Try relative path in CWD
-    try_load_from_path(Path::new(".token"))
 }
 
 fn try_load_from_path(path: &Path) -> Option<PermissionToken> {
