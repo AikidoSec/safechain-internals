@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/AikidoSec/safechain-internals/internal/sbom"
 )
@@ -27,26 +26,7 @@ func (p *Pip) Name() string {
 }
 
 func (p *Pip) Installations(ctx context.Context) ([]sbom.InstalledVersion, error) {
-	paths, err := findBinaries()
-	if err != nil {
-		return nil, fmt.Errorf("failed to find pip binaries: %w", err)
-	}
-
-	var installations []sbom.InstalledVersion
-	for _, path := range paths {
-		version, err := getVersion(ctx, path)
-		if err != nil {
-			log.Printf("Skipping pip at %s: %v", path, err)
-			continue
-		}
-		log.Printf("Found pip %s at: %s", version, path)
-		installations = append(installations, sbom.InstalledVersion{
-			Version: version,
-			Path:    path,
-		})
-	}
-
-	return installations, nil
+	return findInstallations(ctx)
 }
 
 func (p *Pip) SBOM(ctx context.Context, installation sbom.InstalledVersion) ([]sbom.Package, error) {
