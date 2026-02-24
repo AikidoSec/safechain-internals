@@ -108,7 +108,7 @@ func readLatestExtension(extDir string, extensionID string) (*sbom.Package, erro
 	}
 
 	return &sbom.Package{
-		ID:      extensionID,
+		Id:      extensionID,
 		Name:    name,
 		Version: manifest.Version,
 	}, nil
