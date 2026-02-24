@@ -172,7 +172,9 @@ func isSystemPACSetForSid(ctx context.Context, sid string, pacURL string) bool {
 func IsSystemPACSet(ctx context.Context, pacURL string) error {
 	sids, err := getLoggedInUserSIDs(ctx)
 	if err != nil || len(sids) == 0 {
-		return fmt.Errorf("failed to get logged in user sids: %v", err)
+		// On restart, the user is not logged in yet, so we continue anyway to not block the install / uninstall
+		log.Printf("failed to get logged in user sids: %v, continuing anyway", err)
+		return nil
 	}
 
 	for _, sid := range sids {
