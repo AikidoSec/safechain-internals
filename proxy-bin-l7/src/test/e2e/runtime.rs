@@ -21,7 +21,7 @@ use rama::{
         },
         service::client::HttpClientExt as _,
     },
-    layer::{AddInputExtensionLayer, MapErrLayer, TimeoutLayer},
+    layer::{AddInputExtensionLayer, TimeoutLayer},
     net::{
         Protocol,
         address::{DomainAddress, ProxyAddress, SocketAddress},
@@ -81,11 +81,7 @@ impl Runtime {
 
     #[inline(always)]
     pub fn client_fail_fast(&self) -> impl Service<Request, Output = Response, Error = BoxError> {
-        (
-            TimeoutLayer::new(Duration::from_secs(30)),
-            MapErrLayer::new(Into::into),
-        )
-            .into_layer(self.client())
+        TimeoutLayer::new(Duration::from_secs(30)).into_layer(self.client())
     }
 
     pub async fn client_with_ca_trust(
@@ -244,7 +240,6 @@ fn create_client_inner(
         // timeout needs to be high enough for this e2e test setup
         // ... windows machines in CI... can be ... slow
         TimeoutLayer::new(Duration::from_secs(180)),
-        MapErrLayer::new(Into::into),
         RetryLayer::new(
             ManagedPolicy::default().with_backoff(
                 ExponentialBackoff::new(

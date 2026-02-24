@@ -25,7 +25,7 @@ use rama::{
     tls::boring::server::TlsAcceptorLayer,
 };
 
-use safechain_proxy_lib::http::firewall::Firewall;
+use safechain_proxy_lib::{http::firewall::Firewall, utils::env::network_service_identifier};
 
 #[cfg(feature = "har")]
 use safechain_proxy_lib::diagnostics::har::HarClient;
@@ -84,9 +84,8 @@ pub async fn run_meta_https_server(
 
     let http_svc = (
         TraceLayer::new_for_http(),
-        AddRequiredResponseHeadersLayer::new().with_server_header_value(HeaderValue::from_static(
-            crate::utils::env::network_service_identifier(),
-        )),
+        AddRequiredResponseHeadersLayer::new()
+            .with_server_header_value(HeaderValue::from_static(network_service_identifier())),
     )
         .into_layer(http_router);
 

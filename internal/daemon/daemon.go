@@ -2,8 +2,10 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -12,16 +14,12 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/ingress"
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
+	"github.com/AikidoSec/safechain-internals/internal/sbom"
+	"github.com/AikidoSec/safechain-internals/internal/sbom/npm"
 	"github.com/AikidoSec/safechain-internals/internal/scannermanager"
 	"github.com/AikidoSec/safechain-internals/internal/setup"
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 	"github.com/AikidoSec/safechain-internals/internal/version"
-)
-
-const (
-	DaemonStatusLogInterval = 1 * time.Hour
-	ProxyStartMaxRetries    = 20
-	ProxyStartRetryInterval = 3 * time.Minute
 )
 
 type Config struct {
@@ -39,14 +37,18 @@ type Daemon struct {
 	stopOnce    sync.Once
 	proxy       *proxy.Proxy
 	registry    *scannermanager.Registry
-	ingress     *ingress.Server
-	logRotator  *utils.LogRotator
-	logReaper   *utils.LogReaper
+	sbomManager *sbom.Registry
+
+	ingress *ingress.Server
+
+	logRotator *utils.LogRotator
+	logReaper  *utils.LogReaper
 
 	proxyRetryCount    int
 	proxyLastRetryTime time.Time
 
-	daemonLastStatusLogTime time.Time
+	daemonLastStatusLogTime  time.Time
+	daemonLastSBOMReportTime time.Time
 }
 
 func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
@@ -57,6 +59,7 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 		config:      config,
 		proxy:       proxy.New(),
 		registry:    scannermanager.NewRegistry(),
+		sbomManager: newSBOMRegistry(),
 		ingress:     ingress.New(),
 		logRotator:  utils.NewLogRotator(),
 		logReaper:   utils.NewLogReaper(),
@@ -261,19 +264,19 @@ func (d *Daemon) handleProxy() (shouldRetry bool, err error) {
 		return true, nil
 	}
 
-	if d.proxyRetryCount >= ProxyStartMaxRetries {
+	if d.proxyRetryCount >= constants.ProxyStartMaxRetries {
 		// Exit daemon loop if proxy start retry limit is reached
 		return false, fmt.Errorf("proxy start retry limit reached (%d attempts), not retrying", d.proxyRetryCount)
 	}
 
-	if !d.proxyLastRetryTime.IsZero() && time.Since(d.proxyLastRetryTime) < ProxyStartRetryInterval {
-		log.Printf("Proxy is not running, waiting for retry interval (%s) before next attempt", ProxyStartRetryInterval)
+	if !d.proxyLastRetryTime.IsZero() && time.Since(d.proxyLastRetryTime) < constants.ProxyStartRetryInterval {
+		log.Printf("Proxy is not running, waiting for retry interval (%s) before next attempt", constants.ProxyStartRetryInterval)
 		return true, nil
 	}
 
 	d.proxyRetryCount++
 	d.proxyLastRetryTime = time.Now()
-	log.Printf("Proxy is not running, starting it... (attempt %d/%d)", d.proxyRetryCount, ProxyStartMaxRetries)
+	log.Printf("Proxy is not running, starting it... (attempt %d/%d)", d.proxyRetryCount, constants.ProxyStartMaxRetries)
 
 	if err := d.startProxyAndInstallCA(d.ctx); err != nil {
 		log.Printf("Failed to start proxy and install CA: %v", err)
@@ -290,6 +293,23 @@ func (d *Daemon) handleProxy() (shouldRetry bool, err error) {
 	return true, nil
 }
 
+func (d *Daemon) reportSBOM() error {
+	sbom := d.sbomManager.CollectAllPackages(d.ctx)
+
+	sbomJSON, err := json.MarshalIndent(sbom, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal SBOM to JSON: %w", err)
+	}
+
+	sbomJSONPath := platform.GetSbomJSONPath()
+	if err := os.WriteFile(sbomJSONPath, sbomJSON, 0644); err != nil {
+		return fmt.Errorf("failed to write SBOM to file: %w", err)
+	}
+
+	log.Printf("SBOM written to %s", sbomJSONPath)
+	return nil
+}
+
 func (d *Daemon) heartbeat() error {
 	shouldRetry, err := d.handleProxy()
 	if !shouldRetry {
@@ -299,11 +319,28 @@ func (d *Daemon) heartbeat() error {
 		log.Printf("Failed to start proxy: %v", err)
 	}
 
-	if time.Since(d.daemonLastStatusLogTime) >= DaemonStatusLogInterval {
+	runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() {
 		d.printDaemonStatus()
-		d.daemonLastStatusLogTime = time.Now()
-	}
+	})
+	runIfIntervalExceeded(&d.daemonLastSBOMReportTime, constants.SBOMReportInterval, func() {
+		if err := d.reportSBOM(); err != nil {
+			log.Printf("Failed to report SBOM: %v", err)
+		}
+	})
 	return nil
+}
+
+func newSBOMRegistry() *sbom.Registry {
+	r := sbom.NewRegistry()
+	r.Register(npm.New())
+	return r
+}
+
+func runIfIntervalExceeded(lastRun *time.Time, interval time.Duration, fn func()) {
+	if time.Since(*lastRun) >= interval {
+		fn()
+		*lastRun = time.Now()
+	}
 }
 
 func (d *Daemon) initLogging() {

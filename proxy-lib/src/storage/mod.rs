@@ -1,5 +1,5 @@
 mod secrets;
-pub use secrets::SyncSecrets;
+pub use secrets::{StorageKind as SecretStorageKind, SyncSecrets};
 
 mod data;
 pub use data::SyncCompactDataStorage;
