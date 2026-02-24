@@ -38,6 +38,7 @@ func (r *Registry) Get(name string) (PackageManager, error) {
 	}
 	return pm, nil
 }
+
 func (r *Registry) CollectAllPackages(ctx context.Context) SBOM {
 	var entries []EcosystemEntry
 
