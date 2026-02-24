@@ -21,6 +21,7 @@ pub mod maven;
 pub mod npm;
 pub mod nuget;
 pub mod pypi;
+pub mod skills_sh;
 pub mod vscode;
 
 /// Action determined by a [`Rule`] when evaluating an http [`Request`]
