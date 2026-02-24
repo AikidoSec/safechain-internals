@@ -38,10 +38,10 @@ jobs:
           name: safechain-ultimate-darwin-${{ matrix.arch }}
           path: bin
 
-      - name: Download agent ui artifact
+      - name: Download agent ui app bundle artifact
         uses: actions/download-artifact@v4
         with:
-          name: safechain-ultimate-ui-darwin-${{ matrix.arch }}
+          name: safechain-ultimate-ui-darwin-${{ matrix.arch }}.app
           path: bin
 
       - name: Download proxy artifact
@@ -54,7 +54,7 @@ jobs:
         run: |
           ls -lh bin/
           ls -lh bin/safechain-ultimate-darwin-${{ matrix.arch }}
-          ls -lh bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}
+          ls -lh bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}.app
           ls -lh bin/safechain-proxy-darwin-${{ matrix.arch }}
 
       - name: Make scripts executable
@@ -78,7 +78,7 @@ jobs:
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}
+        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}.app
 
       - name: Sign macOS proxy binary
         env:
