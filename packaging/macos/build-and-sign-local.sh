@@ -43,12 +43,12 @@ echo "✓ Agent built: bin/safechain-ultimate-darwin-$ARCH"
 echo "✓ Agent UI built: bin/safechain-ultimate-ui-darwin-$ARCH.app"
 
 # Build Rust proxy
-echo "Building safechain-proxy..."
-cd "$PROJECT_DIR/proxy"
-cargo build --release
-cp "../target/release/safechain-proxy" "../bin/safechain-proxy-darwin-$ARCH"
+echo "Building safechain-l7-proxy..."
+cd "$PROJECT_DIR/proxy-bin-l7"
+cargo build --release --bin safechain-l7-proxy
+cp "../target/release/safechain-l7-proxy" "../bin/safechain-l7-proxy-darwin-$ARCH"
 cd "$PROJECT_DIR"
-echo "✓ Proxy built: bin/safechain-proxy-darwin-$ARCH"
+echo "✓ Proxy built: bin/safechain-l7-proxy-darwin-$ARCH"
 echo ""
 
 # =============================================================================
@@ -64,12 +64,12 @@ echo ""
 # Check if we have a Developer ID Application certificate
 if security find-identity -v -p codesigning | grep "Developer ID Application" > /dev/null; then
     echo "✓ Found Developer ID Application certificate"
-    
+
     # Get the certificate identity
     CERT_IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
     echo "  Using: $CERT_IDENTITY"
     echo ""
-    
+
     echo "Signing binaries..."
     codesign --sign "$CERT_IDENTITY" \
              --force \
@@ -89,15 +89,15 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
              --force \
              --timestamp \
              --options runtime \
-             "$PROJECT_DIR/bin/safechain-proxy-darwin-$ARCH"
+             "$PROJECT_DIR/bin/safechain-l7-proxy-darwin-$ARCH"
     echo "✓ Proxy signed"
     echo ""
-    
+
     # Verify signatures
     echo "Verifying binary signatures..."
     codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-darwin-$ARCH"
     codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-$ARCH.app"
-    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-proxy-darwin-$ARCH"
+    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-l7-proxy-darwin-$ARCH"
     echo "✓ Binary signatures verified"
     echo ""
 else
@@ -135,26 +135,26 @@ echo ""
 # Check if we have a Developer ID Installer certificate
 if security find-identity -v -p basic | grep "Developer ID Installer" > /dev/null; then
     echo "✓ Found Developer ID Installer certificate"
-    
+
     # Get the certificate identity
     INSTALLER_CERT_IDENTITY=$(security find-identity -v -p basic | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
     echo "  Using: $INSTALLER_CERT_IDENTITY"
     echo ""
-    
+
     echo "Signing PKG..."
     SIGNED_PKG="$PROJECT_DIR/dist/SafeChainUltimate-$VERSION-$ARCH-signed.pkg"
-    
+
     productsign --sign "$INSTALLER_CERT_IDENTITY" \
                 --timestamp \
                 "$PKG_FILE" \
                 "$SIGNED_PKG"
-    
+
     # Replace unsigned with signed
     mv "$SIGNED_PKG" "$PKG_FILE"
-    
+
     echo "✓ PKG signed"
     echo ""
-    
+
     # Verify signature
     echo "Verifying PKG signature..."
     pkgutil --check-signature "$PKG_FILE"

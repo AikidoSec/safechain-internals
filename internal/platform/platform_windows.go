@@ -9,11 +9,14 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
 )
 
@@ -21,9 +24,9 @@ const (
 	SafeChainUltimateLogName       = "SafeChainUltimate.log"
 	SafeChainUltimateErrLogName    = "SafeChainUltimate.err"
 	SafeChainUIBinaryName          = "SafeChainUltimateUI.exe"
-	SafeChainProxyBinaryName       = "SafeChainProxy.exe"
-	SafeChainProxyLogName          = "SafeChainProxy.log"
-	SafeChainProxyErrLogName       = "SafeChainProxy.err"
+	SafeChainL7ProxyBinaryName     = "SafeChainL7Proxy.exe"
+	SafeChainL7ProxyLogName        = "SafeChainL7Proxy.log"
+	SafeChainL7ProxyErrLogName     = "SafeChainL7Proxy.err"
 	SafeChainInstallScriptName     = "install-safe-chain.ps1"
 	SafeChainUninstallScriptName   = "uninstall-safe-chain.ps1"
 	registryInternetSettingsSuffix = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
@@ -49,19 +52,46 @@ func initConfig() error {
 	return nil
 }
 
+func GetCurrentUser(ctx context.Context) (string, int, string, int, error) {
+	if !IsWindowsService() {
+		u, err := user.Current()
+		if err != nil {
+			return "", 0, "", 0, fmt.Errorf("failed to get current user: %v", err)
+		}
+		username := u.Username
+		if parts := strings.SplitN(username, `\`, 2); len(parts) == 2 {
+			username = parts[1]
+		}
+		return username, 0, "", 0, nil
+	}
+
+	userToken, err := getCurrentUserToken()
+	if err != nil {
+		return "", 0, "", 0, fmt.Errorf("failed to get current user token: %v", err)
+	}
+	defer userToken.Close()
+
+	userAccountInfo, err := userToken.GetTokenUser()
+	if err != nil {
+		return "", 0, "", 0, fmt.Errorf("GetTokenUser failed: %v", err)
+	}
+
+	username, _, _, err := userAccountInfo.User.Sid.LookupAccount("")
+	if err != nil {
+		return "", 0, "", 0, fmt.Errorf("LookupAccount failed: %v", err)
+	}
+
+	return username, 0, "", 0, nil
+}
+
 func GetActiveUserHomeDir() (string, error) {
 	if !IsWindowsService() {
 		return os.UserHomeDir()
 	}
 
-	sessionID, err := getActiveUserSessionID()
+	userToken, err := getCurrentUserToken()
 	if err != nil {
-		return "", err
-	}
-
-	var userToken windows.Token
-	if err := windows.WTSQueryUserToken(sessionID, &userToken); err != nil {
-		return "", fmt.Errorf("WTSQueryUserToken failed: %v", err)
+		return "", fmt.Errorf("failed to get current user token: %v", err)
 	}
 	defer userToken.Close()
 
@@ -351,6 +381,15 @@ func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 		SafeChainInstallScriptName,
 		"install-safe-chain-*.ps1",
 	)
+}
+
+func GetOSVersion() string {
+	ver := windows.RtlGetVersion()
+	return fmt.Sprintf("%d.%d.%d", ver.MajorVersion, ver.MinorVersion, ver.BuildNumber)
+}
+
+func GetRawDeviceID() (string, error) {
+	return readRegistryValue(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Cryptography`, "MachineGuid")
 }
 
 func UninstallSafeChain(ctx context.Context, repoURL, version string) error {

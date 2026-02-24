@@ -16,16 +16,17 @@ import (
 	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/utils"
+	"golang.org/x/sys/unix"
 )
 
 const (
 	SafeChainUltimateLogName     = "safechain-ultimate.log"
 	SafeChainUltimateErrLogName  = "safechain-ultimate.error.log"
 	SafeChainUIAppName           = "safechain-ultimate-ui.app/Contents/MacOS/safechain-ultimate-ui"
-	SafeChainProxyBinaryName     = "safechain-proxy"
-	SafeChainProxyLogName        = "safechain-proxy.log"
-	SafeChainProxyErrLogName     = "safechain-proxy.err"
-	SafeChainInstallScriptName   = "install-safe-chain.sh"
+  SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
+	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
+	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
+  SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
 )
 
@@ -34,7 +35,7 @@ var deviceRegex = regexp.MustCompile(`Device:\s*(en\d+)`)
 
 func initConfig() error {
 	if RunningAsRoot() {
-		username, _, _, _, err := getConsoleUser(context.Background())
+		username, _, _, _, err := GetCurrentUser(context.Background())
 		if err != nil {
 			return fmt.Errorf("failed to get console user: %v", err)
 		}
@@ -315,7 +316,7 @@ func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
 	return nil
 }
 
-func getConsoleUser(ctx context.Context) (string, int, string, int, error) {
+func GetCurrentUser(ctx context.Context) (string, int, string, int, error) {
 	output, err := exec.CommandContext(ctx, "stat", "-f", "%Su %u %Sg %g", "/dev/console").Output()
 	if err != nil {
 		return "", 0, "", 0, fmt.Errorf("failed to get console user: %v", err)
@@ -344,7 +345,7 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (st
 		return utils.RunCommand(ctx, binaryPath, args...)
 	}
 
-	username, _, _, _, err := getConsoleUser(ctx)
+	username, _, _, _, err := GetCurrentUser(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get console user: %v", err)
 	}
@@ -358,7 +359,7 @@ func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args
 		return utils.RunCommand(ctx, binaryPath, args...)
 	}
 
-	_, uid, _, _, err := getConsoleUser(ctx)
+	_, uid, _, _, err := GetCurrentUser(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get console user: %v", err)
 	}
@@ -415,7 +416,7 @@ func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 	if err != nil {
 		return err
 	}
-	_, uid, _, gid, err := getConsoleUser(ctx)
+	_, uid, _, gid, err := GetCurrentUser(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get console user: %w", err)
 	}
@@ -427,6 +428,39 @@ func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 		return fmt.Errorf("failed to run install script: %w", err)
 	}
 	return nil
+}
+
+func GetOSVersion() string {
+	version, err := unix.Sysctl("kern.osproductversion")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(version)
+}
+
+func GetRawDeviceID() (string, error) {
+	output, err := exec.Command("ioreg", "-rd1", "-c", "IOPlatformExpertDevice").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to run ioreg: %w", err)
+	}
+
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.Contains(line, "IOPlatformUUID") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		uuid := strings.TrimSpace(parts[1])
+		uuid = strings.Trim(uuid, "\"")
+		if uuid != "" {
+			return uuid, nil
+		}
+	}
+
+	return "", fmt.Errorf("IOPlatformUUID not found in ioreg output")
 }
 
 func UninstallSafeChain(ctx context.Context, repoURL, version string) error {

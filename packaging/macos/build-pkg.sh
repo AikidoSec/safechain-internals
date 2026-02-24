@@ -65,7 +65,8 @@ echo "  Project directory: $PROJECT_DIR"
 # Verify binaries exist
 AGENT_BIN="$BIN_DIR/safechain-ultimate-darwin-$ARCH"
 AGENT_UI_APP="$BIN_DIR/safechain-ultimate-ui-darwin-$ARCH.app"
-PROXY_BIN="$BIN_DIR/safechain-proxy-darwin-$ARCH"
+PROXY_BIN="$BIN_DIR/safechain-l7-proxy-darwin-$ARCH"
+
 
 if [ ! -f "$AGENT_BIN" ]; then
     echo "Error: safechain-ultimate binary not found at $AGENT_BIN" >&2
@@ -78,7 +79,7 @@ if [ ! -d "$AGENT_UI_APP" ]; then
 fi
 
 if [ ! -f "$PROXY_BIN" ]; then
-    echo "Error: safechain-proxy binary not found at $PROXY_BIN" >&2
+    echo "Error: safechain-l7-proxy binary not found at $PROXY_BIN" >&2
     exit 1
 fi
 
@@ -108,10 +109,10 @@ chmod 644 "$LOGS_DIR/.keep"
 echo "Copying binaries..."
 cp "$AGENT_BIN" "$INSTALL_DIR/bin/safechain-ultimate"
 cp -R "$AGENT_UI_APP" "$INSTALL_DIR/bin/safechain-ultimate-ui.app"
-cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-proxy"
+cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-l7-proxy"
 chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
-chmod -R 755 "$INSTALL_DIR/bin/safechain-ultimate-ui.app"
-chmod 755 "$INSTALL_DIR/bin/safechain-proxy"
+chmod 755 "$INSTALL_DIR/bin/safechain-ultimate-ui"
+chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 
 # Copy scripts
 echo "Copying scripts..."
@@ -159,18 +160,18 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "✓ Package built successfully: $OUTPUT_PKG"
     echo ""
-    
+
     # Calculate checksum
     CHECKSUM=$(shasum -a 256 "$OUTPUT_PKG" | awk '{print $1}')
     echo "SHA256: $CHECKSUM"
     echo "$CHECKSUM" > "$OUTPUT_PKG.sha256"
     echo ""
-    
+
     # Display package info
     echo "Package information:"
     pkgutil --payload-files "$OUTPUT_PKG" | head -20
     echo ""
-    
+
     # Display package size
     SIZE=$(du -h "$OUTPUT_PKG" | awk '{print $1}')
     echo "Package size: $SIZE"

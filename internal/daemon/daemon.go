@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/AikidoSec/safechain-internals/internal/constants"
+	"github.com/AikidoSec/safechain-internals/internal/device"
 	"github.com/AikidoSec/safechain-internals/internal/ingress"
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
@@ -64,18 +65,20 @@ func (u *uiProcess) Kill() {
 	log.Printf("Stopped UI tray process (PID %d)", pid)
 }
 
-type Daemon struct {
-	config     *Config
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
-	stopOnce   sync.Once
-	proxy      *proxy.Proxy
-	registry   *scannermanager.Registry
-	ingress    *ingress.Server
-	logRotator *utils.LogRotator
-	logReaper  *utils.LogReaper
-	uiProcess  *uiProcess
+type Daemon struct {	
+	versionInfo *version.VersionInfo
+	deviceInfo  *device.DeviceInfo
+	config      *Config
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	stopOnce    sync.Once
+	proxy       *proxy.Proxy
+	registry    *scannermanager.Registry
+	ingress     *ingress.Server
+	logRotator  *utils.LogRotator
+	logReaper   *utils.LogReaper
+  uiProcess  *uiProcess
 
 	proxyRetryCount    int
 	proxyLastRetryTime time.Time
@@ -87,27 +90,36 @@ type Daemon struct {
 
 func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
 	d := &Daemon{
-		ctx:        ctx,
-		cancel:     cancel,
-		config:     config,
-		proxy:      proxy.New(),
-		registry:   scannermanager.NewRegistry(),
-		ingress:    ingress.New(),
-		logRotator: utils.NewLogRotator(),
-		logReaper:  utils.NewLogReaper(),
-		uiProcess:  &uiProcess{},
+		versionInfo: version.Info,
+		ctx:         ctx,
+		cancel:      cancel,
+		config:      config,
+		proxy:       proxy.New(),
+		registry:    scannermanager.NewRegistry(),
+		ingress:     ingress.New(),
+		logRotator:  utils.NewLogRotator(),
+		logReaper:   utils.NewLogReaper(),
+    uiProcess:  &uiProcess{},
 	}
 
 	if err := platform.Init(); err != nil {
 		return nil, fmt.Errorf("failed to initialize platform: %v", err)
 	}
 
+	d.deviceInfo = device.NewDeviceInfo()
+	if d.deviceInfo == nil {
+		return nil, fmt.Errorf("failed to create device info")
+	}
 	d.initLogging()
 	return d, nil
 }
 
 func (d *Daemon) Start(ctx context.Context) error {
-	log.Print("Starting SafeChain Daemon:\n", version.Info())
+	log.Print("Starting SafeChain Daemon\n")
+
+	log.Printf("Version info:\n%s\n", d.versionInfo.String())
+	log.Printf("Device info:\n%s\n", d.deviceInfo.String())
+
 	log.Println("User home directory used for SafeChain:", platform.GetConfig().HomeDir)
 
 	mergedCtx, cancel := context.WithCancel(ctx)
