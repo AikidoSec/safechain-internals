@@ -68,13 +68,11 @@ func globPaths(homeDir string, binary string) []string {
 	}
 
 	if runtime.GOOS == "windows" {
-		localAppData := os.Getenv("LOCALAPPDATA")
+		localAppData := filepath.Join(homeDir, "AppData", "Local")
 		programFiles := os.Getenv("ProgramFiles")
-		if localAppData != "" {
-			patterns = append(patterns,
-				filepath.Join(localAppData, "Programs", "Python", "*", "Scripts", binary),
-			)
-		}
+		patterns = append(patterns,
+			filepath.Join(localAppData, "Programs", "Python", "*", "Scripts", binary),
+		)
 		if programFiles != "" {
 			patterns = append(patterns,
 				filepath.Join(programFiles, "Python", "*", "Scripts", binary),

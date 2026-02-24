@@ -50,7 +50,7 @@ func findInstallations(ctx context.Context) ([]sbom.InstalledVersion, error) {
 			continue
 		}
 
-		binaryPath, version := getEditorBinaryAndVersion(ctx, v)
+		binaryPath, version := getEditorBinaryAndVersion(ctx, v, homeDir)
 		log.Printf("Found %s extensions at: %s (binary: %s, version: %s)", v.name, extPath, binaryPath, version)
 		installations = append(installations, sbom.InstalledVersion{
 			Ecosystem: v.name,
@@ -63,9 +63,9 @@ func findInstallations(ctx context.Context) ([]sbom.InstalledVersion, error) {
 	return installations, nil
 }
 
-func getEditorBinaryAndVersion(ctx context.Context, v variant) (binaryPath string, version string) {
+func getEditorBinaryAndVersion(ctx context.Context, v variant, homeDir string) (binaryPath string, version string) {
 	for _, bin := range v.bins {
-		paths := findEditorBinary(bin)
+		paths := findEditorBinary(bin, homeDir)
 		for _, p := range paths {
 			ver, err := runEditorVersion(ctx, p)
 			if err != nil {
@@ -77,7 +77,7 @@ func getEditorBinaryAndVersion(ctx context.Context, v variant) (binaryPath strin
 	return "", ""
 }
 
-func findEditorBinary(name string) []string {
+func findEditorBinary(name string, homeDir string) []string {
 	var candidates []string
 
 	if runtime.GOOS == "darwin" {
@@ -95,16 +95,29 @@ func findEditorBinary(name string) []string {
 
 	if runtime.GOOS == "windows" {
 		cmdName := name + ".cmd"
-		localAppData := os.Getenv("LOCALAPPDATA")
-		if localAppData != "" {
-			candidates = append(candidates,
-				filepath.Join(localAppData, "Programs", "Microsoft VS Code", "bin", cmdName),
-				filepath.Join(localAppData, "Programs", "Microsoft VS Code Insiders", "bin", cmdName),
-			)
-			if name == "cursor" {
-				candidates = append(candidates,
-					filepath.Join(localAppData, "Programs", "cursor", "resources", "app", "bin", cmdName),
-				)
+		localAppData := filepath.Join(homeDir, "AppData", "Local")
+		programFiles := os.Getenv("ProgramFiles")
+
+		userPaths := map[string][]string{
+			"code":          {filepath.Join(localAppData, "Programs", "Microsoft VS Code", "bin", cmdName)},
+			"code-insiders": {filepath.Join(localAppData, "Programs", "Microsoft VS Code Insiders", "bin", cmdName)},
+			"cursor":        {filepath.Join(localAppData, "Programs", "cursor", "resources", "app", "bin", cmdName)},
+			"codium":        {filepath.Join(localAppData, "Programs", "VSCodium", "bin", cmdName)},
+			"vscodium":      {filepath.Join(localAppData, "Programs", "VSCodium", "bin", "codium.cmd")},
+		}
+		if paths, ok := userPaths[name]; ok {
+			candidates = append(candidates, paths...)
+		}
+
+		if programFiles != "" {
+			systemPaths := map[string][]string{
+				"code":          {filepath.Join(programFiles, "Microsoft VS Code", "bin", cmdName)},
+				"code-insiders": {filepath.Join(programFiles, "Microsoft VS Code - Insiders", "bin", cmdName)},
+				"codium":        {filepath.Join(programFiles, "VSCodium", "bin", cmdName)},
+				"vscodium":      {filepath.Join(programFiles, "VSCodium", "bin", "codium.cmd")},
+			}
+			if paths, ok := systemPaths[name]; ok {
+				candidates = append(candidates, paths...)
 			}
 		}
 	}
