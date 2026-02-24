@@ -37,7 +37,10 @@ pub mod rule;
 #[cfg(feature = "pac")]
 mod pac;
 
-use crate::{storage::SyncCompactDataStorage, utils::env::network_service_identifier};
+use crate::{
+    storage::SyncCompactDataStorage,
+    utils::{env::network_service_identifier, token::PermissionGroupToken},
+};
 
 use self::rule::{RequestAction, Rule};
 
@@ -48,7 +51,7 @@ pub struct Firewall {
     // a background task update these when needed..
     block_rules: Arc<Vec<self::rule::DynRule>>,
     notifier: Option<self::notifier::EventNotifier>,
-    _aikido_token: Option<String>,
+    _aikido_token: Option<PermissionGroupToken>,
 }
 
 impl Firewall {
@@ -57,7 +60,7 @@ impl Firewall {
         client: impl Service<Request, Output = Response, Error = OpaqueError> + Clone,
         data: SyncCompactDataStorage,
         reporting_endpoint: Option<rama::http::Uri>,
-        aikido_token: Option<String>,
+        aikido_token: Option<PermissionGroupToken>,
     ) -> Result<Self, BoxError> {
         let layered_client = (
             MapResponseBodyLayer::new_boxed_streaming_body(),

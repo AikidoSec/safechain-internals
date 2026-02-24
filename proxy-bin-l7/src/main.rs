@@ -27,6 +27,10 @@ pub mod client;
 pub mod server;
 pub mod utils;
 
+pub struct RuntimeArgs {
+    pub aikido_token: Option<safechain_utils::token::PermissionGroupToken>,
+}
+
 #[cfg(target_family = "unix")]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
@@ -127,30 +131,14 @@ async fn main() -> Result<(), BoxError> {
     ))
     .await?;
 
-    let aikido_token = match utils::token::load_token() {
-        Ok(token) => token,
-        Err(err) => {
-            tracing::warn!(
-                error = %err,
-                "Error occurred while loading Aikido authentication token; continuing without token"
-            );
-            None
-        }
-    };
-
-    if aikido_token.is_some() {
-        tracing::info!("Aikido authentication token loaded");
-    } else {
-        tracing::info!(
-            "No Aikido authentication token found; endpoint protection features disabled"
-        );
-    }
+    let aikido_token = safechain_utils::token::load_token();
 
     #[cfg(target_family = "unix")]
     rama::unix::utils::raise_nofile(args.ulimit).context("set file descriptor limit")?;
 
     let base_shutdown_signal = graceful::default_signal();
-    if let Err(err) = run_with_args(base_shutdown_signal, args, aikido_token).await {
+    let runtime_args = RuntimeArgs { aikido_token };
+    if let Err(err) = run_with_args(base_shutdown_signal, args, runtime_args).await {
         eprintln!("🚩 exit with error: {err}");
         std::process::exit(1);
     }
@@ -166,7 +154,7 @@ async fn main() -> Result<(), BoxError> {
 async fn run_with_args<F>(
     base_shutdown_signal: F,
     args: Args,
-    aikido_token: Option<String>,
+    runtime_args: RuntimeArgs,
 ) -> Result<(), BoxError>
 where
     F: Future<Output: Send + 'static> + Send + 'static,
@@ -213,7 +201,7 @@ where
             client::new_web_client()?,
             data_storage,
             args.reporting_endpoint.clone(),
-            aikido_token,
+            runtime_args.aikido_token,
         ) => {
             result?
         }
