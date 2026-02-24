@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/sbom"
 )
 
 func findBinaries() ([]string, error) {
@@ -19,24 +20,7 @@ func findBinaries() ([]string, error) {
 	}
 	candidates = append(candidates, globVersionedPaths(homeDir)...)
 
-	seen := make(map[string]bool)
-	var paths []string
-	for _, candidate := range candidates {
-		resolved, err := filepath.EvalSymlinks(candidate)
-		if err != nil {
-			resolved = candidate
-		}
-		if seen[resolved] {
-			continue
-		}
-		if _, err := os.Stat(candidate); err != nil {
-			continue
-		}
-		seen[resolved] = true
-		paths = append(paths, candidate)
-	}
-
-	return paths, nil
+	return sbom.DeduplicatePaths(candidates), nil
 }
 
 func knownPaths(binary string) []string {

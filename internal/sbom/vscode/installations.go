@@ -131,12 +131,9 @@ func findEditorBinary(name string, homeDir string) []string {
 		"/snap/bin/"+name,
 	)
 
-	var found []string
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			found = append(found, c)
-			break
-		}
+	paths := sbom.DeduplicatePaths(candidates)
+	if len(paths) > 0 {
+		return paths[:1]
 	}
-	return found
+	return nil
 }
