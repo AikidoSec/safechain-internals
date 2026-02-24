@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use rama::{
     Service,
@@ -18,9 +18,12 @@ use tokio::time::Instant;
 
 use crate::{storage::SyncCompactDataStorage, utils::uri::uri_to_filename};
 
+use super::types::{EcosystemConfig, EndpointConfig};
+
 #[derive(Clone)]
 pub struct RemoteEndpointConfig {
     config: Arc<ArcSwap<EndpointConfig>>,
+    trigger_notify: Arc<tokio::sync::Notify>,
 }
 
 impl std::fmt::Debug for RemoteEndpointConfig {
@@ -50,7 +53,7 @@ impl RemoteEndpointConfig {
         C: Service<Request, Output = Response, Error = BoxError>,
     {
         let filename = uri_to_filename(&uri);
-        let refresh_interval = Duration::from_secs(600); // 10 minutes? Configurable?
+        let refresh_interval = Duration::from_secs(60);
 
         let config_client = RemoteConfigClient {
             uri,
@@ -96,16 +99,19 @@ impl RemoteEndpointConfig {
         };
 
         let shared_config = Arc::new(ArcSwap::new(Arc::new(endpoint_config)));
+        let trigger_notify = Arc::new(tokio::sync::Notify::new());
 
         tokio::spawn(config_update_loop(
             guard,
             config_client,
             e_tag,
             shared_config.clone(),
+            trigger_notify.clone(),
         ));
 
         Ok(Self {
             config: shared_config,
+            trigger_notify,
         })
     }
 
@@ -116,6 +122,11 @@ impl RemoteEndpointConfig {
     pub fn get_ecosystem_config<'a>(&self, ecosystem: &'a str) -> EcosystemConfigResult<'a> {
         let guard = self.config.load();
         EcosystemConfigResult { ecosystem, guard }
+    }
+
+    /// Trigger an immediate config refresh check.
+    pub fn trigger_refresh(&self) {
+        self.trigger_notify.notify_one();
     }
 }
 
@@ -265,6 +276,7 @@ async fn config_update_loop<C>(
     client: RemoteConfigClient<C>,
     e_tag: Option<ArcStr>,
     shared_config: Arc<ArcSwap<EndpointConfig>>,
+    trigger_notify: Arc<tokio::sync::Notify>,
 ) where
     C: Service<Request, Output = Response, Error = BoxError>,
 {
@@ -283,7 +295,18 @@ async fn config_update_loop<C>(
         );
 
         tokio::select! {
-            _ = tokio::time::sleep(sleep_for) => {},
+            _ = tokio::time::sleep(sleep_for) => {
+                tracing::debug!(
+                    "remote endpoint config (uri = {}), timer triggered refresh",
+                    client.uri
+                );
+            },
+            _ = trigger_notify.notified() => {
+                tracing::debug!(
+                    "remote endpoint config (uri = {}), manual trigger received",
+                    client.uri
+                );
+            },
             _ = guard.cancelled() => {
                 tracing::debug!(
                     "remote endpoint config (uri = {}), guard cancelled; exit",
@@ -329,48 +352,4 @@ fn with_jitter(refresh: Duration) -> Duration {
 struct CachedEndpointConfig {
     pub e_tag: Option<ArcStr>,
     pub config: EndpointConfig,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EndpointConfig {
-    pub version: ArcStr,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub updated_at: Option<ArcStr>,
-    pub permission_group_id: u64,
-    pub permission_group_name: ArcStr,
-    /// Per-ecosystem configurations (npm, maven, pypi, etc.).
-    #[serde(default)]
-    pub ecosystems: HashMap<ArcStr, EcosystemConfig>,
-}
-
-/// Configuration for a specific package ecosystem.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EcosystemConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-
-    #[serde(default)]
-    pub block_all_installs: bool,
-
-    #[serde(default)]
-    pub force_requests_for_new_packages: bool,
-
-    #[serde(default)]
-    pub exceptions: Exceptions,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Exceptions {
-    /// Packages to always block (even if not in malware list).
-    #[serde(default)]
-    pub blocked_packages: Vec<ArcStr>,
-
-    /// Packages to allow.
-    #[serde(default)]
-    pub allowed_packages: Vec<ArcStr>,
-}
-
-fn default_true() -> bool {
-    true
 }
