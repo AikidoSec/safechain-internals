@@ -34,7 +34,7 @@ pub fn load_token() -> Option<PermissionToken> {
         tracing::info!("Aikido authentication token loaded");
     } else {
         tracing::info!(
-            "no Aikido authentication token found; endpoint protection features disabled"
+            "No Aikido authentication token found; Some endpoint protection features will be disabled"
         );
     }
     token
