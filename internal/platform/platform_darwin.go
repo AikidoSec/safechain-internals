@@ -23,10 +23,10 @@ const (
 	SafeChainUltimateLogName     = "safechain-ultimate.log"
 	SafeChainUltimateErrLogName  = "safechain-ultimate.error.log"
 	SafeChainUIAppName           = "safechain-ultimate-ui.app/Contents/MacOS/safechain-ultimate-ui"
-  SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
+	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
 	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
 	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
-  SafeChainInstallScriptName   = "install-safe-chain.sh"
+	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
 )
 
@@ -379,7 +379,7 @@ func StartUIProcessInAuditSessionOfCurrentUser(ctx context.Context, binaryPath s
 		}
 		return cmd.Process.Pid, nil
 	}
-	_, uid, _, _, err := getConsoleUser(ctx)
+	_, uid, _, _, err := GetCurrentUser(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get console user: %v", err)
 	}
