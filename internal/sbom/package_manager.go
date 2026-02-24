@@ -12,6 +12,7 @@ type InstalledVersion struct {
 }
 
 type Package struct {
+	Id      string `json:"id,omitempty"`
 	Name    string `json:"name"`
 	Version string `json:"version"`
 }
