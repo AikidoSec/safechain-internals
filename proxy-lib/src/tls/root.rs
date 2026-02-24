@@ -205,7 +205,8 @@ mod tests {
     #[test]
     fn test_new_root_tls_crt_key_pair_fs() {
         let dir = tmp_dir::try_new("test_new_root_tls_crt_key_pair_fs").unwrap();
-        let secrets = SyncSecrets::new_fs(dir.clone());
+        let secrets =
+            SyncSecrets::try_new_fs(crate::utils::env::project_name(), dir.clone()).unwrap();
         let data_storage = SyncCompactDataStorage::try_new(dir).unwrap();
         for _ in 0..2 {
             let _ = new_root_tls_crt_key_pair(&secrets, &data_storage).unwrap();
