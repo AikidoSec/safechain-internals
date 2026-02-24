@@ -26,19 +26,27 @@ pub struct EcosystemConfig {
     pub block_all_installs: bool,
 
     #[serde(default)]
-    pub force_requests_for_new_packages: bool,
+    pub request_installs: bool,
 
     #[serde(default)]
-    pub exceptions: Exceptions,
+    pub minimum_allowed_age_value: Option<u64>,
+
+    #[serde(default)]
+    pub minimum_allowed_age_unit: Option<ArcStr>,
+
+    #[serde(default)]
+    pub exceptions: Vec<Exception>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Exceptions {
-    #[serde(default)]
-    pub blocked_packages: Vec<ArcStr>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Exception {
+    pub exception_type: ArcStr,
 
     #[serde(default)]
-    pub allowed_packages: Vec<ArcStr>,
+    pub permission_group_ids: Vec<u64>,
+
+    #[serde(default)]
+    pub related_packages: Vec<ArcStr>,
 }
 
 fn default_true() -> bool {
