@@ -22,13 +22,14 @@ use rama::{
 use clap::Parser;
 
 use safechain_proxy_lib::{http, storage, tls, utils as safechain_utils};
+use safechain_utils::token::{PermissionToken, load_token};
 
 pub mod client;
 pub mod server;
 pub mod utils;
 
 pub struct RuntimeArgs {
-    pub aikido_token: Option<safechain_utils::token::PermissionToken>,
+    pub aikido_token: Option<PermissionToken>,
 }
 
 #[cfg(target_family = "unix")]
@@ -131,7 +132,7 @@ async fn main() -> Result<(), BoxError> {
     ))
     .await?;
 
-    let aikido_token = safechain_utils::token::load_token();
+    let aikido_token = load_token();
 
     #[cfg(target_family = "unix")]
     rama::unix::utils::raise_nofile(args.ulimit).context("set file descriptor limit")?;
