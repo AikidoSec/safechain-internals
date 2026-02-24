@@ -102,7 +102,7 @@ func globPaths(homeDir string, binary string) []string {
 func globVersionedPaths(homeDir string) []string {
 	pattern := "pip[23].[0-9]*"
 	if runtime.GOOS == "windows" {
-		pattern = "pip[23].[0-9]*.exe"
+		pattern += ".exe"
 	}
 
 	dirs := []string{
