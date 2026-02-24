@@ -54,12 +54,12 @@ func (r *Registry) CollectAllPackages(ctx context.Context) SBOM {
 				log.Printf("Failed to collect SBOM for '%s' (%s): %v", name, inst.Version, err)
 				continue
 			}
-			ecosystem := inst.Variant
-			if ecosystem == "" {
-				ecosystem = name
+			variant := inst.Variant
+			if variant == "" {
+				variant = name
 			}
 			entries = append(entries, EcosystemEntry{
-				Variant:  inst.Variant,
+				Variant:  variant,
 				Version:  inst.Version,
 				Path:     inst.Path,
 				Packages: packages,
