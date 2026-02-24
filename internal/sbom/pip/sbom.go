@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/sbom"
 )
@@ -61,17 +60,8 @@ func (p *Pip) SBOM(ctx context.Context, installation sbom.InstalledVersion) ([]s
 		return nil, fmt.Errorf("failed to parse pip list output: %w", err)
 	}
 
-	skipPackages := map[string]bool{
-		"pip":        true,
-		"setuptools": true,
-		"wheel":      true,
-	}
-
 	packages := make([]sbom.Package, 0, len(parsed))
 	for _, entry := range parsed {
-		if skipPackages[strings.ToLower(entry.Name)] {
-			continue
-		}
 		packages = append(packages, sbom.Package{
 			Name:    entry.Name,
 			Version: entry.Version,

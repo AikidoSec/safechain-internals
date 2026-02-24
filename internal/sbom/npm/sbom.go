@@ -64,9 +64,6 @@ func (n *Npm) SBOM(ctx context.Context, installation sbom.InstalledVersion) ([]s
 
 	packages := make([]sbom.Package, 0, len(parsed.Dependencies))
 	for pkgName, dep := range parsed.Dependencies {
-		if pkgName == name {
-			continue
-		}
 		packages = append(packages, sbom.Package{
 			Name:    pkgName,
 			Version: dep.Version,
