@@ -62,28 +62,27 @@ func (u *uiProcess) Kill() {
 	log.Printf("Stopped UI tray process (PID %d)", pid)
 }
 
-type Daemon struct {	
-	versionInfo *version.VersionInfo
-	deviceInfo  *device.DeviceInfo
-	config      *Config
-	ctx         context.Context
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup
-	stopOnce    sync.Once
-	proxy       *proxy.Proxy
-	registry    *scannermanager.Registry
-  sbomManager *sbom.Registry
-	ingress     *ingress.Server
-	logRotator  *utils.LogRotator
-	logReaper   *utils.LogReaper
-  uiProcess  *uiProcess
-	proxyRetryCount    int
-	proxyLastRetryTime time.Time
+type Daemon struct {
+	versionInfo                *version.VersionInfo
+	deviceInfo                 *device.DeviceInfo
+	config                     *Config
+	ctx                        context.Context
+	cancel                     context.CancelFunc
+	wg                         sync.WaitGroup
+	stopOnce                   sync.Once
+	proxy                      *proxy.Proxy
+	registry                   *scannermanager.Registry
+	sbomManager                *sbom.Registry
+	ingress                    *ingress.Server
+	logRotator                 *utils.LogRotator
+	logReaper                  *utils.LogReaper
+	uiProcess                  *uiProcess
+	proxyRetryCount            int
+	proxyLastRetryTime         time.Time
 	daemonLastStatusLogTime    time.Time
 	proxyStatusSentToTray      bool // last proxy running state sent to tray
 	proxyStatusTrayInitialized bool // true after we've sent at least once
-	daemonLastSBOMReportTime time.Time
-
+	daemonLastSBOMReportTime   time.Time
 }
 
 func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
@@ -98,7 +97,7 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 		ingress:     ingress.New(),
 		logRotator:  utils.NewLogRotator(),
 		logReaper:   utils.NewLogReaper(),
-    uiProcess:  &uiProcess{},
+		uiProcess:   &uiProcess{},
 	}
 
 	if err := platform.Init(); err != nil {
@@ -372,7 +371,6 @@ func (d *Daemon) heartbeat() error {
 		d.proxyStatusTrayInitialized = true
 	}
 
-	if time.Since(d.daemonLastStatusLogTime) >= DaemonStatusLogInterval {
 	runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() {
 		d.printDaemonStatus()
 	})
