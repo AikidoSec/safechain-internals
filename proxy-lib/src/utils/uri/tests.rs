@@ -1,6 +1,6 @@
 use rama::http::Uri;
 
-use super::uri::uri_to_filename;
+use super::uri_to_filename;
 
 #[test]
 fn test_uri_to_filename_basic() {
