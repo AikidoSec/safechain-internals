@@ -2,11 +2,13 @@ use std::path::Path;
 
 use rama::{error::BoxError, telemetry::tracing, utils::str::arcstr::ArcStr};
 
+use crate::storage::app_path;
+
 /// Permission group token used to authenticate with the Aikido endpoint protection API.
 #[derive(Debug, Clone)]
-pub struct PermissionGroupToken(ArcStr);
+pub struct PermissionToken(ArcStr);
 
-impl PermissionGroupToken {
+impl PermissionToken {
     pub fn try_parse(raw: &str) -> Result<Self, BoxError> {
         let trimmed = raw.trim();
 
@@ -26,7 +28,7 @@ impl PermissionGroupToken {
     }
 }
 
-pub fn load_token() -> Option<PermissionGroupToken> {
+pub fn load_token() -> Option<PermissionToken> {
     let token = load_token_inner();
     if token.is_some() {
         tracing::info!("Aikido authentication token loaded");
@@ -38,8 +40,8 @@ pub fn load_token() -> Option<PermissionGroupToken> {
     token
 }
 
-fn load_token_inner() -> Option<PermissionGroupToken> {
-    let system_path = crate::storage::app_path::resolve(".token");
+fn load_token_inner() -> Option<PermissionToken> {
+    let system_path = app_path::resolve(".token");
     if let Some(token) = try_load_from_path(&system_path) {
         return Some(token);
     }
@@ -48,7 +50,7 @@ fn load_token_inner() -> Option<PermissionGroupToken> {
     try_load_from_path(Path::new(".token"))
 }
 
-fn try_load_from_path(path: &Path) -> Option<PermissionGroupToken> {
+fn try_load_from_path(path: &Path) -> Option<PermissionToken> {
     if !path.exists() {
         return None;
     }
@@ -81,7 +83,7 @@ fn try_load_from_path(path: &Path) -> Option<PermissionGroupToken> {
         }
     };
 
-    match PermissionGroupToken::try_parse(&raw) {
+    match PermissionToken::try_parse(&raw) {
         Ok(token) => Some(token),
         Err(err) => {
             tracing::warn!(path = %path.display(), error = %err, "invalid token; ignoring");

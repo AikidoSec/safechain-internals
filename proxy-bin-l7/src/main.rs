@@ -28,7 +28,7 @@ pub mod server;
 pub mod utils;
 
 pub struct RuntimeArgs {
-    pub aikido_token: Option<safechain_utils::token::PermissionGroupToken>,
+    pub aikido_token: Option<safechain_utils::token::PermissionToken>,
 }
 
 #[cfg(target_family = "unix")]

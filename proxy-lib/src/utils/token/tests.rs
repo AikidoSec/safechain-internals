@@ -4,31 +4,31 @@ use std::fs;
 
 #[test]
 fn test_try_parse_valid() {
-    let token = PermissionGroupToken::try_parse("some-valid-test-token").unwrap();
+    let token = PermissionToken::try_parse("some-valid-test-token").unwrap();
     assert_eq!(token.as_str(), "some-valid-test-token");
 }
 
 #[test]
 fn test_try_parse_trims_whitespace() {
-    let token = PermissionGroupToken::try_parse("  some-valid-test-token  \n").unwrap();
+    let token = PermissionToken::try_parse("  some-valid-test-token  \n").unwrap();
     assert_eq!(token.as_str(), "some-valid-test-token");
 }
 
 #[test]
 fn test_try_parse_empty() {
-    assert!(PermissionGroupToken::try_parse("").is_err());
-    assert!(PermissionGroupToken::try_parse("   \n  ").is_err());
+    assert!(PermissionToken::try_parse("").is_err());
+    assert!(PermissionToken::try_parse("   \n  ").is_err());
 }
 
 #[test]
 fn test_try_parse_control_chars() {
-    assert!(PermissionGroupToken::try_parse("abc\x00def123456").is_err());
-    assert!(PermissionGroupToken::try_parse("abc\ndef_12345678").is_err());
+    assert!(PermissionToken::try_parse("abc\x00def123456").is_err());
+    assert!(PermissionToken::try_parse("abc\ndef_12345678").is_err());
 }
 
 #[test]
 fn test_try_parse_non_ascii() {
-    assert!(PermissionGroupToken::try_parse("tökén_12345678").is_err());
+    assert!(PermissionToken::try_parse("tökén_12345678").is_err());
 }
 
 #[test]
