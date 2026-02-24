@@ -1,6 +1,6 @@
 [package]
 name = "safechain-l4-proxy"
-description = "MITM SafeChain l4 Proxy for Developer Security"
+description = "Aikido SafeChain MITM l4 Proxy"
 version = { workspace = true }  # keep in sync with GH releases
 edition = { workspace = true }
 publish = false
