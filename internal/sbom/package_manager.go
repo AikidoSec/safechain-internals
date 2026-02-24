@@ -5,27 +5,16 @@ import (
 )
 
 type InstalledVersion struct {
-	Ecosystem string
-	Version   string
-	Path      string
-	DataPath  string
+	Variant  string
+	Version  string
+	Path     string
+	DataPath string
 }
 
 type Package struct {
 	Id      string `json:"id,omitempty"`
 	Name    string `json:"name"`
 	Version string `json:"version"`
-}
-
-type EcosystemEntry struct {
-	Ecosystem string    `json:"ecosystem"`
-	Version   string    `json:"version"`
-	Path      string    `json:"path"`
-	Packages  []Package `json:"packages"`
-}
-
-type SBOM struct {
-	Entries []EcosystemEntry `json:"sbom"`
 }
 
 // PackageManager represents a package ecosystem (e.g. "npm", "pip").

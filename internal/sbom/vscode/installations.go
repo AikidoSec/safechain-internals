@@ -44,19 +44,19 @@ func findInstallations(ctx context.Context) ([]sbom.InstalledVersion, error) {
 	homeDir := platform.GetConfig().HomeDir
 	var installations []sbom.InstalledVersion
 
-	for _, v := range variants {
-		extPath := filepath.Join(homeDir, v.extDir)
+	for _, variant := range variants {
+		extPath := filepath.Join(homeDir, variant.extDir)
 		if _, err := os.Stat(extPath); err != nil {
 			continue
 		}
 
-		binaryPath, version := getEditorBinaryAndVersion(ctx, v, homeDir)
-		log.Printf("Found %s extensions at: %s (binary: %s, version: %s)", v.name, extPath, binaryPath, version)
+		binaryPath, version := getEditorBinaryAndVersion(ctx, variant, homeDir)
+		log.Printf("Found %s extensions at: %s (binary: %s, version: %s)", variant.name, extPath, binaryPath, version)
 		installations = append(installations, sbom.InstalledVersion{
-			Ecosystem: v.name,
-			Version:   version,
-			Path:      binaryPath,
-			DataPath:  extPath,
+			Variant:  variant.name,
+			Version:  version,
+			Path:     binaryPath,
+			DataPath: extPath,
 		})
 	}
 
