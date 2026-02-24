@@ -111,7 +111,7 @@ cp "$AGENT_BIN" "$INSTALL_DIR/bin/safechain-ultimate"
 cp -R "$AGENT_UI_APP" "$INSTALL_DIR/bin/safechain-ultimate-ui.app"
 cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-l7-proxy"
 chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
-chmod 755 "$INSTALL_DIR/bin/safechain-ultimate-ui"
+chmod -R 755 "$INSTALL_DIR/bin/safechain-ultimate-ui.app"
 chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 
 # Copy scripts
