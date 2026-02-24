@@ -46,8 +46,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: safechain-ultimate-ui-darwin-${{ matrix.arch }}.app
-          path: bin
+          path: bin-ui-app
 
+      - name: Restore .app bundle layout
+        run: |
+          mkdir -p "bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}.app"
+          mv bin-ui-app/* "bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}.app/"
+          rm -rf bin-ui-app
+          
       - name: Download proxy artifact
         uses: actions/download-artifact@v4
         with:
