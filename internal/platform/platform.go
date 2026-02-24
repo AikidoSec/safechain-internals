@@ -57,3 +57,7 @@ func GetProxyLogPath() string {
 func GetProxyErrLogPath() string {
 	return filepath.Join(config.LogDir, SafeChainL7ProxyErrLogName)
 }
+
+func GetSbomJSONPath() string {
+	return filepath.Join(config.LogDir, SafeChainSbomJSONName)
+}

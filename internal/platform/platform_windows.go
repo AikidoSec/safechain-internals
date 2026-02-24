@@ -26,6 +26,7 @@ const (
 	SafeChainL7ProxyBinaryName     = "SafeChainL7Proxy.exe"
 	SafeChainL7ProxyLogName        = "SafeChainL7Proxy.log"
 	SafeChainL7ProxyErrLogName     = "SafeChainL7Proxy.err"
+	SafeChainSbomJSONName          = "SafeChainUltimateSBOM.json"
 	SafeChainInstallScriptName     = "install-safe-chain.ps1"
 	SafeChainUninstallScriptName   = "uninstall-safe-chain.ps1"
 	registryInternetSettingsSuffix = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
@@ -233,7 +234,7 @@ func IsProxyCAInstalled(ctx context.Context) error {
 func UninstallProxyCA(ctx context.Context) error {
 	commandsToExecute := []utils.Command{
 		{Command: "certutil", Args: []string{"-delstore", "Root", "aikidosafechain.com"}},
-		{Command: "cmdkey", Args: []string{"/delete:safechain-proxy.tls-root-ca-key"}},
+		{Command: "cmdkey", Args: []string{"/delete:safechain-proxy-lib.tls-root-ca-key"}},
 	}
 	_, err := utils.RunCommands(ctx, commandsToExecute)
 	if err != nil {
@@ -317,6 +318,12 @@ func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (st
 	}
 
 	return runAsLoggedInUser(binaryPath, args)
+}
+
+// On Windows, CreateEnvironmentBlock provides the full user environment
+// automatically, so no PATH manipulation is needed.
+func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ...string) (string, error) {
+	return RunAsCurrentUser(ctx, binaryPath, args)
 }
 
 func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
