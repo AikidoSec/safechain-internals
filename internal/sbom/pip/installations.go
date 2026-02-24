@@ -110,7 +110,7 @@ func globPaths(homeDir string, binary string) []string {
 
 // globVersionedPaths finds versioned pip binaries like pip3.9, pip3.10, pip2.7.
 func globVersionedPaths(homeDir string) []string {
-	pattern := "pip[23].[0-9]*"
+	pattern := "pip[0-9].[0-9]*"
 	if runtime.GOOS == "windows" {
 		pattern += ".exe"
 	}
