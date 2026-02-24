@@ -76,10 +76,7 @@ func getBrowsers(homeDir string) []browser {
 		}
 
 	case "windows":
-		localAppData := os.Getenv("LOCALAPPDATA")
-		if localAppData == "" {
-			return nil
-		}
+		localAppData := filepath.Join(homeDir, "AppData", "Local")
 		programFiles := os.Getenv("ProgramFiles")
 		programFilesX86 := os.Getenv("ProgramFiles(x86)")
 		return []browser{
