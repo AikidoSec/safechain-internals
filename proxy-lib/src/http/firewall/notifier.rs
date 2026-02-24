@@ -85,7 +85,7 @@ impl std::fmt::Debug for EventNotifier {
 impl EventNotifier {
     pub fn try_new(
         exec: Executor,
-        client: impl Service<Request, Output = Response, Error = BoxError>,
+        client: impl Service<Request, Output = Response, Error = OpaqueError>,
         reporting_endpoint: Uri,
     ) -> Result<Self, BoxError> {
         let client = create_notifier_https_client(client)?;
@@ -160,7 +160,7 @@ async fn send_blocked_event(
     );
 
     let resp = match client
-        .into_post(reporting_endpoint.clone())
+        .post(reporting_endpoint.clone())
         .json(&event)
         .send()
         .await
@@ -190,7 +190,7 @@ async fn send_blocked_event(
 }
 
 fn create_notifier_https_client(
-    client: impl Service<Request, Output = Response, Error = BoxError>,
+    client: impl Service<Request, Output = Response, Error = OpaqueError>,
 ) -> Result<BoxService<Request, Response, OpaqueError>, BoxError> {
     let client_middleware = (
         MapResponseBodyLayer::new_boxed_streaming_body(),

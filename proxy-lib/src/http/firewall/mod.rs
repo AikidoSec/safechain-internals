@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use rama::{
     Layer as _, Service,
-    error::{BoxError, ErrorContext as _},
+    error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{
         HeaderValue, Request, Response,
@@ -53,7 +53,7 @@ pub struct Firewall {
 impl Firewall {
     pub async fn try_new(
         guard: ShutdownGuard,
-        client: impl Service<Request, Output = Response, Error = BoxError> + Clone,
+        client: impl Service<Request, Output = Response, Error = OpaqueError> + Clone,
         data: SyncCompactDataStorage,
         reporting_endpoint: Option<rama::http::Uri>,
     ) -> Result<Self, BoxError> {
@@ -133,9 +133,17 @@ impl Firewall {
                 .await
                 .context("create block rule: npm")?
                 .into_dyn(),
-                self::rule::pypi::RulePyPI::try_new(guard, layered_client, data)
+                self::rule::pypi::RulePyPI::try_new(
+                    guard.clone(),
+                    layered_client.clone(),
+                    data.clone(),
+                )
+                .await
+                .context("create block rule: pypi")?
+                .into_dyn(),
+                self::rule::maven::RuleMaven::try_new(guard, layered_client, data)
                     .await
-                    .context("create block rule: pypi")?
+                    .context("create block rule: maven")?
                     .into_dyn(),
             ]),
             notifier,
