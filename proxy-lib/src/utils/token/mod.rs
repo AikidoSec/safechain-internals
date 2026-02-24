@@ -4,7 +4,11 @@ use rama::{error::BoxError, telemetry::tracing, utils::str::arcstr::ArcStr};
 
 use crate::storage::app_path;
 
+const TOKEN_PREFIX: &str = "mdm_";
+
 /// Permission group token used to authenticate with the Aikido endpoint protection API.
+///
+/// Tokens are issued per permission group and follow the format `mdm_<secret>`.
 #[derive(Debug, Clone)]
 pub struct PermissionToken(ArcStr);
 
@@ -16,8 +20,19 @@ impl PermissionToken {
             return Err("token is empty".into());
         }
 
-        if !trimmed.bytes().all(|b| b.is_ascii_graphic() || b == b' ') {
-            return Err("token contains non-printable or non-ASCII characters".into());
+        if !trimmed.bytes().all(|b| b.is_ascii_graphic()) {
+            return Err("token contains non-printable, whitespace, or non-ASCII characters".into());
+        }
+
+        if !trimmed.starts_with(TOKEN_PREFIX) {
+            return Err(format!(
+                "token must start with '{TOKEN_PREFIX}' prefix"
+            )
+            .into());
+        }
+
+        if trimmed.len() <= TOKEN_PREFIX.len() {
+            return Err("token is missing the secret part after the prefix".into());
         }
 
         Ok(Self(ArcStr::from(trimmed)))
