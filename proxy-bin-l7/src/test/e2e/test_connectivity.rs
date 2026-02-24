@@ -57,7 +57,7 @@ async fn test_connectivity_http() {
     let payload = resp.try_into_string().await.unwrap();
 
     assert!(payload.contains("<!doctype html>"));
-    assert!(payload.contains(crate::utils::env::project_name()));
+    assert!(payload.contains(safechain_proxy_lib::utils::env::project_name()));
 }
 
 #[tokio::test]
@@ -77,7 +77,7 @@ async fn test_connectivity_http_over_sock5() {
     let payload = resp.try_into_string().await.unwrap();
 
     assert!(payload.contains("<!doctype html>"));
-    assert!(payload.contains(crate::utils::env::project_name()));
+    assert!(payload.contains(safechain_proxy_lib::utils::env::project_name()));
 }
 
 #[tokio::test]
@@ -99,7 +99,7 @@ async fn test_connectivity_http_with_username_labels() {
     let payload = resp.try_into_string().await.unwrap();
 
     assert!(payload.contains("<!doctype html>"));
-    assert!(payload.contains(crate::utils::env::project_name()));
+    assert!(payload.contains(safechain_proxy_lib::utils::env::project_name()));
 }
 
 #[tokio::test]
@@ -119,7 +119,7 @@ async fn test_connectivity_https() {
     let payload = resp.try_into_string().await.unwrap();
 
     assert!(payload.contains("<!doctype html>"));
-    assert!(payload.contains(crate::utils::env::project_name()));
+    assert!(payload.contains(safechain_proxy_lib::utils::env::project_name()));
 }
 
 #[tokio::test]
@@ -139,5 +139,5 @@ async fn test_connectivity_https_over_socks5() {
     let payload = resp.try_into_string().await.unwrap();
 
     assert!(payload.contains("<!doctype html>"));
-    assert!(payload.contains(crate::utils::env::project_name()));
+    assert!(payload.contains(safechain_proxy_lib::utils::env::project_name()));
 }
