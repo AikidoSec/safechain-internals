@@ -38,15 +38,6 @@ func (r *Registry) Get(name string) (PackageManager, error) {
 	}
 	return pm, nil
 }
-
-func (r *Registry) List() []string {
-	names := make([]string, 0, len(r.managers))
-	for name := range r.managers {
-		names = append(names, name)
-	}
-	return names
-}
-
 func (r *Registry) CollectAllPackages(ctx context.Context) SBOM {
 	var entries []EcosystemEntry
 
