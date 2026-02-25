@@ -40,7 +40,7 @@ impl AgentIdentity {
     }
 
     fn try_load_from_path(path: &Path) -> Option<Self> {
-        let raw = Self::read_content(path)?;
+        let raw = Self::read_config_with_limit(path)?;
 
         let raw_identity = Self::parse_raw_identity(path, &raw)?;
 
@@ -61,7 +61,7 @@ impl AgentIdentity {
         Some(Self { token, device_id })
     }
 
-    fn read_content(path: &Path) -> Option<String> {
+    fn read_config_with_limit(path: &Path) -> Option<String> {
         const MAX_CONFIG_SIZE: usize = 4096; // 4KB max
         let mut file = match std::fs::File::open(path) {
             Ok(f) => f,
