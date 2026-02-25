@@ -39,6 +39,28 @@ func getCurrentUserToken() (*windows.Token, error) {
 	return nil, fmt.Errorf("no active user session found")
 }
 
+// getActiveUserSessionID returns the session ID of the active, non-session-0 user.
+// This is similar to getCurrentUserToken, but exposes just the session ID so callers
+// can obtain their own tokens or interact with the session as needed.
+func getActiveUserSessionID() (uint32, error) {
+	var sessionInfo *windows.WTS_SESSION_INFO
+	var count uint32
+
+	if err := windows.WTSEnumerateSessions(0, 0, 1, &sessionInfo, &count); err != nil {
+		return 0, fmt.Errorf("WTSEnumerateSessions failed: %v", err)
+	}
+	defer windows.WTSFreeMemory(uintptr(unsafe.Pointer(sessionInfo)))
+
+	sessions := unsafe.Slice(sessionInfo, count)
+	for _, session := range sessions {
+		if session.State == windows.WTSActive && session.SessionID != 0 {
+			return session.SessionID, nil
+		}
+	}
+
+	return 0, fmt.Errorf("no active user session found")
+}
+
 func getLoggedInUserSIDs(ctx context.Context) ([]string, error) {
 	output, err := utils.RunCommand(ctx, "reg", "query", "HKU")
 	if err != nil {

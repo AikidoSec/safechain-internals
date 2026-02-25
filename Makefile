@@ -68,6 +68,11 @@ ifeq ($(GOOS),darwin)
 	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
 	@cp -R ui/bin/$(BINARY_NAME_UI).app $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
 	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app"
+else ifeq ($(GOOS),windows)
+	@cd ui && wails3 package
+	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
+	@cp -R ui/bin/$(BINARY_NAME_UI).exe $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
+	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe"
 endif
 
 build-release:
@@ -82,8 +87,10 @@ ifeq ($(GOOS),darwin)
 	@cp -R ui/bin/$(BINARY_NAME_UI).app $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
 	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app"
 else
-	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/ui
-	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
+	@cd ui && wails3 package
+	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
+	@cp -R ui/bin/$(BINARY_NAME_UI).exe $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
+	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe"
 endif
 
 build-darwin-amd64:

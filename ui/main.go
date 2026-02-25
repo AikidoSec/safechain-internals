@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 )
 
@@ -88,6 +89,7 @@ func main() {
 		Name:        "safechain-ultimate-ui",
 		Description: "A demo of using raw HTML & CSS",
 		Services: []application.Service{
+			application.NewService(notifier),
 			application.NewService(&DaemonService{}),
 			//	application.NewService(dockService),
 		},
@@ -117,14 +119,24 @@ func main() {
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true,
 		},
-		Mac: application.MacWindow{},
+		Mac:          application.MacWindow{},
+		HideOnEscape: true,
 	}
 	mainWindow := app.Window.NewWithOptions(mainWindowOpts)
+	attachCloseToHide := func(w *application.WebviewWindow) {
+		w.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+			// Intercept window close and keep the app/tray alive.
+			event.Cancel()
+			w.Hide()
+		})
+	}
+	attachCloseToHide(mainWindow)
 	showDashboard := func() {
 		w := getMainWindow(app)
 		if w == nil {
 			log.Println("new window")
 			mainWindow = app.Window.NewWithOptions(mainWindowOpts)
+			attachCloseToHide(mainWindow)
 			w = mainWindow
 
 		} else {
