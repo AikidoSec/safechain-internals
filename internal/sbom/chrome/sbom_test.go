@@ -48,8 +48,8 @@ func TestSBOM(t *testing.T) {
 
 	c := &ChromeExtensions{}
 	packages, err := c.SBOM(context.Background(), sbom.InstalledVersion{
-		Ecosystem: "chrome",
-		DataPath:  dataDir,
+		Variant:  "chrome",
+		DataPath: dataDir,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -61,7 +61,7 @@ func TestSBOM(t *testing.T) {
 
 	pkgByID := make(map[string]sbom.Package)
 	for _, p := range packages {
-		pkgByID[p.ID] = p
+		pkgByID[p.Id] = p
 	}
 
 	if p, ok := pkgByID["abcdefghijklmnopqrstuvwxyzabcdef"]; !ok || p.Name != "Adobe Acrobat" || p.Version != "1.0.0" {
@@ -96,8 +96,8 @@ func TestSBOMPicksLatestVersion(t *testing.T) {
 	if len(packages) != 1 {
 		t.Fatalf("expected 1 package, got %d", len(packages))
 	}
-	if packages[0].ID != extID {
-		t.Errorf("expected ID %s, got %s", extID, packages[0].ID)
+	if packages[0].Id != extID {
+		t.Errorf("expected ID %s, got %s", extID, packages[0].Id)
 	}
 	if packages[0].Version != "2.0.0" {
 		t.Errorf("expected version 2.0.0, got %s", packages[0].Version)
@@ -134,8 +134,8 @@ func TestSBOMDeduplicatesAcrossProfiles(t *testing.T) {
 	if len(packages) != 1 {
 		t.Fatalf("expected 1 package (deduplicated), got %d", len(packages))
 	}
-	if packages[0].ID != extID {
-		t.Errorf("expected ID %s, got %s", extID, packages[0].ID)
+	if packages[0].Id != extID {
+		t.Errorf("expected ID %s, got %s", extID, packages[0].Id)
 	}
 	if packages[0].Name != "Shared Extension" {
 		t.Errorf("expected 'Shared Extension', got %s", packages[0].Name)
@@ -176,8 +176,8 @@ func TestSBOMLocalizedName(t *testing.T) {
 	if len(packages) != 1 {
 		t.Fatalf("expected 1 package, got %d", len(packages))
 	}
-	if packages[0].ID != extID {
-		t.Errorf("expected ID %s, got %s", extID, packages[0].ID)
+	if packages[0].Id != extID {
+		t.Errorf("expected ID %s, got %s", extID, packages[0].Id)
 	}
 	if packages[0].Name != "My Cool Extension" {
 		t.Errorf("expected 'My Cool Extension', got %s", packages[0].Name)
@@ -202,8 +202,8 @@ func TestSBOMFallsBackToExtensionIDWhenNameEmpty(t *testing.T) {
 	if len(packages) != 1 {
 		t.Fatalf("expected 1 package, got %d", len(packages))
 	}
-	if packages[0].ID != extID {
-		t.Errorf("expected ID %s, got %s", extID, packages[0].ID)
+	if packages[0].Id != extID {
+		t.Errorf("expected ID %s, got %s", extID, packages[0].Id)
 	}
 	if packages[0].Name != extID {
 		t.Errorf("expected fallback name to extension ID %s, got %s", extID, packages[0].Name)
