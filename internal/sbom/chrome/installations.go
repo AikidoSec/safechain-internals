@@ -129,7 +129,7 @@ func findInstallations(ctx context.Context) ([]sbom.InstalledVersion, error) {
 
 		log.Printf("Found %s with %d profile(s) at: %s (binary: %s, version: %s)", b.name, len(profiles), b.dataDir, binaryPath, version)
 		installations = append(installations, sbom.InstalledVersion{
-			Ecosystem: b.name,
+			Variant: b.name,
 			Version:   version,
 			Path:      binaryPath,
 			DataPath:  b.dataDir,
