@@ -27,12 +27,19 @@ func getVersion(ctx context.Context, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Output format: "pip X.Y.Z from /path/to/pip (python X.Y)"
+	return parsePipVersion(output)
+}
+
+// parsePipVersion extracts the pip version from pip --version output.
+// Expected format: "pip X.Y.Z from /path/to/pip (python X.Y)"
+func parsePipVersion(output string) (string, error) {
 	trimmed := strings.TrimSpace(output)
-	start := strings.Index(trimmed, "(python ")
-	end := strings.Index(trimmed, ")")
-	if start == -1 || end == -1 || end <= start {
+	if !strings.HasPrefix(trimmed, "pip ") {
 		return "", fmt.Errorf("unexpected pip version output: %s", trimmed)
 	}
-	return trimmed[start+len("(python ") : end], nil
+	fields := strings.Fields(trimmed)
+	if len(fields) < 2 {
+		return "", fmt.Errorf("unexpected pip version output: %s", trimmed)
+	}
+	return fields[1], nil
 }
