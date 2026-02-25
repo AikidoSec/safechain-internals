@@ -119,20 +119,20 @@ func findInstallations(ctx context.Context) ([]sbom.InstalledVersion, error) {
 
 	var installations []sbom.InstalledVersion
 
-	for _, b := range browsers {
-		profiles := findProfilesWithExtensions(b.dataDir)
+	for _, browser := range browsers {
+		profiles := findProfilesWithExtensions(browser.dataDir)
 		if len(profiles) == 0 {
 			continue
 		}
 
-		binaryPath, version := getBrowserBinaryAndVersion(ctx, b.bins)
+		binaryPath, version := getBrowserBinaryAndVersion(ctx, browser.bins)
 
-		log.Printf("Found %s with %d profile(s) at: %s (binary: %s, version: %s)", b.name, len(profiles), b.dataDir, binaryPath, version)
+		log.Printf("Found %s with %d profile(s) at: %s (binary: %s, version: %s)", browser.name, len(profiles), browser.dataDir, binaryPath, version)
 		installations = append(installations, sbom.InstalledVersion{
-			Variant: b.name,
-			Version:   version,
-			Path:      binaryPath,
-			DataPath:  b.dataDir,
+			Variant:  browser.name,
+			Version:  version,
+			Path:     binaryPath,
+			DataPath: browser.dataDir,
 		})
 	}
 
