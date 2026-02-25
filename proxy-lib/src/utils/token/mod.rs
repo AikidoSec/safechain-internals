@@ -40,6 +40,28 @@ impl AgentIdentity {
     }
 
     fn try_load_from_path(path: &Path) -> Option<Self> {
+        let raw = Self::read_content(path)?;
+
+        let raw_identity = Self::parse_raw_identity(path, &raw)?;
+
+        let token = raw_identity
+            .token
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(ArcStr::from);
+
+        let device_id = raw_identity
+            .device_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(ArcStr::from);
+
+        Some(Self { token, device_id })
+    }
+
+    fn read_content(path: &Path) -> Option<String> {
         const MAX_CONFIG_SIZE: usize = 4096; // 4KB max
         let mut file = match std::fs::File::open(path) {
             Ok(f) => f,
@@ -50,7 +72,7 @@ impl AgentIdentity {
             }
         };
 
-        // Read at most MAX_CONFIG_SIZE + 1 bytes to detect files that are too large
+        // Read at most max_size + 1 bytes to detect files that are too large.
         let mut limited = file.by_ref().take(MAX_CONFIG_SIZE as u64 + 1);
         let mut raw = String::new();
         limited
@@ -68,25 +90,13 @@ impl AgentIdentity {
             return None;
         }
 
-        let raw_identity: RawAgentIdentity = serde_json::from_str(&raw)
+        Some(raw)
+    }
+
+    fn parse_raw_identity(path: &Path, raw: &str) -> Option<RawAgentIdentity> {
+        serde_json::from_str(raw)
             .map_err(|err| tracing::warn!(path = %path.display(), error = %err, "failed to parse config.json; ignoring"))
-            .ok()?;
-
-        let token = raw_identity
-            .token
-            .as_deref()
-            .map(str::trim)
-            .filter(|t| !t.is_empty())
-            .map(ArcStr::from);
-
-        let device_id = raw_identity
-            .device_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|t| !t.is_empty())
-            .map(ArcStr::from);
-
-        Some(Self { token, device_id })
+            .ok()
     }
 }
 
