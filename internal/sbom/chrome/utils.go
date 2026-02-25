@@ -35,17 +35,12 @@ func parseVersionOutput(output string) string {
 	}
 	line := strings.TrimSpace(lines[0])
 
-	if v := versionPattern.FindString(line); v != "" {
-		return v
-	}
-
-	return line
+	return versionPattern.FindString(line)
 }
 
 type extensionManifest struct {
-	Name          string `json:"name"`
-	Version       string `json:"version"`
-	DefaultLocale string `json:"default_locale"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
 }
 
 func readLatestExtension(extDir string, extensionID string) (*sbom.Package, error) {
@@ -70,7 +65,7 @@ func readLatestExtension(extDir string, extensionID string) (*sbom.Package, erro
 
 	name := manifest.Name
 	if strings.HasPrefix(name, "__MSG_") && strings.HasSuffix(name, "__") {
-		if resolved := resolveLocalizedName(versionDir, manifest.DefaultLocale, name); resolved != "" {
+		if resolved := resolveLocalizedName(versionDir, name); resolved != "" {
 			name = resolved
 		}
 	}
@@ -88,7 +83,7 @@ func readLatestExtension(extDir string, extensionID string) (*sbom.Package, erro
 
 // resolveLocalizedName reads the _locales messages files to resolve __MSG_key__ strings.
 // Only English locales are tried to ensure consistent output regardless of machine settings.
-func resolveLocalizedName(versionDir string, _ string, msgRef string) string {
+func resolveLocalizedName(versionDir string, msgRef string) string {
 	key := strings.TrimPrefix(msgRef, "__MSG_")
 	key = strings.TrimSuffix(key, "__")
 

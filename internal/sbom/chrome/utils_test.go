@@ -106,7 +106,7 @@ func TestResolveLocalizedName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	name := resolveLocalizedName(versionDir, "en", "__MSG_appName__")
+	name := resolveLocalizedName(versionDir, "__MSG_appName__")
 	if name != "My Cool Extension" {
 		t.Errorf("expected 'My Cool Extension', got %s", name)
 	}
@@ -114,7 +114,7 @@ func TestResolveLocalizedName(t *testing.T) {
 
 func TestResolveLocalizedNameNotFound(t *testing.T) {
 	versionDir := t.TempDir()
-	name := resolveLocalizedName(versionDir, "en", "__MSG_missing__")
+	name := resolveLocalizedName(versionDir, "__MSG_missing__")
 	if name != "" {
 		t.Errorf("expected empty string, got %s", name)
 	}
