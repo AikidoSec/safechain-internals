@@ -43,6 +43,7 @@ func (p *Pip) SBOM(ctx context.Context, installation sbom.InstalledVersion) ([]s
 	packages := make([]sbom.Package, 0, len(parsed))
 	for _, entry := range parsed {
 		packages = append(packages, sbom.Package{
+			Id:      entry.Name,
 			Name:    entry.Name,
 			Version: entry.Version,
 		})
