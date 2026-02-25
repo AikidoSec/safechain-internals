@@ -1,4 +1,5 @@
 pub mod env;
 pub mod io;
 pub mod telemetry;
+pub mod uri;
 pub mod token;
