@@ -17,19 +17,20 @@ use rama::{
     },
     telemetry::tracing::{self, Instrument as _},
     tls::boring::server::TlsAcceptorLayer,
+    utils::str::arcstr::ArcStr,
 };
 
 use clap::Parser;
-
 use safechain_proxy_lib::{http, storage, tls, utils as safechain_utils};
-use safechain_utils::token::{PermissionToken, load_token};
+use safechain_utils::token::AgentIdentity;
 
 pub mod client;
 pub mod server;
 pub mod utils;
 
 pub struct RuntimeArgs {
-    pub aikido_token: Option<PermissionToken>,
+    pub aikido_token: Option<ArcStr>,
+    pub device_id: Option<ArcStr>,
 }
 
 #[cfg(target_family = "unix")]
@@ -132,13 +133,16 @@ async fn main() -> Result<(), BoxError> {
     ))
     .await?;
 
-    let aikido_token = load_token();
+    let agent_identity = AgentIdentity::load();
 
     #[cfg(target_family = "unix")]
     rama::unix::utils::raise_nofile(args.ulimit).context("set file descriptor limit")?;
 
     let base_shutdown_signal = graceful::default_signal();
-    let runtime_args = RuntimeArgs { aikido_token };
+    let runtime_args = RuntimeArgs {
+        aikido_token: agent_identity.token,
+        device_id: agent_identity.device_id,
+    };
     if let Err(err) = run_with_args(base_shutdown_signal, args, runtime_args).await {
         eprintln!("🚩 exit with error: {err}");
         std::process::exit(1);
@@ -203,6 +207,7 @@ where
             data_storage,
             args.reporting_endpoint.clone(),
             runtime_args.aikido_token,
+            runtime_args.device_id,
         ) => {
             result?
         }

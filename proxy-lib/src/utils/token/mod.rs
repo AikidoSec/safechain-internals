@@ -1,91 +1,109 @@
-use std::path::Path;
+use std::{io::Read, path::Path};
 
-use rama::{error::BoxError, telemetry::tracing, utils::str::arcstr::ArcStr};
+use rama::{telemetry::tracing, utils::str::arcstr::ArcStr};
+use serde::Deserialize;
 
 use crate::storage::app_path;
 
-/// Permission group token used to authenticate with the Aikido endpoint protection API.
-#[derive(Debug, Clone)]
-pub struct PermissionToken(ArcStr);
+/// Agent identity loaded from the shared `config.json` file written by the daemon.
+pub struct AgentIdentity {
+    pub token: Option<ArcStr>,
+    pub device_id: Option<ArcStr>,
+}
 
-impl PermissionToken {
-    pub fn try_parse(raw: &str) -> Result<Self, BoxError> {
-        let trimmed = raw.trim();
+impl AgentIdentity {
+    pub fn load() -> Self {
+        let system_path = app_path::path_for("config.json");
+        let config = Self::try_load_from_path(&system_path);
 
-        if trimmed.is_empty() {
-            return Err("token is empty".into());
+        match config {
+            Some(config) => {
+                if config.token.is_some() {
+                    tracing::info!("Aikido authentication token loaded");
+                } else {
+                    tracing::info!(
+                        "No token found in config; some endpoint protection features will be disabled"
+                    );
+                }
+                config
+            }
+            None => {
+                tracing::info!(
+                    "No Aikido config file found; some endpoint protection features will be disabled"
+                );
+                Self {
+                    token: None,
+                    device_id: None,
+                }
+            }
         }
-
-        if !trimmed.bytes().all(|b| b.is_ascii_graphic() || b == b' ') {
-            return Err("token contains non-printable or non-ASCII characters".into());
-        }
-
-        Ok(Self(ArcStr::from(trimmed)))
     }
 
-    pub fn as_str(&self) -> &str {
-        &self.0
+    fn try_load_from_path(path: &Path) -> Option<Self> {
+        const MAX_CONFIG_SIZE: usize = 4096; // 4KB max
+        let mut raw = String::new();
+        let mut file = match std::fs::File::open(path) {
+            Ok(f) => f,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return None,
+            Err(err) => {
+                tracing::warn!(path = %path.display(), error = %err, "failed to read config file");
+                return None;
+            }
+        };
+        if let Err(err) = file
+            .by_ref()
+            .take(MAX_CONFIG_SIZE as u64 + 1)
+            .read_to_string(&mut raw)
+        {
+            tracing::warn!(
+                path = %path.display(),
+                error = %err,
+                "failed to read config file contents"
+            );
+            return None;
+        }
+        if raw.len() > MAX_CONFIG_SIZE {
+            tracing::warn!(
+                path = %path.display(),
+                size = raw.len(),
+                max = MAX_CONFIG_SIZE,
+                "config file exceeds maximum size; ignoring",
+            );
+            return None;
+        }
+
+        let raw_identity: RawAgentIdentity = match serde_json::from_str(&raw) {
+            Ok(c) => c,
+            Err(err) => {
+                tracing::warn!(path = %path.display(), error = %err, "failed to parse config.json; ignoring");
+                return None;
+            }
+        };
+
+        let token = raw_identity
+            .token
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(ArcStr::from);
+
+        let device_id = raw_identity
+            .device_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(ArcStr::from);
+
+        Some(Self { token, device_id })
     }
 }
 
-pub fn load_token() -> Option<PermissionToken> {
-    let system_path = app_path::resolve(".token");
-    let token = try_load_from_path(&system_path).or_else(|| {
-        // Fallback: try relative path in CWD
-        try_load_from_path(Path::new(".token"))
-    });
-
-    if token.is_some() {
-        tracing::info!("Aikido authentication token loaded");
-    } else {
-        tracing::info!(
-            "No Aikido authentication token found; Some endpoint protection features will be disabled"
-        );
-    }
-
-    token
-}
-
-fn try_load_from_path(path: &Path) -> Option<PermissionToken> {
-    if !path.exists() {
-        return None;
-    }
-
-    // Check file size before reading to prevent DoS
-    let metadata = match std::fs::metadata(path) {
-        Ok(m) => m,
-        Err(err) => {
-            tracing::warn!(path = %path.display(), error = %err, "failed to read token file metadata");
-            return None;
-        }
-    };
-
-    const MAX_TOKEN_SIZE: u64 = 1024; // 1KB max
-    if metadata.len() > MAX_TOKEN_SIZE {
-        tracing::warn!(
-            path = %path.display(),
-            size = metadata.len(),
-            max = MAX_TOKEN_SIZE,
-            "token file exceeds maximum size; ignoring",
-        );
-        return None;
-    }
-
-    let raw = match std::fs::read_to_string(path) {
-        Ok(s) => s,
-        Err(err) => {
-            tracing::warn!(path = %path.display(), error = %err, "failed to read token file");
-            return None;
-        }
-    };
-
-    match PermissionToken::try_parse(&raw) {
-        Ok(token) => Some(token),
-        Err(err) => {
-            tracing::warn!(path = %path.display(), error = %err, "invalid token; ignoring");
-            None
-        }
-    }
+#[derive(Deserialize)]
+struct RawAgentIdentity {
+    #[serde(default)]
+    token: Option<String>,
+    #[serde(default)]
+    device_id: Option<String>,
 }
 
 #[cfg(test)]

@@ -1,24 +1,23 @@
 use std::path::{Path, PathBuf};
 
-/// Returns the platform-specific application storage directory.
-fn base_dir() -> &'static Path {
+fn base_dir() -> PathBuf {
     #[cfg(target_os = "macos")]
     {
-        Path::new("/Library/Application Support/AikidoSecurity/SafeChainUltimate")
+        PathBuf::from("/Library/Application Support/AikidoSecurity/SafeChainUltimate")
     }
 
     #[cfg(target_os = "windows")]
     {
-        Path::new(r"C:\ProgramData\AikidoSecurity\SafeChainUltimate")
+        PathBuf::from(r"C:\ProgramData\AikidoSecurity\SafeChainUltimate")
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        Path::new(".")
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        PathBuf::from(home).join(".AikidoSecurity/SafeChainUltimate")
     }
 }
 
-/// Resolve a relative filename within the application storage directory.
-pub fn resolve(filename: &str) -> PathBuf {
-    base_dir().join(filename)
+pub fn path_for(path: impl AsRef<Path>) -> PathBuf {
+    base_dir().join(path)
 }
