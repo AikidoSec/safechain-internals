@@ -72,7 +72,7 @@ func TestSBOM(t *testing.T) {
 	}
 }
 
-func TestSBOMPicksLatestVersion(t *testing.T) {
+func TestSBOMReportsAllVersions(t *testing.T) {
 	dataDir := setupBrowserDataDir(t)
 	extID := "fedcbazyxwvutsrqponmlkjihgfedcba"
 
@@ -93,14 +93,19 @@ func TestSBOMPicksLatestVersion(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(packages) != 1 {
-		t.Fatalf("expected 1 package, got %d", len(packages))
+	if len(packages) != 2 {
+		t.Fatalf("expected 2 packages (all versions), got %d", len(packages))
 	}
-	if packages[0].Id != extID {
-		t.Errorf("expected ID %s, got %s", extID, packages[0].Id)
+
+	versions := make(map[string]bool)
+	for _, p := range packages {
+		if p.Id != extID {
+			t.Errorf("expected ID %s, got %s", extID, p.Id)
+		}
+		versions[p.Version] = true
 	}
-	if packages[0].Version != "2.0.0" {
-		t.Errorf("expected version 2.0.0, got %s", packages[0].Version)
+	if !versions["1.0.0"] || !versions["2.0.0"] {
+		t.Errorf("expected versions 1.0.0 and 2.0.0, got %v", versions)
 	}
 }
 

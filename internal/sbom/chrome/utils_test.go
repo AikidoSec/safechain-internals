@@ -27,7 +27,7 @@ func TestParseVersionOutput(t *testing.T) {
 	}
 }
 
-func TestReadLatestExtension(t *testing.T) {
+func TestReadExtensionVersions(t *testing.T) {
 	extDir := t.TempDir()
 	versionDir := filepath.Join(extDir, "1.0.0_0")
 	if err := os.MkdirAll(versionDir, 0755); err != nil {
@@ -40,22 +40,52 @@ func TestReadLatestExtension(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pkg, err := readLatestExtension(extDir, "test-id")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	packages := readExtensionVersions(extDir, "test-id")
+	if len(packages) != 1 {
+		t.Fatalf("expected 1 package, got %d", len(packages))
 	}
-	if pkg.Name != "Test Extension" {
-		t.Errorf("expected name 'Test Extension', got %s", pkg.Name)
+	if packages[0].Name != "Test Extension" {
+		t.Errorf("expected name 'Test Extension', got %s", packages[0].Name)
 	}
-	if pkg.Version != "1.0.0" {
-		t.Errorf("expected version '1.0.0', got %s", pkg.Version)
+	if packages[0].Version != "1.0.0" {
+		t.Errorf("expected version '1.0.0', got %s", packages[0].Version)
 	}
-	if pkg.Id != "test-id" {
-		t.Errorf("expected id 'test-id', got %s", pkg.Id)
+	if packages[0].Id != "test-id" {
+		t.Errorf("expected id 'test-id', got %s", packages[0].Id)
 	}
 }
 
-func TestReadLatestExtensionMissingVersion(t *testing.T) {
+func TestReadExtensionVersionsMultiple(t *testing.T) {
+	extDir := t.TempDir()
+	for _, v := range []struct{ dir, version string }{
+		{"1.0.0_0", "1.0.0"},
+		{"2.0.0_0", "2.0.0"},
+	} {
+		dir := filepath.Join(extDir, v.dir)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		manifest := `{"name": "Test Extension", "version": "` + v.version + `"}`
+		if err := os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(manifest), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	packages := readExtensionVersions(extDir, "test-id")
+	if len(packages) != 2 {
+		t.Fatalf("expected 2 packages, got %d", len(packages))
+	}
+
+	versions := make(map[string]bool)
+	for _, p := range packages {
+		versions[p.Version] = true
+	}
+	if !versions["1.0.0"] || !versions["2.0.0"] {
+		t.Errorf("expected versions 1.0.0 and 2.0.0, got %v", versions)
+	}
+}
+
+func TestReadExtensionVersionsSkipsMissingVersion(t *testing.T) {
 	extDir := t.TempDir()
 	versionDir := filepath.Join(extDir, "1.0.0_0")
 	if err := os.MkdirAll(versionDir, 0755); err != nil {
@@ -67,13 +97,13 @@ func TestReadLatestExtensionMissingVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := readLatestExtension(extDir, "test-id")
-	if err == nil {
-		t.Fatal("expected error for missing version")
+	packages := readExtensionVersions(extDir, "test-id")
+	if len(packages) != 0 {
+		t.Errorf("expected 0 packages for missing version, got %d", len(packages))
 	}
 }
 
-func TestReadLatestExtensionFallbackToID(t *testing.T) {
+func TestReadExtensionVersionsFallbackToID(t *testing.T) {
 	extDir := t.TempDir()
 	versionDir := filepath.Join(extDir, "1.0.0_0")
 	if err := os.MkdirAll(versionDir, 0755); err != nil {
@@ -85,12 +115,12 @@ func TestReadLatestExtensionFallbackToID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pkg, err := readLatestExtension(extDir, "fallback-id")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	packages := readExtensionVersions(extDir, "fallback-id")
+	if len(packages) != 1 {
+		t.Fatalf("expected 1 package, got %d", len(packages))
 	}
-	if pkg.Name != "fallback-id" {
-		t.Errorf("expected name to fall back to extension ID 'fallback-id', got %s", pkg.Name)
+	if packages[0].Name != "fallback-id" {
+		t.Errorf("expected name to fall back to extension ID 'fallback-id', got %s", packages[0].Name)
 	}
 }
 
@@ -120,7 +150,7 @@ func TestResolveLocalizedNameNotFound(t *testing.T) {
 	}
 }
 
-func TestFindLatestVersionDir(t *testing.T) {
+func TestFindVersionDirs(t *testing.T) {
 	extDir := t.TempDir()
 	for _, ver := range []string{"1.0.0_0", "2.0.0_0"} {
 		dir := filepath.Join(extDir, ver)
@@ -132,16 +162,13 @@ func TestFindLatestVersionDir(t *testing.T) {
 		}
 	}
 
-	result, err := findLatestVersionDir(extDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if filepath.Base(result) != "2.0.0_0" {
-		t.Errorf("expected '2.0.0_0', got %s", filepath.Base(result))
+	dirs := findVersionDirs(extDir)
+	if len(dirs) != 2 {
+		t.Fatalf("expected 2 version dirs, got %d", len(dirs))
 	}
 }
 
-func TestFindLatestVersionDirSkipsMetadata(t *testing.T) {
+func TestFindVersionDirsSkipsMetadata(t *testing.T) {
 	extDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(extDir, "_metadata"), 0755); err != nil {
 		t.Fatal(err)
@@ -154,19 +181,19 @@ func TestFindLatestVersionDirSkipsMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := findLatestVersionDir(extDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	dirs := findVersionDirs(extDir)
+	if len(dirs) != 1 {
+		t.Fatalf("expected 1 version dir, got %d", len(dirs))
 	}
-	if filepath.Base(result) != "1.0.0_0" {
-		t.Errorf("expected '1.0.0_0', got %s", filepath.Base(result))
+	if dirs[0] != "1.0.0_0" {
+		t.Errorf("expected '1.0.0_0', got %s", dirs[0])
 	}
 }
 
-func TestFindLatestVersionDirEmpty(t *testing.T) {
+func TestFindVersionDirsEmpty(t *testing.T) {
 	extDir := t.TempDir()
-	_, err := findLatestVersionDir(extDir)
-	if err == nil {
-		t.Fatal("expected error for empty directory")
+	dirs := findVersionDirs(extDir)
+	if len(dirs) != 0 {
+		t.Errorf("expected 0 version dirs, got %d", len(dirs))
 	}
 }

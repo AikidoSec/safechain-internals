@@ -25,11 +25,13 @@ func (c *ChromeExtensions) Installations(ctx context.Context) ([]sbom.InstalledV
 }
 
 // SBOM scans all profiles within the browser data directory (DataPath)
-// and deduplicates extensions across profiles.
+// and reports every installed version of each extension, deduplicating
+// identical (id, version) pairs that appear across multiple profiles.
 func (c *ChromeExtensions) SBOM(_ context.Context, installation sbom.InstalledVersion) ([]sbom.Package, error) {
 	profiles := findProfilesWithExtensions(installation.DataPath)
 
-	packageMap := make(map[string]sbom.Package)
+	seen := make(map[string]bool)
+	var packages []sbom.Package
 
 	for _, profile := range profiles {
 		extDir := filepath.Join(installation.DataPath, profile, "Extensions")
@@ -47,21 +49,15 @@ func (c *ChromeExtensions) SBOM(_ context.Context, installation sbom.InstalledVe
 			extensionID := entry.Name()
 			extPath := filepath.Join(extDir, extensionID)
 
-			pkg, err := readLatestExtension(extPath, extensionID)
-			if err != nil {
-				log.Printf("Skipping Chrome extension %s: %v", extensionID, err)
-				continue
-			}
-
-			if existing, ok := packageMap[extensionID]; !ok || pkg.Version > existing.Version {
-				packageMap[extensionID] = *pkg
+			for _, pkg := range readExtensionVersions(extPath, extensionID) {
+				key := pkg.Id + "@" + pkg.Version
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				packages = append(packages, pkg)
 			}
 		}
-	}
-
-	packages := make([]sbom.Package, 0, len(packageMap))
-	for _, pkg := range packageMap {
-		packages = append(packages, pkg)
 	}
 
 	return packages, nil
