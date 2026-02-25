@@ -34,8 +34,8 @@ func getVersion(ctx context.Context, path string) (string, error) {
 	return strings.TrimSpace(output), nil
 }
 
-// collectDependencies recursively flattens the nested npm dependency tree
-// into a deduplicated slice of packages.
+// collectDependencies extracts all unique package versions from the dependency tree
+// to build a complete SBOM inventory, avoiding duplicate entries for transitive dependencies.
 func collectDependencies(deps map[string]npmDependency, seen map[string]bool) []sbom.Package {
 	var packages []sbom.Package
 	for name, dep := range deps {
