@@ -41,7 +41,6 @@ impl AgentIdentity {
 
     fn try_load_from_path(path: &Path) -> Option<Self> {
         const MAX_CONFIG_SIZE: usize = 4096; // 4KB max
-        let mut raw = String::new();
         let mut file = match std::fs::File::open(path) {
             Ok(f) => f,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return None,
@@ -50,18 +49,15 @@ impl AgentIdentity {
                 return None;
             }
         };
-        if let Err(err) = file
-            .by_ref()
-            .take(MAX_CONFIG_SIZE as u64 + 1)
+
+        // Read at most MAX_CONFIG_SIZE + 1 bytes to detect files that are too large
+        let mut limited = file.by_ref().take(MAX_CONFIG_SIZE as u64 + 1);
+        let mut raw = String::new();
+        limited
             .read_to_string(&mut raw)
-        {
-            tracing::warn!(
-                path = %path.display(),
-                error = %err,
-                "failed to read config file contents"
-            );
-            return None;
-        }
+            .map_err(|err| tracing::warn!(path = %path.display(), error = %err, "failed to read config file contents"))
+            .ok()?;
+
         if raw.len() > MAX_CONFIG_SIZE {
             tracing::warn!(
                 path = %path.display(),
@@ -72,13 +68,9 @@ impl AgentIdentity {
             return None;
         }
 
-        let raw_identity: RawAgentIdentity = match serde_json::from_str(&raw) {
-            Ok(c) => c,
-            Err(err) => {
-                tracing::warn!(path = %path.display(), error = %err, "failed to parse config.json; ignoring");
-                return None;
-            }
-        };
+        let raw_identity: RawAgentIdentity = serde_json::from_str(&raw)
+            .map_err(|err| tracing::warn!(path = %path.display(), error = %err, "failed to parse config.json; ignoring"))
+            .ok()?;
 
         let token = raw_identity
             .token
