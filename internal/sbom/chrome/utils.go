@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/sbom"
 )
+
+var versionPattern = regexp.MustCompile(`\d+\.\d+[\d.]*`)
 
 func runBrowserVersion(ctx context.Context, binaryPath string) (string, error) {
 	quietCtx := context.WithValue(ctx, "disable_logging", true)
@@ -32,10 +35,8 @@ func parseVersionOutput(output string) string {
 	}
 	line := strings.TrimSpace(lines[0])
 
-	for _, part := range strings.Fields(line) {
-		if len(part) > 0 && part[0] >= '0' && part[0] <= '9' {
-			return part
-		}
+	if v := versionPattern.FindString(line); v != "" {
+		return v
 	}
 
 	return line
