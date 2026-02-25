@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/sbom"
 )
 
 const (
@@ -31,4 +32,29 @@ func getVersion(ctx context.Context, path string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(output), nil
+}
+
+// collectDependencies extracts all unique package versions from the dependency tree
+// to build a complete SBOM inventory, avoiding duplicate entries for transitive dependencies.
+func collectDependencies(deps map[string]npmDependency, seen map[string]bool) []sbom.Package {
+	var packages []sbom.Package
+	for name, dep := range deps {
+		if dep.Version == "" {
+			continue
+		}
+
+		key := name + "@" + dep.Version
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		packages = append(packages, sbom.Package{
+			Name:    name,
+			Version: dep.Version,
+		})
+
+		packages = append(packages, collectDependencies(dep.Dependencies, seen)...)
+	}
+	return packages
 }
