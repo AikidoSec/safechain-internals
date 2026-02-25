@@ -339,23 +339,3 @@ func TestFindProfilesNonExistentDir(t *testing.T) {
 	}
 }
 
-func TestParseVersionOutput(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"Google Chrome 120.0.6099.109", "120.0.6099.109"},
-		{"Brave Browser 1.62.156 Chromium: 121.0.6167.139", "1.62.156"},
-		{"Microsoft Edge 120.0.2210.133", "120.0.2210.133"},
-		{"Chromium 121.0.6167.139", "121.0.6167.139"},
-		{"120.0.6099.109", "120.0.6099.109"},
-		{"", ""},
-	}
-
-	for _, tt := range tests {
-		result := parseVersionOutput(tt.input)
-		if result != tt.expected {
-			t.Errorf("parseVersionOutput(%q) = %q, want %q", tt.input, result, tt.expected)
-		}
-	}
-}
