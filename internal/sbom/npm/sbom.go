@@ -11,10 +11,6 @@ import (
 
 const name = "npm"
 
-type npmListOutput struct {
-	Dependencies map[string]npmDependency `json:"dependencies"`
-}
-
 type npmDependency struct {
 	Version      string                   `json:"version"`
 	Dependencies map[string]npmDependency `json:"dependencies"`
@@ -53,15 +49,16 @@ func (n *Npm) Installations(ctx context.Context) ([]sbom.InstalledVersion, error
 }
 
 func (n *Npm) SBOM(ctx context.Context, installation sbom.InstalledVersion) ([]sbom.Package, error) {
+	// --all includes the full dependency tree (not just top-level) so the SBOM is complete.
 	output, err := runNpm(ctx, installation.Path, "list", "-g", "--all", "--json")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list global packages: %w", err)
 	}
 
-	var parsed npmListOutput
-	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
+	var root npmDependency
+	if err := json.Unmarshal([]byte(output), &root); err != nil {
 		return nil, fmt.Errorf("failed to parse npm list output: %w", err)
 	}
 
-	return collectDependencies(parsed.Dependencies, make(map[string]bool)), nil
+	return collectDependencies(root.Dependencies, make(map[string]bool)), nil
 }
