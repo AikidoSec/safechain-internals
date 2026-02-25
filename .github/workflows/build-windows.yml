@@ -35,6 +35,11 @@ jobs:
         with:
           go-version: "1.25"
 
+      - name: Set up Wails (v3)
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+          wails3 doctor  # Verify installation
+
       - name: Run tests
         run: make test
         shell: bash
