@@ -16,6 +16,7 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
 	"github.com/AikidoSec/safechain-internals/internal/sbom"
 	"github.com/AikidoSec/safechain-internals/internal/sbom/npm"
+	"github.com/AikidoSec/safechain-internals/internal/sbom/pip"
 	"github.com/AikidoSec/safechain-internals/internal/sbom/vscode"
 	"github.com/AikidoSec/safechain-internals/internal/scannermanager"
 	"github.com/AikidoSec/safechain-internals/internal/setup"
@@ -335,6 +336,7 @@ func newSBOMRegistry() *sbom.Registry {
 	r := sbom.NewRegistry()
 	r.Register(npm.New())
 	r.Register(vscode.New())
+	r.Register(pip.New())
 	return r
 }
 

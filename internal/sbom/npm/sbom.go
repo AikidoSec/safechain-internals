@@ -4,19 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/AikidoSec/safechain-internals/internal/sbom"
 )
 
 const name = "npm"
 
-type npmListOutput struct {
-	Dependencies map[string]npmDependency `json:"dependencies"`
-}
-
 type npmDependency struct {
-	Version string `json:"version"`
+	Version      string                   `json:"version"`
+	Dependencies map[string]npmDependency `json:"dependencies"`
 }
 
 type Npm struct{}
@@ -30,45 +26,20 @@ func (n *Npm) Name() string {
 }
 
 func (n *Npm) Installations(ctx context.Context) ([]sbom.InstalledVersion, error) {
-	paths, err := findBinaries()
-	if err != nil {
-		return nil, fmt.Errorf("failed to find npm binaries: %w", err)
-	}
-	var installations []sbom.InstalledVersion
-	for _, path := range paths {
-		version, err := getVersion(ctx, path)
-		if err != nil {
-			log.Printf("Skipping npm at %s: %v", path, err)
-			continue
-		}
-		log.Printf("Found npm %s at: %s", version, path)
-		installations = append(installations, sbom.InstalledVersion{
-			Version: version,
-			Path:    path,
-		})
-	}
-
-	return installations, nil
+	return findInstallations(ctx)
 }
 
 func (n *Npm) SBOM(ctx context.Context, installation sbom.InstalledVersion) ([]sbom.Package, error) {
-	output, err := runNpm(ctx, installation.Path, "list", "-g", "--json")
+	// --all includes the full dependency tree (not just top-level) so the SBOM is complete.
+	output, err := runNpm(ctx, installation.Path, "list", "-g", "--all", "--json")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list global packages: %w", err)
 	}
 
-	var parsed npmListOutput
-	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
+	var root npmDependency
+	if err := json.Unmarshal([]byte(output), &root); err != nil {
 		return nil, fmt.Errorf("failed to parse npm list output: %w", err)
 	}
 
-	packages := make([]sbom.Package, 0, len(parsed.Dependencies))
-	for pkgName, dep := range parsed.Dependencies {
-		packages = append(packages, sbom.Package{
-			Name:    pkgName,
-			Version: dep.Version,
-		})
-	}
-
-	return packages, nil
+	return collectDependencies(root.Dependencies, make(map[string]bool)), nil
 }
