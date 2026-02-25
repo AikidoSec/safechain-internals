@@ -34,8 +34,6 @@ func (n *Npm) Installations(ctx context.Context) ([]sbom.InstalledVersion, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to find npm binaries: %w", err)
 	}
-	log.Printf("Found %d npm binaries: %v", len(paths), paths)
-
 	var installations []sbom.InstalledVersion
 	for _, path := range paths {
 		version, err := getVersion(ctx, path)
@@ -66,9 +64,6 @@ func (n *Npm) SBOM(ctx context.Context, installation sbom.InstalledVersion) ([]s
 
 	packages := make([]sbom.Package, 0, len(parsed.Dependencies))
 	for pkgName, dep := range parsed.Dependencies {
-		if pkgName == name {
-			continue
-		}
 		packages = append(packages, sbom.Package{
 			Name:    pkgName,
 			Version: dep.Version,

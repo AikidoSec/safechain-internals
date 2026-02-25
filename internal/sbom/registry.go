@@ -6,6 +6,17 @@ import (
 	"log"
 )
 
+type EcosystemEntry struct {
+	Variant  string    `json:"variant"`
+	Version  string    `json:"version"`
+	Path     string    `json:"path"`
+	Packages []Package `json:"packages"`
+}
+
+type SBOM struct {
+	Entries []EcosystemEntry `json:"sbom"`
+}
+
 type Registry struct {
 	managers map[string]PackageManager
 }
@@ -28,14 +39,6 @@ func (r *Registry) Get(name string) (PackageManager, error) {
 	return pm, nil
 }
 
-func (r *Registry) List() []string {
-	names := make([]string, 0, len(r.managers))
-	for name := range r.managers {
-		names = append(names, name)
-	}
-	return names
-}
-
 func (r *Registry) CollectAllPackages(ctx context.Context) SBOM {
 	var entries []EcosystemEntry
 
@@ -52,15 +55,15 @@ func (r *Registry) CollectAllPackages(ctx context.Context) SBOM {
 				log.Printf("Failed to collect SBOM for '%s' (%s): %v", name, inst.Version, err)
 				continue
 			}
-			ecosystem := inst.Ecosystem
-			if ecosystem == "" {
-				ecosystem = name
+			variant := inst.Variant
+			if variant == "" {
+				variant = name
 			}
 			entries = append(entries, EcosystemEntry{
-				Ecosystem: ecosystem,
-				Version:   inst.Version,
-				Path:      inst.Path,
-				Packages:  packages,
+				Variant:  variant,
+				Version:  inst.Version,
+				Path:     inst.Path,
+				Packages: packages,
 			})
 		}
 	}

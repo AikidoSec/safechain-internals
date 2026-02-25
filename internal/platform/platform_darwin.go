@@ -369,6 +369,11 @@ func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ..
 	binDir := filepath.Dir(binaryPath)
 	pathEnv := binDir
 
+	// Package managers like Homebrew and nvm install binaries as symlinks
+	// (e.g. /usr/local/bin/npm -> /usr/local/lib/node_modules/npm/bin/npm-cli.js).
+	// When we run npm, it needs to find its sibling `node` binary which lives
+	// in the symlink target's directory. Resolve the symlink so we can also add
+	// the real directory to PATH, ensuring sibling binaries are discoverable.
 	resolved, err := filepath.EvalSymlinks(binaryPath)
 	if err == nil {
 		resolvedDir := filepath.Dir(resolved)

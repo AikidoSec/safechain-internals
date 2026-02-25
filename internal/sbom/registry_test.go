@@ -117,7 +117,7 @@ func TestCollectAllPackages(t *testing.T) {
 	r.Register(&mockPackageManager{
 		name: "npm",
 		installations: []InstalledVersion{
-			{Version: "18.0.0", Path: "/usr/bin/node", Ecosystem: "node"},
+			{Version: "18.0.0", Path: "/usr/bin/node", Variant: "node"},
 		},
 		packages: map[string][]Package{
 			"/usr/bin/node": {
@@ -146,7 +146,7 @@ func TestCollectAllPackages(t *testing.T) {
 
 	entryByEcosystem := make(map[string]EcosystemEntry)
 	for _, e := range sbom.Entries {
-		entryByEcosystem[e.Ecosystem] = e
+		entryByEcosystem[e.Variant] = e
 	}
 
 	nodeEntry, ok := entryByEcosystem["node"]
@@ -182,8 +182,8 @@ func TestCollectAllPackagesEcosystemFallback(t *testing.T) {
 	if len(sbom.Entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(sbom.Entries))
 	}
-	if sbom.Entries[0].Ecosystem != "pip" {
-		t.Fatalf("expected ecosystem fallback to 'pip', got %q", sbom.Entries[0].Ecosystem)
+	if sbom.Entries[0].Variant != "pip" {
+		t.Fatalf("expected variant fallback to 'pip', got %q", sbom.Entries[0].Variant)
 	}
 }
 
@@ -208,8 +208,8 @@ func TestCollectAllPackagesInstallationError(t *testing.T) {
 	if len(sbom.Entries) != 1 {
 		t.Fatalf("expected 1 entry (npm should be skipped), got %d", len(sbom.Entries))
 	}
-	if sbom.Entries[0].Ecosystem != "pip" {
-		t.Fatalf("expected pip entry, got %q", sbom.Entries[0].Ecosystem)
+	if sbom.Entries[0].Variant != "pip" {
+		t.Fatalf("expected pip entry, got %q", sbom.Entries[0].Variant)
 	}
 }
 
@@ -235,8 +235,8 @@ func TestCollectAllPackagesMultipleInstallations(t *testing.T) {
 	r.Register(&mockPackageManager{
 		name: "pip",
 		installations: []InstalledVersion{
-			{Version: "3.10", Path: "/usr/bin/python3.10", Ecosystem: "pypi"},
-			{Version: "3.11", Path: "/usr/bin/python3.11", Ecosystem: "pypi"},
+			{Version: "3.10", Path: "/usr/bin/python3.10", Variant: "pypi"},
+			{Version: "3.11", Path: "/usr/bin/python3.11", Variant: "pypi"},
 		},
 		packages: map[string][]Package{
 			"/usr/bin/python3.10": {{Name: "django", Version: "4.2.0"}},
@@ -253,8 +253,8 @@ func TestCollectAllPackagesMultipleInstallations(t *testing.T) {
 	versions := map[string]bool{}
 	for _, e := range sbom.Entries {
 		versions[e.Version] = true
-		if e.Ecosystem != "pypi" {
-			t.Fatalf("expected ecosystem 'pypi', got %q", e.Ecosystem)
+		if e.Variant != "pypi" {
+			t.Fatalf("expected variant 'pypi', got %q", e.Variant)
 		}
 	}
 	if !versions["3.10"] || !versions["3.11"] {

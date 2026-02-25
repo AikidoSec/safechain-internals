@@ -27,9 +27,19 @@ rust-fuzz *ARGS:
 rust-qa-full: rust-qa rust-fuzz
     cargo nextest run --workspace --all-features --run-ignored=only
 
+run-l4-proxy *ARGS:
+    mkdir -p .aikido/safechain-l4-proxy
+    RUST_LOG=info,safechain_l4_proxy=debug,safechain_proxy_lib=debug \
+    cargo run \
+        --bin safechain-l4-proxy \
+        --features har \
+        -- \
+        --secrets .aikido/safechain-l4-proxy \
+        {{ARGS}}
+
 run-l7-proxy *ARGS:
     mkdir -p .aikido/safechain-l7-proxy
-    RUST_LOG=info,safechain_proxy=debug \
+    RUST_LOG=info,safechain_l7_proxy=debug,safechain_proxy_lib=debug \
     cargo run \
         --bin safechain-l7-proxy \
         --features har \

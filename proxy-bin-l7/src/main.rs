@@ -21,11 +21,11 @@ use rama::{
 
 use clap::Parser;
 
-use safechain_proxy_lib::utils;
-use safechain_proxy_lib::{http, storage, tls};
+use safechain_proxy_lib::{http, storage, tls, utils as safechain_utils};
 
 pub mod client;
 pub mod server;
+pub mod utils;
 
 #[cfg(target_family = "unix")]
 #[global_allocator]
@@ -63,7 +63,7 @@ pub struct Args {
         value_name = "keyring | memory | <dir>",
         default_value = "keyring"
     )]
-    pub secrets: storage::SyncSecrets,
+    pub secrets: storage::SecretStorageKind,
 
     /// debug logging as default instead of Info; use RUST_LOG env for more options
     #[arg(long, short = 'v', default_value_t = false)]
@@ -111,22 +111,24 @@ pub struct Args {
     #[cfg(target_family = "unix")]
     /// Set the limit of max open file descriptors for this process and its children.
     #[arg(long, value_name = "N", default_value_t = 262_144)]
-    pub ulimit: utils::os::rlim_t,
+    pub ulimit: rama::unix::utils::rlim_t,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), BoxError> {
     let args = Args::parse();
 
-    let _tracing_guard = utils::telemetry::init_tracing(Some(utils::telemetry::TelemetryConfig {
-        verbose: args.verbose,
-        pretty: args.pretty,
-        output: args.output.as_deref(),
-    }))
+    let _tracing_guard = safechain_utils::telemetry::init_tracing(Some(
+        safechain_utils::telemetry::TelemetryConfig {
+            verbose: args.verbose,
+            pretty: args.pretty,
+            output: args.output.as_deref(),
+        },
+    ))
     .await?;
 
     #[cfg(target_family = "unix")]
-    utils::os::raise_nofile(args.ulimit).context("set file descriptor limit")?;
+    rama::unix::utils::raise_nofile(args.ulimit).context("set file descriptor limit")?;
 
     let base_shutdown_signal = graceful::default_signal();
     if let Err(err) = run_with_args(base_shutdown_signal, args).await {
@@ -158,8 +160,12 @@ where
 
     let graceful_timeout = (args.graceful > 0.).then(|| Duration::from_secs_f64(args.graceful));
 
+    let secret_storage =
+        storage::SyncSecrets::try_new(self::utils::env::project_name(), args.secrets.clone())
+            .context("create secrets storage")?;
+
     let (tls_acceptor, root_ca) = tls::new_tls_acceptor_layer(
-        &args.secrets,
+        &secret_storage,
         &data_storage,
         Some(vec![
             ApplicationProtocol::HTTP_2,
