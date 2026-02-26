@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
@@ -20,26 +19,14 @@ type ConfigInfo struct {
 
 func NewConfigInfo(deviceId string) *ConfigInfo {
 	c, err := loadFromDisk(platform.GetConfigPath())
-	if err == nil {
-		return c
+	if err != nil {
+		log.Printf("failed to load config from disk: %v", err)
+		log.Printf("building new config...")
+		c = &ConfigInfo{}
 	}
-
-	c = &ConfigInfo{
-		Token:    c.LoadToken(),
-		DeviceID: deviceId,
-	}
+	c.DeviceID = deviceId
 	c.Save()
 	return c
-}
-
-func (c *ConfigInfo) LoadToken() string {
-	tokenPath := platform.GetTokenPath()
-	data, err := os.ReadFile(tokenPath)
-	if err != nil {
-		log.Printf("failed to read token file at %s: %v", tokenPath, err)
-		return ""
-	}
-	return strings.TrimSpace(string(data))
 }
 
 func (c *ConfigInfo) Save() error {

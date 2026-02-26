@@ -37,10 +37,10 @@ fi
 
 if [ -n "$AIKIDO_TOKEN" ]; then
     echo "Storing Aikido token..."
-    TOKEN_FILE="$RUN_DIR/.token"
-    printf '%s' "$AIKIDO_TOKEN" > "$TOKEN_FILE"
-    chmod 600 "$TOKEN_FILE"
-    chown root:wheel "$TOKEN_FILE"
+    CONFIG_FILE="$RUN_DIR/config.json"
+    echo '{"token":"'$AIKIDO_TOKEN'"}' > "$CONFIG_FILE"
+    chmod 600 "$CONFIG_FILE"
+    chown root:wheel "$CONFIG_FILE"
 fi
 
 # Load and start the LaunchDaemon

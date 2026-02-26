@@ -62,10 +62,6 @@ func GetSbomJSONPath() string {
 	return filepath.Join(config.LogDir, SafeChainSbomJSONName)
 }
 
-func GetTokenPath() string {
-	return filepath.Join(config.RunDir, ".token")
-}
-
 func GetConfigPath() string {
 	return filepath.Join(config.RunDir, "config.json")
 }
