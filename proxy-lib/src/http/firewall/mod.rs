@@ -19,7 +19,7 @@ use rama::{
     net::address::Domain,
     rt::Executor,
     telemetry::tracing,
-    utils::{backoff::ExponentialBackoff, rng::HasherRng, str::arcstr::ArcStr},
+    utils::{backoff::ExponentialBackoff, rng::HasherRng},
 };
 
 #[cfg(feature = "pac")]
@@ -37,7 +37,10 @@ pub mod rule;
 #[cfg(feature = "pac")]
 mod pac;
 
-use crate::{storage::SyncCompactDataStorage, utils::env::network_service_identifier};
+use crate::{
+    storage::SyncCompactDataStorage,
+    utils::{env::network_service_identifier, token::AgentIdentity},
+};
 
 use self::rule::{RequestAction, Rule};
 
@@ -48,8 +51,7 @@ pub struct Firewall {
     // a background task update these when needed..
     block_rules: Arc<Vec<self::rule::DynRule>>,
     notifier: Option<self::notifier::EventNotifier>,
-    _aikido_token: Option<ArcStr>,
-    _device_id: Option<ArcStr>,
+    _agent_identity: Option<AgentIdentity>,
 }
 
 impl Firewall {
@@ -58,8 +60,7 @@ impl Firewall {
         client: impl Service<Request, Output = Response, Error = OpaqueError> + Clone,
         data: SyncCompactDataStorage,
         reporting_endpoint: Option<rama::http::Uri>,
-        aikido_token: Option<ArcStr>,
-        device_id: Option<ArcStr>,
+        agent_identity: Option<AgentIdentity>,
     ) -> Result<Self, BoxError> {
         let layered_client = (
             MapResponseBodyLayer::new_boxed_streaming_body(),
@@ -151,8 +152,7 @@ impl Firewall {
                     .into_dyn(),
             ]),
             notifier,
-            _aikido_token: aikido_token,
-            _device_id: device_id,
+            _agent_identity: agent_identity,
         })
     }
 

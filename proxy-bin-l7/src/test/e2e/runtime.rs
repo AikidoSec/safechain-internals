@@ -395,11 +395,7 @@ fn spawn_safechain_proxy_app_with_args(extra_args: &[&str]) -> PathBuf {
             .build()
             .unwrap();
 
-        let runtime_args = crate::RuntimeArgs {
-            aikido_token: None,
-            device_id: None,
-        };
-        let server_future = crate::run_with_args(std::future::pending::<()>(), args, runtime_args);
+        let server_future = crate::run_with_args(std::future::pending::<()>(), args);
 
         notify_server_ready.set(()).expect("waiter to be nofified");
 

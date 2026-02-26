@@ -1,64 +1,42 @@
 use std::{io::Read, path::Path};
 
-use rama::{telemetry::tracing, utils::str::arcstr::ArcStr};
+use rama::{telemetry::tracing, utils::str::NonEmptyStr};
 use serde::Deserialize;
 
-use crate::storage::app_path;
-
-/// Agent identity loaded from the shared `config.json` file written by the daemon.
+#[derive(Clone, Deserialize)]
 pub struct AgentIdentity {
-    pub token: Option<ArcStr>,
-    pub device_id: Option<ArcStr>,
+    pub token: NonEmptyStr,
+    pub device_id: NonEmptyStr,
+}
+
+impl std::fmt::Debug for AgentIdentity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AgentIdentity")
+            .field("token", &"[REDACTED]")
+            .field("device_id", &self.device_id)
+            .finish()
+    }
 }
 
 impl AgentIdentity {
-    pub fn load() -> Self {
-        let system_path = app_path::path_for("config.json");
-        let config = Self::try_load_from_path(&system_path);
+    pub fn load(data_dir: &Path) -> Option<Self> {
+        let identity = Self::try_load_from_path(&data_dir.join("config.json"));
 
-        match config {
-            Some(config) => {
-                if config.token.is_some() {
-                    tracing::info!("Aikido authentication token loaded");
-                } else {
-                    tracing::info!(
-                        "No token found in config; some endpoint protection features will be disabled"
-                    );
-                }
-                config
-            }
-            None => {
-                tracing::info!(
-                    "No Aikido config file found; some endpoint protection features will be disabled"
-                );
-                Self {
-                    token: None,
-                    device_id: None,
-                }
-            }
+        match &identity {
+            Some(_) => tracing::info!("Aikido agent identity loaded"),
+            None => tracing::info!(
+                "No valid agent identity found; some endpoint protection features will be disabled"
+            ),
         }
+
+        identity
     }
 
     fn try_load_from_path(path: &Path) -> Option<Self> {
         let raw = Self::read_config_with_limit(path)?;
-
-        let raw_identity = Self::parse_raw_identity(path, &raw)?;
-
-        let token = raw_identity
-            .token
-            .as_deref()
-            .map(str::trim)
-            .filter(|t| !t.is_empty())
-            .map(ArcStr::from);
-
-        let device_id = raw_identity
-            .device_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|t| !t.is_empty())
-            .map(ArcStr::from);
-
-        Some(Self { token, device_id })
+        serde_json::from_str(&raw)
+            .map_err(|err| tracing::warn!(path = %path.display(), error = %err, "failed to parse config.json; ignoring"))
+            .ok()
     }
 
     fn read_config_with_limit(path: &Path) -> Option<String> {
@@ -92,20 +70,6 @@ impl AgentIdentity {
 
         Some(raw)
     }
-
-    fn parse_raw_identity(path: &Path, raw: &str) -> Option<RawAgentIdentity> {
-        serde_json::from_str(raw)
-            .map_err(|err| tracing::warn!(path = %path.display(), error = %err, "failed to parse config.json; ignoring"))
-            .ok()
-    }
-}
-
-#[derive(Deserialize)]
-struct RawAgentIdentity {
-    #[serde(default)]
-    token: Option<String>,
-    #[serde(default)]
-    device_id: Option<String>,
 }
 
 #[cfg(test)]

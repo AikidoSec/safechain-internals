@@ -17,7 +17,6 @@ use rama::{
     },
     telemetry::tracing::{self, Instrument as _},
     tls::boring::server::TlsAcceptorLayer,
-    utils::str::arcstr::ArcStr,
 };
 
 use clap::Parser;
@@ -27,11 +26,6 @@ use safechain_utils::token::AgentIdentity;
 pub mod client;
 pub mod server;
 pub mod utils;
-
-pub struct RuntimeArgs {
-    pub aikido_token: Option<ArcStr>,
-    pub device_id: Option<ArcStr>,
-}
 
 #[cfg(target_family = "unix")]
 #[global_allocator]
@@ -133,17 +127,11 @@ async fn main() -> Result<(), BoxError> {
     ))
     .await?;
 
-    let agent_identity = AgentIdentity::load();
-
     #[cfg(target_family = "unix")]
     rama::unix::utils::raise_nofile(args.ulimit).context("set file descriptor limit")?;
 
     let base_shutdown_signal = graceful::default_signal();
-    let runtime_args = RuntimeArgs {
-        aikido_token: agent_identity.token,
-        device_id: agent_identity.device_id,
-    };
-    if let Err(err) = run_with_args(base_shutdown_signal, args, runtime_args).await {
+    if let Err(err) = run_with_args(base_shutdown_signal, args).await {
         eprintln!("🚩 exit with error: {err}");
         std::process::exit(1);
     }
@@ -156,11 +144,7 @@ async fn main() -> Result<(), BoxError> {
 ///
 /// This entry point is used by both the (binary) `main` function as well as
 /// for the e2e test suite found in the test module.
-async fn run_with_args<F>(
-    base_shutdown_signal: F,
-    args: Args,
-    runtime_args: RuntimeArgs,
-) -> Result<(), BoxError>
+async fn run_with_args<F>(base_shutdown_signal: F, args: Args) -> Result<(), BoxError>
 where
     F: Future<Output: Send + 'static> + Send + 'static,
 {
@@ -173,6 +157,8 @@ where
         .context("create compact data storage using dir")
         .with_context_debug_field("path", || args.data.clone())?;
     tracing::info!(path = ?args.data, "data directory ready to be used");
+
+    let agent_identity = AgentIdentity::load(&args.data);
 
     let graceful_timeout = (args.graceful > 0.).then(|| Duration::from_secs_f64(args.graceful));
 
@@ -206,8 +192,7 @@ where
             client::new_web_client()?,
             data_storage,
             args.reporting_endpoint.clone(),
-            runtime_args.aikido_token,
-            runtime_args.device_id,
+            agent_identity,
         ) => {
             result?
         }
