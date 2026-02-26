@@ -6,11 +6,13 @@ echo "SafeChain Ultimate Installer - Post-installation"
 
 INSTALL_DIR="/Library/Application Support/AikidoSecurity/SafeChainUltimate"
 LOGS_DIR="/Library/Logs/AikidoSecurity/SafeChainUltimate"
+RUN_DIR="$INSTALL_DIR/run"
 LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist"
 
 # Ensure logs directory exists and has proper permissions
 echo "Setting up logs directory..."
 mkdir -p "$LOGS_DIR"
+mkdir -p "$RUN_DIR"
 chmod 755 "$LOGS_DIR"
 
 # Set proper permissions on binaries
@@ -23,6 +25,7 @@ chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 echo "Setting ownership..."
 chown -R root:wheel "$INSTALL_DIR"
 chown -R root:wheel "$LOGS_DIR"
+chown -R root:wheel "$RUN_DIR"
 
 AIKIDO_TOKEN=""
 TOKEN_STAGING_FILE="/tmp/aikido_endpoint_token.txt"
@@ -34,7 +37,7 @@ fi
 
 if [ -n "$AIKIDO_TOKEN" ]; then
     echo "Storing Aikido token..."
-    TOKEN_FILE="$INSTALL_DIR/.token"
+    TOKEN_FILE="$RUN_DIR/.token"
     printf '%s' "$AIKIDO_TOKEN" > "$TOKEN_FILE"
     chmod 600 "$TOKEN_FILE"
     chown root:wheel "$TOKEN_FILE"
