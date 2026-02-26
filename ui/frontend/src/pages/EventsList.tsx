@@ -56,6 +56,8 @@ export function EventsList() {
     setError(null);
     try {
       const list = await listEvents(50);
+      // sort by ts descending
+      list.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
       setEvents(list ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
