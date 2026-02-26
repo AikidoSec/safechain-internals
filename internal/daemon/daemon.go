@@ -380,6 +380,7 @@ func runIfIntervalExceeded(lastRun *time.Time, interval time.Duration, fn func()
 	if time.Since(*lastRun) >= interval {
 		err := fn()
 		if err != nil {
+			// On failure, don't update the last run time so we retry ASAP
 			log.Printf("%v", err)
 			return
 		}
