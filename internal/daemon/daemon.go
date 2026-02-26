@@ -342,9 +342,6 @@ func (d *Daemon) heartbeat() error {
 		return nil
 	})
 	runIfIntervalExceeded(&d.config.LastHeartbeatReportTime, constants.HeartbeatReportInterval, func() error {
-		if d.config.Token == "" {
-			return fmt.Errorf("Token is not set, skipping heartbeat report")
-		}
 		if err := cloud.SendHeartbeat(d.ctx, d.config, &cloud.HeartbeatEvent{
 			DeviceInfo:  *d.deviceInfo,
 			VersionInfo: *d.versionInfo,
@@ -356,9 +353,6 @@ func (d *Daemon) heartbeat() error {
 		return nil
 	})
 	runIfIntervalExceeded(&d.config.LastSBOMReportTime, constants.SBOMReportInterval, func() error {
-		if d.config.Token == "" {
-			return fmt.Errorf("Token is not set, skipping SBOM report")
-		}
 		if err := d.reportSBOM(); err != nil {
 			return fmt.Errorf("Failed to report SBOM: %v", err)
 		}
