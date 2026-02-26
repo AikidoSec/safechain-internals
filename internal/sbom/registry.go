@@ -14,7 +14,7 @@ type EcosystemEntry struct {
 }
 
 type SBOM struct {
-	Entries []EcosystemEntry `json:"sbom"`
+	Entries []EcosystemEntry `json:"ecosystems"`
 }
 
 type Registry struct {
