@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"time"
 
@@ -51,13 +50,6 @@ func sendEvent(ctx context.Context, endpoint string, config *config.ConfigInfo, 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", config.Token)
 	req.Header.Set("X-Device-Id", config.DeviceID)
-
-	dump, dumpErr := httputil.DumpRequestOut(req, true)
-	if dumpErr != nil {
-		log.Printf("failed to dump request: %v", dumpErr)
-	} else {
-		log.Printf("HTTP request:\n%s", dump)
-	}
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
