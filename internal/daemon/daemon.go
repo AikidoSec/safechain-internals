@@ -351,7 +351,6 @@ func (d *Daemon) heartbeat() error {
 		}); err != nil {
 			return fmt.Errorf("Failed to report heartbeat: %v", err)
 		}
-		d.config.LastHeartbeatReportTime = time.Now()
 		d.config.Save()
 		return nil
 	})
@@ -362,7 +361,6 @@ func (d *Daemon) heartbeat() error {
 		if err := d.reportSBOM(); err != nil {
 			return fmt.Errorf("Failed to report SBOM: %v", err)
 		}
-		d.config.LastSBOMReportTime = time.Now()
 		d.config.Save()
 		return nil
 	})
