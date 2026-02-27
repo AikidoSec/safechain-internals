@@ -17,10 +17,24 @@ use serde_json::json;
 
 use crate::http::KnownContentType;
 
-pub(in crate::http::firewall) struct MinPackageAge {}
+pub(in crate::http::firewall) struct MinPackageAge {
+    is_enabled: bool,
+    duration: Duration,
+}
 
 impl MinPackageAge {
-    pub fn modify_request_headers(req: &mut Request) {
+    pub fn new(is_enabled: bool, duration: Duration) -> Self {
+        Self {
+            is_enabled,
+            duration,
+        }
+    }
+
+    pub fn modify_request_headers(&self, req: &mut Request) {
+        if !self.is_enabled {
+            return;
+        }
+
         let Some(accept_is_npm_info) = req.headers().typed_get().map(|accept: Accept| {
             accept
                 .0
@@ -37,10 +51,11 @@ impl MinPackageAge {
         req.headers_mut().typed_insert(Accept::json());
     }
 
-    pub async fn remove_new_packages(
-        resp: Response,
-        cut_off_duration: Duration,
-    ) -> Result<Response, BoxError> {
+    pub async fn remove_new_packages(&self, resp: Response) -> Result<Response, BoxError> {
+        if !self.is_enabled {
+            return Ok(resp);
+        }
+
         let Some(content_type) = resp.headers().typed_get::<ContentType>() else {
             return Ok(resp);
         };
@@ -51,7 +66,7 @@ impl MinPackageAge {
             return Ok(resp);
         }
 
-        let cutoff = now_unix_ms() - cut_off_duration.as_millis() as i64;
+        let cutoff = now_unix_ms() - self.duration.as_millis() as i64;
 
         let (mut parts, body) = resp.into_parts();
 

@@ -26,28 +26,32 @@ fn timestamp_hours_ago(hours: u64) -> String {
 #[test]
 fn replaces_npm_install_accept_header() {
     let mut req = make_request(Some("application/vnd.npm.install-v1+json"));
-    MinPackageAge::modify_request_headers(&mut req);
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    min_package_age.modify_request_headers(&mut req);
     assert_eq!(req.headers().get("accept").unwrap(), "application/json");
 }
 
 #[test]
 fn no_accept_header_is_unchanged() {
     let mut req = make_request(None);
-    MinPackageAge::modify_request_headers(&mut req);
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    min_package_age.modify_request_headers(&mut req);
     assert!(req.headers().get("accept").is_none());
 }
 
 #[test]
 fn non_matching_accept_header_is_unchanged() {
     let mut req = make_request(Some("application/json"));
-    MinPackageAge::modify_request_headers(&mut req);
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    min_package_age.modify_request_headers(&mut req);
     assert_eq!(req.headers().get("accept").unwrap(), "application/json");
 }
 
 #[test]
 fn unrelated_accept_header_is_unchanged() {
     let mut req = make_request(Some("text/html"));
-    MinPackageAge::modify_request_headers(&mut req);
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    min_package_age.modify_request_headers(&mut req);
     assert_eq!(req.headers().get("accept").unwrap(), "text/html");
 }
 
@@ -58,9 +62,8 @@ async fn removes_versions_newer_than_24h() {
         r#"{{"time":{{"created":"2020-01-01T00:00:00.000Z","modified":"2020-01-02T00:00:00.000Z","1.0.0":"2020-01-01T00:00:00.000Z","1.0.1":"{recent}"}}}}"#
     );
     let resp = make_json_response(&body);
-    let result = MinPackageAge::remove_new_packages(resp, Duration::from_hours(24))
-        .await
-        .unwrap();
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    let result = min_package_age.remove_new_packages(resp).await.unwrap();
     let result_json: serde_json::Value = result.try_into_json().await.unwrap();
     let time = result_json["time"].as_object().unwrap();
     assert!(time.contains_key("created"));
@@ -77,9 +80,8 @@ async fn keeps_versions_older_than_24h() {
     let old = timestamp_hours_ago(48);
     let body = format!(r#"{{"time":{{"created":"2020-01-01T00:00:00.000Z","1.0.0":"{old}"}}}}"#);
     let resp = make_json_response(&body);
-    let result = MinPackageAge::remove_new_packages(resp, Duration::from_hours(24))
-        .await
-        .unwrap();
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    let result = min_package_age.remove_new_packages(resp).await.unwrap();
     let result_json: serde_json::Value = result.try_into_json().await.unwrap();
     let time = result_json["time"].as_object().unwrap();
     assert!(time.contains_key("1.0.0"), "old version should be kept");
@@ -90,9 +92,8 @@ async fn keeps_created_and_modified_always() {
     let recent = timestamp_hours_ago(1);
     let body = format!(r#"{{"time":{{"created":"{recent}","modified":"{recent}"}}}}"#);
     let resp = make_json_response(&body);
-    let result = MinPackageAge::remove_new_packages(resp, Duration::from_hours(24))
-        .await
-        .unwrap();
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    let result = min_package_age.remove_new_packages(resp).await.unwrap();
     let result_json: serde_json::Value = result.try_into_json().await.unwrap();
     let time = result_json["time"].as_object().unwrap();
     assert!(
@@ -111,9 +112,8 @@ async fn passthrough_non_json_response() {
         .header("content-type", "application/octet-stream")
         .body(Body::from("binary data"))
         .unwrap();
-    let result = MinPackageAge::remove_new_packages(resp, Duration::from_hours(24))
-        .await
-        .unwrap();
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    let result = min_package_age.remove_new_packages(resp).await.unwrap();
     assert_eq!(
         result.headers().get("content-type").unwrap(),
         "application/octet-stream"
@@ -123,9 +123,8 @@ async fn passthrough_non_json_response() {
 #[tokio::test]
 async fn passthrough_invalid_json_body() {
     let resp = make_json_response("not valid json {{{");
-    let result = MinPackageAge::remove_new_packages(resp, Duration::from_hours(24))
-        .await
-        .unwrap();
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    let result = min_package_age.remove_new_packages(resp).await.unwrap();
     let body_str = result.try_into_string().await.unwrap();
     assert_eq!(body_str, "not valid json {{{");
 }
@@ -138,9 +137,8 @@ async fn updates_latest_tag_when_latest_is_removed() {
         r#"{{"name":"my-package","dist-tags":{{"latest":"1.0.1"}},"time":{{"created":"2020-01-01T00:00:00.000Z","modified":"2020-01-02T00:00:00.000Z","1.0.0":"{old}","1.0.1":"{recent}"}}}}"#
     );
     let resp = make_json_response(&body);
-    let result = MinPackageAge::remove_new_packages(resp, Duration::from_hours(24))
-        .await
-        .unwrap();
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    let result = min_package_age.remove_new_packages(resp).await.unwrap();
     let result_json: serde_json::Value = result.try_into_json().await.unwrap();
     assert_eq!(result_json["dist-tags"]["latest"], "1.0.0");
 }
@@ -154,9 +152,8 @@ async fn updates_latest_to_most_recent_stable_version() {
         r#"{{"name":"my-package","dist-tags":{{"latest":"1.0.2"}},"time":{{"created":"2020-01-01T00:00:00.000Z","modified":"2020-01-02T00:00:00.000Z","1.0.0":"{older}","1.0.1":"{newer}","1.0.2":"{recent}"}}}}"#
     );
     let resp = make_json_response(&body);
-    let result = MinPackageAge::remove_new_packages(resp, Duration::from_hours(24))
-        .await
-        .unwrap();
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    let result = min_package_age.remove_new_packages(resp).await.unwrap();
     let result_json: serde_json::Value = result.try_into_json().await.unwrap();
     assert_eq!(result_json["dist-tags"]["latest"], "1.0.1");
 }
@@ -168,9 +165,8 @@ async fn removes_latest_tag_when_no_stable_versions_remain() {
         r#"{{"name":"my-package","dist-tags":{{"latest":"1.0.0"}},"time":{{"created":"2020-01-01T00:00:00.000Z","modified":"2020-01-02T00:00:00.000Z","1.0.0":"{recent}"}}}}"#
     );
     let resp = make_json_response(&body);
-    let result = MinPackageAge::remove_new_packages(resp, Duration::from_hours(24))
-        .await
-        .unwrap();
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    let result = min_package_age.remove_new_packages(resp).await.unwrap();
     let result_json: serde_json::Value = result.try_into_json().await.unwrap();
     assert!(
         result_json["dist-tags"]
@@ -190,9 +186,8 @@ async fn preserves_latest_tag_when_latest_is_not_removed() {
         r#"{{"name":"my-package","dist-tags":{{"latest":"1.0.0"}},"time":{{"created":"2020-01-01T00:00:00.000Z","modified":"2020-01-02T00:00:00.000Z","1.0.0":"{old}","1.0.1":"{recent}"}}}}"#
     );
     let resp = make_json_response(&body);
-    let result = MinPackageAge::remove_new_packages(resp, Duration::from_hours(24))
-        .await
-        .unwrap();
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    let result = min_package_age.remove_new_packages(resp).await.unwrap();
     let result_json: serde_json::Value = result.try_into_json().await.unwrap();
     assert_eq!(result_json["dist-tags"]["latest"], "1.0.0");
 }
@@ -205,9 +200,8 @@ async fn excludes_prerelease_versions_from_latest_tag() {
         r#"{{"name":"my-package","dist-tags":{{"latest":"1.0.0"}},"time":{{"created":"2020-01-01T00:00:00.000Z","modified":"2020-01-02T00:00:00.000Z","1.0.0":"{recent}","1.0.1-beta":"{old}"}}}}"#
     );
     let resp = make_json_response(&body);
-    let result = MinPackageAge::remove_new_packages(resp, Duration::from_hours(24))
-        .await
-        .unwrap();
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    let result = min_package_age.remove_new_packages(resp).await.unwrap();
     let result_json: serde_json::Value = result.try_into_json().await.unwrap();
     assert!(
         result_json["dist-tags"]
@@ -226,9 +220,8 @@ async fn no_dist_tags_is_unchanged() {
         r#"{{"name":"my-package","time":{{"created":"2020-01-01T00:00:00.000Z","modified":"2020-01-02T00:00:00.000Z","1.0.0":"{recent}"}}}}"#
     );
     let resp = make_json_response(&body);
-    let result = MinPackageAge::remove_new_packages(resp, Duration::from_hours(24))
-        .await
-        .unwrap();
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    let result = min_package_age.remove_new_packages(resp).await.unwrap();
     let result_json: serde_json::Value = result.try_into_json().await.unwrap();
     assert!(
         result_json.as_object().unwrap().get("dist-tags").is_none(),
@@ -250,9 +243,8 @@ async fn removes_response_caching() {
         .body(Body::from(body))
         .unwrap();
 
-    let result = MinPackageAge::remove_new_packages(resp, Duration::from_hours(24))
-        .await
-        .unwrap();
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    let result = min_package_age.remove_new_packages(resp).await.unwrap();
 
     assert!(
         result.headers().get("last-modified").is_none(),
@@ -276,9 +268,8 @@ async fn does_not_strip_headers_for_non_json_response() {
         .header("etag", r#""abc123""#)
         .body(Body::from("binary data"))
         .unwrap();
-    let result = MinPackageAge::remove_new_packages(resp, Duration::from_hours(24))
-        .await
-        .unwrap();
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    let result = min_package_age.remove_new_packages(resp).await.unwrap();
     assert_eq!(
         result.headers().get("etag").unwrap(),
         r#""abc123""#,
@@ -300,9 +291,8 @@ async fn does_not_strip_cache_headers_when_json_is_not_modified() {
         .body(Body::from(body))
         .unwrap();
 
-    let result = MinPackageAge::remove_new_packages(resp, Duration::from_hours(24))
-        .await
-        .unwrap();
+    let min_package_age = MinPackageAge::new(true, Duration::from_hours(24));
+    let result = min_package_age.remove_new_packages(resp).await.unwrap();
 
     assert_eq!(
         result.headers().get("etag").unwrap(),
