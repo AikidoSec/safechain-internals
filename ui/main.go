@@ -199,7 +199,6 @@ func main() {
 
 		go func() {
 			time.Sleep(500 * time.Millisecond)
-			//application.InvokeAsync(keepDockHidden)
 			app.Event.Emit("focus_event", FocusEventPayload{EventId: eventId})
 		}()
 	})
