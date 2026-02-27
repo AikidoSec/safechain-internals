@@ -397,6 +397,8 @@ func (d *Daemon) launchUI(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get random free port: %v", err)
 	}
+	ui_url := fmt.Sprintf("http://127.0.0.1:%d", port)
+	uiconfig.SetBaseURL(ui_url)
 	cfg := platform.GetConfig()
 	binaryPath := filepath.Join(cfg.BinaryDir, platform.SafeChainUIAppName)
 	args := []string{

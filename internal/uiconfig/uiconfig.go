@@ -8,7 +8,7 @@ import (
 
 const (
 	DefaultBaseURL = "http://127.0.0.1:9876"
-	DefaultToken  = "devtoken"
+	DefaultToken   = "devtoken"
 )
 
 var (
