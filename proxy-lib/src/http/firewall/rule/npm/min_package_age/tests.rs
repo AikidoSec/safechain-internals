@@ -6,7 +6,7 @@ fn make_request(accept: Option<&str>) -> Request {
     let mut req = Request::builder().uri("/").body(Body::empty()).unwrap();
     if let Some(accept) = accept {
         req.headers_mut()
-            .insert("accept", HeaderValue::from_str(accept).unwrap());
+            .insert("accept", rama::http::HeaderValue::from_str(accept).unwrap());
     }
     req
 }
@@ -255,11 +255,11 @@ async fn removes_response_caching() {
         .unwrap();
 
     assert!(
-        result.headers().get("etag").is_none(),
-        "etag should be stripped from JSON responses"
+        result.headers().get("last-modified").is_none(),
+        "last-modified should be stripped from JSON responses"
     );
     assert!(
-        result.headers().get("last-modified").is_none(),
+        result.headers().get("etag").is_none(),
         "etag should be stripped from JSON responses"
     );
     assert_eq!(

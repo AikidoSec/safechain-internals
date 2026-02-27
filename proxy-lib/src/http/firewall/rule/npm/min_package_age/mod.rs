@@ -3,11 +3,15 @@ use std::time::{Duration, SystemTime};
 use rama::{
     error::{BoxError, ErrorContext as _},
     http::{
-        Body, HeaderValue, Request, Response,
+        Body, Request, Response,
         body::util::BodyExt as _,
-        headers::{Accept, ContentType, HeaderMapExt as _},
+        headers::{Accept, CacheControl, ContentType, HeaderMapExt as _},
+        layer::remove_header::{
+            remove_cache_policy_headers, remove_cache_validation_response_headers,
+        },
     },
     telemetry::tracing,
+    utils::time::now_unix_ms,
 };
 use serde_json::json;
 
@@ -30,14 +34,7 @@ impl MinPackageAge {
             return;
         }
 
-        if let Ok(replacement_accept_header) = HeaderValue::from_str("application/json") {
-            tracing::debug!(
-                "modified accept: application/vnd.npm.install-v1+json header to application/json",
-            );
-            let _ = &req
-                .headers_mut()
-                .insert("accept", replacement_accept_header);
-        }
+        req.headers_mut().typed_insert(Accept::json());
     }
 
     pub async fn remove_new_packages(
@@ -47,15 +44,14 @@ impl MinPackageAge {
         let Some(content_type) = resp.headers().typed_get::<ContentType>() else {
             return Ok(resp);
         };
-        let is_json = KnownContentType::detect_from_content_type_header(content_type.clone())
-            .map(|ct| ct == KnownContentType::Json)
-            .unwrap_or(false);
 
-        if !is_json {
+        if KnownContentType::detect_from_content_type_header(content_type.clone())
+            != Some(KnownContentType::Json)
+        {
             return Ok(resp);
         }
 
-        let cutoff = SystemTime::now() - cut_off_duration;
+        let cutoff = now_unix_ms() - cut_off_duration.as_millis() as i64;
 
         let (mut parts, body) = resp.into_parts();
 
@@ -87,14 +83,11 @@ impl MinPackageAge {
         let new_bytes =
             serde_json::to_vec(&json).context("serialize modified npm info response")?;
 
-        parts.headers.remove("content-length");
-        parts.headers.remove("etag");
-        parts.headers.remove("last-modified");
-        if let Ok(no_cache) = HeaderValue::from_str("no-cache") {
-            parts.headers.insert("cache-control", no_cache);
-        } else {
-            parts.headers.remove("cache-control");
-        }
+        remove_cache_policy_headers(&mut parts.headers);
+        remove_cache_validation_response_headers(&mut parts.headers);
+        parts
+            .headers
+            .typed_insert(CacheControl::new().with_no_cache());
 
         Ok(Response::from_parts(parts, Body::from(new_bytes)))
     }
@@ -122,12 +115,11 @@ impl MinPackageAge {
         let Some(latest_value) = dist_tags
             .get("latest")
             .and_then(|latest_tag| latest_tag.as_str())
-            .map(str::to_owned)
         else {
             return json;
         };
 
-        if !removed_versions.contains(&latest_value) {
+        if !removed_versions.iter().any(|v| v == latest_value) {
             return json;
         }
 
@@ -161,7 +153,7 @@ impl MinPackageAge {
         json
     }
 
-    fn get_versions_to_remove(json: &serde_json::Value, cutoff: SystemTime) -> Vec<String> {
+    fn get_versions_to_remove(json: &serde_json::Value, cutoff_unix_ms: i64) -> Vec<String> {
         if let Some(time_obj) = json.get("time").and_then(|t| t.as_object()) {
             let keys_to_remove: Vec<String> = time_obj
                 .iter()
@@ -173,7 +165,13 @@ impl MinPackageAge {
                         return false;
                     };
                     match humantime::parse_rfc3339(timestamp_str) {
-                        Ok(published_at) => published_at > cutoff,
+                        Ok(published_at) => {
+                            let published_unix_ms = published_at
+                                .duration_since(SystemTime::UNIX_EPOCH)
+                                .map(|d| d.as_millis() as i64)
+                                .unwrap_or(0);
+                            published_unix_ms > cutoff_unix_ms
+                        }
                         Err(err) => {
                             tracing::debug!(
                                 "failed to parse npm package timestamp '{timestamp_str}': {err}"
