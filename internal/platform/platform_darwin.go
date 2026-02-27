@@ -16,15 +16,17 @@ import (
 	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/utils"
+	"golang.org/x/sys/unix"
 )
 
 const (
-	SafeChainUltimateLogName    = "safechain-ultimate.log"
-	SafeChainUltimateErrLogName = "safechain-ultimate.error.log"
-	SafeChainUIBinaryName       = "safechain-ultimate-ui"
-	SafeChainProxyBinaryName    = "safechain-proxy"
-	SafeChainProxyLogName       = "safechain-proxy.log"
-	SafeChainProxyErrLogName    = "safechain-proxy.err"
+	SafeChainUltimateLogName     = "safechain-ultimate.log"
+	SafeChainUltimateErrLogName  = "safechain-ultimate.error.log"
+	SafeChainUIBinaryName        = "safechain-ultimate-ui"
+	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
+	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
+	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
+	SafeChainSbomJSONName        = "safechain-ultimate-sbom.json"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
 )
@@ -34,7 +36,7 @@ var deviceRegex = regexp.MustCompile(`Device:\s*(en\d+)`)
 
 func initConfig() error {
 	if RunningAsRoot() {
-		username, _, _, _, err := getConsoleUser(context.Background())
+		username, _, _, _, err := GetCurrentUser(context.Background())
 		if err != nil {
 			return fmt.Errorf("failed to get console user: %v", err)
 		}
@@ -315,7 +317,7 @@ func RunAsWindowsService(runner ServiceRunner, serviceName string) error {
 	return nil
 }
 
-func getConsoleUser(ctx context.Context) (string, int, string, int, error) {
+func GetCurrentUser(ctx context.Context) (string, int, string, int, error) {
 	output, err := exec.CommandContext(ctx, "stat", "-f", "%Su %u %Sg %g", "/dev/console").Output()
 	if err != nil {
 		return "", 0, "", 0, fmt.Errorf("failed to get console user: %v", err)
@@ -339,18 +341,54 @@ func getConsoleUser(ctx context.Context) (string, int, string, int, error) {
 	return username, uidInt, group, gidInt, nil
 }
 
-func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
+func RunAsCurrentUserWithEnv(ctx context.Context, env []string, binaryPath string, args []string) (string, error) {
 	if !RunningAsRoot() {
-		return utils.RunCommand(ctx, binaryPath, args...)
+		return utils.RunCommandWithEnv(ctx, env, binaryPath, args...)
 	}
 
-	username, _, _, _, err := getConsoleUser(ctx)
+	username, _, _, _, err := GetCurrentUser(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get console user: %v", err)
 	}
 
-	suArgs := append([]string{"-u", username, binaryPath}, args...)
-	return utils.RunCommandWithEnv(ctx, []string{}, "sudo", suArgs...)
+	suArgs := []string{"-u", username}
+	if len(env) > 0 {
+		suArgs = append(suArgs, "env")
+		suArgs = append(suArgs, env...)
+	}
+	suArgs = append(suArgs, binaryPath)
+	suArgs = append(suArgs, args...)
+	return utils.RunCommand(ctx, "sudo", suArgs...)
+}
+
+// RunAsCurrentUserWithPathEnv runs a binary as the current user with the appropriate environment.
+// On macOS, sudo strips the environment when dropping privileges, so we
+// explicitly construct PATH to include the binary's directory (and its symlink
+// target) to ensure sibling tools (python3, node, etc.) remain discoverable.
+func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ...string) (string, error) {
+	binDir := filepath.Dir(binaryPath)
+	pathEnv := binDir
+
+	// Package managers like Homebrew and nvm install binaries as symlinks
+	// (e.g. /usr/local/bin/npm -> /usr/local/lib/node_modules/npm/bin/npm-cli.js).
+	// When we run npm, it needs to find its sibling `node` binary which lives
+	// in the symlink target's directory. Resolve the symlink so we can also add
+	// the real directory to PATH, ensuring sibling binaries are discoverable.
+	resolved, err := filepath.EvalSymlinks(binaryPath)
+	if err == nil {
+		resolvedDir := filepath.Dir(resolved)
+		if resolvedDir != binDir {
+			pathEnv = binDir + string(os.PathListSeparator) + resolvedDir
+		}
+	}
+
+	pathEnv = pathEnv + string(os.PathListSeparator) + os.Getenv("PATH")
+	env := []string{"PATH=" + pathEnv}
+	return RunAsCurrentUserWithEnv(ctx, env, binaryPath, args)
+}
+
+func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
+	return RunAsCurrentUserWithEnv(ctx, []string{}, binaryPath, args)
 }
 
 func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
@@ -358,7 +396,7 @@ func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args
 		return utils.RunCommand(ctx, binaryPath, args...)
 	}
 
-	_, uid, _, _, err := getConsoleUser(ctx)
+	_, uid, _, _, err := GetCurrentUser(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get console user: %v", err)
 	}
@@ -392,7 +430,7 @@ func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 	if err != nil {
 		return err
 	}
-	_, uid, _, gid, err := getConsoleUser(ctx)
+	_, uid, _, gid, err := GetCurrentUser(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get console user: %w", err)
 	}
@@ -404,6 +442,39 @@ func InstallSafeChain(ctx context.Context, repoURL, version string) error {
 		return fmt.Errorf("failed to run install script: %w", err)
 	}
 	return nil
+}
+
+func GetOSVersion() string {
+	version, err := unix.Sysctl("kern.osproductversion")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(version)
+}
+
+func GetRawDeviceID() (string, error) {
+	output, err := exec.Command("ioreg", "-rd1", "-c", "IOPlatformExpertDevice").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to run ioreg: %w", err)
+	}
+
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.Contains(line, "IOPlatformUUID") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		uuid := strings.TrimSpace(parts[1])
+		uuid = strings.Trim(uuid, "\"")
+		if uuid != "" {
+			return uuid, nil
+		}
+	}
+
+	return "", fmt.Errorf("IOPlatformUUID not found in ioreg output")
 }
 
 func UninstallSafeChain(ctx context.Context, repoURL, version string) error {

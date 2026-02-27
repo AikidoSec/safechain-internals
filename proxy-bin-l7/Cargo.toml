@@ -1,0 +1,47 @@
+[package]
+name = "safechain-l7-proxy"
+description = "MITM SafeChain HTTP(S)/SOCKS5 l7 Proxy for Developer Security"
+version = { workspace = true }  # keep in sync with GH releases
+edition = { workspace = true }
+publish = false
+rust-version = { workspace = true }
+readme = "../docs/proxy.md"
+
+[features]
+har = ["safechain-proxy-lib/har"]
+
+[dependencies]
+arc-swap = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+humantime = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_html_form = { workspace = true }
+rustls-platform-verifier = { workspace = true }
+safechain-proxy-lib = { workspace = true, features = ["pac"] }
+
+[target.'cfg(target_family = "unix")'.dependencies]
+jemallocator = { workspace = true }
+libc = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+mimalloc = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.build-dependencies]
+static_vcruntime = { workspace = true }
+
+[dependencies.rama]
+workspace = true
+features = ["http-full", "proxy-full", "dns", "boring", "rustls"]
+
+[dev-dependencies]
+tracing-test = { workspace = true }
+
+[dev-dependencies.safechain-proxy-lib]
+workspace = true
+features = ["test-utils"]
+
+[dev-dependencies.rama]
+workspace = true
+features = ["cli"]

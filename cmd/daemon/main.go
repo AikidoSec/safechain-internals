@@ -26,14 +26,14 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Print(version.Info())
+		fmt.Print(version.Info.String())
 		os.Exit(0)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	d, err := daemon.New(ctx, cancel, &daemon.Config{})
+	d, err := daemon.New(ctx, cancel)
 	if err != nil {
 		log.Fatalf("Failed to create daemon: %v", err)
 	}

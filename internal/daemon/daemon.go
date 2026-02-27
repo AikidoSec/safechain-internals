@@ -2,72 +2,92 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/AikidoSec/safechain-internals/internal/cloud"
+	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
+	"github.com/AikidoSec/safechain-internals/internal/device"
 	"github.com/AikidoSec/safechain-internals/internal/ingress"
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
+	"github.com/AikidoSec/safechain-internals/internal/sbom"
+	"github.com/AikidoSec/safechain-internals/internal/sbom/npm"
+	"github.com/AikidoSec/safechain-internals/internal/sbom/pip"
 	"github.com/AikidoSec/safechain-internals/internal/scannermanager"
 	"github.com/AikidoSec/safechain-internals/internal/setup"
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 	"github.com/AikidoSec/safechain-internals/internal/version"
 )
 
-const (
-	DaemonStatusLogInterval = 1 * time.Hour
-	ProxyStartMaxRetries    = 20
-	ProxyStartRetryInterval = 3 * time.Minute
-)
-
-type Config struct {
-	ConfigPath string
-	LogLevel   string
-}
-
 type Daemon struct {
-	config     *Config
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
-	stopOnce   sync.Once
-	proxy      *proxy.Proxy
-	registry   *scannermanager.Registry
-	ingress    *ingress.Server
+	versionInfo *version.VersionInfo
+	deviceInfo  *device.DeviceInfo
+	config      *config.ConfigInfo
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	stopOnce    sync.Once
+	proxy       *proxy.Proxy
+	registry    *scannermanager.Registry
+	sbomManager *sbom.Registry
+
+	ingress *ingress.Server
+
 	logRotator *utils.LogRotator
 	logReaper  *utils.LogReaper
 
 	proxyRetryCount    int
 	proxyLastRetryTime time.Time
 
-	daemonLastStatusLogTime time.Time
+	daemonLastStatusLogTime  time.Time
+	daemonLastSBOMReportTime time.Time
 }
 
-func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
+func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 	d := &Daemon{
-		ctx:        ctx,
-		cancel:     cancel,
-		config:     config,
-		proxy:      proxy.New(),
-		registry:   scannermanager.NewRegistry(),
-		ingress:    ingress.New(),
-		logRotator: utils.NewLogRotator(),
-		logReaper:  utils.NewLogReaper(),
+		versionInfo: version.Info,
+		ctx:         ctx,
+		cancel:      cancel,
+		proxy:       proxy.New(),
+		registry:    scannermanager.NewRegistry(),
+		sbomManager: newSBOMRegistry(),
+		ingress:     ingress.New(),
+		logRotator:  utils.NewLogRotator(),
+		logReaper:   utils.NewLogReaper(),
 	}
 
 	if err := platform.Init(); err != nil {
 		return nil, fmt.Errorf("failed to initialize platform: %v", err)
 	}
 
+	cloud.Init()
+
+	d.deviceInfo = device.NewDeviceInfo()
+	if d.deviceInfo == nil {
+		return nil, fmt.Errorf("failed to create device info")
+	}
+
+	d.config = config.NewConfigInfo(d.deviceInfo.ID)
+	if d.config == nil {
+		return nil, fmt.Errorf("failed to create config")
+	}
 	d.initLogging()
 	return d, nil
 }
 
 func (d *Daemon) Start(ctx context.Context) error {
-	log.Print("Starting SafeChain Daemon:\n", version.Info())
+	log.Print("Starting SafeChain Daemon\n")
+
+	log.Printf("Version info:\n%s\n", d.versionInfo.String())
+	log.Printf("Device info:\n%s\n", d.deviceInfo.String())
+	log.Printf("Config:\n%s\n", d.config.String())
+
 	log.Println("User home directory used for SafeChain:", platform.GetConfig().HomeDir)
 
 	mergedCtx, cancel := context.WithCancel(ctx)
@@ -196,6 +216,10 @@ func (d *Daemon) run(ctx context.Context) error {
 		return fmt.Errorf("failed to install all scanners: %v", err)
 	}
 
+	if err := d.heartbeat(); err != nil {
+		return fmt.Errorf("failed to heartbeat on startup: %v", err)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -249,19 +273,19 @@ func (d *Daemon) handleProxy() (shouldRetry bool, err error) {
 		return true, nil
 	}
 
-	if d.proxyRetryCount >= ProxyStartMaxRetries {
+	if d.proxyRetryCount >= constants.ProxyStartMaxRetries {
 		// Exit daemon loop if proxy start retry limit is reached
 		return false, fmt.Errorf("proxy start retry limit reached (%d attempts), not retrying", d.proxyRetryCount)
 	}
 
-	if !d.proxyLastRetryTime.IsZero() && time.Since(d.proxyLastRetryTime) < ProxyStartRetryInterval {
-		log.Printf("Proxy is not running, waiting for retry interval (%s) before next attempt", ProxyStartRetryInterval)
+	if !d.proxyLastRetryTime.IsZero() && time.Since(d.proxyLastRetryTime) < constants.ProxyStartRetryInterval {
+		log.Printf("Proxy is not running, waiting for retry interval (%s) before next attempt", constants.ProxyStartRetryInterval)
 		return true, nil
 	}
 
 	d.proxyRetryCount++
 	d.proxyLastRetryTime = time.Now()
-	log.Printf("Proxy is not running, starting it... (attempt %d/%d)", d.proxyRetryCount, ProxyStartMaxRetries)
+	log.Printf("Proxy is not running, starting it... (attempt %d/%d)", d.proxyRetryCount, constants.ProxyStartMaxRetries)
 
 	if err := d.startProxyAndInstallCA(d.ctx); err != nil {
 		log.Printf("Failed to start proxy and install CA: %v", err)
@@ -278,6 +302,32 @@ func (d *Daemon) handleProxy() (shouldRetry bool, err error) {
 	return true, nil
 }
 
+func (d *Daemon) reportSBOM() error {
+	sbom := d.sbomManager.CollectAllPackages(d.ctx)
+
+	sbomJSON, err := json.MarshalIndent(sbom, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal SBOM to JSON: %w", err)
+	}
+
+	sbomJSONPath := platform.GetSbomJSONPath()
+	if err := os.WriteFile(sbomJSONPath, sbomJSON, 0644); err != nil {
+		return fmt.Errorf("failed to write SBOM to file: %w", err)
+	}
+
+	log.Printf("SBOM written to %s", sbomJSONPath)
+
+	event := &cloud.SBOMEvent{
+		DeviceInfo:  *d.deviceInfo,
+		VersionInfo: *d.versionInfo,
+		SBOM:        sbom,
+	}
+	if err := cloud.SendSBOM(d.ctx, d.config, event); err != nil {
+		return fmt.Errorf("failed to send SBOM: %w", err)
+	}
+	return nil
+}
+
 func (d *Daemon) heartbeat() error {
 	shouldRetry, err := d.handleProxy()
 	if !shouldRetry {
@@ -287,11 +337,53 @@ func (d *Daemon) heartbeat() error {
 		log.Printf("Failed to start proxy: %v", err)
 	}
 
-	if time.Since(d.daemonLastStatusLogTime) >= DaemonStatusLogInterval {
+	runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() error {
 		d.printDaemonStatus()
-		d.daemonLastStatusLogTime = time.Now()
-	}
+		return nil
+	})
+	runIfIntervalExceeded(&d.config.LastHeartbeatReportTime, constants.HeartbeatReportInterval, func() error {
+		if d.config.Token == "" {
+			return fmt.Errorf("Token is not set, skipping heartbeat report")
+		}
+		if err := cloud.SendHeartbeat(d.ctx, d.config, &cloud.HeartbeatEvent{
+			DeviceInfo:  *d.deviceInfo,
+			VersionInfo: *d.versionInfo,
+		}); err != nil {
+			return fmt.Errorf("Failed to report heartbeat: %v", err)
+		}
+		d.config.Save()
+		return nil
+	})
+	runIfIntervalExceeded(&d.config.LastSBOMReportTime, constants.SBOMReportInterval, func() error {
+		if d.config.Token == "" {
+			return fmt.Errorf("Token is not set, skipping SBOM report")
+		}
+		if err := d.reportSBOM(); err != nil {
+			return fmt.Errorf("Failed to report SBOM: %v", err)
+		}
+		d.config.Save()
+		return nil
+	})
 	return nil
+}
+
+func newSBOMRegistry() *sbom.Registry {
+	r := sbom.NewRegistry()
+	r.Register(npm.New())
+	r.Register(pip.New())
+	return r
+}
+
+func runIfIntervalExceeded(lastRun *time.Time, interval time.Duration, fn func() error) {
+	if time.Since(*lastRun) >= interval {
+		err := fn()
+		if err != nil {
+			// On failure, don't update the last run time so we retry ASAP
+			log.Printf("%v", err)
+			return
+		}
+		*lastRun = time.Now()
+	}
 }
 
 func (d *Daemon) initLogging() {

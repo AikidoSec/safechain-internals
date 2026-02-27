@@ -12,7 +12,6 @@ RELEASE_LDFLAGS=$(LDFLAGS) -s -w
 
 BIN_DIR=bin
 DIST_DIR=dist
-PROXY_DIR=proxy
 
 UNAME_S := $(shell uname -s 2>/dev/null || echo Windows)
 UNAME_M := $(shell uname -m 2>/dev/null || echo x86_64)
@@ -88,12 +87,12 @@ build-windows-amd64:
 build-windows-arm64:
 	@$(MAKE) GOOS=windows GOARCH=arm64 build-release
 
-build-proxy:
-	@echo "Building safechain-proxy..."
-	@cd $(PROXY_DIR) && cargo build --release
+build-l7-proxy:
+	@echo "Building safechain-l7-proxy..."
+	@cargo build --release --bin safechain-l7-proxy
 	@mkdir -p $(BIN_DIR)
-	@cp target/release/safechain-proxy $(BIN_DIR)/safechain-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)
-	@echo "Proxy built: $(BIN_DIR)/safechain-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)"
+	@cp target/release/safechain-l7-proxy $(BIN_DIR)/safechain-l7-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)
+	@echo "Proxy built: $(BIN_DIR)/safechain-l7-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)"
 
 build-pkg:
 ifeq ($(DETECTED_OS),darwin)
@@ -115,7 +114,11 @@ else
 endif
 
 install-pkg:
+ifndef TOKEN
+	$(error TOKEN is required. Usage: make install-pkg TOKEN=your_token)
+endif
 ifeq ($(DETECTED_OS),darwin)
+	@echo "$(TOKEN)" > /tmp/aikido_endpoint_token.txt
 	@cd packaging/macos && ./install-local.sh
 else
 	@echo "Error: PKG installation is only supported on macOS"
@@ -124,7 +127,7 @@ endif
 
 uninstall-pkg:
 ifeq ($(DETECTED_OS),darwin)
-	@cd packaging/macos && ./uninstall-local.sh
+	sudo "/Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall"
 else
 	@echo "Error: PKG uninstallation is only supported on macOS"
 	@exit 1
