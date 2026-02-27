@@ -9,10 +9,34 @@ import (
 	"time"
 )
 
+// Config holds daemon connection settings. Used only in Go; never exposed to frontend.
+// Defaults are used when the app is started without -base-url / -token.
+
+type Config struct {
+	agentURL string
+	Token    string
+}
+
+var config Config = Config{
+	agentURL: "http://127.0.0.1:7878",
+	Token:    "devtoken",
+}
+
+// SetConfig sets the daemon API base URL and auth token (e.g. from command-line flags).
+// Call this at startup before any daemon API calls.
+func SetConfig(agentURL, token string) {
+	if agentURL != "" {
+		config.agentURL = agentURL
+	}
+	if token != "" {
+		config.Token = token
+	}
+}
+
 const timeout = 10 * time.Second
 
 func doRequest(method, path string, body []byte) (*http.Response, error) {
-	url := BASE_URL + path
+	url := config.agentURL + path
 	var bodyReader io.Reader
 	if len(body) > 0 {
 		bodyReader = bytes.NewReader(body)
@@ -21,7 +45,7 @@ func doRequest(method, path string, body []byte) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+TOKEN)
+	req.Header.Set("Authorization", "Bearer "+config.Token)
 	if len(body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
 	}
