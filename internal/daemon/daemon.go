@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AikidoSec/safechain-internals/internal/cloud"
+	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
 	"github.com/AikidoSec/safechain-internals/internal/device"
 	"github.com/AikidoSec/safechain-internals/internal/ingress"
@@ -24,11 +26,6 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 	"github.com/AikidoSec/safechain-internals/internal/version"
 )
-
-type Config struct {
-	ConfigPath string
-	LogLevel   string
-}
 
 // uiProcess holds the tray UI process PID so the daemon can kill it on Stop.
 type uiProcess struct {
@@ -64,34 +61,37 @@ func (u *uiProcess) Kill() {
 }
 
 type Daemon struct {
-	versionInfo                *version.VersionInfo
-	deviceInfo                 *device.DeviceInfo
-	config                     *Config
-	ctx                        context.Context
-	cancel                     context.CancelFunc
-	wg                         sync.WaitGroup
-	stopOnce                   sync.Once
-	proxy                      *proxy.Proxy
-	registry                   *scannermanager.Registry
-	sbomManager                *sbom.Registry
-	ingress                    *ingress.Server
-	logRotator                 *utils.LogRotator
-	logReaper                  *utils.LogReaper
-	uiProcess                  *uiProcess
-	proxyRetryCount            int
-	proxyLastRetryTime         time.Time
-	daemonLastStatusLogTime    time.Time
-	proxyStatusSentToTray      bool // last proxy running state sent to tray
+	versionInfo *version.VersionInfo
+	deviceInfo  *device.DeviceInfo
+	config      *config.ConfigInfo
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	stopOnce    sync.Once
+	proxy       *proxy.Proxy
+	registry    *scannermanager.Registry
+	sbomManager *sbom.Registry
+
+	ingress *ingress.Server
+
+	logRotator *utils.LogRotator
+	logReaper  *utils.LogReaper
+
+	proxyRetryCount    int
+	proxyLastRetryTime time.Time
+  
+  proxyStatusSentToTray      bool // last proxy running state sent to tray
 	proxyStatusTrayInitialized bool // true after we've sent at least once
-	daemonLastSBOMReportTime   time.Time
+
+	daemonLastStatusLogTime  time.Time
+	daemonLastSBOMReportTime time.Time
 }
 
-func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
+func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 	d := &Daemon{
 		versionInfo: version.Info,
 		ctx:         ctx,
 		cancel:      cancel,
-		config:      config,
 		proxy:       proxy.New(),
 		registry:    scannermanager.NewRegistry(),
 		sbomManager: newSBOMRegistry(),
@@ -105,9 +105,16 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 		return nil, fmt.Errorf("failed to initialize platform: %v", err)
 	}
 
+	cloud.Init()
+
 	d.deviceInfo = device.NewDeviceInfo()
 	if d.deviceInfo == nil {
 		return nil, fmt.Errorf("failed to create device info")
+	}
+
+	d.config = config.NewConfigInfo(d.deviceInfo.ID)
+	if d.config == nil {
+		return nil, fmt.Errorf("failed to create config")
 	}
 	d.initLogging()
 	return d, nil
@@ -118,6 +125,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 
 	log.Printf("Version info:\n%s\n", d.versionInfo.String())
 	log.Printf("Device info:\n%s\n", d.deviceInfo.String())
+	log.Printf("Config:\n%s\n", d.config.String())
 
 	log.Println("User home directory used for SafeChain:", platform.GetConfig().HomeDir)
 
@@ -256,6 +264,10 @@ func (d *Daemon) run(ctx context.Context) error {
 		return fmt.Errorf("failed to install all scanners: %v", err)
 	}
 
+	if err := d.heartbeat(); err != nil {
+		return fmt.Errorf("failed to heartbeat on startup: %v", err)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -352,6 +364,15 @@ func (d *Daemon) reportSBOM() error {
 	}
 
 	log.Printf("SBOM written to %s", sbomJSONPath)
+
+	event := &cloud.SBOMEvent{
+		DeviceInfo:  *d.deviceInfo,
+		VersionInfo: *d.versionInfo,
+		SBOM:        sbom,
+	}
+	if err := cloud.SendSBOM(d.ctx, d.config, event); err != nil {
+		return fmt.Errorf("failed to send SBOM: %w", err)
+	}
 	return nil
 }
 
@@ -372,13 +393,32 @@ func (d *Daemon) heartbeat() error {
 		d.proxyStatusTrayInitialized = true
 	}
 
-	runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() {
+	runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() error {
 		d.printDaemonStatus()
+		return nil
 	})
-	runIfIntervalExceeded(&d.daemonLastSBOMReportTime, constants.SBOMReportInterval, func() {
-		if err := d.reportSBOM(); err != nil {
-			log.Printf("Failed to report SBOM: %v", err)
+	runIfIntervalExceeded(&d.config.LastHeartbeatReportTime, constants.HeartbeatReportInterval, func() error {
+		if d.config.Token == "" {
+			return fmt.Errorf("Token is not set, skipping heartbeat report")
 		}
+		if err := cloud.SendHeartbeat(d.ctx, d.config, &cloud.HeartbeatEvent{
+			DeviceInfo:  *d.deviceInfo,
+			VersionInfo: *d.versionInfo,
+		}); err != nil {
+			return fmt.Errorf("Failed to report heartbeat: %v", err)
+		}
+		d.config.Save()
+		return nil
+	})
+	runIfIntervalExceeded(&d.config.LastSBOMReportTime, constants.SBOMReportInterval, func() error {
+		if d.config.Token == "" {
+			return fmt.Errorf("Token is not set, skipping SBOM report")
+		}
+		if err := d.reportSBOM(); err != nil {
+			return fmt.Errorf("Failed to report SBOM: %v", err)
+		}
+		d.config.Save()
+		return nil
 	})
 	return nil
 }
@@ -425,9 +465,14 @@ func newSBOMRegistry() *sbom.Registry {
 	return r
 }
 
-func runIfIntervalExceeded(lastRun *time.Time, interval time.Duration, fn func()) {
+func runIfIntervalExceeded(lastRun *time.Time, interval time.Duration, fn func() error) {
 	if time.Since(*lastRun) >= interval {
-		fn()
+		err := fn()
+		if err != nil {
+			// On failure, don't update the last run time so we retry ASAP
+			log.Printf("%v", err)
+			return
+		}
 		*lastRun = time.Now()
 	}
 }

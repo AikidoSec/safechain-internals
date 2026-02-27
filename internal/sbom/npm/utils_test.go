@@ -100,7 +100,7 @@ func TestCollectDependenciesDeduplicates(t *testing.T) {
 
 	count := 0
 	for _, p := range packages {
-		if p.Name == "shared" {
+		if p.Id == "shared" {
 			count++
 		}
 	}
@@ -132,7 +132,7 @@ func TestCollectDependenciesDifferentVersionsNotDeduplicated(t *testing.T) {
 
 	versions := []string{}
 	for _, p := range packages {
-		if p.Name == "shared" {
+		if p.Id == "shared" {
 			versions = append(versions, p.Version)
 		}
 	}
@@ -177,7 +177,7 @@ func TestCollectDependenciesDeeplyNested(t *testing.T) {
 func packagesByName(packages []sbom.Package) map[string]sbom.Package {
 	m := make(map[string]sbom.Package)
 	for _, p := range packages {
-		m[p.Name] = p
+		m[p.Id] = p
 	}
 	return m
 }
@@ -189,6 +189,6 @@ func assertPackage(t *testing.T, byName map[string]sbom.Package, name, version s
 		t.Fatalf("expected package %q not found", name)
 	}
 	if p.Version != version {
-		t.Fatalf("expected %s@%s, got %s@%s", name, version, p.Name, p.Version)
+		t.Fatalf("expected %s@%s, got %s@%s", name, version, p.Id, p.Version)
 	}
 }

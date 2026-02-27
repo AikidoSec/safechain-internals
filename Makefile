@@ -144,7 +144,11 @@ else
 endif
 
 install-pkg:
+ifndef TOKEN
+	$(error TOKEN is required. Usage: make install-pkg TOKEN=your_token)
+endif
 ifeq ($(DETECTED_OS),darwin)
+	@echo "$(TOKEN)" > /tmp/aikido_endpoint_token.txt
 	@cd packaging/macos && ./install-local.sh
 else ifeq ($(DETECTED_OS),windows)
 	@echo "Installing Windows MSI package..."
