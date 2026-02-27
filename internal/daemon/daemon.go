@@ -392,12 +392,17 @@ func (d *Daemon) launchUI(ctx context.Context) error {
 	// Generate token and set it so daemon↔UI requests use the same token
 	token := uiconfig.GenerateAndSetToken()
 	daemonURL := "http://" + ingressAddr
-
+	// get a random free port
+	port, err := utils.GetRandomFreePort()
+	if err != nil {
+		return fmt.Errorf("failed to get random free port: %v", err)
+	}
 	cfg := platform.GetConfig()
 	binaryPath := filepath.Join(cfg.BinaryDir, platform.SafeChainUIAppName)
 	args := []string{
 		"--daemon_url", daemonURL,
 		"--token", token,
+		"--ui_url", fmt.Sprintf("127.0.0.1:%d", port),
 	}
 
 	// Launch UI as current user (non-blocking); save PID so Stop can kill it
