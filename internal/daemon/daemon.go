@@ -67,6 +67,7 @@ type Daemon struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
+	uiProcess   *uiProcess
 	stopOnce    sync.Once
 	proxy       *proxy.Proxy
 	registry    *scannermanager.Registry
@@ -79,8 +80,8 @@ type Daemon struct {
 
 	proxyRetryCount    int
 	proxyLastRetryTime time.Time
-  
-  proxyStatusSentToTray      bool // last proxy running state sent to tray
+
+	proxyStatusSentToTray      bool // last proxy running state sent to tray
 	proxyStatusTrayInitialized bool // true after we've sent at least once
 
 	daemonLastStatusLogTime  time.Time
