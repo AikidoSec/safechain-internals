@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 )
 
 const (
@@ -21,11 +22,34 @@ type Server struct {
 	listener net.Listener
 	server   *http.Server
 
-	mu sync.RWMutex
+	eventStore *eventStore
+	mu         sync.RWMutex
 }
 
 func New() *Server {
-	return &Server{}
+	store := &eventStore{}
+
+	// Seed with a couple of sample blocked events so the UI has examples
+	store.Add(BlockEvent{
+		TsMs: time.Now().Add(-5 * time.Minute).UnixMilli(),
+		Artifact: Artifact{
+			Product:        "npm",
+			PackageName:    "left-pad",
+			PackageVersion: "1.3.0",
+		},
+	})
+	store.Add(BlockEvent{
+		TsMs: time.Now().Add(-2 * time.Minute).UnixMilli(),
+		Artifact: Artifact{
+			Product:        "pip",
+			PackageName:    "requests",
+			PackageVersion: "2.32.3",
+		},
+	})
+
+	return &Server{
+		eventStore: store,
+	}
 }
 
 func (s *Server) Addr() string {
@@ -38,7 +62,10 @@ func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /block", s.handleBlock)
 	mux.HandleFunc("GET /ping", s.handlePing)
-	mux.HandleFunc("POST /request-bypass", s.handleRequestBypass)
+
+	mux.HandleFunc("POST /v1/events/{id}/request-access", s.handleRequestBypass)
+	mux.HandleFunc("GET /v1/events", s.handleEvents)
+	mux.HandleFunc("GET /v1/events/{id}", s.handleGetEventByID)
 
 	listener, err := net.Listen("tcp", DefaultBind)
 	if err != nil {

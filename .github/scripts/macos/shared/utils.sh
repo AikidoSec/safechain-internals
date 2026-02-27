@@ -16,12 +16,12 @@ log_error() { echo -e "${RED}❌ $1${NC}"; }
 log_success() { echo -e "${GREEN}✅ $1${NC}"; }
 log_debug() { echo -e "${BLUE}🔍 $1${NC}"; }
 
-# Check if file exists and is readable
+# Check if file or directory exists and is readable (use for binaries or .app bundles)
 check_file_exists() {
     local file_path="$1"
     local description="${2:-File}"
     
-    if [ ! -f "$file_path" ]; then
+    if [ ! -e "$file_path" ]; then
         log_error "$description not found: $file_path"
         return 1
     fi

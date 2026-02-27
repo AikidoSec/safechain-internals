@@ -61,31 +61,49 @@ build:
 	@echo "Building $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT) ./cmd/daemon
-	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME_UI)$(BINARY_EXT) ./cmd/ui
 	@echo "Binaries built:"
-	@echo "$(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)"
-	@echo "$(BIN_DIR)/$(BINARY_NAME_UI)$(BINARY_EXT)"
+	@echo "  $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)"
+ifeq ($(GOOS),darwin)
+	@cd ui && wails3 package
+	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
+	@cp -R ui/bin/$(BINARY_NAME_UI).app $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
+	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app"
+else ifeq ($(GOOS),windows)
+	@cd ui && wails3 package
+	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
+	@cp -R ui/bin/$(BINARY_NAME_UI).exe $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
+	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe"
+endif
 
 build-release:
 	@echo "Building release $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/daemon
-	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/ui
 	@echo "Binaries built:"
-	@echo "$(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
-	@echo "$(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
+	@echo "  $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
+ifeq ($(GOOS),darwin)
+	@cd ui && wails3 package
+	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
+	@cp -R ui/bin/$(BINARY_NAME_UI).app $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
+	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app"
+else
+	@cd ui && wails3 package
+	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
+	@cp -R ui/bin/$(BINARY_NAME_UI).exe $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
+	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe"
+endif
 
 build-darwin-amd64:
-	@$(MAKE) GOOS=darwin GOARCH=amd64 build-release
+	@"$(MAKE)" GOOS=darwin GOARCH=amd64 build-release
 
 build-darwin-arm64:
-	@$(MAKE) GOOS=darwin GOARCH=arm64 build-release
+	@"$(MAKE)" GOOS=darwin GOARCH=arm64 build-release
 
 build-windows-amd64:
-	@$(MAKE) GOOS=windows GOARCH=amd64 build-release
+	@"$(MAKE)" GOOS=windows GOARCH=amd64 build-release
 
 build-windows-arm64:
-	@$(MAKE) GOOS=windows GOARCH=arm64 build-release
+	@"$(MAKE)" GOOS=windows GOARCH=arm64 build-release
 
 build-l7-proxy:
 	@echo "Building safechain-l7-proxy..."
@@ -108,6 +126,18 @@ build-pkg-sign-local:
 ifeq ($(DETECTED_OS),darwin)
 	@echo "Building complete macOS package..."
 	@cd packaging/macos && ./build-and-sign-local.sh $(VERSION)
+else ifeq ($(DETECTED_OS),windows)
+	@echo "Building Windows binaries for $(DETECTED_ARCH)..."
+	@"$(MAKE)" build-windows-$(DETECTED_ARCH) VERSION=$(VERSION)
+	@echo "Building Windows proxy (safechain-l7-proxy)..."
+	@cargo build --release -p safechain-l7-proxy --target x86_64-pc-windows-msvc
+	@mkdir -p $(BIN_DIR)
+	@cp target/x86_64-pc-windows-msvc/release/safechain-l7-proxy.exe $(BIN_DIR)/SafeChainL7Proxy.exe
+	@cp $(BIN_DIR)/$(BINARY_NAME)-windows-$(DETECTED_ARCH).exe $(BIN_DIR)/SafeChainUltimate.exe
+	@cp $(BIN_DIR)/$(BINARY_NAME_UI)-windows-$(DETECTED_ARCH).exe $(BIN_DIR)/SafeChainUltimateUI.exe
+	@echo "Building Windows MSI installer..."
+	@powershell -ExecutionPolicy Bypass -File packaging/windows/build-msi.ps1 -Version "$(VERSION)" -Arch "$(DETECTED_ARCH)" -BinDir ".\$(BIN_DIR)" -OutputDir "."
+	@echo "Windows MSI build completed."
 else
 	@echo "Error: PKG building is only supported on macOS"
 	@exit 1
@@ -120,6 +150,9 @@ endif
 ifeq ($(DETECTED_OS),darwin)
 	@echo "$(TOKEN)" > /tmp/aikido_endpoint_token.txt
 	@cd packaging/macos && ./install-local.sh
+else ifeq ($(DETECTED_OS),windows)
+	@echo "Installing Windows MSI package..."
+	@msiexec /i SafeChainUltimate.$(DETECTED_ARCH).msi
 else
 	@echo "Error: PKG installation is only supported on macOS"
 	@exit 1
