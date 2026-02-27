@@ -26,7 +26,7 @@ func SetListenAddr(addr string) {
 func validateToken(w http.ResponseWriter, r *http.Request) bool {
 	auth := r.Header.Get("Authorization")
 	token := strings.TrimPrefix(auth, "Bearer ")
-	if token != daemon.TOKEN {
+	if token != daemon.AgentConfig.Token {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return false
 	}

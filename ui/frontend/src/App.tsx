@@ -13,7 +13,6 @@ function FocusHandler() {
   const navigate = useNavigate();
   useEffect(() => {
     const unsub = Events.On("focus_event", (ev: { data?: { eventId?: string } }) => {
-      console.log("focus_event", ev);
       const id = ev.data?.eventId;
       if (id) navigate(`/events/${id}`);
     });

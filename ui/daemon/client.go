@@ -17,7 +17,7 @@ type Config struct {
 	Token    string
 }
 
-var config Config = Config{
+var AgentConfig Config = Config{
 	agentURL: "http://127.0.0.1:7878",
 	Token:    "devtoken",
 }
@@ -26,17 +26,17 @@ var config Config = Config{
 // Call this at startup before any daemon API calls.
 func SetConfig(agentURL, token string) {
 	if agentURL != "" {
-		config.agentURL = agentURL
+		AgentConfig.agentURL = agentURL
 	}
 	if token != "" {
-		config.Token = token
+		AgentConfig.Token = token
 	}
 }
 
 const timeout = 10 * time.Second
 
 func doRequest(method, path string, body []byte) (*http.Response, error) {
-	url := config.agentURL + path
+	url := AgentConfig.agentURL + path
 	var bodyReader io.Reader
 	if len(body) > 0 {
 		bodyReader = bytes.NewReader(body)
@@ -45,7 +45,7 @@ func doRequest(method, path string, body []byte) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+config.Token)
+	req.Header.Set("Authorization", "Bearer "+AgentConfig.Token)
 	if len(body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
 	}
