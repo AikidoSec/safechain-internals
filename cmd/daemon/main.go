@@ -33,7 +33,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	d, err := daemon.New(ctx, cancel, &daemon.Config{})
+	d, err := daemon.New(ctx, cancel)
 	if err != nil {
 		log.Fatalf("Failed to create daemon: %v", err)
 	}
