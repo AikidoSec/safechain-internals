@@ -51,7 +51,7 @@ impl PolicyEvaluator {
             return PackagePolicyDecision::Block;
         }
 
-        // Explicitly allowed packages 
+        // Explicitly allowed packages
         if ecosystem_cfg
             .exceptions
             .allowed_packages
