@@ -26,5 +26,5 @@ pub fn compute_concurrent_request_count() -> usize {
 }
 
 pub fn aikido_app_base_url() -> Uri {
-    Uri::from_static("https://app.test.aikido.dev")
+    Uri::from_static("https://app.aikido.dev")
 }
