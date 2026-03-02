@@ -2,7 +2,7 @@
 
 A lightweight background agent that provides real-time security scanning for your development environment. The SafeChain Ultimate runs as a daemon, integrates and manages the security tooling seamlessly into your workflow.
 
-## Installation / Upgrade
+## Install / Upgrade
 
 ### macOS
 
@@ -16,7 +16,9 @@ echo "YOUR_TOKEN" > /tmp/aikido_endpoint_token.txt && sudo installer -pkg SafeCh
 
 ### Windows
 
-Start PowerShell as Administrator and run:
+Download and run the latest MSI installer from the [releases page](https://github.com/AikidoSec/safechain-internals/releases).
+
+Or start PowerShell as Administrator and run:
 ```powershell
 Invoke-WebRequest -Uri "https://github.com/AikidoSec/safechain-internals/releases/latest/download/SafeChainUltimate-windows-amd64.msi" -OutFile "SafeChainUltimate.msi"
 msiexec /i SafeChainUltimate.msi /qn /norestart AIKIDO_TOKEN=YOUR_TOKEN
