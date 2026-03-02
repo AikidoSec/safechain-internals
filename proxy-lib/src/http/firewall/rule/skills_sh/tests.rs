@@ -1,9 +1,6 @@
 use super::*;
 
-use crate::package::{
-    malware_list::ListDataEntry,
-    version::PackageVersion,
-};
+use crate::package::{malware_list::ListDataEntry, version::PackageVersion};
 
 // --- SkillsShEntryFormatter ---
 
@@ -88,5 +85,8 @@ fn test_parse_repo_rejects_non_git_path() {
 #[test]
 fn test_parse_repo_rejects_path_without_owner() {
     let result = RuleSkillsSh::parse_repo_from_path("/repo/git-upload-pack");
-    assert!(result.is_none(), "should be None when there is no owner segment");
+    assert!(
+        result.is_none(),
+        "should be None when there is no owner segment"
+    );
 }

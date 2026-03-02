@@ -166,7 +166,6 @@ impl Firewall {
                     .await
                     .context("create block rule: skills.sh")?
                     .into_dyn(),
-                
             ]),
             notifier,
             _agent_identity: agent_identity,

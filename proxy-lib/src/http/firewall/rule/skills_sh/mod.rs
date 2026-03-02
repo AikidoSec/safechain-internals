@@ -176,8 +176,7 @@ impl RuleSkillsSh {
         // uri().path() already strips the query string, so "/info/refs" is the
         // literal path suffix regardless of the "?service=..." parameter.
 
-        const GIT_ENDPOINTS: &[&str] =
-            &["/info/refs", "/git-upload-pack", "/git-receive-pack"];
+        const GIT_ENDPOINTS: &[&str] = &["/info/refs", "/git-upload-pack", "/git-receive-pack"];
 
         // Strip one of the known git endpoint suffixes
         let repo_path = GIT_ENDPOINTS
