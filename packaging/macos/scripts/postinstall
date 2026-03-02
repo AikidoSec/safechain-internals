@@ -28,15 +28,26 @@ chown -R root:wheel "$LOGS_DIR"
 chown -R root:wheel "$RUN_DIR"
 
 AIKIDO_TOKEN=""
+CONFIG_FILE="$RUN_DIR/config.json"
 TOKEN_STAGING_FILE="/tmp/aikido_endpoint_token.txt"
 
+# 1) Explicit token via staging file always wins (fresh install or re-provisioning)
 if [ -f "$TOKEN_STAGING_FILE" ]; then
     AIKIDO_TOKEN="$(cat "$TOKEN_STAGING_FILE" | tr -d '[:space:]')"
     rm -f "$TOKEN_STAGING_FILE"
 fi
 
-if [ -z "$AIKIDO_TOKEN" ]; then
-    echo "Token file not found or empty, prompting user..."
+# 2) No staging file — check if this is an upgrade with an existing config
+if [ -z "$AIKIDO_TOKEN" ] && [ -f "$CONFIG_FILE" ]; then
+    EXISTING_TOKEN="$(sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CONFIG_FILE" | tr -d '[:space:]')"
+    if [ -n "$EXISTING_TOKEN" ]; then
+        echo "Existing token found in config, skipping token setup (upgrade)."
+    fi
+fi
+
+# 3) No token from file and no existing config — prompt user (fresh install)
+if [ -z "$AIKIDO_TOKEN" ] && [ -z "$EXISTING_TOKEN" ]; then
+    echo "No token found, prompting user..."
     AIKIDO_TOKEN=$(osascript <<'APPLESCRIPT' 2>/dev/null
 set dialogResult to display dialog "Enter your Token to activate Aikido Endpoint Protection." & return & return & "You can find this token in your Aikido Security dashboard." with title "SafeChain Ultimate — Token Setup" default answer "" buttons {"Skip", "OK"} default button "OK" with icon caution
 if button returned of dialogResult is "OK" then
@@ -50,14 +61,13 @@ APPLESCRIPT
 
     if [ -z "$AIKIDO_TOKEN" ]; then
         echo "No token provided. You can configure it later by writing your token to:"
-        echo "  $RUN_DIR/config.json"
+        echo "  $CONFIG_FILE"
         echo "  Format: {\"token\":\"YOUR_TOKEN\"}"
     fi
 fi
 
 if [ -n "$AIKIDO_TOKEN" ]; then
     echo "Storing Aikido token..."
-    CONFIG_FILE="$RUN_DIR/config.json"
     echo '{"token":"'"$AIKIDO_TOKEN"'"}' > "$CONFIG_FILE"
     chmod 600 "$CONFIG_FILE"
     chown root:wheel "$CONFIG_FILE"
