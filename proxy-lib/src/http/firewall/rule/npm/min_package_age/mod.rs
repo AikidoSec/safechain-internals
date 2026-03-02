@@ -27,16 +27,15 @@ impl MinPackageAge {
     }
 
     pub fn modify_request_headers(&self, req: &mut Request) {
-        let Some(accept_is_npm_info) = req.headers().typed_get().map(|accept: Accept| {
-            accept
-                .0
-                .iter()
-                .any(|mime| mime.value.subtype() == "vnd.npm.install-v1")
-        }) else {
-            return;
-        };
-
-        if !accept_is_npm_info {
+        if !req
+            .headers()
+            .typed_get()
+            .map(|Accept(qvs)| {
+                qvs.iter()
+                    .any(|mime| mime.value.subtype() == "vnd.npm.install-v1")
+            })
+            .unwrap_or_default()
+        {
             return;
         }
 
@@ -44,11 +43,11 @@ impl MinPackageAge {
     }
 
     pub async fn remove_new_packages(&self, resp: Response) -> Result<Response, BoxError> {
-        let Some(content_type) = resp.headers().typed_get::<ContentType>() else {
-            return Ok(resp);
-        };
-
-        if KnownContentType::detect_from_content_type_header(content_type.clone())
+        if resp
+            .headers()
+            .typed_get::<ContentType>()
+            .clone()
+            .and_then(KnownContentType::detect_from_content_type_header)
             != Some(KnownContentType::Json)
         {
             return Ok(resp);
