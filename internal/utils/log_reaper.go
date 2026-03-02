@@ -94,6 +94,11 @@ func (r *LogReaper) reapOldLogs(lf reapableLog) {
 			continue
 		}
 
+		// Skip the current log file itself (e.g. safechain-ultimate.log); only reap rotated files with a timestamp in the name
+		if name == baseName {
+			continue
+		}
+
 		timestampStr := strings.TrimSuffix(strings.TrimPrefix(name, baseNameWithoutExt+"."), ext)
 		logTime, err := time.Parse("2006-01-02-15", timestampStr)
 		if err != nil {
