@@ -174,3 +174,38 @@ async fn test_pypi_https_package_allowed_by_endpoint_policy_exception() {
         .unwrap();
     assert_eq!(StatusCode::OK, resp.status());
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_pypi_https_package_blocked_by_endpoint_policy_block_all() {
+    let runtime =
+        e2e::runtime::spawn_with_agent_identity("policy-block-pypi", "mock_device", &[]).await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "requests" is not malware, but block_all_installs blocks it
+    let resp = client
+        .get("https://files.pythonhosted.org/packages/abc/def/requests-2.31.0-py3-none-any.whl")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_pypi_https_package_blocked_by_endpoint_policy_rejected_package() {
+    let runtime =
+        e2e::runtime::spawn_with_agent_identity("policy-reject-requests-pypi", "mock_device", &[])
+            .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "requests" is in rejected_packages — blocked even though it's not malware
+    let resp = client
+        .get("https://files.pythonhosted.org/packages/abc/def/requests-2.31.0-py3-none-any.whl")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
