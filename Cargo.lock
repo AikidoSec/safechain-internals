@@ -2945,6 +2945,7 @@ version = "1.0.0"
 dependencies = [
  "apple-native-keyring-store",
  "arc-swap",
+ "humantime",
  "keyring-core",
  "libc",
  "linux-keyutils-keyring-store",

@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, time::Duration};
 
 use rama::{
     Service,
@@ -15,6 +15,7 @@ use crate::{
         firewall::{
             domain_matcher::DomainMatcher,
             events::{BlockedArtifact, BlockedEventInfo},
+            rule::npm::min_package_age::MinPackageAge,
         },
         response::generate_generic_blocked_response_for_req,
     },
@@ -30,9 +31,12 @@ use crate::http::firewall::pac::PacScriptGenerator;
 
 use super::{BlockedRequest, RequestAction, Rule};
 
+mod min_package_age;
+
 pub(in crate::http::firewall) struct RuleNpm {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    maybe_min_package_age: Option<MinPackageAge>,
 }
 
 impl RuleNpm {
@@ -68,6 +72,7 @@ impl RuleNpm {
             .into_iter()
             .collect(),
             remote_malware_list,
+            maybe_min_package_age: Some(MinPackageAge::new(Duration::from_hours(24))),
         })
     }
 }
@@ -98,11 +103,13 @@ impl Rule for RuleNpm {
     }
 
     async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        // Pass through for now - response modification can be added in future PR
-        Ok(resp)
+        match &self.maybe_min_package_age {
+            Some(min_package_age) => min_package_age.remove_new_packages(resp).await,
+            None => Ok(resp),
+        }
     }
 
-    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
+    async fn evaluate_request(&self, mut req: Request) -> Result<RequestAction, BoxError> {
         if !crate::http::try_get_domain_for_req(&req)
             .map(|domain| self.match_domain(&domain))
             .unwrap_or_default()
@@ -111,6 +118,25 @@ impl Rule for RuleNpm {
             return Ok(RequestAction::Allow(req));
         }
 
+        if self.is_tarball_download(&req) {
+            return self.evaluate_tarball_request(req).await;
+        }
+
+        if let Some(min_package_age) = &self.maybe_min_package_age {
+            min_package_age.modify_request_headers(&mut req);
+        }
+
+        Ok(RequestAction::Allow(req))
+    }
+}
+
+impl RuleNpm {
+    fn is_tarball_download(&self, req: &Request) -> bool {
+        let path = req.uri().path();
+        path.ends_with(".tgz") && path.contains("/-/")
+    }
+
+    async fn evaluate_tarball_request(&self, req: Request) -> Result<RequestAction, BoxError> {
         let path = req.uri().path().trim_start_matches('/');
 
         let Some(package) = parse_package_from_path(path) else {
@@ -137,9 +163,7 @@ impl Rule for RuleNpm {
             Ok(RequestAction::Allow(req))
         }
     }
-}
 
-impl RuleNpm {
     fn is_package_listed_as_malware(&self, npm_package: &NpmPackage) -> bool {
         self.remote_malware_list.has_entries_with_version(
             &npm_package.fully_qualified_name,
@@ -188,145 +212,4 @@ fn parse_package_from_path(path: &str) -> Option<NpmPackage> {
 }
 
 #[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    #[tokio::test]
-    async fn test_parse_npm_package_from_path() {
-        for (path, expected) in [
-            (
-                "lodash/-/lodash-4.17.21.tgz",
-                Some(NpmPackage::new(
-                    "lodash",
-                    PragmaticSemver::new_semver(4, 17, 21),
-                )),
-            ),
-            (
-                "/lodash/-/lodash-4.17.21.tgz",
-                Some(NpmPackage::new(
-                    "lodash",
-                    PragmaticSemver::new_semver(4, 17, 21),
-                )),
-            ),
-            ("lodash/-/lodash-4.17.21", None),
-            ("lodash", None),
-            (
-                "express/-/express-4.18.2.tgz",
-                Some(NpmPackage::new(
-                    "express",
-                    PragmaticSemver::new_semver(4, 18, 2),
-                )),
-            ),
-            (
-                "safe-chain-test/-/safe-chain-test-1.0.0.tgz",
-                Some(NpmPackage::new(
-                    "safe-chain-test",
-                    PragmaticSemver::new_semver(1, 0, 0),
-                )),
-            ),
-            (
-                "web-vitals/-/web-vitals-3.5.0.tgz",
-                Some(NpmPackage::new(
-                    "web-vitals",
-                    PragmaticSemver::new_semver(3, 5, 0),
-                )),
-            ),
-            (
-                "safe-chain-test/-/safe-chain-test-0.0.1-security.tgz",
-                Some(NpmPackage::new(
-                    "safe-chain-test",
-                    PragmaticSemver::new_semver(0, 0, 1).with_pre("security"),
-                )),
-            ),
-            (
-                "lodash/-/lodash-5.0.0-beta.1.tgz",
-                Some(NpmPackage::new(
-                    "lodash",
-                    PragmaticSemver::new_semver(5, 0, 0).with_pre("beta.1"),
-                )),
-            ),
-            (
-                "react/-/react-18.3.0-canary-abc123.tgz",
-                Some(NpmPackage::new(
-                    "react",
-                    PragmaticSemver::new_semver(18, 3, 0).with_pre("canary-abc123"),
-                )),
-            ),
-            (
-                "@babel/core/-/core-7.21.4.tgz",
-                Some(NpmPackage::new(
-                    "@babel/core",
-                    PragmaticSemver::new_semver(7, 21, 4),
-                )),
-            ),
-            (
-                "@types/node/-/node-20.10.5.tgz",
-                Some(NpmPackage::new(
-                    "@types/node",
-                    PragmaticSemver::new_semver(20, 10, 5),
-                )),
-            ),
-            (
-                "@angular/common/-/common-17.0.8.tgz",
-                Some(NpmPackage::new(
-                    "@angular/common",
-                    PragmaticSemver::new_semver(17, 0, 8),
-                )),
-            ),
-            (
-                "@safe-chain/test-package/-/test-package-2.1.0.tgz",
-                Some(NpmPackage::new(
-                    "@safe-chain/test-package",
-                    PragmaticSemver::new_semver(2, 1, 0),
-                )),
-            ),
-            (
-                "@aws-sdk/client-s3/-/client-s3-3.465.0.tgz",
-                Some(NpmPackage::new(
-                    "@aws-sdk/client-s3",
-                    PragmaticSemver::new_semver(3, 465, 0),
-                )),
-            ),
-            (
-                "@babel/core/-/core-8.0.0-alpha.1.tgz",
-                Some(NpmPackage::new(
-                    "@babel/core",
-                    PragmaticSemver::new_semver(8, 0, 0).with_pre("alpha.1"),
-                )),
-            ),
-            (
-                "@safe-chain/security-test/-/security-test-1.0.0-security.tgz",
-                Some(NpmPackage::new(
-                    "@safe-chain/security-test",
-                    PragmaticSemver::new_semver(1, 0, 0).with_pre("security"),
-                )),
-            ),
-        ] {
-            let result = parse_package_from_path(path);
-
-            match (result, expected) {
-                (Some(actual_package), Some(expected_package)) => {
-                    assert_eq!(
-                        expected_package.fully_qualified_name,
-                        actual_package.fully_qualified_name
-                    );
-                    assert_eq!(expected_package.version, actual_package.version);
-                }
-                (None, None) => {}
-                (Some(actual_package), None) => {
-                    unreachable!(
-                        "No package expected, but got '{}'",
-                        actual_package.fully_qualified_name
-                    );
-                }
-                (None, Some(expected_package)) => {
-                    unreachable!(
-                        "Expected '{}', but got None",
-                        expected_package.fully_qualified_name
-                    );
-                }
-            }
-        }
-    }
-}
+mod tests;
