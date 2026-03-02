@@ -65,7 +65,8 @@ pub fn new_mock_client()
 }
 
 fn app_domain_from_base_url() -> Domain {
-    let host = aikido_app_base_url()
+    let base_url = aikido_app_base_url();
+    let host = base_url
         .host()
         .expect("aikido app base URL should always have a host");
     host.parse::<Domain>()

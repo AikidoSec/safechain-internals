@@ -11,7 +11,7 @@ fn exceptions(allowed_packages: &[&str], rejected_packages: &[&str]) -> Exceptio
 }
 
 #[test]
-fn evaluate_package_install_no_ecosystem_returns_no_match() {
+fn evaluate_package_install_no_matching_rule_returns_defer() {
     let cfg = EcosystemConfig {
         block_all_installs: false,
         request_installs: true,
@@ -20,7 +20,7 @@ fn evaluate_package_install_no_ecosystem_returns_no_match() {
     };
 
     let decision = PolicyEvaluator::evaluate_package_install_for_ecosystem_config(&cfg, "numpy");
-    assert_eq!(PackagePolicyDecision::NoMatch, decision);
+    assert_eq!(PackagePolicyDecision::Defer, decision);
 }
 
 #[test]
@@ -65,14 +65,28 @@ fn evaluate_package_install_rejected_package_blocks() {
 }
 
 #[test]
-fn evaluate_package_install_no_matching_policy_returns_no_match() {
+fn evaluate_package_install_rejected_takes_priority_over_allowed() {
+    // A package appearing in both lists: rejected wins (Rule 1 > Rule 2).
     let cfg = EcosystemConfig {
         block_all_installs: false,
-        request_installs: true,
+        request_installs: false,
         minimum_allowed_age_timestamp: None,
-        exceptions: exceptions(&["requests"], &["evil-package"]),
+        exceptions: exceptions(&["requests"], &["requests"]),
     };
 
-    let decision = PolicyEvaluator::evaluate_package_install_for_ecosystem_config(&cfg, "numpy");
-    assert_eq!(PackagePolicyDecision::NoMatch, decision);
+    let decision = PolicyEvaluator::evaluate_package_install_for_ecosystem_config(&cfg, "requests");
+    assert_eq!(PackagePolicyDecision::Block, decision);
+}
+
+#[test]
+fn evaluate_package_install_allow_list_takes_priority_over_block_all() {
+    let cfg = EcosystemConfig {
+        block_all_installs: true,
+        request_installs: false,
+        minimum_allowed_age_timestamp: None,
+        exceptions: exceptions(&["requests"], &[]),
+    };
+
+    let decision = PolicyEvaluator::evaluate_package_install_for_ecosystem_config(&cfg, "requests");
+    assert_eq!(PackagePolicyDecision::Allow, decision);
 }

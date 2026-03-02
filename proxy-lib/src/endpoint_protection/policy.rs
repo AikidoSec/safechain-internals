@@ -3,8 +3,11 @@ use rama::telemetry::tracing;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackagePolicyDecision {
-    NoMatch,
+    /// No policy rule matched — defer to the next check (e.g. the malware list).
+    Defer,
+    /// An explicit allow rule matched — bypass all further checks for this package.
     Allow,
+    /// An explicit block rule matched — block this package immediately.
     Block,
 }
 
@@ -25,7 +28,7 @@ impl PolicyEvaluator {
     ) -> PackagePolicyDecision {
         let ecosystem_config = self.config.get_ecosystem_config(ecosystem);
         let Some(ecosystem_cfg) = ecosystem_config.config() else {
-            return PackagePolicyDecision::NoMatch;
+            return PackagePolicyDecision::Defer;
         };
 
         Self::evaluate_package_install_for_ecosystem_config(ecosystem_cfg, package_name)
@@ -35,41 +38,42 @@ impl PolicyEvaluator {
         ecosystem_cfg: &EcosystemConfig,
         package_name: &str,
     ) -> PackagePolicyDecision {
-        if ecosystem_cfg
-            .exceptions
-            .allowed_packages
-            .iter()
-            .any(|pkg| pkg.as_str() == package_name)
-        {
-            tracing::info!(
-                package = package_name,
-                "package is explicitly allowed by endpoint protection config"
-            );
-            return PackagePolicyDecision::Allow;
-        }
-
-        if ecosystem_cfg.block_all_installs {
-            tracing::info!(
-                package = package_name,
-                "all package installs are blocked by endpoint protection config"
-            );
-            return PackagePolicyDecision::Block;
-        }
-
+        // Explicitly rejected packages are always blocked, even if also in allowed_packages.
         if ecosystem_cfg
             .exceptions
             .rejected_packages
-            .iter()
-            .any(|pkg| pkg.as_str() == package_name)
+            .contains(package_name)
         {
-            tracing::info!(
+            tracing::debug!(
                 package = package_name,
                 "package is explicitly blocked by endpoint protection config"
             );
             return PackagePolicyDecision::Block;
         }
 
-        PackagePolicyDecision::NoMatch
+        // Explicitly allowed packages bypass block_all_installs.
+        if ecosystem_cfg
+            .exceptions
+            .allowed_packages
+            .contains(package_name)
+        {
+            tracing::debug!(
+                package = package_name,
+                "package is explicitly allowed by endpoint protection config"
+            );
+            return PackagePolicyDecision::Allow;
+        }
+
+        // Block all installs unless the package was explicitly allowed above.
+        if ecosystem_cfg.block_all_installs {
+            tracing::debug!(
+                package = package_name,
+                "all package installs are blocked by endpoint protection config"
+            );
+            return PackagePolicyDecision::Block;
+        }
+
+        PackagePolicyDecision::Defer
     }
 }
 

@@ -61,7 +61,7 @@ impl Firewall {
     const ENDPOINT_CONFIG_PATH: &'static str =
         "/api/endpoint_protection/callbacks/fetchPermissions";
 
-    fn endpoint_config_uri() -> Uri {
+    fn endpoint_config_uri() -> Result<Uri, BoxError> {
         let base = aikido_app_base_url();
         let uri_str = format!(
             "{}{}",
@@ -71,7 +71,7 @@ impl Firewall {
 
         uri_str
             .parse::<Uri>()
-            .expect("aikido_app_base_url should always produce a valid absolute http(s) origin")
+            .context("aikido_app_base_url should always produce a valid absolute http(s) origin")
     }
 
     pub async fn try_new(
@@ -123,7 +123,8 @@ impl Firewall {
             None => None,
         };
 
-        let endpoint_config_uri = Self::endpoint_config_uri();
+        let endpoint_config_uri =
+            Self::endpoint_config_uri().context("build endpoint config URI")?;
 
         let remote_endpoint_config = match agent_identity.as_ref() {
             Some(identity) => {

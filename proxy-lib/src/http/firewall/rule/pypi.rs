@@ -88,6 +88,19 @@ impl RulePyPI {
         })
     }
 
+    fn make_blocked_request(req: Request, package_info: &PackageInfo) -> BlockedRequest {
+        BlockedRequest {
+            response: generate_generic_blocked_response_for_req(req),
+            info: BlockedEventInfo {
+                artifact: BlockedArtifact {
+                    product: arcstr!("pypi"),
+                    identifier: ArcStr::from(package_info.name.as_str()),
+                    version: Some(package_info.version.clone()),
+                },
+            },
+        }
+    }
+
     fn is_blocked(&self, package_info: &PackageInfo) -> Result<bool, BoxError> {
         let entries = self.remote_malware_list.find_entries(&package_info.name);
         let Some(entries) = entries.entries() else {
@@ -188,46 +201,31 @@ impl Rule for RulePyPI {
             return Ok(RequestAction::Allow(req));
         }
 
-        const ECOSYSTEM: &str = "pypi";
+        // Apply endpoint policy (rejected packages, allow exceptions, block_all_installs).
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
             let decision =
-                policy_evaluator.evaluate_package_install(ECOSYSTEM, package_info.name.as_str());
+                policy_evaluator.evaluate_package_install("pypi", package_info.name.as_str());
 
             match decision {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Block => {
-                    return Ok(RequestAction::Block(BlockedRequest {
-                        response: generate_generic_blocked_response_for_req(req),
-                        info: BlockedEventInfo {
-                            artifact: BlockedArtifact {
-                                product: arcstr!(ECOSYSTEM),
-                                identifier: ArcStr::from(package_info.name.as_str()),
-                                version: Some(package_info.version.clone()),
-                            },
-                        },
-                    }));
+                    return Ok(RequestAction::Block(Self::make_blocked_request(
+                        req,
+                        &package_info,
+                    )));
                 }
-                PackagePolicyDecision::NoMatch => {}
+                PackagePolicyDecision::Defer => {}
             }
         }
 
-        // Package names are already normalized by extract_package_info (underscores -> hyphens),
-        // so we can check directly against the malware list
         if self.is_blocked(&package_info)? {
             tracing::debug!(package = %package_info.name, version = ?package_info.version, "blocked PyPI package download");
-
-            return Ok(RequestAction::Block(BlockedRequest {
-                response: generate_generic_blocked_response_for_req(req),
-                info: BlockedEventInfo {
-                    artifact: BlockedArtifact {
-                        product: arcstr!(ECOSYSTEM),
-                        identifier: ArcStr::from(package_info.name.as_str()),
-                        version: Some(package_info.version.clone()),
-                    },
-                },
-            }));
+            return Ok(RequestAction::Block(Self::make_blocked_request(
+                req,
+                &package_info,
+            )));
         }
 
         Ok(RequestAction::Allow(req))

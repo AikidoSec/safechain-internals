@@ -46,6 +46,15 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": []
             }
         }),
+        "policy-reject-requests-pypi" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": ["requests"]
+            }
+        }),
         _ => json!({
             "block_all_installs": false,
             "request_installs": false,
