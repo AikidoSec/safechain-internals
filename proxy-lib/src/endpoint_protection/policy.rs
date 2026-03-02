@@ -38,7 +38,7 @@ impl PolicyEvaluator {
         ecosystem_cfg: &EcosystemConfig,
         package_name: &str,
     ) -> PackagePolicyDecision {
-        // Explicitly rejected packages are always blocked, even if also in allowed_packages.
+        // Explicitly rejected packages
         if ecosystem_cfg
             .exceptions
             .rejected_packages
@@ -51,7 +51,7 @@ impl PolicyEvaluator {
             return PackagePolicyDecision::Block;
         }
 
-        // Explicitly allowed packages bypass block_all_installs.
+        // Explicitly allowed packages 
         if ecosystem_cfg
             .exceptions
             .allowed_packages
@@ -64,7 +64,7 @@ impl PolicyEvaluator {
             return PackagePolicyDecision::Allow;
         }
 
-        // Block all installs unless the package was explicitly allowed above.
+        // Block all installs
         if ecosystem_cfg.block_all_installs {
             tracing::debug!(
                 package = package_name,

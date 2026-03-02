@@ -58,15 +58,11 @@ pub struct Firewall {
 }
 
 impl Firewall {
-    const ENDPOINT_CONFIG_PATH: &'static str =
-        "/api/endpoint_protection/callbacks/fetchPermissions";
-
     fn endpoint_config_uri() -> Result<Uri, BoxError> {
         let base = aikido_app_base_url();
         let uri_str = format!(
-            "{}{}",
+            "{}/api/endpoint_protection/callbacks/fetchPermissions",
             base.to_string().trim_end_matches('/'),
-            Self::ENDPOINT_CONFIG_PATH
         );
 
         uri_str
@@ -123,8 +119,7 @@ impl Firewall {
             None => None,
         };
 
-        let endpoint_config_uri =
-            Self::endpoint_config_uri().context("build endpoint config URI")?;
+        let endpoint_config_uri = Self::endpoint_config_uri()?;
 
         let remote_endpoint_config = match agent_identity.as_ref() {
             Some(identity) => {

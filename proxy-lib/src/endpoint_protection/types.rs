@@ -26,7 +26,6 @@ pub struct EcosystemConfig {
     #[serde(default)]
     pub request_installs: bool,
 
-    // TODO: implement minimum age enforcement during response evaluation
     #[serde(default)]
     pub minimum_allowed_age_timestamp: Option<i64>,
 
@@ -36,14 +35,9 @@ pub struct EcosystemConfig {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ExceptionLists {
-    /// Packages explicitly allowed, even if `block_all_installs` is set or the package appears
-    /// in the malware list. Entries are lowercased at deserialization time so comparisons
-    /// against already-normalized package names are always consistent.
     #[serde(default, deserialize_with = "deserialize_lowercase_set")]
     pub allowed_packages: HashSet<ArcStr>,
 
-    /// Packages explicitly blocked regardless of the malware list.
-    /// Entries are lowercased at deserialization time.
     #[serde(default, deserialize_with = "deserialize_lowercase_set")]
     pub rejected_packages: HashSet<ArcStr>,
 }
