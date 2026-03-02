@@ -30,15 +30,35 @@ chown -R root:wheel "$RUN_DIR"
 AIKIDO_TOKEN=""
 TOKEN_STAGING_FILE="/tmp/aikido_endpoint_token.txt"
 
-if [ -z "$AIKIDO_TOKEN" ] && [ -f "$TOKEN_STAGING_FILE" ]; then
-    AIKIDO_TOKEN="$(cat "$TOKEN_STAGING_FILE")"
+if [ -f "$TOKEN_STAGING_FILE" ]; then
+    AIKIDO_TOKEN="$(cat "$TOKEN_STAGING_FILE" | tr -d '[:space:]')"
     rm -f "$TOKEN_STAGING_FILE"
+fi
+
+if [ -z "$AIKIDO_TOKEN" ]; then
+    echo "Token file not found or empty, prompting user..."
+    AIKIDO_TOKEN=$(osascript <<'APPLESCRIPT' 2>/dev/null
+set dialogResult to display dialog "Enter your Token to activate Aikido Endpoint Protection." & return & return & "You can find this token in your Aikido Security dashboard." with title "SafeChain Ultimate — Token Setup" default answer "" buttons {"Skip", "OK"} default button "OK" with icon caution
+if button returned of dialogResult is "OK" then
+    return text returned of dialogResult
+else
+    return ""
+end if
+APPLESCRIPT
+    ) || true
+    AIKIDO_TOKEN="$(echo "$AIKIDO_TOKEN" | tr -d '[:space:]')"
+
+    if [ -z "$AIKIDO_TOKEN" ]; then
+        echo "No token provided. You can configure it later by writing your token to:"
+        echo "  $RUN_DIR/config.json"
+        echo "  Format: {\"token\":\"YOUR_TOKEN\"}"
+    fi
 fi
 
 if [ -n "$AIKIDO_TOKEN" ]; then
     echo "Storing Aikido token..."
     CONFIG_FILE="$RUN_DIR/config.json"
-    echo '{"token":"'$AIKIDO_TOKEN'"}' > "$CONFIG_FILE"
+    echo '{"token":"'"$AIKIDO_TOKEN"'"}' > "$CONFIG_FILE"
     chmod 600 "$CONFIG_FILE"
     chown root:wheel "$CONFIG_FILE"
 fi
