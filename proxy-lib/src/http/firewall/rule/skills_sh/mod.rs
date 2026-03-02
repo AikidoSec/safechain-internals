@@ -71,7 +71,7 @@ impl RuleSkillsSh {
             SkillsShEntryFormatter,
         )
         .await
-        .context("create remote malware list for skills_sh block rule")?;
+        .context("create remote malware list for skills.sh block rule")?;
 
         Ok(Self {
             target_domains: ["github.com"].into_iter().collect(),

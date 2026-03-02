@@ -164,7 +164,7 @@ impl Firewall {
                 .into_dyn(),
                 self::rule::skills_sh::RuleSkillsSh::try_new(guard, layered_client, data)
                     .await
-                    .context("create block rule: skills_sh")?
+                    .context("create block rule: skills.sh")?
                     .into_dyn(),
                 
             ]),

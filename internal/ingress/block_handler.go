@@ -54,16 +54,21 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 	}
 }
 
-func buildBlockedText(event BlockEvent) string {
-	if event.Artifact.PackageVersion != "" {
-		return fmt.Sprintf(
-			"SafeChain blocked a potentially malicious %s package:",
-			event.Artifact.Product,
-		)
+// productDisplayName maps proxy product identifiers to UI display names.
+func productDisplayName(product string) string {
+	switch product {
+	case "skills_sh":
+		return "skills.sh"
+	default:
+		return product
 	}
+}
+
+func buildBlockedText(event BlockEvent) string {
+	display := productDisplayName(event.Artifact.Product)
 	return fmt.Sprintf(
 		"SafeChain blocked a potentially malicious %s package:",
-		event.Artifact.Product,
+		display,
 	)
 }
 
