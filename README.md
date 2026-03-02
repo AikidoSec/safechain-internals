@@ -2,7 +2,7 @@
 
 A lightweight background agent that provides real-time security scanning for your development environment. The SafeChain Ultimate runs as a daemon, integrates and manages the security tooling seamlessly into your workflow.
 
-## Installation
+## Installation / Upgrade
 
 ### macOS
 
