@@ -18,23 +18,15 @@ use serde_json::json;
 use crate::http::KnownContentType;
 
 pub(in crate::http::firewall) struct MinPackageAge {
-    is_enabled: bool,
     duration: Duration,
 }
 
 impl MinPackageAge {
-    pub fn new(is_enabled: bool, duration: Duration) -> Self {
-        Self {
-            is_enabled,
-            duration,
-        }
+    pub fn new(duration: Duration) -> Self {
+        Self { duration }
     }
 
     pub fn modify_request_headers(&self, req: &mut Request) {
-        if !self.is_enabled {
-            return;
-        }
-
         let Some(accept_is_npm_info) = req.headers().typed_get().map(|accept: Accept| {
             accept
                 .0
@@ -52,10 +44,6 @@ impl MinPackageAge {
     }
 
     pub async fn remove_new_packages(&self, resp: Response) -> Result<Response, BoxError> {
-        if !self.is_enabled {
-            return Ok(resp);
-        }
-
         let Some(content_type) = resp.headers().typed_get::<ContentType>() else {
             return Ok(resp);
         };

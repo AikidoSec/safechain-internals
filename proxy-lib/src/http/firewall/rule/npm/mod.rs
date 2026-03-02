@@ -36,7 +36,7 @@ mod min_package_age;
 pub(in crate::http::firewall) struct RuleNpm {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
-    min_package_age: MinPackageAge,
+    maybe_min_package_age: Option<MinPackageAge>,
 }
 
 impl RuleNpm {
@@ -72,7 +72,7 @@ impl RuleNpm {
             .into_iter()
             .collect(),
             remote_malware_list,
-            min_package_age: MinPackageAge::new(true, Duration::from_hours(24)),
+            maybe_min_package_age: Some(MinPackageAge::new(Duration::from_hours(24))),
         })
     }
 }
@@ -103,7 +103,10 @@ impl Rule for RuleNpm {
     }
 
     async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        self.min_package_age.remove_new_packages(resp).await
+        match &self.maybe_min_package_age {
+            Some(min_package_age) => min_package_age.remove_new_packages(resp).await,
+            None => Ok(resp),
+        }
     }
 
     async fn evaluate_request(&self, mut req: Request) -> Result<RequestAction, BoxError> {
@@ -119,7 +122,9 @@ impl Rule for RuleNpm {
             return self.evaluate_tarball_request(req).await;
         }
 
-        self.min_package_age.modify_request_headers(&mut req);
+        if let Some(min_package_age) = &self.maybe_min_package_age {
+            min_package_age.modify_request_headers(&mut req);
+        }
 
         Ok(RequestAction::Allow(req))
     }
