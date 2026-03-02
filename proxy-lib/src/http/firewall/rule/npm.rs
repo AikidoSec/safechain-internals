@@ -11,6 +11,7 @@ use rama::{
 };
 
 use crate::{
+    endpoint_protection::PolicyEvaluator,
     http::{
         firewall::{
             domain_matcher::DomainMatcher,
@@ -33,6 +34,7 @@ use super::{BlockedRequest, RequestAction, Rule};
 pub(in crate::http::firewall) struct RuleNpm {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    _policy_evaluator: Option<PolicyEvaluator>,
 }
 
 impl RuleNpm {
@@ -40,6 +42,7 @@ impl RuleNpm {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
+        policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = BoxError>,
@@ -68,6 +71,7 @@ impl RuleNpm {
             .into_iter()
             .collect(),
             remote_malware_list,
+            _policy_evaluator: policy_evaluator,
         })
     }
 }

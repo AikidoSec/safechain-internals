@@ -5,7 +5,7 @@ use rama::{
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{
-        HeaderValue, Request, Response,
+        HeaderValue, Request, Response, Uri,
         layer::{
             decompression::DecompressionLayer,
             map_request_body::MapRequestBodyLayer,
@@ -19,7 +19,7 @@ use rama::{
     net::address::Domain,
     rt::Executor,
     telemetry::tracing,
-    utils::{backoff::ExponentialBackoff, rng::HasherRng},
+    utils::{backoff::ExponentialBackoff, rng::HasherRng, str::arcstr::ArcStr},
 };
 
 #[cfg(feature = "pac")]
@@ -38,8 +38,12 @@ pub mod rule;
 mod pac;
 
 use crate::{
+    endpoint_protection::{PolicyEvaluator, RemoteEndpointConfig},
     storage::SyncCompactDataStorage,
-    utils::{env::network_service_identifier, token::AgentIdentity},
+    utils::{
+        env::{aikido_app_base_url, network_service_identifier},
+        token::AgentIdentity,
+    },
 };
 
 use self::rule::{RequestAction, Rule};
@@ -51,10 +55,25 @@ pub struct Firewall {
     // a background task update these when needed..
     block_rules: Arc<Vec<self::rule::DynRule>>,
     notifier: Option<self::notifier::EventNotifier>,
-    _agent_identity: Option<AgentIdentity>,
 }
 
 impl Firewall {
+    const ENDPOINT_CONFIG_PATH: &'static str =
+        "/api/endpoint_protection/callbacks/fetchPermissions";
+
+    fn endpoint_config_uri() -> Uri {
+        let base = aikido_app_base_url();
+        let uri_str = format!(
+            "{}{}",
+            base.to_string().trim_end_matches('/'),
+            Self::ENDPOINT_CONFIG_PATH
+        );
+
+        uri_str
+            .parse::<Uri>()
+            .expect("aikido_app_base_url should always produce a valid absolute http(s) origin")
+    }
+
     pub async fn try_new(
         guard: ShutdownGuard,
         client: impl Service<Request, Output = Response, Error = OpaqueError> + Clone,
@@ -104,12 +123,41 @@ impl Firewall {
             None => None,
         };
 
+        let endpoint_config_uri = Self::endpoint_config_uri();
+
+        let remote_endpoint_config = match agent_identity.as_ref() {
+            Some(identity) => {
+                match RemoteEndpointConfig::try_new(
+                    guard.clone(),
+                    endpoint_config_uri.clone(),
+                    ArcStr::from(identity.token.as_ref()),
+                    ArcStr::from(identity.device_id.as_ref()),
+                    data.clone(),
+                    layered_client.clone(),
+                )
+                .await
+                {
+                    Ok(config) => Some(config),
+                    Err(err) => {
+                        tracing::warn!(
+                            error = %err,
+                            "failed to initialize endpoint config; config-based policy checks disabled"
+                        );
+                        None
+                    }
+                }
+            }
+            None => None,
+        };
+        let policy_evaluator = remote_endpoint_config.map(PolicyEvaluator::new);
+
         Ok(Self {
             block_rules: Arc::new(vec![
                 self::rule::vscode::RuleVSCode::try_new(
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
+                    policy_evaluator.clone(),
                 )
                 .await
                 .context("create block rule: vscode")?
@@ -118,6 +166,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
+                    policy_evaluator.clone(),
                 )
                 .await
                 .context("create block rule: nuget")?
@@ -126,6 +175,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
+                    policy_evaluator.clone(),
                 )
                 .await
                 .context("create block rule: chrome")?
@@ -134,6 +184,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
+                    policy_evaluator.clone(),
                 )
                 .await
                 .context("create block rule: npm")?
@@ -142,6 +193,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
+                    policy_evaluator.clone(),
                 )
                 .await
                 .context("create block rule: pypi")?
@@ -150,17 +202,22 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
+                    policy_evaluator.clone(),
                 )
                 .await
                 .context("create block rule: maven")?
                 .into_dyn(),
-                self::rule::open_vsx::RuleOpenVsx::try_new(guard, layered_client, data)
-                    .await
-                    .context("create block rule: open vsx")?
-                    .into_dyn(),
+                self::rule::open_vsx::RuleOpenVsx::try_new(
+                    guard,
+                    layered_client,
+                    data,
+                    policy_evaluator.clone(),
+                )
+                .await
+                .context("create block rule: open vsx")?
+                .into_dyn(),
             ]),
             notifier,
-            _agent_identity: agent_identity,
         })
     }
 

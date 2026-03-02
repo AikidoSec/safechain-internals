@@ -16,6 +16,7 @@ use rama::{
 use rama::utils::str::arcstr::{ArcStr, arcstr};
 
 use crate::{
+    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::{
         firewall::{
             domain_matcher::DomainMatcher,
@@ -53,6 +54,7 @@ impl PackageInfo {
 pub(in crate::http::firewall) struct RulePyPI {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    policy_evaluator: Option<PolicyEvaluator>,
 }
 
 impl RulePyPI {
@@ -60,6 +62,7 @@ impl RulePyPI {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
+        policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = BoxError>,
@@ -81,6 +84,7 @@ impl RulePyPI {
         Ok(Self {
             target_domains,
             remote_malware_list,
+            policy_evaluator,
         })
     }
 
@@ -184,6 +188,31 @@ impl Rule for RulePyPI {
             return Ok(RequestAction::Allow(req));
         }
 
+        const ECOSYSTEM: &str = "pypi";
+        if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
+            let decision =
+                policy_evaluator.evaluate_package_install(ECOSYSTEM, package_info.name.as_str());
+
+            match decision {
+                PackagePolicyDecision::Allow => {
+                    return Ok(RequestAction::Allow(req));
+                }
+                PackagePolicyDecision::Block => {
+                    return Ok(RequestAction::Block(BlockedRequest {
+                        response: generate_generic_blocked_response_for_req(req),
+                        info: BlockedEventInfo {
+                            artifact: BlockedArtifact {
+                                product: arcstr!(ECOSYSTEM),
+                                identifier: ArcStr::from(package_info.name.as_str()),
+                                version: Some(package_info.version.clone()),
+                            },
+                        },
+                    }));
+                }
+                PackagePolicyDecision::NoMatch => {}
+            }
+        }
+
         // Package names are already normalized by extract_package_info (underscores -> hyphens),
         // so we can check directly against the malware list
         if self.is_blocked(&package_info)? {
@@ -193,7 +222,7 @@ impl Rule for RulePyPI {
                 response: generate_generic_blocked_response_for_req(req),
                 info: BlockedEventInfo {
                     artifact: BlockedArtifact {
-                        product: arcstr!("pypi"),
+                        product: arcstr!(ECOSYSTEM),
                         identifier: ArcStr::from(package_info.name.as_str()),
                         version: Some(package_info.version.clone()),
                     },

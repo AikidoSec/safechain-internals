@@ -12,6 +12,7 @@ use rama::{
 };
 
 use crate::{
+    endpoint_protection::PolicyEvaluator,
     http::{
         firewall::{
             domain_matcher::DomainMatcher,
@@ -33,6 +34,7 @@ mod malware_key;
 pub(in crate::http::firewall) struct RuleChrome {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    _policy_evaluator: Option<PolicyEvaluator>,
 }
 
 impl RuleChrome {
@@ -40,6 +42,7 @@ impl RuleChrome {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
+        policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = BoxError>,
@@ -63,6 +66,7 @@ impl RuleChrome {
             .into_iter()
             .collect(),
             remote_malware_list,
+            _policy_evaluator: policy_evaluator,
         })
     }
 }

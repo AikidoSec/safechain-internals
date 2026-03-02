@@ -1,4 +1,5 @@
 use std::{
+    fs,
     io::ErrorKind,
     path::PathBuf,
     sync::{Arc, LazyLock, OnceLock},
@@ -293,7 +294,41 @@ pub(super) async fn get() -> Runtime {
 }
 
 pub(super) async fn spawn_with_args(extra_args: &[&str]) -> Runtime {
-    let data_dir = spawn_safechain_proxy_app_with_args(extra_args);
+    let data_dir = spawn_safechain_proxy_app_with_args_and_identity(extra_args, None);
+    let app = App { data_dir };
+
+    let (meta_addr, proxy_addr) = tokio::try_join!(
+        tokio::time::timeout(
+            Duration::from_secs(180),
+            read_file_or_wait(app.data_dir.join("meta.addr.txt"))
+        ),
+        tokio::time::timeout(
+            Duration::from_secs(180),
+            read_file_or_wait(app.data_dir.join("proxy.addr.txt"))
+        ),
+    )
+    .unwrap();
+
+    let runtime = Runtime {
+        _app: app,
+        meta_addr,
+        proxy_addr,
+    };
+
+    assert!(runtime.meta_socket_addr().ip_addr.is_loopback());
+    assert!(runtime.proxy_socket_addr().ip_addr.is_loopback());
+    assert_ne!(runtime.meta_socket_addr(), runtime.proxy_socket_addr());
+
+    runtime
+}
+
+pub(super) async fn spawn_with_agent_identity(
+    token: &str,
+    device_id: &str,
+    extra_args: &[&str],
+) -> Runtime {
+    let data_dir =
+        spawn_safechain_proxy_app_with_args_and_identity(extra_args, Some((token, device_id)));
     let app = App { data_dir };
 
     let (meta_addr, proxy_addr) = tokio::try_join!(
@@ -359,12 +394,24 @@ impl App {
 }
 
 fn spawn_safechain_proxy_app() -> PathBuf {
-    spawn_safechain_proxy_app_with_args(&[])
+    spawn_safechain_proxy_app_with_args_and_identity(&[], None)
 }
 
-fn spawn_safechain_proxy_app_with_args(extra_args: &[&str]) -> PathBuf {
+fn spawn_safechain_proxy_app_with_args_and_identity(
+    extra_args: &[&str],
+    identity: Option<(&str, &str)>,
+) -> PathBuf {
     let data_dir = crate::test::tmp_dir::try_new("safechain_proxy_app_e2e").unwrap();
     eprintln!("safechain_proxy_app_e2e all data stored under: {data_dir:?}");
+
+    if let Some((token, device_id)) = identity {
+        let config_path = data_dir.join("config.json");
+        let config = serde_json::json!({
+            "token": token,
+            "device_id": device_id,
+        });
+        fs::write(config_path, config.to_string()).expect("write test config.json");
+    }
 
     let data_dir_str = data_dir.display().to_string().leak();
 

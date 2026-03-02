@@ -11,6 +11,7 @@ use rama::{
 };
 
 use crate::{
+    endpoint_protection::PolicyEvaluator,
     http::{
         firewall::{
             domain_matcher::DomainMatcher,
@@ -32,6 +33,7 @@ use crate::http::firewall::pac::PacScriptGenerator;
 pub(in crate::http::firewall) struct RuleNuget {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    _policy_evaluator: Option<PolicyEvaluator>,
 }
 
 impl RuleNuget {
@@ -39,6 +41,7 @@ impl RuleNuget {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
+        policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = BoxError>,
@@ -56,6 +59,7 @@ impl RuleNuget {
         Ok(Self {
             target_domains: ["api.nuget.org", "www.nuget.org"].into_iter().collect(),
             remote_malware_list,
+            _policy_evaluator: policy_evaluator,
         })
     }
 }

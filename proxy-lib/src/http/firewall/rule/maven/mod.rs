@@ -11,6 +11,7 @@ use rama::{
 };
 
 use crate::{
+    endpoint_protection::PolicyEvaluator,
     http::{
         firewall::{
             domain_matcher::DomainMatcher,
@@ -36,6 +37,7 @@ mod test;
 pub(in crate::http::firewall) struct RuleMaven {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    _policy_evaluator: Option<PolicyEvaluator>,
 }
 
 impl RuleMaven {
@@ -43,6 +45,7 @@ impl RuleMaven {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
+        policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = BoxError>,
@@ -67,6 +70,7 @@ impl RuleMaven {
             .into_iter()
             .collect(),
             remote_malware_list,
+            _policy_evaluator: policy_evaluator,
         })
     }
 }

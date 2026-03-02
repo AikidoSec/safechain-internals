@@ -15,8 +15,10 @@ use rama::{
     service::service_fn,
     telemetry::tracing,
 };
+use safechain_proxy_lib::utils::env::aikido_app_base_url;
 
 mod assert_endpoint;
+mod endpoint_protection_callbacks;
 mod malware_list;
 mod vscode_marketplace;
 
@@ -32,6 +34,8 @@ pub fn new_mock_client()
         async move { echo_svc.serve(req).await.map(IntoResponse::into_response) }
     });
 
+    let app_domain = app_domain_from_base_url();
+
     let mock_server = WebService::new()
         .with_matcher(
             HttpMatcher::domain(Domain::from_static("malware-list.aikido.dev")),
@@ -40,6 +44,10 @@ pub fn new_mock_client()
         .with_matcher(
             HttpMatcher::domain(Domain::from_static("marketplace.visualstudio.com")),
             self::vscode_marketplace::web_svc(),
+        )
+        .with_matcher(
+            HttpMatcher::domain(app_domain),
+            self::endpoint_protection_callbacks::web_svc(),
         )
         .with_matcher(
             HttpMatcher::domain(Domain::from_static("assert-test.internal")),
@@ -54,4 +62,11 @@ pub fn new_mock_client()
     Ok(Arc::new(
         MapErrLayer::into_opaque_error().into_layer(mock_server),
     ))
+}
+
+fn app_domain_from_base_url() -> Domain {
+    let host = aikido_app_base_url()
+        .host()
+        .expect("aikido app base URL should always have a host");
+    host.into()
 }
