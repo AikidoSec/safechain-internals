@@ -68,5 +68,6 @@ fn app_domain_from_base_url() -> Domain {
     let host = aikido_app_base_url()
         .host()
         .expect("aikido app base URL should always have a host");
-    host.into()
+    host.parse::<Domain>()
+        .expect("aikido app base URL host should be a valid domain")
 }
