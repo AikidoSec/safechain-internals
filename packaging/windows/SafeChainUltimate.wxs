@@ -12,6 +12,7 @@
     <Icon Id="SafeChainIcon.ico" SourceFile="$(var.ProjectDir)\packaging\shared\resources\SafeChain.ico" />
     <Property Id="ARPPRODUCTICON" Value="SafeChainIcon.ico" />
     <Property Id="AIKIDO_TOKEN" Secure="yes" />
+    <SetProperty Id="AIKIDO_TOKEN_FROM_CLI" Value="1" Before="CostInitialize" Sequence="ui" Condition="AIKIDO_TOKEN" />
 
     <MajorUpgrade Schedule="afterInstallValidate" DowngradeErrorMessage="A newer version of SafeChain Ultimate is already installed." AllowSameVersionUpgrades="yes" />
 
@@ -131,10 +132,42 @@
       </Component>
     </DirectoryRef>
 
-    <!-- UI with license -->
+    <!-- UI with license and Aikido token dialog -->
     <WixVariable Id="WixUILicenseRtf" Value="$(var.ProjectDir)\packaging\windows\license.rtf" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
     <ui:WixUI Id="WixUI_InstallDir" />
+
+    <UI>
+      <Dialog Id="AikidoTokenDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Aikido Token" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes" Text="Enter your Aikido authentication token." />
+
+        <Control Id="TokenLabel" Type="Text" X="20" Y="60" Width="330" Height="30" NoPrefix="yes"
+                 Text="Enter the Aikido token used to authenticate this agent with the Aikido platform:" />
+        <Control Id="TokenEdit" Type="Edit" X="20" Y="100" Width="330" Height="18" Property="AIKIDO_TOKEN" />
+
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)">
+          <Publish Event="NewDialog" Value="InstallDirDlg" />
+        </Control>
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)">
+          <Publish Event="NewDialog" Value="VerifyReadyDlg">AIKIDO_TOKEN</Publish>
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="WixUICancel" />
+        </Control>
+      </Dialog>
+
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="AikidoTokenDlg" Order="6">
+        (WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID="1") AND NOT AIKIDO_TOKEN_FROM_CLI
+      </Publish>
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="AikidoTokenDlg" Order="6">
+        NOT AIKIDO_TOKEN_FROM_CLI
+      </Publish>
+    </UI>
 
   </Package>
 </Wix>
