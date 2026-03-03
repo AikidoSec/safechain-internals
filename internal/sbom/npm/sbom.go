@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/sbom"
 )
@@ -33,6 +34,11 @@ func (n *Npm) SBOM(ctx context.Context, installation sbom.InstalledVersion) ([]s
 	// --all includes the full dependency tree (not just top-level) so the SBOM is complete.
 	output, err := runNpm(ctx, installation.Path, "list", "-g", "--all", "--json")
 	if err != nil {
+		if strings.Contains(output, "ENOENT") {
+			// Fresh npm installation, no packages installed yet
+			// We still want to report the installation, even if it has no packages
+			return []sbom.Package{}, nil
+		}
 		return nil, fmt.Errorf("failed to list global packages: %w", err)
 	}
 

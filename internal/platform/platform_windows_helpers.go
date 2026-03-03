@@ -150,7 +150,7 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 		err := fmt.Errorf("process exited with code %d", exitCode)
 		log.Printf("\t- Command error: %v", err)
 		log.Printf("\t- Command output: %s", string(output))
-		return "", err
+		return string(output), err
 	}
 
 	return string(output), nil
