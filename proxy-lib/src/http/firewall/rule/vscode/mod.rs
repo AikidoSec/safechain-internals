@@ -20,7 +20,9 @@ use crate::{
             domain_matcher::DomainMatcher,
             events::{BlockedArtifact, BlockedEventInfo},
         },
-        response::{generate_generic_blocked_response_for_req, generate_malware_blocked_response_for_req},
+        response::{
+            generate_generic_blocked_response_for_req, generate_malware_blocked_response_for_req,
+        },
     },
     package::malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
     storage::SyncCompactDataStorage,
