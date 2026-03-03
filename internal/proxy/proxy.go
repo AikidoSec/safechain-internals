@@ -83,7 +83,7 @@ func (p *Proxy) Start(ctx context.Context, proxyIngressAddr string) error {
 		"--data", platform.GetRunDir(),
 		"--output", filepath.Join(config.LogDir, platform.SafeChainL7ProxyLogName),
 		"--secrets", "keyring",
-		"--reporting-endpoint", fmt.Sprintf("http://%s/block", proxyIngressAddr),
+		"--reporting-endpoint", fmt.Sprintf("http://%s", proxyIngressAddr),
 	)
 
 	stderrLogPath := filepath.Join(config.LogDir, platform.SafeChainL7ProxyErrLogName)
