@@ -157,7 +157,7 @@
           <Publish Event="NewDialog" Value="VerifyReadyDlg" Condition="AIKIDO_TOKEN" />
         </Control>
         <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
-          <Publish Event="SpawnDialog" Value="WixUICancel" />
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
         </Control>
       </Dialog>
 
