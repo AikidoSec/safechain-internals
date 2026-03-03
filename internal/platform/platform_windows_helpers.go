@@ -182,7 +182,7 @@ func runAsLoggedInUser(binaryPath string, args []string) (string, error) {
 
 	output, err := runProcessAsUser(duplicatedToken, cmdLinePtr, envBlock)
 	if err != nil {
-		return "", fmt.Errorf("runProcessAsUser failed: %v", err)
+		return output, fmt.Errorf("runProcessAsUser failed: %v", err)
 	}
 
 	return output, nil
