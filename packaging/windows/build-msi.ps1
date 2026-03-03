@@ -30,6 +30,7 @@ if (-not (Test-Path $OutputDir)) {
 
 $ProjectDir = (Get-Item (Split-Path -Parent $MyInvocation.MyCommand.Path)).Parent.Parent.FullName
 $WxsFile = Join-Path $ProjectDir "packaging\windows\SafeChainUltimate.wxs"
+$CustomUIFile = Join-Path $ProjectDir "packaging\windows\WixUI_InstallDir_Custom.wxs"
 
 Write-Host "Building MSI installer for Aikido SafeChain Ultimate v$Version (WiX version: $WixVersion)"
 Write-Host "  Binary directory: $BinDir"
@@ -66,7 +67,7 @@ if (-not (Test-Path $StoreTokenScript)) {
 $OutputMsi = Join-Path $OutputDir "SafeChainUltimate.$Arch.msi"
 $WixArch = if ($Arch -eq "arm64") { "arm64" } else { "x64" }
 
-wix build $WxsFile `
+wix build $WxsFile $CustomUIFile `
     -d Version=$WixVersion `
     -d BinDir=$BinDir `
     -d ProjectDir=$ProjectDir `
