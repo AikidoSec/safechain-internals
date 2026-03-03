@@ -39,7 +39,7 @@ pub(super) fn web_svc(
 ) -> impl Service<Request, Output = Response, Error = Infallible> {
     Router::new_with_state(state)
         .with_get("/firewall-user-config/echo", safechain_config_echo)
-        .with_post("/blocked-events", record_blocked_event)
+        .with_post("/events/blocks", record_blocked_event)
         .with_get("/blocked-events/take", take_blocked_events)
         .with_get("/blocked-events/clear", clear_blocked_events)
 }

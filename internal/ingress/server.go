@@ -36,7 +36,7 @@ func (s *Server) Addr() string {
 
 func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /block", s.handleBlock)
+	mux.HandleFunc("POST /events/blocks", s.handleBlock)
 	mux.HandleFunc("GET /ping", s.handlePing)
 	mux.HandleFunc("POST /request-bypass", s.handleRequestBypass)
 
