@@ -205,7 +205,11 @@ func registryValueContains(ctx context.Context, path string, value string, toCon
 	if err != nil {
 		return false
 	}
-	return strings.Contains(string(output), toContain)
+	stringOutput := strings.TrimSpace(string(output))
+	if stringOutput == "" {
+		return false
+	}
+	return strings.Contains(stringOutput, toContain)
 }
 
 func deleteRegistryValue(ctx context.Context, path string, value string) error {
