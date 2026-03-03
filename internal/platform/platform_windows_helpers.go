@@ -14,7 +14,10 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-const PROCESS_TIMEOUT_MS = 60000 // 1 minute
+const (
+	PROCESS_TIMEOUT_MS = 60000 // 1 minute
+	CREATE_NO_WINDOW   = 0x08000000
+)
 
 func getCurrentUserToken() (*windows.Token, error) {
 	var sessionInfo *windows.WTS_SESSION_INFO
@@ -103,13 +106,15 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 	var si windows.StartupInfo
 	si.Cb = uint32(unsafe.Sizeof(si))
 	si.Desktop, _ = windows.UTF16PtrFromString("winsta0\\default")
-	si.Flags = windows.STARTF_USESTDHANDLES
+	si.Flags = windows.STARTF_USESTDHANDLES | windows.STARTF_USESHOWWINDOW
+	si.ShowWindow = uint16(windows.SW_HIDE)
 	si.StdOutput = stdoutWrite
 	si.StdErr = stdoutWrite
 
 	var pi windows.ProcessInformation
 
-	if err := windows.CreateProcessAsUser(duplicatedToken, nil, cmdLinePtr, nil, nil, true, windows.CREATE_UNICODE_ENVIRONMENT, envBlock, nil, &si, &pi); err != nil {
+	creationFlags := uint32(windows.CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW)
+	if err := windows.CreateProcessAsUser(duplicatedToken, nil, cmdLinePtr, nil, nil, true, creationFlags, envBlock, nil, &si, &pi); err != nil {
 		return "", fmt.Errorf("CreateProcessAsUser failed: %v", err)
 	}
 
