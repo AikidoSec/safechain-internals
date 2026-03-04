@@ -224,11 +224,9 @@ func UnsetSystemPAC(ctx context.Context, pacURL string) error {
 
 	for _, sid := range sids {
 		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
-		regValuesToDisable := map[string]RegistryValue{
-			"AutoConfigURL": {Type: "REG_SZ", Value: "AutoConfigURL", Data: ""},
-		}
-		for _, regValue := range regValuesToDisable {
-			if err := setRegistryValue(ctx, regPath, regValue); err != nil {
+		regValuesToDelete := []string{"AutoConfigURL"}
+		for _, regValue := range regValuesToDelete {
+			if err := deleteRegistryValue(ctx, regPath, regValue); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -253,7 +251,7 @@ func IsProxyCAInstalled(ctx context.Context) error {
 func UninstallProxyCA(ctx context.Context) error {
 	commandsToExecute := []utils.Command{
 		{Command: "certutil", Args: []string{"-delstore", "Root", "aikidosafechain.com"}},
-		{Command: "cmdkey", Args: []string{"/delete:safechain-proxy-lib.tls-root-ca-key"}},
+		{Command: "cmdkey", Args: []string{"/delete:safechain-l7-proxy.tls-root-ca-key"}},
 	}
 	_, err := utils.RunCommands(ctx, commandsToExecute)
 	if err != nil {
