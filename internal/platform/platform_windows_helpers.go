@@ -121,31 +121,42 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 	defer windows.CloseHandle(pi.Thread)
 	defer windows.CloseHandle(pi.Process)
 
+	windows.CloseHandle(stdoutWrite)
+	stdoutWrite = 0
+
+	type pipeResult struct {
+		output []byte
+		err    error
+	}
+	pipeCh := make(chan pipeResult, 1)
+	go func() {
+		var output []byte
+		buf := make([]byte, 4096)
+		for {
+			var bytesRead uint32
+			err := windows.ReadFile(stdoutRead, buf, &bytesRead, nil)
+			if err != nil || bytesRead == 0 {
+				break
+			}
+			output = append(output, buf[:bytesRead]...)
+		}
+		pipeCh <- pipeResult{output: output}
+	}()
+
 	event, err := windows.WaitForSingleObject(pi.Process, PROCESS_TIMEOUT_MS)
 	if err != nil {
 		return "", fmt.Errorf("WaitForSingleObject failed: %v", err)
 	}
 	if event == uint32(windows.WAIT_TIMEOUT) {
+		windows.TerminateProcess(pi.Process, 1)
 		return "", fmt.Errorf("process timed out after 1 minute")
 	}
 	if event != windows.WAIT_OBJECT_0 {
 		return "", fmt.Errorf("unexpected wait result: %d", event)
 	}
 
-	// Need to close this earlier so the pipe is fully closed and flushed before reading the output
-	windows.CloseHandle(stdoutWrite)
-	stdoutWrite = 0
-
-	var output []byte
-	buf := make([]byte, 4096)
-	for {
-		var bytesRead uint32
-		err := windows.ReadFile(stdoutRead, buf, &bytesRead, nil)
-		if err != nil || bytesRead == 0 {
-			break
-		}
-		output = append(output, buf[:bytesRead]...)
-	}
+	pr := <-pipeCh
+	output := pr.output
 
 	var exitCode uint32
 	if err := windows.GetExitCodeProcess(pi.Process, &exitCode); err != nil {
