@@ -197,6 +197,25 @@ func IsAnySystemProxySet(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
+// GetSystemProxyConflictDetails returns a human-readable list of where proxy/PAC is configured.
+// On Windows this is per-user registry, so we report that proxy or PAC is set for one or more users.
+func GetSystemProxyConflictDetails(ctx context.Context) ([]string, error) {
+	sids, err := getLoggedInUserSIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var details []string
+	for _, sid := range sids {
+		if isSystemProxySetForSid(ctx, sid) {
+			details = append(details, fmt.Sprintf("  - User registry (SID %s): Web Proxy enabled", sid))
+		}
+		if isSystemPACSetForSid(ctx, sid, "") {
+			details = append(details, fmt.Sprintf("  - User registry (SID %s): PAC (AutoConfigURL) set", sid))
+		}
+	}
+	return details, nil
+}
+
 func UnsetSystemPAC(ctx context.Context, pacURL string) error {
 	errs := []error{}
 	sids, err := getLoggedInUserSIDs(ctx)

@@ -26,6 +26,7 @@ serde_json = { workspace = true }
 moka = { workspace = true }
 rand = { workspace = true }
 parking_lot = { workspace = true }
+humantime = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 linux-keyutils-keyring-store = { workspace = true }

@@ -394,11 +394,11 @@ func (d *Daemon) heartbeat() error {
 		d.proxyStatusTrayInitialized = true
 	}
 
-	runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() error {
+	d.runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() error {
 		d.printDaemonStatus()
 		return nil
 	})
-	runIfIntervalExceeded(&d.config.LastHeartbeatReportTime, constants.HeartbeatReportInterval, func() error {
+	d.runIfIntervalExceeded(&d.config.LastHeartbeatReportTime, constants.HeartbeatReportInterval, func() error {
 		if d.config.Token == "" {
 			return fmt.Errorf("Token is not set, skipping heartbeat report")
 		}
@@ -408,17 +408,15 @@ func (d *Daemon) heartbeat() error {
 		}); err != nil {
 			return fmt.Errorf("Failed to report heartbeat: %v", err)
 		}
-		d.config.Save()
 		return nil
 	})
-	runIfIntervalExceeded(&d.config.LastSBOMReportTime, constants.SBOMReportInterval, func() error {
+	d.runIfIntervalExceeded(&d.config.LastSBOMReportTime, constants.SBOMReportInterval, func() error {
 		if d.config.Token == "" {
 			return fmt.Errorf("Token is not set, skipping SBOM report")
 		}
 		if err := d.reportSBOM(); err != nil {
 			return fmt.Errorf("Failed to report SBOM: %v", err)
 		}
-		d.config.Save()
 		return nil
 	})
 	return nil
@@ -466,7 +464,7 @@ func newSBOMRegistry() *sbom.Registry {
 	return r
 }
 
-func runIfIntervalExceeded(lastRun *time.Time, interval time.Duration, fn func() error) {
+func (d *Daemon) runIfIntervalExceeded(lastRun *time.Time, interval time.Duration, fn func() error) {
 	if time.Since(*lastRun) >= interval {
 		err := fn()
 		if err != nil {
@@ -475,6 +473,9 @@ func runIfIntervalExceeded(lastRun *time.Time, interval time.Duration, fn func()
 			return
 		}
 		*lastRun = time.Now()
+		if err := d.config.Save(); err != nil {
+			log.Printf("Failed to save config: %v", err)
+		}
 	}
 }
 
