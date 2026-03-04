@@ -32,7 +32,9 @@ pub fn new_web_client()
 
     let mut config = ClientConfig::with_platform_verifier().context("create platform verifier")?;
 
-    // Glen DC placeholder to add this ALPN config to transparent proxy client also
+    // TODO[glendc] replace with rama native platform verifier
+    // which already takes care of defaults such as these,
+    // similar to the default tls behaviour already in rama
     config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
 
     Ok(EasyHttpWebClient::connector_builder()
