@@ -11,14 +11,10 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::PolicyEvaluator,
-    http::{
-        firewall::{
-            domain_matcher::DomainMatcher,
-            events::{BlockedArtifact, BlockedEventInfo},
-            rule::npm::min_package_age::MinPackageAge,
-        },
-        response::generate_generic_blocked_response_for_req,
+    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    http::firewall::{
+        domain_matcher::DomainMatcher, events::BlockedArtifact,
+        rule::npm::min_package_age::MinPackageAge,
     },
     package::{
         malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
@@ -38,7 +34,7 @@ pub(in crate::http::firewall) struct RuleNpm {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
     maybe_min_package_age: Option<MinPackageAge>,
-    _policy_evaluator: Option<PolicyEvaluator>,
+    policy_evaluator: Option<PolicyEvaluator>,
 }
 
 impl RuleNpm {
@@ -76,7 +72,7 @@ impl RuleNpm {
             .collect(),
             remote_malware_list,
             maybe_min_package_age: Some(MinPackageAge::new(Duration::from_hours(24))),
-            _policy_evaluator: policy_evaluator,
+            policy_evaluator,
         })
     }
 }
@@ -148,20 +144,40 @@ impl RuleNpm {
             return Ok(RequestAction::Allow(req));
         };
 
+        if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
+            let decision =
+                policy_evaluator.evaluate_package_install("npm", &package.fully_qualified_name);
+
+            match decision {
+                PackagePolicyDecision::Allow => {
+                    return Ok(RequestAction::Allow(req));
+                }
+                PackagePolicyDecision::Block => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        BlockedArtifact {
+                            product: arcstr!("npm"),
+                            identifier: ArcStr::from(package.fully_qualified_name.as_str()),
+                            version: Some(PackageVersion::Semver(package.version.clone())),
+                        },
+                    )));
+                }
+                PackagePolicyDecision::Defer => {}
+            }
+        }
+
         if self.is_package_listed_as_malware(&package) {
             let package_name = package.fully_qualified_name;
             let package_version = package.version;
             tracing::warn!("Blocked malware from {package_name}");
-            Ok(RequestAction::Block(BlockedRequest {
-                response: generate_generic_blocked_response_for_req(req),
-                info: BlockedEventInfo {
-                    artifact: BlockedArtifact {
-                        product: arcstr!("npm"),
-                        identifier: ArcStr::from(package_name),
-                        version: Some(PackageVersion::Semver(package_version)),
-                    },
+            Ok(RequestAction::Block(BlockedRequest::malware(
+                req,
+                BlockedArtifact {
+                    product: arcstr!("npm"),
+                    identifier: ArcStr::from(package_name),
+                    version: Some(PackageVersion::Semver(package_version)),
                 },
-            }))
+            )))
         } else {
             tracing::debug!("Npm url: {path} does not contain malware: passthrough");
             Ok(RequestAction::Allow(req))

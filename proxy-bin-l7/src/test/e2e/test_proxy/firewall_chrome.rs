@@ -161,3 +161,59 @@ async fn test_chrome_blocks_two_digit_version_vs_four_digit_crx() {
 
     assert_eq!(StatusCode::FORBIDDEN, resp.status());
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_chrome_extension_allowed_by_endpoint_policy_exception() {
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-allow-malicious-ext-chrome",
+        "mock_device",
+        &[],
+    )
+    .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "lajondecmobodlejlcjllhojikagldgd" is malware, but the allowed_packages exception overrides the malware check.
+    let resp = client
+        .get("https://clients2.googleusercontent.com/crx/blobs/somehash/lajondecmobodlejlcjllhojikagldgd_1_0_0_0.crx")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::OK, resp.status());
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_chrome_extension_blocked_by_endpoint_policy_block_all() {
+    let runtime =
+        e2e::runtime::spawn_with_agent_identity("policy-block-chrome", "mock_device", &[]).await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "safeextension12345" is not malware, but block_all_installs blocks it.
+    let resp = client
+        .get("https://clients2.googleusercontent.com/crx/blobs/somehash/safeextension12345_1_0_0_0.crx")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_chrome_extension_blocked_by_endpoint_policy_rejected_package() {
+    let runtime =
+        e2e::runtime::spawn_with_agent_identity("policy-reject-safeext-chrome", "mock_device", &[])
+            .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "safeextension12345" is in rejected_packages — blocked even though it's not malware.
+    let resp = client
+        .get("https://clients2.googleusercontent.com/crx/blobs/somehash/safeextension12345_1_0_0_0.crx")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}

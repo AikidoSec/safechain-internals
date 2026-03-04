@@ -64,3 +64,62 @@ async fn test_nuget_api_v3_https_package_ok() {
 
     assert_eq!(StatusCode::OK, resp.status());
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_nuget_package_allowed_by_endpoint_policy_exception() {
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-allow-safechaintest-nuget",
+        "mock_device",
+        &[],
+    )
+    .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "safechaintest" is malware, but the allowed_packages exception overrides the malware check.
+    let resp = client
+        .get("https://api.nuget.org/v3-flatcontainer/safechaintest/0.0.1-security/safechaintest.0.0.1-security.nupkg")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::OK, resp.status());
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_nuget_package_blocked_by_endpoint_policy_block_all() {
+    let runtime =
+        e2e::runtime::spawn_with_agent_identity("policy-block-nuget", "mock_device", &[]).await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "newtonsoft.json" is not malware, but block_all_installs blocks it.
+    let resp = client
+        .get("https://api.nuget.org/v3-flatcontainer/newtonsoft.json/13.0.4/newtonsoft.json.13.0.4.nupkg")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_nuget_package_blocked_by_endpoint_policy_rejected_package() {
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-reject-newtonsoft-nuget",
+        "mock_device",
+        &[],
+    )
+    .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "newtonsoft.json" is in rejected_packages — blocked even though it's not malware.
+    let resp = client
+        .get("https://api.nuget.org/v3-flatcontainer/newtonsoft.json/13.0.4/newtonsoft.json.13.0.4.nupkg")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
