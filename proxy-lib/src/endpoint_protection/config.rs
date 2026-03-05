@@ -40,12 +40,14 @@ impl RemoteEndpointConfig {
     /// * `guard` - Graceful shutdown guard for background task
     /// * `uri` - Config endpoint URL
     /// * `token` - Permission group token
+    /// * `device_id` - External device identifier sent as `X-Device-Id`
     /// * `sync_storage` - Storage for caching config
     /// * `client` - HTTP client for fetching config
     pub async fn try_new<C>(
         guard: ShutdownGuard,
         uri: Uri,
         token: ArcStr,
+        device_id: ArcStr,
         sync_storage: SyncCompactDataStorage,
         client: C,
     ) -> Result<Self, BoxError>
@@ -58,6 +60,7 @@ impl RemoteEndpointConfig {
         let config_client = RemoteConfigClient {
             uri,
             token,
+            device_id,
             filename,
             refresh_interval,
             sync_storage,
@@ -144,6 +147,7 @@ impl EcosystemConfigResult<'_> {
 struct RemoteConfigClient<C> {
     uri: Uri,
     token: ArcStr,
+    device_id: ArcStr,
     filename: ArcStr,
     refresh_interval: Duration,
     sync_storage: SyncCompactDataStorage,
@@ -181,6 +185,7 @@ where
         let req_builder = self.client.get(self.uri.clone());
 
         let req_builder = req_builder.header("Authorization", self.token.as_str());
+        let req_builder = req_builder.header("X-Device-Id", self.device_id.as_str());
 
         let req_builder = if let Some(e_tag) = previous_e_tag {
             req_builder.header("if-none-match", e_tag)
@@ -219,7 +224,7 @@ where
         tracing::debug!(
             "fetched and decoded new endpoint config from '{}' (permission_group_id: {}) (tt: {:?})",
             self.uri,
-            config.permission_group_id,
+            config.permission_group.id,
             start.elapsed(),
         );
 

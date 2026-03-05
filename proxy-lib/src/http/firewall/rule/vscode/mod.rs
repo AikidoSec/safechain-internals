@@ -14,12 +14,15 @@ use rama::{
 };
 
 use crate::{
+    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::{
         firewall::{
             domain_matcher::DomainMatcher,
             events::{BlockedArtifact, BlockedEventInfo},
         },
-        response::generate_malware_blocked_response_for_req,
+        response::{
+            generate_generic_blocked_response_for_req, generate_malware_blocked_response_for_req,
+        },
     },
     package::malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
     storage::SyncCompactDataStorage,
@@ -33,6 +36,7 @@ use super::{BlockedRequest, RequestAction, Rule};
 pub(in crate::http::firewall) struct RuleVSCode {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    policy_evaluator: Option<PolicyEvaluator>,
 }
 
 impl RuleVSCode {
@@ -40,6 +44,7 @@ impl RuleVSCode {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
+        policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = BoxError>,
@@ -65,6 +70,7 @@ impl RuleVSCode {
             .into_iter()
             .collect(),
             remote_malware_list,
+            policy_evaluator,
         })
     }
 }
@@ -128,6 +134,25 @@ impl Rule for RuleVSCode {
             "VSCode install asset request"
         );
 
+        // Apply endpoint policy (rejected packages, allow exceptions, block_all_installs).
+        if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
+            let decision = policy_evaluator
+                .evaluate_package_install("vscode", vscode_extension.extension_id.as_str());
+
+            match decision {
+                PackagePolicyDecision::Allow => {
+                    return Ok(RequestAction::Allow(req));
+                }
+                PackagePolicyDecision::Block => {
+                    return Ok(RequestAction::Block(Self::make_blocked_request(
+                        req,
+                        &vscode_extension,
+                    )));
+                }
+                PackagePolicyDecision::Defer => {}
+            }
+        }
+
         if self.is_package_listed_as_malware(&vscode_extension) {
             tracing::info!(
                 http.url.path = %path,
@@ -161,6 +186,19 @@ impl Rule for RuleVSCode {
 }
 
 impl RuleVSCode {
+    fn make_blocked_request(req: Request, vscode_extension: &VsCodeExtensionId) -> BlockedRequest {
+        BlockedRequest {
+            response: generate_generic_blocked_response_for_req(req),
+            info: BlockedEventInfo {
+                artifact: BlockedArtifact {
+                    product: arcstr!("vscode"),
+                    identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
+                    version: None,
+                },
+            },
+        }
+    }
+
     fn is_package_listed_as_malware(&self, vscode_extension: &VsCodeExtensionId) -> bool {
         self.remote_malware_list
             .find_entries(&vscode_extension.extension_id)
@@ -251,7 +289,7 @@ struct VsCodeExtensionId {
 impl VsCodeExtensionId {
     fn new(publisher: &str, extension: &str) -> VsCodeExtensionId {
         Self {
-            extension_id: format!("{publisher}.{extension}"),
+            extension_id: format!("{publisher}.{extension}").to_lowercase(),
         }
     }
 }
