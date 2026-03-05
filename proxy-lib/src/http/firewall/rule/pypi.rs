@@ -201,7 +201,7 @@ impl Rule for RulePyPI {
             return Ok(RequestAction::Allow(req));
         }
 
-        // Appply endpoint policy (rejected packages, allow exceptions, block_all_installs).
+        // Apply endpoint policy (rejected packages, allow exceptions, block_all_installs).
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
             let decision =
                 policy_evaluator.evaluate_package_install("pypi", package_info.name.as_str());
