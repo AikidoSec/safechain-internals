@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -22,7 +23,7 @@ import (
 const (
 	SafeChainUltimateLogName       = "SafeChainUltimate.log"
 	SafeChainUltimateErrLogName    = "SafeChainUltimate.err"
-	SafeChainUIBinaryName          = "SafeChainUltimateUI.exe"
+	SafeChainUIAppName             = "SafeChainUltimateUI.exe"
 	SafeChainL7ProxyBinaryName     = "SafeChainL7Proxy.exe"
 	SafeChainL7ProxyLogName        = "SafeChainL7Proxy.log"
 	SafeChainL7ProxyErrLogName     = "SafeChainL7Proxy.err"
@@ -345,6 +346,23 @@ func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ..
 
 func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
 	return RunAsCurrentUser(ctx, binaryPath, args)
+}
+
+// StartUIProcessInAuditSessionOfCurrentUser starts the process as the current user and returns its PID.
+// The process is not waited on; the caller may kill it later using the PID.
+func StartUIProcessInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (int, error) {
+	if !IsWindowsService() {
+		cmd := exec.CommandContext(ctx, binaryPath, args...)
+		if err := cmd.Start(); err != nil {
+			return 0, err
+		}
+		return cmd.Process.Pid, nil
+	}
+	pid, err := runAsLoggedInUserNoWait(binaryPath, args)
+	if err != nil {
+		return 0, err
+	}
+	return int(pid), nil
 }
 
 func downloadAndRunSafeChainPowerShellScript(ctx context.Context, repoURL, version string, scriptName string, tempFilePattern string) error {

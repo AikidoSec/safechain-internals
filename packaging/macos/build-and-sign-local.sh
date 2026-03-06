@@ -32,9 +32,15 @@ echo ""
 echo "Building safechain-ultimate..."
 cd "$PROJECT_DIR"
 go build -o "bin/safechain-ultimate-darwin-$ARCH" cmd/daemon/main.go
-go build -o "bin/safechain-ultimate-ui-darwin-$ARCH" ./cmd/ui
+# Build Wails UI bundle.
+cd "$PROJECT_DIR/ui"
+wails3 package
+DEST_APP="$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-$ARCH.app"
+rm -rf "$DEST_APP"
+cp -R "$PROJECT_DIR/ui/bin/safechain-ultimate-ui.app" "$DEST_APP"
+cd "$PROJECT_DIR"
 echo "✓ Agent built: bin/safechain-ultimate-darwin-$ARCH"
-echo "✓ Agent UI built: bin/safechain-ultimate-ui-darwin-$ARCH"
+echo "✓ Agent UI built: bin/safechain-ultimate-ui-darwin-$ARCH.app"
 
 # Build Rust proxy
 echo "Building safechain-l7-proxy..."
@@ -76,7 +82,7 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
              --force \
              --timestamp \
              --options runtime \
-             "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-$ARCH"
+             "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-$ARCH.app"
     echo "✓ Agent UI signed"
 
     codesign --sign "$CERT_IDENTITY" \
@@ -90,7 +96,7 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
     # Verify signatures
     echo "Verifying binary signatures..."
     codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-darwin-$ARCH"
-    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-$ARCH"
+    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-$ARCH.app"
     codesign --verify --verbose "$PROJECT_DIR/bin/safechain-l7-proxy-darwin-$ARCH"
     echo "✓ Binary signatures verified"
     echo ""

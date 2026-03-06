@@ -36,6 +36,11 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+      
+      - name: Set up Wails (v3)
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+          wails3 doctor  # Verify installation
 
       - name: Run tests
         run: make test
@@ -46,7 +51,7 @@ jobs:
       - name: Prepare artifacts
         run: |
           mv bin/safechain-ultimate-darwin-${{ matrix.arch }} safechain-ultimate-darwin-${{ matrix.arch }}
-          mv bin/safechain-ultimate-ui-darwin-${{ matrix.arch }} safechain-ultimate-ui-darwin-${{ matrix.arch }}
+          mv bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}.app safechain-ultimate-ui-darwin-${{ matrix.arch }}.app
 
       - name: Upload safechain-ultimate artifact
         uses: actions/upload-artifact@v4
@@ -54,12 +59,12 @@ jobs:
           name: safechain-ultimate-darwin-${{ matrix.arch }}
           path: |
             safechain-ultimate-darwin-${{ matrix.arch }}
-      - name: Upload safechain-ultimate-ui artifact
+      - name: Upload safechain-ultimate-ui app bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: safechain-ultimate-ui-darwin-${{ matrix.arch }}
+          name: safechain-ultimate-ui-darwin-${{ matrix.arch }}.app
           path: |
-            safechain-ultimate-ui-darwin-${{ matrix.arch }}
+            safechain-ultimate-ui-darwin-${{ matrix.arch }}.app
 
   build-unix-proxy:
     strategy:
