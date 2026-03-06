@@ -134,9 +134,7 @@ impl Rule for RuleOpenVsx {
                         req,
                         BlockedArtifact {
                             product: arcstr!("open_vsx"),
-                            identifier: ArcStr::from(
-                                extension.extension_id.to_ascii_lowercase().as_str(),
-                            ),
+                            identifier: ArcStr::from(extension.extension_id.as_str()),
                             version: None,
                         },
                     )));
