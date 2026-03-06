@@ -13,7 +13,10 @@ use rama::{
 
 use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
-    http::firewall::{domain_matcher::DomainMatcher, events::BlockedArtifact},
+    http::firewall::{
+        domain_matcher::DomainMatcher,
+        events::{BlockReason, BlockedArtifact},
+    },
     package::{malware_list::RemoteMalwareList, version::PackageVersion},
     storage::SyncCompactDataStorage,
 };
@@ -122,7 +125,7 @@ impl Rule for RuleChrome {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Block => {
+                PackagePolicyDecision::Rejected => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
                         BlockedArtifact {
@@ -130,6 +133,29 @@ impl Rule for RuleChrome {
                             identifier: extension_id,
                             version: Some(version),
                         },
+                        BlockReason::Rejected,
+                    )));
+                }
+                PackagePolicyDecision::BlockAll => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        BlockedArtifact {
+                            product: arcstr!("chrome"),
+                            identifier: extension_id,
+                            version: Some(version),
+                        },
+                        BlockReason::BlockAll,
+                    )));
+                }
+                PackagePolicyDecision::RequestInstall => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        BlockedArtifact {
+                            product: arcstr!("chrome"),
+                            identifier: extension_id,
+                            version: Some(version),
+                        },
+                        BlockReason::RequestInstall,
                     )));
                 }
                 PackagePolicyDecision::Defer => {}

@@ -12,7 +12,10 @@ use rama::{
 
 use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
-    http::firewall::{domain_matcher::DomainMatcher, events::BlockedArtifact},
+    http::firewall::{
+        domain_matcher::DomainMatcher,
+        events::{BlockReason, BlockedArtifact},
+    },
     package::{
         malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
         version::{PackageVersion, PragmaticSemver},
@@ -138,7 +141,7 @@ impl Rule for RuleMaven {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Block => {
+                PackagePolicyDecision::Rejected => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
                         BlockedArtifact {
@@ -146,6 +149,29 @@ impl Rule for RuleMaven {
                             identifier: artifact.fully_qualified_name.clone(),
                             version: Some(PackageVersion::Semver(artifact.version.clone())),
                         },
+                        BlockReason::Rejected,
+                    )));
+                }
+                PackagePolicyDecision::BlockAll => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        BlockedArtifact {
+                            product: arcstr!("maven"),
+                            identifier: artifact.fully_qualified_name.clone(),
+                            version: Some(PackageVersion::Semver(artifact.version.clone())),
+                        },
+                        BlockReason::BlockAll,
+                    )));
+                }
+                PackagePolicyDecision::RequestInstall => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        BlockedArtifact {
+                            product: arcstr!("maven"),
+                            identifier: artifact.fully_qualified_name.clone(),
+                            version: Some(PackageVersion::Semver(artifact.version.clone())),
+                        },
+                        BlockReason::RequestInstall,
                     )));
                 }
                 PackagePolicyDecision::Defer => {}

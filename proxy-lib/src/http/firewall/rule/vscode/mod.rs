@@ -15,7 +15,10 @@ use rama::{
 
 use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
-    http::firewall::{domain_matcher::DomainMatcher, events::BlockedArtifact},
+    http::firewall::{
+        domain_matcher::DomainMatcher,
+        events::{BlockReason, BlockedArtifact},
+    },
     package::malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
     storage::SyncCompactDataStorage,
 };
@@ -135,7 +138,7 @@ impl Rule for RuleVSCode {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Block => {
+                PackagePolicyDecision::Rejected => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
                         BlockedArtifact {
@@ -143,6 +146,29 @@ impl Rule for RuleVSCode {
                             identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
                             version: None,
                         },
+                        BlockReason::Rejected,
+                    )));
+                }
+                PackagePolicyDecision::BlockAll => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        BlockedArtifact {
+                            product: arcstr!("vscode"),
+                            identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
+                            version: None,
+                        },
+                        BlockReason::BlockAll,
+                    )));
+                }
+                PackagePolicyDecision::RequestInstall => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        BlockedArtifact {
+                            product: arcstr!("vscode"),
+                            identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
+                            version: None,
+                        },
+                        BlockReason::RequestInstall,
                     )));
                 }
                 PackagePolicyDecision::Defer => {}

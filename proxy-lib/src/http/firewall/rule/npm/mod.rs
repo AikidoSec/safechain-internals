@@ -13,7 +13,8 @@ use rama::{
 use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
-        domain_matcher::DomainMatcher, events::BlockedArtifact,
+        domain_matcher::DomainMatcher,
+        events::{BlockReason, BlockedArtifact},
         rule::npm::min_package_age::MinPackageAge,
     },
     package::{
@@ -152,7 +153,7 @@ impl RuleNpm {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Block => {
+                PackagePolicyDecision::Rejected => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
                         BlockedArtifact {
@@ -160,6 +161,29 @@ impl RuleNpm {
                             identifier: ArcStr::from(package.fully_qualified_name.as_str()),
                             version: Some(PackageVersion::Semver(package.version.clone())),
                         },
+                        BlockReason::Rejected,
+                    )));
+                }
+                PackagePolicyDecision::BlockAll => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        BlockedArtifact {
+                            product: arcstr!("npm"),
+                            identifier: ArcStr::from(package.fully_qualified_name.as_str()),
+                            version: Some(PackageVersion::Semver(package.version.clone())),
+                        },
+                        BlockReason::BlockAll,
+                    )));
+                }
+                PackagePolicyDecision::RequestInstall => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        BlockedArtifact {
+                            product: arcstr!("npm"),
+                            identifier: ArcStr::from(package.fully_qualified_name.as_str()),
+                            version: Some(PackageVersion::Semver(package.version.clone())),
+                        },
+                        BlockReason::RequestInstall,
                     )));
                 }
                 PackagePolicyDecision::Defer => {}

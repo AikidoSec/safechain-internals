@@ -14,7 +14,7 @@ use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
-        events::BlockedArtifact,
+        events::{BlockReason, BlockedArtifact},
         rule::{BlockedRequest, RequestAction, Rule},
     },
     package::{
@@ -123,7 +123,7 @@ impl Rule for RuleNuget {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Block => {
+                PackagePolicyDecision::Rejected => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
                         BlockedArtifact {
@@ -131,6 +131,29 @@ impl Rule for RuleNuget {
                             identifier: ArcStr::from(nuget_package.fully_qualified_name.as_str()),
                             version: Some(PackageVersion::Semver(nuget_package.version.clone())),
                         },
+                        BlockReason::Rejected,
+                    )));
+                }
+                PackagePolicyDecision::BlockAll => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        BlockedArtifact {
+                            product: arcstr!("nuget"),
+                            identifier: ArcStr::from(nuget_package.fully_qualified_name.as_str()),
+                            version: Some(PackageVersion::Semver(nuget_package.version.clone())),
+                        },
+                        BlockReason::BlockAll,
+                    )));
+                }
+                PackagePolicyDecision::RequestInstall => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        BlockedArtifact {
+                            product: arcstr!("nuget"),
+                            identifier: ArcStr::from(nuget_package.fully_qualified_name.as_str()),
+                            version: Some(PackageVersion::Semver(nuget_package.version.clone())),
+                        },
+                        BlockReason::RequestInstall,
                     )));
                 }
                 PackagePolicyDecision::Defer => {}

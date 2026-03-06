@@ -6,7 +6,7 @@ use rama::{
     net::address::Domain,
 };
 
-use super::events::{BlockedArtifact, BlockedEventInfo};
+use super::events::{BlockReason, BlockedArtifact, BlockedEventInfo};
 use crate::http::response::{
     generate_generic_blocked_response_for_req, generate_malware_blocked_response_for_req,
 };
@@ -17,17 +17,23 @@ pub struct BlockedRequest {
 }
 
 impl BlockedRequest {
-    pub(crate) fn policy(req: Request, artifact: BlockedArtifact) -> Self {
+    pub(crate) fn policy(req: Request, artifact: BlockedArtifact, reason: BlockReason) -> Self {
         Self {
             response: generate_generic_blocked_response_for_req(req),
-            info: BlockedEventInfo { artifact },
+            info: BlockedEventInfo {
+                artifact,
+                block_reason: reason,
+            },
         }
     }
 
     pub(crate) fn malware(req: Request, artifact: BlockedArtifact) -> Self {
         Self {
             response: generate_malware_blocked_response_for_req(req),
-            info: BlockedEventInfo { artifact },
+            info: BlockedEventInfo {
+                artifact,
+                block_reason: BlockReason::Malware,
+            },
         }
     }
 }
