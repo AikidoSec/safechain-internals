@@ -162,13 +162,17 @@ async fn test_pypi_https_sdist_ok() {
 #[tokio::test]
 #[tracing_test::traced_test]
 async fn test_pypi_https_package_allowed_by_endpoint_policy_exception() {
-    let runtime =
-        e2e::runtime::spawn_with_agent_identity("policy-allow-requests-pypi", "mock_device", &[])
-            .await;
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-allow-safe-chain-pi-test-pypi",
+        "mock_device",
+        &[],
+    )
+    .await;
     let client = runtime.client_with_http_proxy().await;
 
+    // "safe-chain-pi-test" is malware, but the allowed_packages exception overrides the malware check.
     let resp = client
-        .get("https://files.pythonhosted.org/packages/abc/def/requests-2.31.0-py3-none-any.whl")
+        .get("https://files.pythonhosted.org/packages/abc/def/safe_chain_pi_test-0.1.0-py3-none-any.whl")
         .send()
         .await
         .unwrap();

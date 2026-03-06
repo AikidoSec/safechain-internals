@@ -47,12 +47,12 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": []
             }
         }),
-        "policy-allow-requests-pypi" => json!({
-            "block_all_installs": true,
+        "policy-allow-safe-chain-pi-test-pypi" => json!({
+            "block_all_installs": false,
             "request_installs": false,
             "minimum_allowed_age_timestamp": null,
             "exceptions": {
-                "allowed_packages": ["requests"],
+                "allowed_packages": ["safe-chain-pi-test"], // listed as malware in mock list
                 "rejected_packages": []
             }
         }),
@@ -78,12 +78,12 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": []
             }
         }),
-        "policy-allow-python-python-vscode" => json!({
-            "block_all_installs": true,
+        "policy-allow-pythoner-pythontheme-vscode" => json!({
+            "block_all_installs": false,
             "request_installs": false,
             "minimum_allowed_age_timestamp": null,
             "exceptions": {
-                "allowed_packages": ["python.python"],
+                "allowed_packages": ["pythoner.pythontheme"], // listed as malware in mock list
                 "rejected_packages": []
             }
         }),
@@ -96,6 +96,161 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": ["python.python"]
             }
         }),
+        _ => default_ecosystem_policy.clone(),
+    };
+
+    let npm_policy = match token {
+        "policy-block-npm" => json!({
+            "block_all_installs": true,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
+        "policy-allow-safe-chain-test-npm" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": ["safe-chain-test"], // listed as malware in mock list
+                "rejected_packages": []
+            }
+        }),
+        "policy-reject-lodash-npm" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": ["lodash"]
+            }
+        }),
+        _ => default_ecosystem_policy.clone(),
+    };
+
+    let maven_policy = match token {
+        "policy-block-maven" => json!({
+            "block_all_installs": true,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
+        "policy-allow-malicious-lib-maven" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": ["org.example:malicious-lib"], // listed as malware in mock list
+                "rejected_packages": []
+            }
+        }),
+        "policy-reject-junit-maven" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": ["org.junit:junit"]
+            }
+        }),
+        _ => default_ecosystem_policy.clone(),
+    };
+
+    let nuget_policy = match token {
+        "policy-block-nuget" => json!({
+            "block_all_installs": true,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
+        "policy-allow-safechaintest-nuget" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": ["safechaintest"], // listed as malware in mock list
+                "rejected_packages": []
+            }
+        }),
+        "policy-reject-newtonsoft-nuget" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": ["newtonsoft.json"]
+            }
+        }),
+        _ => default_ecosystem_policy.clone(),
+    };
+
+    let chrome_policy = match token {
+        "policy-block-chrome" => json!({
+            "block_all_installs": true,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
+        "policy-allow-malicious-ext-chrome" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": ["lajondecmobodlejlcjllhojikagldgd"], // listed as malware in mock list
+                "rejected_packages": []
+            }
+        }),
+        "policy-reject-safeext-chrome" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": ["safeextension12345"]
+            }
+        }),
+        _ => default_ecosystem_policy.clone(),
+    };
+
+    let open_vsx_policy = match token {
+        "policy-block-open-vsx" => json!({
+            "block_all_installs": true,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
+        "policy-allow-evil-extension-open-vsx" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": ["malicious-publisher/evil-extension"], // listed as malware in mock list
+                "rejected_packages": []
+            }
+        }),
+        "policy-reject-redhat-java-open-vsx" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": ["redhat/java"]
+            }
+        }),
         _ => default_ecosystem_policy,
     };
 
@@ -106,7 +261,12 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
         },
         "ecosystems": {
             "pypi": pypi_policy,
-            "vscode": vscode_policy
+            "vscode": vscode_policy,
+            "npm": npm_policy,
+            "maven": maven_policy,
+            "nuget": nuget_policy,
+            "chrome": chrome_policy,
+            "open_vsx": open_vsx_policy
         }
     }))
     .into_response()

@@ -11,14 +11,11 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::PolicyEvaluator,
-    http::{
-        firewall::{
-            domain_matcher::DomainMatcher,
-            events::{BlockedArtifact, BlockedEventInfo},
-            rule::{BlockedRequest, RequestAction, Rule},
-        },
-        response::generate_malware_blocked_response_for_req,
+    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    http::firewall::{
+        domain_matcher::DomainMatcher,
+        events::BlockedArtifact,
+        rule::{BlockedRequest, RequestAction, Rule},
     },
     package::{
         malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
@@ -33,7 +30,7 @@ use crate::http::firewall::pac::PacScriptGenerator;
 pub(in crate::http::firewall) struct RuleNuget {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
-    _policy_evaluator: Option<PolicyEvaluator>,
+    policy_evaluator: Option<PolicyEvaluator>,
 }
 
 impl RuleNuget {
@@ -59,7 +56,7 @@ impl RuleNuget {
         Ok(Self {
             target_domains: ["api.nuget.org", "www.nuget.org"].into_iter().collect(),
             remote_malware_list,
-            _policy_evaluator: policy_evaluator,
+            policy_evaluator,
         })
     }
 }
@@ -118,17 +115,37 @@ impl Rule for RuleNuget {
             "Nuget package download request"
         );
 
+        if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
+            let decision = policy_evaluator
+                .evaluate_package_install("nuget", &nuget_package.fully_qualified_name);
+
+            match decision {
+                PackagePolicyDecision::Allow => {
+                    return Ok(RequestAction::Allow(req));
+                }
+                PackagePolicyDecision::Block => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        BlockedArtifact {
+                            product: arcstr!("nuget"),
+                            identifier: ArcStr::from(nuget_package.fully_qualified_name.as_str()),
+                            version: Some(PackageVersion::Semver(nuget_package.version.clone())),
+                        },
+                    )));
+                }
+                PackagePolicyDecision::Defer => {}
+            }
+        }
+
         if self.is_package_listed_as_malware(&nuget_package) {
-            Ok(RequestAction::Block(BlockedRequest {
-                response: generate_malware_blocked_response_for_req(req),
-                info: BlockedEventInfo {
-                    artifact: BlockedArtifact {
-                        product: arcstr!("nuget"),
-                        identifier: ArcStr::from(nuget_package.fully_qualified_name.to_string()),
-                        version: Some(PackageVersion::Semver(nuget_package.version.clone())),
-                    },
+            Ok(RequestAction::Block(BlockedRequest::malware(
+                req,
+                BlockedArtifact {
+                    product: arcstr!("nuget"),
+                    identifier: ArcStr::from(nuget_package.fully_qualified_name.to_string()),
+                    version: Some(PackageVersion::Semver(nuget_package.version.clone())),
                 },
-            }))
+            )))
         } else {
             tracing::debug!(
                 http.url.path = %path,

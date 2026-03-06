@@ -107,3 +107,62 @@ async fn test_open_vsx_org_vsix_signature_allowed() {
 
     assert_eq!(StatusCode::OK, resp.status());
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_open_vsx_extension_allowed_by_endpoint_policy_exception() {
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-allow-evil-extension-open-vsx",
+        "mock_device",
+        &[],
+    )
+    .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "malicious-publisher/evil-extension" is malware, but the allowed_packages exception overrides the malware check.
+    let resp = client
+        .get("https://open-vsx.org/vscode/asset/malicious-publisher/evil-extension/1.0.0/Microsoft.VisualStudio.Services.VSIXPackage")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::OK, resp.status());
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_open_vsx_extension_blocked_by_endpoint_policy_block_all() {
+    let runtime =
+        e2e::runtime::spawn_with_agent_identity("policy-block-open-vsx", "mock_device", &[]).await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "redhat/java" is not malware, but block_all_installs blocks it.
+    let resp = client
+        .get("https://open-vsx.org/vscode/asset/redhat/java/1.30.0/Microsoft.VisualStudio.Services.VSIXPackage")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_open_vsx_extension_blocked_by_endpoint_policy_rejected_package() {
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-reject-redhat-java-open-vsx",
+        "mock_device",
+        &[],
+    )
+    .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "redhat/java" is in rejected_packages — blocked even though it's not malware.
+    let resp = client
+        .get("https://open-vsx.org/vscode/asset/redhat/java/1.30.0/Microsoft.VisualStudio.Services.VSIXPackage")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}

@@ -6,11 +6,30 @@ use rama::{
     net::address::Domain,
 };
 
-use super::events::BlockedEventInfo;
+use super::events::{BlockedArtifact, BlockedEventInfo};
+use crate::http::response::{
+    generate_generic_blocked_response_for_req, generate_malware_blocked_response_for_req,
+};
 
 pub struct BlockedRequest {
     pub response: Response,
     pub info: BlockedEventInfo,
+}
+
+impl BlockedRequest {
+    pub(crate) fn policy(req: Request, artifact: BlockedArtifact) -> Self {
+        Self {
+            response: generate_generic_blocked_response_for_req(req),
+            info: BlockedEventInfo { artifact },
+        }
+    }
+
+    pub(crate) fn malware(req: Request, artifact: BlockedArtifact) -> Self {
+        Self {
+            response: generate_malware_blocked_response_for_req(req),
+            info: BlockedEventInfo { artifact },
+        }
+    }
 }
 
 #[cfg(feature = "pac")]
