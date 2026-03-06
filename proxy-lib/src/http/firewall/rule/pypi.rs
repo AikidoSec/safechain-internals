@@ -17,7 +17,10 @@ use rama::utils::str::arcstr::{ArcStr, arcstr};
 
 use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
-    http::firewall::{domain_matcher::DomainMatcher, events::BlockedArtifact},
+    http::firewall::{
+        domain_matcher::DomainMatcher,
+        events::{BlockReason, BlockedArtifact},
+    },
     package::{
         malware_list::{LowerCaseEntryFormatter, MalwareEntry, RemoteMalwareList},
         version::PackageVersion,
@@ -89,6 +92,14 @@ impl RulePyPI {
         };
 
         Ok(entries.iter().any(|entry| package_info.matches(entry)))
+    }
+
+    fn blocked_artifact(package_info: &PackageInfo) -> BlockedArtifact {
+        BlockedArtifact {
+            product: arcstr!("pypi"),
+            identifier: ArcStr::from(package_info.name.as_str()),
+            version: Some(package_info.version.clone()),
+        }
     }
 
     /// Extracts package name and version from a PyPI request.
@@ -191,14 +202,25 @@ impl Rule for RulePyPI {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Block => {
+                PackagePolicyDecision::Rejected => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("pypi"),
-                            identifier: ArcStr::from(package_info.name.as_str()),
-                            version: Some(package_info.version.clone()),
-                        },
+                        Self::blocked_artifact(&package_info),
+                        BlockReason::Rejected,
+                    )));
+                }
+                PackagePolicyDecision::BlockAll => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        Self::blocked_artifact(&package_info),
+                        BlockReason::BlockAll,
+                    )));
+                }
+                PackagePolicyDecision::RequestInstall => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        Self::blocked_artifact(&package_info),
+                        BlockReason::RequestInstall,
                     )));
                 }
                 PackagePolicyDecision::Defer => {}
@@ -209,11 +231,7 @@ impl Rule for RulePyPI {
             tracing::debug!(package = %package_info.name, version = ?package_info.version, "blocked PyPI package download");
             return Ok(RequestAction::Block(BlockedRequest::malware(
                 req,
-                BlockedArtifact {
-                    product: arcstr!("pypi"),
-                    identifier: ArcStr::from(package_info.name.as_str()),
-                    version: Some(package_info.version.clone()),
-                },
+                Self::blocked_artifact(&package_info),
             )));
         }
 

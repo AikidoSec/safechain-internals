@@ -15,7 +15,10 @@ use rama::{
 
 use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
-    http::firewall::{domain_matcher::DomainMatcher, events::BlockedArtifact},
+    http::firewall::{
+        domain_matcher::DomainMatcher,
+        events::{BlockReason, BlockedArtifact},
+    },
     package::malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
     storage::SyncCompactDataStorage,
 };
@@ -129,14 +132,25 @@ impl Rule for RuleOpenVsx {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Block => {
+                PackagePolicyDecision::Rejected => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("open_vsx"),
-                            identifier: ArcStr::from(extension.extension_id.as_str()),
-                            version: None,
-                        },
+                        Self::blocked_artifact(&extension),
+                        BlockReason::Rejected,
+                    )));
+                }
+                PackagePolicyDecision::BlockAll => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        Self::blocked_artifact(&extension),
+                        BlockReason::BlockAll,
+                    )));
+                }
+                PackagePolicyDecision::RequestInstall => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        Self::blocked_artifact(&extension),
+                        BlockReason::RequestInstall,
                     )));
                 }
                 PackagePolicyDecision::Defer => {}
@@ -151,11 +165,7 @@ impl Rule for RuleOpenVsx {
             );
             return Ok(RequestAction::Block(BlockedRequest::malware(
                 req,
-                BlockedArtifact {
-                    product: arcstr!("open_vsx"),
-                    identifier: ArcStr::from(extension.extension_id.as_str()),
-                    version: None,
-                },
+                Self::blocked_artifact(&extension),
             )));
         }
 
@@ -174,6 +184,14 @@ impl Rule for RuleOpenVsx {
 }
 
 impl RuleOpenVsx {
+    fn blocked_artifact(extension: &OpenVsxExtensionId) -> BlockedArtifact {
+        BlockedArtifact {
+            product: arcstr!("open_vsx"),
+            identifier: ArcStr::from(extension.extension_id.as_str()),
+            version: None,
+        }
+    }
+
     fn is_package_listed_as_malware(&self, extension: &OpenVsxExtensionId) -> bool {
         self.remote_malware_list
             .find_entries(&extension.extension_id.to_ascii_lowercase())

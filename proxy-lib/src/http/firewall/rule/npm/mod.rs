@@ -13,7 +13,8 @@ use rama::{
 use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
-        domain_matcher::DomainMatcher, events::BlockedArtifact,
+        domain_matcher::DomainMatcher,
+        events::{BlockReason, BlockedArtifact},
         rule::npm::min_package_age::MinPackageAge,
     },
     package::{
@@ -131,6 +132,14 @@ impl Rule for RuleNpm {
 }
 
 impl RuleNpm {
+    fn blocked_artifact(package_name: &str, version: &PragmaticSemver) -> BlockedArtifact {
+        BlockedArtifact {
+            product: arcstr!("npm"),
+            identifier: ArcStr::from(package_name),
+            version: Some(PackageVersion::Semver(version.clone())),
+        }
+    }
+
     fn is_tarball_download(&self, req: &Request) -> bool {
         let path = req.uri().path();
         path.ends_with(".tgz") && path.contains("/-/")
@@ -152,14 +161,34 @@ impl RuleNpm {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Block => {
+                PackagePolicyDecision::Rejected => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("npm"),
-                            identifier: ArcStr::from(package.fully_qualified_name.as_str()),
-                            version: Some(PackageVersion::Semver(package.version.clone())),
-                        },
+                        Self::blocked_artifact(
+                            package.fully_qualified_name.as_str(),
+                            &package.version,
+                        ),
+                        BlockReason::Rejected,
+                    )));
+                }
+                PackagePolicyDecision::BlockAll => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        Self::blocked_artifact(
+                            package.fully_qualified_name.as_str(),
+                            &package.version,
+                        ),
+                        BlockReason::BlockAll,
+                    )));
+                }
+                PackagePolicyDecision::RequestInstall => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        Self::blocked_artifact(
+                            package.fully_qualified_name.as_str(),
+                            &package.version,
+                        ),
+                        BlockReason::RequestInstall,
                     )));
                 }
                 PackagePolicyDecision::Defer => {}
@@ -172,11 +201,7 @@ impl RuleNpm {
             tracing::warn!("Blocked malware from {package_name}");
             Ok(RequestAction::Block(BlockedRequest::malware(
                 req,
-                BlockedArtifact {
-                    product: arcstr!("npm"),
-                    identifier: ArcStr::from(package_name),
-                    version: Some(PackageVersion::Semver(package_version)),
-                },
+                Self::blocked_artifact(package_name.as_str(), &package_version),
             )))
         } else {
             tracing::debug!("Npm url: {path} does not contain malware: passthrough");
