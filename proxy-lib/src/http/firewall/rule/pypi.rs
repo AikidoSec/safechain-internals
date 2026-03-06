@@ -94,6 +94,14 @@ impl RulePyPI {
         Ok(entries.iter().any(|entry| package_info.matches(entry)))
     }
 
+    fn blocked_artifact(package_info: &PackageInfo) -> BlockedArtifact {
+        BlockedArtifact {
+            product: arcstr!("pypi"),
+            identifier: ArcStr::from(package_info.name.as_str()),
+            version: Some(package_info.version.clone()),
+        }
+    }
+
     /// Extracts package name and version from a PyPI request.
     ///
     /// Returns `PackageInfo` where version is `PackageVersion::None` for metadata requests.
@@ -197,33 +205,21 @@ impl Rule for RulePyPI {
                 PackagePolicyDecision::Rejected => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("pypi"),
-                            identifier: ArcStr::from(package_info.name.as_str()),
-                            version: Some(package_info.version.clone()),
-                        },
+                        Self::blocked_artifact(&package_info),
                         BlockReason::Rejected,
                     )));
                 }
                 PackagePolicyDecision::BlockAll => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("pypi"),
-                            identifier: ArcStr::from(package_info.name.as_str()),
-                            version: Some(package_info.version.clone()),
-                        },
+                        Self::blocked_artifact(&package_info),
                         BlockReason::BlockAll,
                     )));
                 }
                 PackagePolicyDecision::RequestInstall => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("pypi"),
-                            identifier: ArcStr::from(package_info.name.as_str()),
-                            version: Some(package_info.version.clone()),
-                        },
+                        Self::blocked_artifact(&package_info),
                         BlockReason::RequestInstall,
                     )));
                 }
@@ -235,11 +231,7 @@ impl Rule for RulePyPI {
             tracing::debug!(package = %package_info.name, version = ?package_info.version, "blocked PyPI package download");
             return Ok(RequestAction::Block(BlockedRequest::malware(
                 req,
-                BlockedArtifact {
-                    product: arcstr!("pypi"),
-                    identifier: ArcStr::from(package_info.name.as_str()),
-                    version: Some(package_info.version.clone()),
-                },
+                Self::blocked_artifact(&package_info),
             )));
         }
 

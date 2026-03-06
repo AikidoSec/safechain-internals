@@ -141,33 +141,21 @@ impl Rule for RuleVSCode {
                 PackagePolicyDecision::Rejected => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("vscode"),
-                            identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
-                            version: None,
-                        },
+                        Self::blocked_artifact(&vscode_extension),
                         BlockReason::Rejected,
                     )));
                 }
                 PackagePolicyDecision::BlockAll => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("vscode"),
-                            identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
-                            version: None,
-                        },
+                        Self::blocked_artifact(&vscode_extension),
                         BlockReason::BlockAll,
                     )));
                 }
                 PackagePolicyDecision::RequestInstall => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("vscode"),
-                            identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
-                            version: None,
-                        },
+                        Self::blocked_artifact(&vscode_extension),
                         BlockReason::RequestInstall,
                     )));
                 }
@@ -183,11 +171,7 @@ impl Rule for RuleVSCode {
             );
             return Ok(RequestAction::Block(BlockedRequest::malware(
                 req,
-                BlockedArtifact {
-                    product: arcstr!("vscode"),
-                    identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
-                    version: None,
-                },
+                Self::blocked_artifact(&vscode_extension),
             )));
         }
 
@@ -206,6 +190,14 @@ impl Rule for RuleVSCode {
 }
 
 impl RuleVSCode {
+    fn blocked_artifact(vscode_extension: &VsCodeExtensionId) -> BlockedArtifact {
+        BlockedArtifact {
+            product: arcstr!("vscode"),
+            identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
+            version: None,
+        }
+    }
+
     fn is_package_listed_as_malware(&self, vscode_extension: &VsCodeExtensionId) -> bool {
         self.remote_malware_list
             .find_entries(&vscode_extension.extension_id)

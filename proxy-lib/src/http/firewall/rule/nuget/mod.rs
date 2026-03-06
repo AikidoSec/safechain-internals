@@ -126,33 +126,21 @@ impl Rule for RuleNuget {
                 PackagePolicyDecision::Rejected => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("nuget"),
-                            identifier: ArcStr::from(nuget_package.fully_qualified_name.as_str()),
-                            version: Some(PackageVersion::Semver(nuget_package.version.clone())),
-                        },
+                        Self::blocked_artifact(&nuget_package),
                         BlockReason::Rejected,
                     )));
                 }
                 PackagePolicyDecision::BlockAll => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("nuget"),
-                            identifier: ArcStr::from(nuget_package.fully_qualified_name.as_str()),
-                            version: Some(PackageVersion::Semver(nuget_package.version.clone())),
-                        },
+                        Self::blocked_artifact(&nuget_package),
                         BlockReason::BlockAll,
                     )));
                 }
                 PackagePolicyDecision::RequestInstall => {
                     return Ok(RequestAction::Block(BlockedRequest::policy(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("nuget"),
-                            identifier: ArcStr::from(nuget_package.fully_qualified_name.as_str()),
-                            version: Some(PackageVersion::Semver(nuget_package.version.clone())),
-                        },
+                        Self::blocked_artifact(&nuget_package),
                         BlockReason::RequestInstall,
                     )));
                 }
@@ -163,11 +151,7 @@ impl Rule for RuleNuget {
         if self.is_package_listed_as_malware(&nuget_package) {
             Ok(RequestAction::Block(BlockedRequest::malware(
                 req,
-                BlockedArtifact {
-                    product: arcstr!("nuget"),
-                    identifier: ArcStr::from(nuget_package.fully_qualified_name.to_string()),
-                    version: Some(PackageVersion::Semver(nuget_package.version.clone())),
-                },
+                Self::blocked_artifact(&nuget_package),
             )))
         } else {
             tracing::debug!(
@@ -180,6 +164,14 @@ impl Rule for RuleNuget {
 }
 
 impl RuleNuget {
+    fn blocked_artifact(nuget_package: &NugetPackage) -> BlockedArtifact {
+        BlockedArtifact {
+            product: arcstr!("nuget"),
+            identifier: ArcStr::from(nuget_package.fully_qualified_name.as_str()),
+            version: Some(PackageVersion::Semver(nuget_package.version.clone())),
+        }
+    }
+
     fn is_package_listed_as_malware(&self, nuget_package: &NugetPackage) -> bool {
         self.remote_malware_list.has_entries_with_version(
             &nuget_package.fully_qualified_name,
