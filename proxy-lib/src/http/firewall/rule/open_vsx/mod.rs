@@ -120,8 +120,10 @@ impl Rule for RuleOpenVsx {
         );
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision = policy_evaluator
-                .evaluate_package_install("open_vsx", extension.extension_id.as_str());
+            let decision = policy_evaluator.evaluate_package_install(
+                "open_vsx",
+                extension.extension_id.to_ascii_lowercase().as_str(),
+            );
 
             match decision {
                 PackagePolicyDecision::Allow => {
@@ -132,7 +134,9 @@ impl Rule for RuleOpenVsx {
                         req,
                         BlockedArtifact {
                             product: arcstr!("open_vsx"),
-                            identifier: ArcStr::from(extension.extension_id.as_str()),
+                            identifier: ArcStr::from(
+                                extension.extension_id.to_ascii_lowercase().as_str(),
+                            ),
                             version: None,
                         },
                     )));
