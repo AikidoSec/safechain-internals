@@ -19,7 +19,12 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Received block event: product=%s package=%s", event.Artifact.Product, event.Artifact)
+	log.Printf("Received block event: product=%s package=%s reason=%s", event.Artifact.Product, event.Artifact.PackageName, event.BlockReason)
+
+	key := buildKey(event)
+	s.blocksMu.Lock()
+	s.recentBlocks[key] = event
+	s.blocksMu.Unlock()
 
 	// Show UI modal in a goroutine to not block the HTTP response
 	go showBlockedModal(event, s.Addr())
@@ -32,13 +37,15 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 	cfg := platform.GetConfig()
 	binaryPath := filepath.Join(cfg.BinaryDir, platform.SafeChainUIBinaryName)
 
-	text := buildBlockedText(event)
+	title := buildBlockedTitle(event)
+	subtitle := buildBlockedSubtitle(event)
 	key := buildKey(event)
 
 	args := []string{
 		"--package-id", key,
 		// Encapsulate title as an argument: It can contain spaces causing the argument parsing to fail for windows.
-		"--title", fmt.Sprintf("\"%s\"", text),
+		"--title", fmt.Sprintf("\"%s\"", title),
+		"--subtitle", subtitle,
 		"--ingress", ingressAddress,
 		"--bypass-enabled", "true",
 	}
@@ -54,17 +61,15 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 	}
 }
 
-func buildBlockedText(event BlockEvent) string {
-	if event.Artifact.PackageVersion != "" {
-		return fmt.Sprintf(
-			"SafeChain blocked a potentially malicious %s package:",
-			event.Artifact.Product,
-		)
+func buildBlockedTitle(event BlockEvent) string {
+	return fmt.Sprintf("SafeChain blocked a %s package:", event.Artifact.Product)
+}
+
+func buildBlockedSubtitle(event BlockEvent) string {
+	if event.BlockReason == "request_install" {
+		return "This package requires approval before it can be installed."
 	}
-	return fmt.Sprintf(
-		"SafeChain blocked a potentially malicious %s package:",
-		event.Artifact.Product,
-	)
+	return "Installing this package has been blocked because it looks malicious."
 }
 
 func buildKey(event BlockEvent) string {

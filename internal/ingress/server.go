@@ -10,6 +10,8 @@ import (
 	"net"
 	"net/http"
 	"sync"
+
+	"github.com/AikidoSec/safechain-internals/internal/config"
 )
 
 const (
@@ -20,12 +22,18 @@ type Server struct {
 	addr     string
 	listener net.Listener
 	server   *http.Server
+	config   *config.ConfigInfo
 
-	mu sync.RWMutex
+	mu           sync.RWMutex
+	blocksMu     sync.RWMutex
+	recentBlocks map[string]BlockEvent
 }
 
-func New() *Server {
-	return &Server{}
+func New(cfg *config.ConfigInfo) *Server {
+	return &Server{
+		config:       cfg,
+		recentBlocks: make(map[string]BlockEvent),
+	}
 }
 
 func (s *Server) Addr() string {
