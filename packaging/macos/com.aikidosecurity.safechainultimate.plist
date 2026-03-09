@@ -23,7 +23,7 @@
 	<key>RunAtLoad</key>
 	<true/>
 	<key>StandardErrorPath</key>
-	<string>/Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.error.log</string>
+	<string>/Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.err</string>
 	<key>StandardOutPath</key>
 	<string>/Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.log</string>
 	<key>WorkingDirectory</key>
