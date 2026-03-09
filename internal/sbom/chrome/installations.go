@@ -50,31 +50,6 @@ func getBrowsers(homeDir string) []browser {
 			},
 		}
 
-	case "linux":
-		configDir := filepath.Join(homeDir, ".config")
-		return []browser{
-			{
-				name:    "chrome",
-				dataDir: filepath.Join(configDir, "google-chrome"),
-				bins:    []string{"/usr/bin/google-chrome", "/usr/bin/google-chrome-stable"},
-			},
-			{
-				name:    "brave",
-				dataDir: filepath.Join(configDir, "BraveSoftware", "Brave-Browser"),
-				bins:    []string{"/usr/bin/brave-browser"},
-			},
-			{
-				name:    "edge",
-				dataDir: filepath.Join(configDir, "microsoft-edge"),
-				bins:    []string{"/usr/bin/microsoft-edge"},
-			},
-			{
-				name:    "chromium",
-				dataDir: filepath.Join(configDir, "chromium"),
-				bins:    []string{"/usr/bin/chromium", "/usr/bin/chromium-browser", "/snap/bin/chromium"},
-			},
-		}
-
 	case "windows":
 		localAppData := filepath.Join(homeDir, "AppData", "Local")
 		programFiles := os.Getenv("ProgramFiles")
