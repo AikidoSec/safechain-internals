@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
@@ -38,8 +39,25 @@ func (s *Step) Install(ctx context.Context) error {
 		return fmt.Errorf("failed to load proxy config: %v", err)
 	}
 	proxySet, err := platform.IsAnySystemProxySet(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to check system proxy/PAC: %v", err)
+	}
 	if proxySet {
-		return fmt.Errorf("system proxy/pac is already set! Failing installation to avoid proxy conflicts!")
+		msg := "system proxy or PAC is already set; installation cannot continue to avoid proxy conflicts"
+		details, detailErr := platform.GetSystemProxyConflictDetails(ctx)
+		if len(details) > 0 {
+			msg = fmt.Sprintf(
+				"%s. Where it is set:\n%s\nTo install SafeChain, disable or remove the proxy/PAC on these entries first, then restart the SafeChain service.",
+				msg,
+				strings.Join(details, "\n"),
+			)
+		} else {
+			msg = msg + " To install SafeChain, disable any system proxy or PAC (e.g. in system network settings), then restart the SafeChain service."
+			if detailErr != nil {
+				msg = msg + " (Details could not be retrieved: " + detailErr.Error() + ")"
+			}
+		}
+		return fmt.Errorf("%s", msg)
 	}
 	if err := platform.SetSystemPAC(ctx, proxy.MetaPacURL); err != nil {
 		return fmt.Errorf("failed to set system PAC: %v", err)

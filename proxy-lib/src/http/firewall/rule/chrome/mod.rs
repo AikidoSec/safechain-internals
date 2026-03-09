@@ -12,13 +12,8 @@ use rama::{
 };
 
 use crate::{
-    http::{
-        firewall::{
-            domain_matcher::DomainMatcher,
-            events::{BlockedArtifact, BlockedEventInfo},
-        },
-        response::generate_generic_blocked_response_for_req,
-    },
+    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    http::firewall::{domain_matcher::DomainMatcher, events::BlockedArtifact},
     package::{malware_list::RemoteMalwareList, version::PackageVersion},
     storage::SyncCompactDataStorage,
 };
@@ -33,6 +28,7 @@ mod malware_key;
 pub(in crate::http::firewall) struct RuleChrome {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    policy_evaluator: Option<PolicyEvaluator>,
 }
 
 impl RuleChrome {
@@ -40,6 +36,7 @@ impl RuleChrome {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
+        policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = BoxError>,
@@ -63,6 +60,7 @@ impl RuleChrome {
             .into_iter()
             .collect(),
             remote_malware_list,
+            policy_evaluator,
         })
     }
 }
@@ -116,6 +114,28 @@ impl Rule for RuleChrome {
             version
         );
 
+        if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
+            let decision =
+                policy_evaluator.evaluate_package_install("chrome", extension_id.as_str());
+
+            match decision {
+                PackagePolicyDecision::Allow => {
+                    return Ok(RequestAction::Allow(req));
+                }
+                PackagePolicyDecision::Block => {
+                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                        req,
+                        BlockedArtifact {
+                            product: arcstr!("chrome"),
+                            identifier: extension_id,
+                            version: Some(version),
+                        },
+                    )));
+                }
+                PackagePolicyDecision::Defer => {}
+            }
+        }
+
         if self.matches_malware_entry(extension_id.as_str(), &version) {
             tracing::info!(
                 http.url.full = %req.uri(),
@@ -124,16 +144,14 @@ impl Rule for RuleChrome {
                 version
             );
 
-            return Ok(RequestAction::Block(BlockedRequest {
-                response: generate_generic_blocked_response_for_req(req),
-                info: BlockedEventInfo {
-                    artifact: BlockedArtifact {
-                        product: arcstr!("chrome"),
-                        identifier: extension_id,
-                        version: Some(version),
-                    },
+            return Ok(RequestAction::Block(BlockedRequest::malware(
+                req,
+                BlockedArtifact {
+                    product: arcstr!("chrome"),
+                    identifier: extension_id,
+                    version: Some(version),
                 },
-            }));
+            )));
         }
 
         Ok(RequestAction::Allow(req))

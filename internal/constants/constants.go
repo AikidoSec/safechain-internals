@@ -7,6 +7,7 @@ const (
 	LogRotationSizeInBytes  = 10 * 1024 * 1024 // 10 MB
 	LogReapingAgeInHours    = 24               // 24 hours
 	DaemonStatusLogInterval = 1 * time.Hour
+	HeartbeatReportInterval = 10 * time.Minute
 	SBOMReportInterval      = 24 * time.Hour
 	ProxyStartMaxRetries    = 20
 	ProxyStartRetryInterval = 3 * time.Minute

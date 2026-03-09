@@ -50,7 +50,7 @@ func collectDependencies(deps map[string]npmDependency, seen map[string]bool) []
 		seen[key] = true
 
 		packages = append(packages, sbom.Package{
-			Name:    name,
+			Id:      name,
 			Version: dep.Version,
 		})
 

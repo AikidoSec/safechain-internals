@@ -159,12 +159,12 @@ async fn send_blocked_event(
         event.artifact
     );
 
-    let resp = match client
-        .post(reporting_endpoint.clone())
-        .json(&event)
-        .send()
-        .await
-    {
+    let url = format!(
+        "{}/events/blocks",
+        reporting_endpoint.to_string().trim_end_matches('/')
+    );
+
+    let resp = match client.post(&url).json(&event).send().await {
         Ok(resp) => resp,
         Err(err) => {
             tracing::warn!(

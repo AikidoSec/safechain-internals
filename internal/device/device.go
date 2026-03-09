@@ -19,7 +19,7 @@ const (
 
 type DeviceInfo struct {
 	Version         int    `json:"version"`
-	DeviceID        string `json:"device_id"`
+	ID              string `json:"id"`
 	Hostname        string `json:"hostname"`
 	User            string `json:"user"`
 	Group           string `json:"group"`
@@ -55,7 +55,7 @@ func NewDeviceInfo() *DeviceInfo {
 	}
 	rawDeviceID = strings.ToUpper(rawDeviceID)
 	hashedDeviceID := sha256.Sum256([]byte(rawDeviceID))
-	d.DeviceID = hex.EncodeToString(hashedDeviceID[:])
+	d.ID = hex.EncodeToString(hashedDeviceID[:])
 	return d
 }
 

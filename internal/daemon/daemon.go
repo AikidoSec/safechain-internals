@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AikidoSec/safechain-internals/internal/cloud"
+	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
 	"github.com/AikidoSec/safechain-internals/internal/device"
 	"github.com/AikidoSec/safechain-internals/internal/ingress"
@@ -17,21 +19,18 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/sbom"
 	"github.com/AikidoSec/safechain-internals/internal/sbom/chrome"
 	"github.com/AikidoSec/safechain-internals/internal/sbom/npm"
+	"github.com/AikidoSec/safechain-internals/internal/sbom/pip"
+	"github.com/AikidoSec/safechain-internals/internal/sbom/vscode"
 	"github.com/AikidoSec/safechain-internals/internal/scannermanager"
 	"github.com/AikidoSec/safechain-internals/internal/setup"
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 	"github.com/AikidoSec/safechain-internals/internal/version"
 )
 
-type Config struct {
-	ConfigPath string
-	LogLevel   string
-}
-
 type Daemon struct {
 	versionInfo *version.VersionInfo
 	deviceInfo  *device.DeviceInfo
-	config      *Config
+	config      *config.ConfigInfo
 	ctx         context.Context
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
@@ -52,12 +51,11 @@ type Daemon struct {
 	daemonLastSBOMReportTime time.Time
 }
 
-func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemon, error) {
+func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 	d := &Daemon{
 		versionInfo: version.Info,
 		ctx:         ctx,
 		cancel:      cancel,
-		config:      config,
 		proxy:       proxy.New(),
 		registry:    scannermanager.NewRegistry(),
 		sbomManager: newSBOMRegistry(),
@@ -70,9 +68,16 @@ func New(ctx context.Context, cancel context.CancelFunc, config *Config) (*Daemo
 		return nil, fmt.Errorf("failed to initialize platform: %v", err)
 	}
 
+	cloud.Init()
+
 	d.deviceInfo = device.NewDeviceInfo()
 	if d.deviceInfo == nil {
 		return nil, fmt.Errorf("failed to create device info")
+	}
+
+	d.config = config.NewConfigInfo(d.deviceInfo.ID)
+	if d.config == nil {
+		return nil, fmt.Errorf("failed to create config")
 	}
 	d.initLogging()
 	return d, nil
@@ -83,6 +88,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 
 	log.Printf("Version info:\n%s\n", d.versionInfo.String())
 	log.Printf("Device info:\n%s\n", d.deviceInfo.String())
+	log.Printf("Config:\n%s\n", d.config.String())
 
 	log.Println("User home directory used for SafeChain:", platform.GetConfig().HomeDir)
 
@@ -212,6 +218,10 @@ func (d *Daemon) run(ctx context.Context) error {
 		return fmt.Errorf("failed to install all scanners: %v", err)
 	}
 
+	if err := d.heartbeat(); err != nil {
+		return fmt.Errorf("failed to heartbeat on startup: %v", err)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -308,6 +318,15 @@ func (d *Daemon) reportSBOM() error {
 	}
 
 	log.Printf("SBOM written to %s", sbomJSONPath)
+
+	event := &cloud.SBOMEvent{
+		DeviceInfo:  *d.deviceInfo,
+		VersionInfo: *d.versionInfo,
+		SBOM:        sbom,
+	}
+	if err := cloud.SendSBOM(d.ctx, d.config, event); err != nil {
+		return fmt.Errorf("failed to send SBOM: %w", err)
+	}
 	return nil
 }
 
@@ -320,13 +339,30 @@ func (d *Daemon) heartbeat() error {
 		log.Printf("Failed to start proxy: %v", err)
 	}
 
-	runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() {
+	d.runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() error {
 		d.printDaemonStatus()
+		return nil
 	})
-	runIfIntervalExceeded(&d.daemonLastSBOMReportTime, constants.SBOMReportInterval, func() {
-		if err := d.reportSBOM(); err != nil {
-			log.Printf("Failed to report SBOM: %v", err)
+	d.runIfIntervalExceeded(&d.config.LastHeartbeatReportTime, constants.HeartbeatReportInterval, func() error {
+		if d.config.Token == "" {
+			return fmt.Errorf("Token is not set, skipping heartbeat report")
 		}
+		if err := cloud.SendHeartbeat(d.ctx, d.config, &cloud.HeartbeatEvent{
+			DeviceInfo:  *d.deviceInfo,
+			VersionInfo: *d.versionInfo,
+		}); err != nil {
+			return fmt.Errorf("Failed to report heartbeat: %v", err)
+		}
+		return nil
+	})
+	d.runIfIntervalExceeded(&d.config.LastSBOMReportTime, constants.SBOMReportInterval, func() error {
+		if d.config.Token == "" {
+			return fmt.Errorf("Token is not set, skipping SBOM report")
+		}
+		if err := d.reportSBOM(); err != nil {
+			return fmt.Errorf("Failed to report SBOM: %v", err)
+		}
+		return nil
 	})
 	return nil
 }
@@ -335,13 +371,23 @@ func newSBOMRegistry() *sbom.Registry {
 	r := sbom.NewRegistry()
 	r.Register(npm.New())
 	r.Register(chrome.New())
+	r.Register(vscode.New())
+	r.Register(pip.New())
 	return r
 }
 
-func runIfIntervalExceeded(lastRun *time.Time, interval time.Duration, fn func()) {
+func (d *Daemon) runIfIntervalExceeded(lastRun *time.Time, interval time.Duration, fn func() error) {
 	if time.Since(*lastRun) >= interval {
-		fn()
+		err := fn()
+		if err != nil {
+			// On failure, don't update the last run time so we retry ASAP
+			log.Printf("%v", err)
+			return
+		}
 		*lastRun = time.Now()
+		if err := d.config.Save(); err != nil {
+			log.Printf("Failed to save config: %v", err)
+		}
 	}
 }
 

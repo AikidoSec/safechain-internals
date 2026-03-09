@@ -115,6 +115,9 @@ endif
 
 install-pkg:
 ifeq ($(DETECTED_OS),darwin)
+ifdef TOKEN
+	@echo "$(TOKEN)" > /tmp/aikido_endpoint_token.txt
+endif
 	@cd packaging/macos && ./install-local.sh
 else
 	@echo "Error: PKG installation is only supported on macOS"

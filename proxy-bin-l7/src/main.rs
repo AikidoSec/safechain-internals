@@ -20,8 +20,8 @@ use rama::{
 };
 
 use clap::Parser;
-
 use safechain_proxy_lib::{http, storage, tls, utils as safechain_utils};
+use safechain_utils::token::AgentIdentity;
 
 pub mod client;
 pub mod server;
@@ -158,6 +158,8 @@ where
         .with_context_debug_field("path", || args.data.clone())?;
     tracing::info!(path = ?args.data, "data directory ready to be used");
 
+    let agent_identity = AgentIdentity::load(&args.data);
+
     let graceful_timeout = (args.graceful > 0.).then(|| Duration::from_secs_f64(args.graceful));
 
     let secret_storage =
@@ -190,6 +192,7 @@ where
             client::new_web_client()?,
             data_storage,
             args.reporting_endpoint.clone(),
+            agent_identity,
         ) => {
             result?
         }

@@ -5,6 +5,8 @@ use rama::{
 
 use crate::test::e2e;
 
+const SAFE_EXTENSION_URL: &str = "https://gallerycdn.vsassets.io/_apis/public/gallery/publishers/python/vsextensions/python/1.0.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage";
+
 #[tokio::test]
 #[tracing_test::traced_test]
 async fn test_vscode_https_install_asset_vsixpackage_malware_blocked() {
@@ -154,6 +156,57 @@ async fn test_vscode_https_install_asset_subdomain_cdn_malware_blocked() {
         payload.to_lowercase().contains("malware"),
         "expected blocked response to mention malware, got: {payload}"
     );
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_vscode_https_install_asset_allowed_by_endpoint_policy_exception() {
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-allow-pythoner-pythontheme-vscode",
+        "mock_device",
+        &[],
+    )
+    .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "pythoner.pythontheme" is malware, but the allowed_packages exception overrides the malware check.
+    let resp = client
+        .get("https://gallerycdn.vsassets.io/_apis/public/gallery/publishers/pythoner/vsextensions/pythontheme/2.7.5/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::OK, resp.status());
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_vscode_https_install_asset_blocked_by_endpoint_policy_block_all() {
+    let runtime =
+        e2e::runtime::spawn_with_agent_identity("policy-block-vscode", "mock_device", &[]).await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "python.python" is not malware, but block_all_installs blocks it.
+    let resp = client.get(SAFE_EXTENSION_URL).send().await.unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_vscode_https_install_asset_blocked_by_endpoint_policy_rejected_package() {
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-reject-python-python-vscode",
+        "mock_device",
+        &[],
+    )
+    .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "python.python" is in rejected_packages — blocked even though it's not malware.
+    let resp = client.get(SAFE_EXTENSION_URL).send().await.unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
 }
 
 #[tokio::test]

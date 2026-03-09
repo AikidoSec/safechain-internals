@@ -1,164 +1,92 @@
 use super::*;
 
 #[test]
-fn test_parse_endpoint_config_npm() {
+fn test_parse_fetch_permissions_payload() {
     let json = r#"{
-        "version": "1.0.0",
-        "updated_at": "2026-02-19T10:30:00Z",
-        "permission_group_id": 123,
-        "permission_group_name": "Development",
-        "ecosystems": {
-            "npm": {
-                "enabled": true,
-                "block_all_installs": false,
-                "request_installs": true,
-                "minimum_allowed_age_value": 7,
-                "minimum_allowed_age_unit": "days",
-                "exceptions": [
-                    {
-                        "exception_type": "block_specified_installs",
-                        "permission_group_ids": [123, 456],
-                        "related_packages": ["evil-package", "malicious-lib"]
-                    },
-                    {
-                        "exception_type": "allow_specified_installs",
-                        "permission_group_ids": [123],
-                        "related_packages": ["lodash", "express"]
-                    }
-                ]
-            }
-        }
-    }"#;
-
-    let config: EndpointConfig = serde_json::from_str(json).unwrap();
-
-    assert_eq!(config.version.as_str(), "1.0.0");
-    assert_eq!(config.permission_group_id, 123);
-    assert_eq!(config.permission_group_name.as_str(), "Development");
-
-    let npm_config = config.ecosystems.get("npm").unwrap();
-    assert!(npm_config.enabled);
-    assert!(!npm_config.block_all_installs);
-    assert!(npm_config.request_installs);
-    assert_eq!(npm_config.minimum_allowed_age_value, Some(7));
-    assert_eq!(npm_config.minimum_allowed_age_unit.as_deref(), Some("days"));
-    assert_eq!(npm_config.exceptions.len(), 2);
-    assert_eq!(
-        npm_config.exceptions[0].exception_type.as_str(),
-        "block_specified_installs"
-    );
-    assert_eq!(npm_config.exceptions[0].related_packages.len(), 2);
-    assert_eq!(
-        npm_config.exceptions[1].exception_type.as_str(),
-        "allow_specified_installs"
-    );
-    assert_eq!(npm_config.exceptions[1].related_packages.len(), 2);
-}
-
-#[test]
-fn test_parse_endpoint_config_pypi_minimal() {
-    let json = r#"{
-        "version": "1.0.0",
-        "permission_group_id": 456,
-        "permission_group_name": "Admin",
+        "permission_group": {
+            "id": 123,
+            "name": "Development"
+        },
         "ecosystems": {
             "pypi": {
-                "enabled": true,
                 "block_all_installs": false,
-                "request_installs": false,
-                "exceptions": [
-                    {
-                        "exception_type": "block_specified_installs",
-                        "related_packages": ["malicious-lib"]
-                    }
-                ]
+                "request_installs": true,
+                "minimum_allowed_age_timestamp": 1740172800,
+                "exceptions": {
+                    "allowed_packages": ["requests", "numpy"],
+                    "rejected_packages": ["evil-package"]
+                }
             }
         }
     }"#;
 
     let config: EndpointConfig = serde_json::from_str(json).unwrap();
 
-    assert_eq!(config.version.as_str(), "1.0.0");
-    assert_eq!(config.permission_group_id, 456);
+    assert_eq!(config.permission_group.id, 123);
+    assert_eq!(config.permission_group.name.as_str(), "Development");
 
-    let pypi_config = config.ecosystems.get("pypi").unwrap();
-    assert!(pypi_config.enabled);
-    assert_eq!(pypi_config.minimum_allowed_age_value, None);
-    assert_eq!(pypi_config.minimum_allowed_age_unit, None);
+    let pypi = config.ecosystems.get("pypi").unwrap();
+    assert!(!pypi.block_all_installs);
+    assert!(pypi.request_installs);
+    assert_eq!(pypi.minimum_allowed_age_timestamp, Some(1740172800));
+    assert_eq!(pypi.exceptions.allowed_packages.len(), 2);
+    assert_eq!(pypi.exceptions.rejected_packages.len(), 1);
 }
 
 #[test]
-fn test_parse_endpoint_config_defaults() {
+fn test_parse_fetch_permissions_defaults() {
     let json = r#"{
-        "version": "1.0.0",
-        "permission_group_id": 789,
-        "permission_group_name": "Test",
+        "permission_group": {
+            "id": 42,
+            "name": "Sales"
+        },
         "ecosystems": {
-            "maven": {}
+            "npm": {}
         }
     }"#;
 
     let config: EndpointConfig = serde_json::from_str(json).unwrap();
+    let npm = config.ecosystems.get("npm").unwrap();
 
-    let maven_config = config.ecosystems.get("maven").unwrap();
-    assert!(maven_config.enabled);
-    assert!(!maven_config.block_all_installs);
-    assert!(!maven_config.request_installs);
-    assert_eq!(maven_config.minimum_allowed_age_value, None);
-    assert_eq!(maven_config.minimum_allowed_age_unit, None);
-    assert!(maven_config.exceptions.is_empty());
+    assert!(!npm.block_all_installs);
+    assert!(!npm.request_installs);
+    assert_eq!(npm.minimum_allowed_age_timestamp, None);
+    assert!(npm.exceptions.allowed_packages.is_empty());
+    assert!(npm.exceptions.rejected_packages.is_empty());
 }
 
 #[test]
-fn test_empty_ecosystems() {
+fn test_parse_fetch_permissions_timestamp_true_is_invalid() {
     let json = r#"{
-        "version": "1.0.0",
-        "permission_group_id": 999,
-        "permission_group_name": "Empty"
-    }"#;
-
-    let config: EndpointConfig = serde_json::from_str(json).unwrap();
-    assert!(config.ecosystems.is_empty());
-}
-
-#[test]
-fn test_parse_exception_with_permission_groups() {
-    let json = r#"{
-        "version": "1.0.0",
-        "permission_group_id": 100,
-        "permission_group_name": "Sales",
+        "permission_group": {
+            "id": 1,
+            "name": "Default"
+        },
         "ecosystems": {
-            "npm": {
-                "exceptions": [
-                    {
-                        "exception_type": "block_all_installs",
-                        "permission_group_ids": [100, 200, 300]
-                    },
-                    {
-                        "exception_type": "request_installs",
-                        "permission_group_ids": [100]
-                    }
-                ]
+            "maven": {
+                "minimum_allowed_age_timestamp": true
             }
         }
     }"#;
 
-    let config: EndpointConfig = serde_json::from_str(json).unwrap();
-    let npm_config = config.ecosystems.get("npm").unwrap();
+    let err = serde_json::from_str::<EndpointConfig>(json).unwrap_err();
+    assert!(err.to_string().contains("invalid type: boolean `true`"));
+}
 
-    assert_eq!(npm_config.exceptions.len(), 2);
-    assert_eq!(
-        npm_config.exceptions[0].exception_type.as_str(),
-        "block_all_installs"
-    );
-    assert_eq!(
-        npm_config.exceptions[0].permission_group_ids,
-        vec![100, 200, 300]
-    );
-    assert!(npm_config.exceptions[0].related_packages.is_empty());
-    assert_eq!(
-        npm_config.exceptions[1].exception_type.as_str(),
-        "request_installs"
-    );
-    assert_eq!(npm_config.exceptions[1].permission_group_ids, vec![100]);
+#[test]
+fn test_parse_fetch_permissions_timestamp_false_is_invalid() {
+    let json = r#"{
+        "permission_group": {
+            "id": 1,
+            "name": "Default"
+        },
+        "ecosystems": {
+            "maven": {
+                "minimum_allowed_age_timestamp": false
+            }
+        }
+    }"#;
+
+    let err = serde_json::from_str::<EndpointConfig>(json).unwrap_err();
+    assert!(err.to_string().contains("invalid type: boolean `false`"));
 }

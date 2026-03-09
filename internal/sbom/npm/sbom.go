@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/sbom"
 )
@@ -27,31 +27,18 @@ func (n *Npm) Name() string {
 }
 
 func (n *Npm) Installations(ctx context.Context) ([]sbom.InstalledVersion, error) {
-	paths, err := findBinaries()
-	if err != nil {
-		return nil, fmt.Errorf("failed to find npm binaries: %w", err)
-	}
-	var installations []sbom.InstalledVersion
-	for _, path := range paths {
-		version, err := getVersion(ctx, path)
-		if err != nil {
-			log.Printf("Skipping npm at %s: %v", path, err)
-			continue
-		}
-		log.Printf("Found npm %s at: %s", version, path)
-		installations = append(installations, sbom.InstalledVersion{
-			Version: version,
-			Path:    path,
-		})
-	}
-
-	return installations, nil
+	return findInstallations(ctx)
 }
 
 func (n *Npm) SBOM(ctx context.Context, installation sbom.InstalledVersion) ([]sbom.Package, error) {
 	// --all includes the full dependency tree (not just top-level) so the SBOM is complete.
 	output, err := runNpm(ctx, installation.Path, "list", "-g", "--all", "--json")
 	if err != nil {
+		if strings.Contains(output, "ENOENT") {
+			// Fresh npm installation, no packages installed yet
+			// We still want to report the installation, even if it has no packages
+			return []sbom.Package{}, nil
+		}
 		return nil, fmt.Errorf("failed to list global packages: %w", err)
 	}
 

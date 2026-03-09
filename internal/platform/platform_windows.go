@@ -198,6 +198,25 @@ func IsAnySystemProxySet(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
+// GetSystemProxyConflictDetails returns a human-readable list of where proxy/PAC is configured.
+// On Windows this is per-user registry, so we report that proxy or PAC is set for one or more users.
+func GetSystemProxyConflictDetails(ctx context.Context) ([]string, error) {
+	sids, err := getLoggedInUserSIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var details []string
+	for _, sid := range sids {
+		if isSystemProxySetForSid(ctx, sid) {
+			details = append(details, fmt.Sprintf("  - User registry (SID %s): Web Proxy enabled", sid))
+		}
+		if isSystemPACSetForSid(ctx, sid, "") {
+			details = append(details, fmt.Sprintf("  - User registry (SID %s): PAC (AutoConfigURL) set", sid))
+		}
+	}
+	return details, nil
+}
+
 func UnsetSystemPAC(ctx context.Context, pacURL string) error {
 	errs := []error{}
 	sids, err := getLoggedInUserSIDs(ctx)
@@ -207,11 +226,9 @@ func UnsetSystemPAC(ctx context.Context, pacURL string) error {
 
 	for _, sid := range sids {
 		regPath := `HKU\` + sid + `\` + registryInternetSettingsSuffix
-		regValuesToDisable := map[string]RegistryValue{
-			"AutoConfigURL": {Type: "REG_SZ", Value: "AutoConfigURL", Data: ""},
-		}
-		for _, regValue := range regValuesToDisable {
-			if err := setRegistryValue(ctx, regPath, regValue); err != nil {
+		regValuesToDelete := []string{"AutoConfigURL"}
+		for _, regValue := range regValuesToDelete {
+			if err := deleteRegistryValue(ctx, regPath, regValue); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -236,7 +253,7 @@ func IsProxyCAInstalled(ctx context.Context) error {
 func UninstallProxyCA(ctx context.Context) error {
 	commandsToExecute := []utils.Command{
 		{Command: "certutil", Args: []string{"-delstore", "Root", "aikidosafechain.com"}},
-		{Command: "cmdkey", Args: []string{"/delete:safechain-proxy-lib.tls-root-ca-key"}},
+		{Command: "cmdkey", Args: []string{"/delete:safechain-l7-proxy.tls-root-ca-key"}},
 	}
 	_, err := utils.RunCommands(ctx, commandsToExecute)
 	if err != nil {
