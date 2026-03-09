@@ -14,7 +14,10 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-const PROCESS_TIMEOUT_MS = 60000 // 1 minute
+const (
+	PROCESS_TIMEOUT_MS = 60000 // 1 minute
+	CREATE_NO_WINDOW   = 0x08000000
+)
 
 func getCurrentUserToken() (*windows.Token, error) {
 	var sessionInfo *windows.WTS_SESSION_INFO
@@ -125,44 +128,57 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 	var si windows.StartupInfo
 	si.Cb = uint32(unsafe.Sizeof(si))
 	si.Desktop, _ = windows.UTF16PtrFromString("winsta0\\default")
-	si.Flags = windows.STARTF_USESTDHANDLES
+	si.Flags = windows.STARTF_USESTDHANDLES | windows.STARTF_USESHOWWINDOW
+	si.ShowWindow = uint16(windows.SW_HIDE)
 	si.StdOutput = stdoutWrite
 	si.StdErr = stdoutWrite
 
 	var pi windows.ProcessInformation
 
-	if err := windows.CreateProcessAsUser(duplicatedToken, nil, cmdLinePtr, nil, nil, true, windows.CREATE_UNICODE_ENVIRONMENT, envBlock, nil, &si, &pi); err != nil {
+	creationFlags := uint32(windows.CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW)
+	if err := windows.CreateProcessAsUser(duplicatedToken, nil, cmdLinePtr, nil, nil, true, creationFlags, envBlock, nil, &si, &pi); err != nil {
 		return "", fmt.Errorf("CreateProcessAsUser failed: %v", err)
 	}
 
 	defer windows.CloseHandle(pi.Thread)
 	defer windows.CloseHandle(pi.Process)
 
+	windows.CloseHandle(stdoutWrite)
+	stdoutWrite = 0
+
+	type pipeResult struct {
+		output []byte
+		err    error
+	}
+	pipeCh := make(chan pipeResult, 1)
+	go func() {
+		var output []byte
+		buf := make([]byte, 4096)
+		for {
+			var bytesRead uint32
+			err := windows.ReadFile(stdoutRead, buf, &bytesRead, nil)
+			if err != nil || bytesRead == 0 {
+				break
+			}
+			output = append(output, buf[:bytesRead]...)
+		}
+		pipeCh <- pipeResult{output: output}
+	}()
+
 	event, err := windows.WaitForSingleObject(pi.Process, PROCESS_TIMEOUT_MS)
 	if err != nil {
 		return "", fmt.Errorf("WaitForSingleObject failed: %v", err)
 	}
 	if event == uint32(windows.WAIT_TIMEOUT) {
+		windows.TerminateProcess(pi.Process, 1)
 		return "", fmt.Errorf("process timed out after 1 minute")
 	}
 	if event != windows.WAIT_OBJECT_0 {
 		return "", fmt.Errorf("unexpected wait result: %d", event)
 	}
 
-	// Need to close this earlier so the pipe is fully closed and flushed before reading the output
-	windows.CloseHandle(stdoutWrite)
-	stdoutWrite = 0
-
-	var output []byte
-	buf := make([]byte, 4096)
-	for {
-		var bytesRead uint32
-		err := windows.ReadFile(stdoutRead, buf, &bytesRead, nil)
-		if err != nil || bytesRead == 0 {
-			break
-		}
-		output = append(output, buf[:bytesRead]...)
-	}
+	pr := <-pipeCh
+	output := pr.output
 
 	var exitCode uint32
 	if err := windows.GetExitCodeProcess(pi.Process, &exitCode); err != nil {
@@ -172,7 +188,7 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 		err := fmt.Errorf("process exited with code %d", exitCode)
 		log.Printf("\t- Command error: %v", err)
 		log.Printf("\t- Command output: %s", string(output))
-		return "", err
+		return string(output), err
 	}
 
 	return string(output), nil
@@ -247,7 +263,7 @@ func runAsLoggedInUser(binaryPath string, args []string) (string, error) {
 
 	output, err := runProcessAsUser(duplicatedToken, cmdLinePtr, envBlock)
 	if err != nil {
-		return "", fmt.Errorf("runProcessAsUser failed: %v", err)
+		return output, fmt.Errorf("runProcessAsUser failed: %v", err)
 	}
 
 	return output, nil
@@ -270,7 +286,11 @@ func registryValueContains(ctx context.Context, path string, value string, toCon
 	if err != nil {
 		return false
 	}
-	return strings.Contains(string(output), toContain)
+	stringOutput := strings.TrimSpace(string(output))
+	if stringOutput == "" {
+		return false
+	}
+	return strings.Contains(stringOutput, toContain)
 }
 
 func deleteRegistryValue(ctx context.Context, path string, value string) error {
