@@ -110,6 +110,21 @@ func isPACEnabledAndUrlSet(output string, url string) bool {
 	return strings.Contains(string(output), "Enabled: Yes") && strings.Contains(string(output), "URL: "+url)
 }
 
+// isPACEnabledWithNonEmptyURL returns true only if PAC is enabled AND has a non-empty URL configured.
+// PAC enabled with no URL is an edge case we can safely overwrite.
+func isPACEnabledWithNonEmptyURL(output string) bool {
+	if !strings.Contains(output, "Enabled: Yes") {
+		return false
+	}
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "URL: ") {
+			return strings.TrimPrefix(line, "URL: ") != ""
+		}
+	}
+	return false
+}
+
 func isSystemProxySetForService(ctx context.Context, service string, proxyURL string) (bool, error) {
 	outputHttp, err := exec.CommandContext(ctx, "networksetup", "-getwebproxy", service).Output()
 	if err != nil {
@@ -202,20 +217,23 @@ func IsAnySystemProxySet(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("failed to get network services: %v", err)
 	}
 
-	proxyCheckFunctions := []func(ctx context.Context, service string, proxyURL string) (bool, error){
-		isSystemPACSetForService,
-		isSystemProxySetForService,
-	}
-
 	for _, service := range services {
-		for _, f := range proxyCheckFunctions {
-			set, err := f(ctx, service, "")
-			if err != nil {
-				return false, fmt.Errorf("failed to check if system proxy is set for service %q (possibly not set): %v", service, err)
-			}
-			if set {
-				return true, nil
-			}
+		proxySet, err := isSystemProxySetForService(ctx, service, "")
+		if err != nil {
+			return false, fmt.Errorf("failed to check if system proxy is set for service %q (possibly not set): %v", service, err)
+		}
+		if proxySet {
+			return true, nil
+		}
+
+		// Only consider PAC a conflict if it's enabled AND has a non-empty URL set.
+		// PAC enabled with no URL is a common edge case that we can safely overwrite.
+		output, err := exec.CommandContext(ctx, "networksetup", "-getautoproxyurl", service).Output()
+		if err != nil {
+			return false, fmt.Errorf("failed to check if system PAC is set for service %q: %v", service, err)
+		}
+		if isPACEnabledWithNonEmptyURL(string(output)) {
+			return true, nil
 		}
 	}
 	return false, nil
