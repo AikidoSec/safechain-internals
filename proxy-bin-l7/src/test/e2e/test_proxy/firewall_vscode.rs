@@ -211,6 +211,23 @@ async fn test_vscode_https_install_asset_blocked_by_endpoint_policy_rejected_pac
 
 #[tokio::test]
 #[tracing_test::traced_test]
+async fn test_vscode_https_install_asset_blocked_by_endpoint_policy_request_installs() {
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-request-installs-vscode",
+        "mock_device",
+        &[],
+    )
+    .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "python.python" is not malware, but request_installs requires approval for all installs.
+    let resp = client.get(SAFE_EXTENSION_URL).send().await.unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
 async fn test_vscode_https_install_asset_subdomain_gallery_api_malware_blocked() {
     let runtime = e2e::runtime::get().await;
     let client = runtime.client_with_http_proxy().await;

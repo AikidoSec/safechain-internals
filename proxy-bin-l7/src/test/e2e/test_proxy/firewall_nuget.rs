@@ -123,3 +123,24 @@ async fn test_nuget_package_blocked_by_endpoint_policy_rejected_package() {
 
     assert_eq!(StatusCode::FORBIDDEN, resp.status());
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_nuget_package_blocked_by_endpoint_policy_request_installs() {
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-request-installs-nuget",
+        "mock_device",
+        &[],
+    )
+    .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "newtonsoft.json" is not malware, but request_installs requires approval for all installs.
+    let resp = client
+        .get("https://api.nuget.org/v3-flatcontainer/newtonsoft.json/13.0.4/newtonsoft.json.13.0.4.nupkg")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}

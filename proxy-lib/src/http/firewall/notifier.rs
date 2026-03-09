@@ -43,13 +43,9 @@ type DedupCache = moka::sync::Cache<DedupKey, Arc<AtomicU64>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct DedupKey {
-    /// The product type (e.g., "npm", "pypi", "vscode", "chrome")
     pub product: ArcStr,
-    /// The name or identifier of the artifact
     pub identifier: ArcStr,
-    /// Optional version of the artifact (e.g. semver)
     pub version: PackageVersionKey,
-    /// Reason why the artifact was blocked.
     pub block_reason: BlockReason,
 }
 

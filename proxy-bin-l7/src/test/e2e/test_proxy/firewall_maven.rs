@@ -140,3 +140,24 @@ async fn test_maven_package_blocked_by_endpoint_policy_rejected_package() {
 
     assert_eq!(StatusCode::FORBIDDEN, resp.status());
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_maven_package_blocked_by_endpoint_policy_request_installs() {
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-request-installs-maven",
+        "mock_device",
+        &[],
+    )
+    .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "org.junit:junit" is not malware, but request_installs requires approval for all installs.
+    let resp = client
+        .get("https://repo.maven.apache.org/maven2/org/junit/junit/4.13.2/junit-4.13.2.jar")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
