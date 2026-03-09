@@ -1,59 +1,57 @@
-# Welcome to Your New Wails3 Project!
+# Aikido Safechain UI
 
-Congratulations on generating your Wails3 application! This README will guide you through the next steps to get your project up and running.
+Desktop tray application for Aikido Safechain endpoint protection. Built with [Wails v3](https://v3.wails.io/) (Go backend + web frontend).
 
-## Getting Started
+The app runs as a **system-tray icon** (no dock icon). It receives proxy-status updates and blocked-event notifications from the Safechain daemon, displays them in a dashboard window, and pushes native OS notifications.
 
-1. Navigate to your project directory in the terminal.
+## Architecture
 
-2. To run your application in development mode, use the following command:
+```
+┌──────────┐  POST /v1/proxy-status  ┌───────────┐
+│  Daemon  │  POST /v1/blocked       │  UI App   │
+│          │ ──────────────────────► |(appserver)│
+│          │ ◄────────────────────── │           │
+│          │  GET  /v1/events        │ (daemon   │
+│          │  POST /v1/events/:id/   │  client)  │
+│          │       request-access    └───────────┘
+└──────────┘
+```
 
-   ```
-   wails3 dev
-   ```
+| Package | Purpose |
+|---------|---------|
+| `main` | Entry point, CLI flags, Wails app, window management, system tray, notifications |
+| `appserver` | HTTP server that receives status and block callbacks from the daemon |
+| `daemon` | HTTP client for the daemon API (`ListEvents`, `GetEvent`, `RequestAccess`) |
+| `frontend/` | Web frontend (Vite + TypeScript) embedded into the binary |
 
-   This will start your application and enable hot-reloading for both frontend and backend changes.
+## Prerequisites
 
-3. To build your application for production, use:
+- Go 1.25+
+- [Wails v3 CLI](https://v3.wails.io/getting-started/installation/)
+- Node.js (for the frontend build)
 
-   ```
-   wails3 build
-   ```
+## Development
 
-   This will create a production-ready executable in the `build` directory.
+```sh
+task dev
+```
 
-## Exploring Wails3 Features
+This starts the app with hot-reload for both Go and frontend changes.
 
-Now that you have your project set up, it's time to explore the features that Wails3 offers:
+## Build
 
-1. **Check out the examples**: The best way to learn is by example. Visit the `examples` directory in the `v3/examples` directory to see various sample applications.
+```sh
+task build       # compile binary
+task package     # platform-specific distributable (.app, .exe, etc.)
+```
 
-2. **Run an example**: To run any of the examples, navigate to the example's directory and use:
+## CLI Flags
 
-   ```
-   go run .
-   ```
+The daemon typically launches the UI with these flags:
 
-   Note: Some examples may be under development during the alpha phase.
-
-3. **Explore the documentation**: Visit the [Wails3 documentation](https://v3.wails.io/) for in-depth guides and API references.
-
-4. **Join the community**: Have questions or want to share your progress? Join the [Wails Discord](https://discord.gg/JDdSxwjhGf) or visit the [Wails discussions on GitHub](https://github.com/wailsapp/wails/discussions).
-
-## Project Structure
-
-Take a moment to familiarize yourself with your project structure:
-
-- `frontend/`: Contains your frontend code (HTML, CSS, JavaScript/TypeScript)
-- `main.go`: The entry point of your Go backend
-- `app.go`: Define your application structure and methods here
-- `wails.json`: Configuration file for your Wails project
-
-## Next Steps
-
-1. Modify the frontend in the `frontend/` directory to create your desired UI.
-2. Add backend functionality in `main.go`.
-3. Use `wails3 dev` to see your changes in real-time.
-4. When ready, build your application with `wails3 build`.
-
-Happy coding with Wails3! If you encounter any issues or have questions, don't hesitate to consult the documentation or reach out to the Wails community.
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-daemon_url` | `http://127.0.0.1:7878` | Daemon API base URL |
+| `-token` | `devtoken` | Bearer token for daemon API auth |
+| `-ui_url` | `127.0.0.1:9876` | Address the UI's HTTP server listens on |
+| `-log_file` | _(stdout only)_ | Path to a log file (tee'd with stdout) |
