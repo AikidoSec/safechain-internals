@@ -212,7 +212,7 @@ impl SyncSecrets {
             }
             #[cfg(not(target_os = "macos"))]
             Backend::KeyRing { store } => {
-                let entry = new_key_ring_entry(store, key, self.account)?;
+                let entry = new_key_ring_entry(store.as_ref(), key, self.account)?;
                 entry
                     .set_secret(&raw)
                     .context("set secret")
@@ -269,7 +269,7 @@ impl SyncSecrets {
             }
             #[cfg(not(target_os = "macos"))]
             Backend::KeyRing { store } => {
-                let entry = new_key_ring_entry(store, key, self.account)?;
+                let entry = new_key_ring_entry(store.as_ref(), key, self.account)?;
                 match entry.get_secret() {
                     Ok(raw) => deserialize_secret(&raw, key),
                     Err(keyring_core::Error::NoEntry) => Ok(None),
