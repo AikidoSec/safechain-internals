@@ -22,7 +22,7 @@ func (s *Server) handleRequestBypass(w http.ResponseWriter, r *http.Request) {
 	event, found := s.recentBlocks[req.Key]
 	s.blocksMu.RUnlock()
 
-	if found && event.BlockReason == "request_install" {
+	if found {
 		go s.sendInstallationRequest(event)
 	}
 
