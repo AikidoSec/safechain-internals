@@ -323,7 +323,7 @@ fn try_new_protected_store(
     tracing::info!(
         access_group = ?access_group,
         cloud_sync,
-        "using Apple Protected Data store for secrets; this typically requires a properly signed app with keychain entitlements"
+        "using Apple Protected Data store for secrets"
     );
 
     if config.is_empty() {

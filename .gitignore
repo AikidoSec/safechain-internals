@@ -40,3 +40,9 @@ go.work
 
 # bin data storage
 .aikido
+
+# Xcode generated files
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
