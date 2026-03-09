@@ -3,6 +3,8 @@ package theme
 import (
 	"image/color"
 
+	"gioui.org/font/gofont"
+	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget/material"
 )
@@ -36,6 +38,7 @@ type AikidoTheme struct {
 
 func NewAikidoTheme() *AikidoTheme {
 	th := material.NewTheme()
+	th.Shaper = text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
 
 	aikidoTheme := &AikidoTheme{
 		Theme:              th,
