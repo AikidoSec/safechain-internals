@@ -7,10 +7,11 @@ import (
 )
 
 type EcosystemEntry struct {
-	Variant  string    `json:"variant"`
-	Version  string    `json:"version"`
-	Path     string    `json:"path"`
-	Packages []Package `json:"packages"`
+	Ecosystem string    `json:"ecosystem"`
+	Variant   string    `json:"variant,omitempty"`
+	Version   string    `json:"version"`
+	Path      string    `json:"path"`
+	Packages  []Package `json:"packages"`
 }
 
 type SBOM struct {
@@ -55,15 +56,12 @@ func (r *Registry) CollectAllPackages(ctx context.Context) SBOM {
 				log.Printf("Failed to collect SBOM for '%s' (%s): %v", name, inst.Version, err)
 				continue
 			}
-			variant := inst.Variant
-			if variant == "" {
-				variant = name
-			}
 			entries = append(entries, EcosystemEntry{
-				Variant:  variant,
-				Version:  inst.Version,
-				Path:     inst.Path,
-				Packages: packages,
+				Ecosystem: inst.Ecosystem,
+				Variant:   inst.Variant,
+				Version:   inst.Version,
+				Path:      inst.Path,
+				Packages:  packages,
 			})
 		}
 	}
