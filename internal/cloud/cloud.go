@@ -62,7 +62,6 @@ func sendEvent(ctx context.Context, endpoint string, config *config.ConfigInfo, 
 	}
 
 	log.Printf("Event sent successfully to %s", endpoint)
-	log.Printf("[DEBUG] Request body sent to %s:\n%s", endpoint, string(body))
 	return nil
 }
 

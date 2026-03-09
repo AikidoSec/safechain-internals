@@ -21,11 +21,6 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Received block event: product=%s package=%s reason=%s", event.Artifact.Product, event.Artifact.PackageName, event.BlockReason)
 
-	key := buildKey(event)
-	s.blocksMu.Lock()
-	s.recentBlocks[key] = event
-	s.blocksMu.Unlock()
-
 	// Show UI modal in a goroutine to not block the HTTP response
 	go showBlockedModal(event, s.Addr())
 
@@ -48,6 +43,9 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 		"--subtitle", subtitle,
 		"--ingress", ingressAddress,
 		"--bypass-enabled", "true",
+		"--product", event.Artifact.Product,
+		"--package-name", event.Artifact.PackageName,
+		"--package-version", event.Artifact.PackageVersion,
 	}
 
 	// Make sure that the modals close on their own after an hour so there are no hanging

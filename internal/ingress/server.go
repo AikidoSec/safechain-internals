@@ -24,15 +24,12 @@ type Server struct {
 	server   *http.Server
 	config   *config.ConfigInfo
 
-	mu           sync.RWMutex
-	blocksMu     sync.RWMutex
-	recentBlocks map[string]BlockEvent
+	mu sync.RWMutex
 }
 
 func New(cfg *config.ConfigInfo) *Server {
 	return &Server{
-		config:       cfg,
-		recentBlocks: make(map[string]BlockEvent),
+		config: cfg,
 	}
 }
 

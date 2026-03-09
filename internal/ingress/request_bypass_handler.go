@@ -18,36 +18,30 @@ func (s *Server) handleRequestBypass(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Received request-bypass event: key=%s", req.Key)
 
-	s.blocksMu.RLock()
-	event, found := s.recentBlocks[req.Key]
-	s.blocksMu.RUnlock()
-
-	if found {
-		go s.sendInstallationRequest(event)
-	}
+	go s.sendInstallationRequest(req)
 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) sendInstallationRequest(event BlockEvent) {
-	installEvent := buildInstallationRequestEvent(event)
+func (s *Server) sendInstallationRequest(req RequestBypassEvent) {
+	installEvent := buildInstallationRequestEvent(req)
 	if err := cloud.SendRequestPackageInstallation(context.Background(), s.config, installEvent); err != nil {
-		log.Printf("Failed to send installation request for %s: %v", buildKey(event), err)
+		log.Printf("Failed to send installation request for %s: %v", req.Key, err)
 		return
 	}
-	log.Printf("Installation request sent for %s", buildKey(event))
+	log.Printf("Installation request sent for %s", req.Key)
 }
 
-func buildInstallationRequestEvent(event BlockEvent) *cloud.RequestPackageInstallationEvent {
+func buildInstallationRequestEvent(req RequestBypassEvent) *cloud.RequestPackageInstallationEvent {
 	pkg := cloud.PackageInstallRequest{
-		ID:      event.Artifact.PackageName,
-		Name:    event.Artifact.PackageName,
-		Version: event.Artifact.PackageVersion,
+		ID:      req.PackageName,
+		Name:    req.PackageName,
+		Version: req.PackageVersion,
 	}
 	var installEvent cloud.RequestPackageInstallationEvent
 	installEvent.SBOM.Ecosystems = []cloud.EcosystemPackages{
 		{
-			Variant:  event.Artifact.Product,
+			Variant:  req.Product,
 			Packages: []cloud.PackageInstallRequest{pkg},
 		},
 	}
