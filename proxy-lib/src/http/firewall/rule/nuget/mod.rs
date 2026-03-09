@@ -14,7 +14,7 @@ use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
-        events::BlockedArtifact,
+        events::{BlockReason, BlockedArtifact},
         rule::{BlockedRequest, RequestAction, Rule},
     },
     package::{
@@ -123,28 +123,22 @@ impl Rule for RuleNuget {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Block => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                PackagePolicyDecision::Defer => {}
+                decision => {
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("nuget"),
-                            identifier: ArcStr::from(nuget_package.fully_qualified_name.as_str()),
-                            version: Some(PackageVersion::Semver(nuget_package.version.clone())),
-                        },
+                        Self::blocked_artifact(&nuget_package),
+                        super::block_reason_for(decision),
                     )));
                 }
-                PackagePolicyDecision::Defer => {}
             }
         }
 
         if self.is_package_listed_as_malware(&nuget_package) {
-            Ok(RequestAction::Block(BlockedRequest::malware(
+            Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                BlockedArtifact {
-                    product: arcstr!("nuget"),
-                    identifier: ArcStr::from(nuget_package.fully_qualified_name.to_string()),
-                    version: Some(PackageVersion::Semver(nuget_package.version.clone())),
-                },
+                Self::blocked_artifact(&nuget_package),
+                BlockReason::Malware,
             )))
         } else {
             tracing::debug!(
@@ -157,6 +151,15 @@ impl Rule for RuleNuget {
 }
 
 impl RuleNuget {
+    fn blocked_artifact(nuget_package: &NugetPackage) -> BlockedArtifact {
+        BlockedArtifact {
+            product: arcstr!("nuget"),
+            identifier: ArcStr::from(nuget_package.fully_qualified_name.as_str()),
+            display_name: None,
+            version: Some(PackageVersion::Semver(nuget_package.version.clone())),
+        }
+    }
+
     fn is_package_listed_as_malware(&self, nuget_package: &NugetPackage) -> bool {
         self.remote_malware_list.has_entries_with_version(
             &nuget_package.fully_qualified_name,

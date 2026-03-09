@@ -65,6 +65,15 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": ["requests"]
             }
         }),
+        "policy-request-installs-pypi" => json!({
+            "block_all_installs": false,
+            "request_installs": true,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
         _ => default_ecosystem_policy.clone(),
     };
 
@@ -94,6 +103,15 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
             "exceptions": {
                 "allowed_packages": [],
                 "rejected_packages": ["python.python"]
+            }
+        }),
+        "policy-request-installs-vscode" => json!({
+            "block_all_installs": false,
+            "request_installs": true,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
             }
         }),
         _ => default_ecosystem_policy.clone(),
@@ -127,6 +145,15 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": ["lodash"]
             }
         }),
+        "policy-request-installs-npm" => json!({
+            "block_all_installs": false,
+            "request_installs": true,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
         _ => default_ecosystem_policy.clone(),
     };
 
@@ -156,6 +183,15 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
             "exceptions": {
                 "allowed_packages": [],
                 "rejected_packages": ["org.junit:junit"]
+            }
+        }),
+        "policy-request-installs-maven" => json!({
+            "block_all_installs": false,
+            "request_installs": true,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
             }
         }),
         _ => default_ecosystem_policy.clone(),
@@ -189,6 +225,15 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": ["newtonsoft.json"]
             }
         }),
+        "policy-request-installs-nuget" => json!({
+            "block_all_installs": false,
+            "request_installs": true,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
         _ => default_ecosystem_policy.clone(),
     };
 
@@ -220,6 +265,15 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": ["safeextension12345"]
             }
         }),
+        "policy-request-installs-chrome" => json!({
+            "block_all_installs": false,
+            "request_installs": true,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
         _ => default_ecosystem_policy.clone(),
     };
 
@@ -249,6 +303,15 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
             "exceptions": {
                 "allowed_packages": [],
                 "rejected_packages": ["redhat/java"]
+            }
+        }),
+        "policy-request-installs-open-vsx" => json!({
+            "block_all_installs": false,
+            "request_installs": true,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
             }
         }),
         _ => default_ecosystem_policy,

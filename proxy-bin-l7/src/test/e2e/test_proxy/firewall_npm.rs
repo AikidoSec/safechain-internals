@@ -90,3 +90,21 @@ async fn test_npm_https_package_blocked_by_endpoint_policy_rejected_package() {
 
     assert_eq!(StatusCode::FORBIDDEN, resp.status());
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_npm_https_package_blocked_by_endpoint_policy_request_installs() {
+    let runtime =
+        e2e::runtime::spawn_with_agent_identity("policy-request-installs-npm", "mock_device", &[])
+            .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "lodash" is not malware, but request_installs requires approval for all installs.
+    let resp = client
+        .get("https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
