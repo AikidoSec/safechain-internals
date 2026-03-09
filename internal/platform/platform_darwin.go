@@ -22,6 +22,7 @@ import (
 const (
 	SafeChainUltimateLogName     = "safechain-ultimate.log"
 	SafeChainUltimateErrLogName  = "safechain-ultimate.error.log"
+	SafeChainUILogName           = "safechain-ultimate-ui.log"
 	SafeChainUIAppName           = "safechain-ultimate-ui.app"
 	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
 	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
@@ -62,6 +63,24 @@ func PrepareShellEnvironment(_ context.Context) error {
 
 func SetupLogging() (io.Writer, error) {
 	return os.Stdout, nil
+}
+
+func PrepareUILogFile(ctx context.Context) error {
+	logPath := GetUILogPath()
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create UI log file %s: %w", logPath, err)
+	}
+	f.Close()
+
+	_, uid, _, gid, err := GetCurrentUser(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get current user for UI log chown: %w", err)
+	}
+	if err := os.Chown(logPath, uid, gid); err != nil {
+		return fmt.Errorf("failed to chown UI log file %s: %w", logPath, err)
+	}
+	return nil
 }
 
 /*

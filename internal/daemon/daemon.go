@@ -117,7 +117,7 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 	if d.config == nil {
 		return nil, fmt.Errorf("failed to create config")
 	}
-	d.initLogging()
+	d.initLogging(ctx)
 	return d, nil
 }
 
@@ -444,8 +444,10 @@ func (d *Daemon) launchUI(ctx context.Context) error {
 		"--daemon_url", daemonURL,
 		"--token", token,
 		"--ui_url", fmt.Sprintf("127.0.0.1:%d", port),
+		"--log_file", platform.GetUILogPath(),
 	}
-
+	// log args
+	log.Printf("Launching UI with args: %v", args)
 	// Launch UI as current user (non-blocking); save PID so Stop can kill it
 	pid, err := platform.StartUIProcessInAuditSessionOfCurrentUser(ctx, binaryPath, args)
 	if err != nil {
@@ -479,7 +481,7 @@ func (d *Daemon) runIfIntervalExceeded(lastRun *time.Time, interval time.Duratio
 	}
 }
 
-func (d *Daemon) initLogging() {
+func (d *Daemon) initLogging(ctx context.Context) {
 	writer, err := platform.SetupLogging()
 	if err != nil {
 		log.Printf("Failed to setup file logging: %v, using stdout only", err)
@@ -487,8 +489,13 @@ func (d *Daemon) initLogging() {
 	log.SetOutput(writer)
 	log.SetFlags(log.LstdFlags)
 
+	if err := platform.PrepareUILogFile(ctx); err != nil {
+		log.Printf("Failed to prepare UI log file: %v", err)
+	}
+
 	rotatableLogs := []string{
 		platform.GetUltimateLogPath(),
+		platform.GetUILogPath(),
 	}
 	for _, path := range rotatableLogs {
 		d.logRotator.AddLogFile(path, constants.LogRotationSizeInBytes)
@@ -497,6 +504,7 @@ func (d *Daemon) initLogging() {
 	reapableLogs := []string{
 		platform.GetUltimateLogPath(),
 		platform.GetProxyLogPath(),
+		platform.GetUILogPath(),
 	}
 	for _, path := range reapableLogs {
 		d.logReaper.AddLogFile(path, constants.LogReapingAgeInHours)

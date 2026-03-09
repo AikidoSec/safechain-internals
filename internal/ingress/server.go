@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"sync"
-	"time"
 )
 
 const (
@@ -28,25 +27,6 @@ type Server struct {
 
 func New() *Server {
 	store := &eventStore{}
-
-	// Seed with a couple of sample blocked events so the UI has examples
-	store.Add(BlockEvent{
-		TsMs: time.Now().Add(-5 * time.Minute).UnixMilli(),
-		Artifact: Artifact{
-			Product:        "npm",
-			PackageName:    "left-pad",
-			PackageVersion: "1.3.0",
-		},
-	})
-	store.Add(BlockEvent{
-		TsMs: time.Now().Add(-2 * time.Minute).UnixMilli(),
-		Artifact: Artifact{
-			Product:        "pip",
-			PackageName:    "requests",
-			PackageVersion: "2.32.3",
-		},
-	})
-
 	return &Server{
 		eventStore: store,
 	}

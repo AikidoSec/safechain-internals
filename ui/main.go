@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"flag"
 	"log"
+	"runtime"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -37,7 +38,7 @@ func init() {
 
 // App icon used for system tray (and matches build/appicon.png used for .app and notifications).
 //
-//go:embed build/appicon.png
+//go:embed build/imageTemplate.png
 var icon []byte
 
 // getMainWindow returns the named window if it still exists (nil if closed/destroyed).
@@ -58,7 +59,13 @@ func main() {
 	daemonURL := flag.String("daemon_url", "", "Daemon API base URL (default http://127.0.0.1:7878)")
 	token := flag.String("token", "", "Daemon API auth token (default devtoken)")
 	uiURL := flag.String("ui_url", "", "Address the UI app server listens on (default 127.0.0.1:9876). Daemon calls POST <ui_url>/v1/proxy-status and POST <ui_url>/v1/blocked")
+	logFile := flag.String("log_file", "", "Path to the log file")
 	flag.Parse()
+
+	if *logFile != "" {
+		setupLogging(*logFile)
+		log.Println("Logging to file: ", *logFile)
+	}
 
 	if *daemonURL != "" || *token != "" {
 		daemon.SetConfig(*daemonURL, *token)
@@ -74,11 +81,12 @@ func main() {
 		Actions: []notifications.NotificationAction{{ID: "OPEN", Title: "Open"}},
 	})
 	authorized, _ := notifier.CheckNotificationAuthorization()
+	log.Println("Notifications authorized: ", authorized)
 	if !authorized {
 		authorized, _ = notifier.RequestNotificationAuthorization()
+		log.Println("After request, Notifications authorized: ", authorized)
 	}
 	notifAuthorized := authorized
-	//dockService := dock.NewWithOptions(dock.BadgeOptions{})
 
 	// Create a new Wails application by providing the necessary options.
 	// Variables 'Name' and 'Description' are for application metadata.
@@ -91,7 +99,6 @@ func main() {
 		Services: []application.Service{
 			application.NewService(notifier),
 			application.NewService(&DaemonService{}),
-			//	application.NewService(dockService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -134,13 +141,11 @@ func main() {
 	showDashboard := func() {
 		w := getMainWindow(app)
 		if w == nil {
-			log.Println("new window")
 			mainWindow = app.Window.NewWithOptions(mainWindowOpts)
 			attachCloseToHide(mainWindow)
 			w = mainWindow
 
 		} else {
-			log.Println("existing window")
 			mainWindow = w
 		}
 		w.Show()
@@ -150,7 +155,12 @@ func main() {
 	// System Tray Icon and Menu
 	systray := app.SystemTray.New()
 	systray.SetTooltip("Aikido Safechain")
-	systray.SetIcon(icon)
+	if runtime.GOOS == "darwin" {
+		systray.SetTemplateIcon(icon)
+	} else {
+		systray.SetIcon(icon)
+	}
+
 	statusLabel := "Aikido Proxy: checking…"
 	menu := application.NewMenu()
 	statusItem := menu.Add(statusLabel)
@@ -171,6 +181,7 @@ func main() {
 	srv.SetHandlers(
 		func(displayLabel string) { statusCh <- displayLabel },
 		func(ev daemon.BlockedEvent) {
+			log.Println("Blocked event: ", ev)
 			app.Event.Emit("blocked", ev)
 			if notifAuthorized {
 				notifier.SendNotificationWithActions(notifications.NotificationOptions{
@@ -202,7 +213,6 @@ func main() {
 			app.Event.Emit("focus_event", FocusEventPayload{EventId: eventId})
 		}()
 	})
-
 	// Run the application. This blocks until the application has been exited.
 	err := app.Run()
 	//dockService.HideAppIcon()

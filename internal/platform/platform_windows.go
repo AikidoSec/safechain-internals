@@ -23,6 +23,7 @@ import (
 const (
 	SafeChainUltimateLogName       = "SafeChainUltimate.log"
 	SafeChainUltimateErrLogName    = "SafeChainUltimate.err"
+	SafeChainUILogName             = "SafeChainUltimateUI.log"
 	SafeChainUIAppName             = "SafeChainUltimateUI.exe"
 	SafeChainL7ProxyBinaryName     = "SafeChainL7Proxy.exe"
 	SafeChainL7ProxyLogName        = "SafeChainL7Proxy.log"
@@ -138,6 +139,15 @@ func SetupLogging() (io.Writer, error) {
 	}
 
 	return io.MultiWriter(os.Stdout, fileWriter), nil
+}
+
+func PrepareUILogFile(_ context.Context) error {
+	logPath := GetUILogPath()
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create UI log file %s: %w", logPath, err)
+	}
+	return f.Close()
 }
 
 func SetSystemPAC(ctx context.Context, pacURL string) error {
