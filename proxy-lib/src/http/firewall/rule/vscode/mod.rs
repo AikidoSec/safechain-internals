@@ -139,21 +139,21 @@ impl Rule for RuleVSCode {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Rejected => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&vscode_extension),
                         BlockReason::Rejected,
                     )));
                 }
                 PackagePolicyDecision::BlockAll => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&vscode_extension),
                         BlockReason::BlockAll,
                     )));
                 }
                 PackagePolicyDecision::RequestInstall => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&vscode_extension),
                         BlockReason::RequestInstall,
@@ -169,9 +169,10 @@ impl Rule for RuleVSCode {
                 package = %vscode_extension,
                 "blocked VSCode extension install asset download"
             );
-            return Ok(RequestAction::Block(BlockedRequest::malware(
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
                 Self::blocked_artifact(&vscode_extension),
+                BlockReason::Malware,
             )));
         }
 
@@ -194,6 +195,7 @@ impl RuleVSCode {
         BlockedArtifact {
             product: arcstr!("vscode"),
             identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
+            display_name: None,
             version: None,
         }
     }

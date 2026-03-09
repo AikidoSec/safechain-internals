@@ -126,21 +126,21 @@ impl Rule for RuleChrome {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Rejected => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&extension_id, &version),
                         BlockReason::Rejected,
                     )));
                 }
                 PackagePolicyDecision::BlockAll => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&extension_id, &version),
                         BlockReason::BlockAll,
                     )));
                 }
                 PackagePolicyDecision::RequestInstall => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&extension_id, &version),
                         BlockReason::RequestInstall,
@@ -158,9 +158,10 @@ impl Rule for RuleChrome {
                 version
             );
 
-            return Ok(RequestAction::Block(BlockedRequest::malware(
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
                 Self::blocked_artifact(&extension_id, &version),
+                BlockReason::Malware,
             )));
         }
 
@@ -173,6 +174,7 @@ impl RuleChrome {
         BlockedArtifact {
             product: arcstr!("chrome"),
             identifier: extension_id.clone(),
+            display_name: None,
             version: Some(version.clone()),
         }
     }

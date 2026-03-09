@@ -124,21 +124,21 @@ impl Rule for RuleNuget {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Rejected => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&nuget_package),
                         BlockReason::Rejected,
                     )));
                 }
                 PackagePolicyDecision::BlockAll => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&nuget_package),
                         BlockReason::BlockAll,
                     )));
                 }
                 PackagePolicyDecision::RequestInstall => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&nuget_package),
                         BlockReason::RequestInstall,
@@ -149,9 +149,10 @@ impl Rule for RuleNuget {
         }
 
         if self.is_package_listed_as_malware(&nuget_package) {
-            Ok(RequestAction::Block(BlockedRequest::malware(
+            Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
                 Self::blocked_artifact(&nuget_package),
+                BlockReason::Malware,
             )))
         } else {
             tracing::debug!(
@@ -168,6 +169,7 @@ impl RuleNuget {
         BlockedArtifact {
             product: arcstr!("nuget"),
             identifier: ArcStr::from(nuget_package.fully_qualified_name.as_str()),
+            display_name: None,
             version: Some(PackageVersion::Semver(nuget_package.version.clone())),
         }
     }

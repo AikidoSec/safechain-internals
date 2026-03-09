@@ -98,6 +98,7 @@ impl RulePyPI {
         BlockedArtifact {
             product: arcstr!("pypi"),
             identifier: ArcStr::from(package_info.name.as_str()),
+            display_name: None,
             version: Some(package_info.version.clone()),
         }
     }
@@ -203,21 +204,21 @@ impl Rule for RulePyPI {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Rejected => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&package_info),
                         BlockReason::Rejected,
                     )));
                 }
                 PackagePolicyDecision::BlockAll => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&package_info),
                         BlockReason::BlockAll,
                     )));
                 }
                 PackagePolicyDecision::RequestInstall => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&package_info),
                         BlockReason::RequestInstall,
@@ -229,9 +230,10 @@ impl Rule for RulePyPI {
 
         if self.is_blocked(&package_info)? {
             tracing::debug!(package = %package_info.name, version = ?package_info.version, "blocked PyPI package download");
-            return Ok(RequestAction::Block(BlockedRequest::malware(
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
                 Self::blocked_artifact(&package_info),
+                BlockReason::Malware,
             )));
         }
 

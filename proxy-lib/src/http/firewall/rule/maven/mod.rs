@@ -142,21 +142,21 @@ impl Rule for RuleMaven {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Rejected => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&artifact),
                         BlockReason::Rejected,
                     )));
                 }
                 PackagePolicyDecision::BlockAll => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&artifact),
                         BlockReason::BlockAll,
                     )));
                 }
                 PackagePolicyDecision::RequestInstall => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&artifact),
                         BlockReason::RequestInstall,
@@ -167,9 +167,10 @@ impl Rule for RuleMaven {
         }
 
         if self.is_package_listed_as_malware(&artifact) {
-            return Ok(RequestAction::Block(BlockedRequest::malware(
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
                 Self::blocked_artifact(&artifact),
+                BlockReason::Malware,
             )));
         }
 
@@ -207,6 +208,7 @@ impl RuleMaven {
         BlockedArtifact {
             product: arcstr!("maven"),
             identifier: artifact.fully_qualified_name.clone(),
+            display_name: None,
             version: Some(PackageVersion::Semver(artifact.version.clone())),
         }
     }

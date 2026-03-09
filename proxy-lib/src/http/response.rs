@@ -4,13 +4,17 @@ use rama::http::{
     service::web::response::{Headers, IntoResponse},
 };
 
+use crate::http::firewall::events::BlockReason;
+
 use super::KnownContentType;
 
 const CONTACT_ADMIN_MESSAGE: &str = "Contact your security administrator for more information.";
-const GENERIC_BLOCKED_MESSAGE: &str =
-    "The requested source was blocked due to your organization policy.";
 const MALWARE_BLOCKED_MESSAGE: &str =
     "This download was blocked because it was identified as malware.";
+const REJECTED_BLOCKED_MESSAGE: &str = "This download was blocked by your organization policy.";
+const BLOCK_ALL_BLOCKED_MESSAGE: &str = "Your organization blocks all installs for this source.";
+const REQUEST_INSTALL_BLOCKED_MESSAGE: &str =
+    "Install approval is required by your organization policy.";
 
 fn html_blocked_payload(message: &str) -> String {
     format!(
@@ -59,34 +63,17 @@ fn xml_blocked_payload(message: &str) -> String {
     )
 }
 
-pub fn generate_generic_blocked_response_for_req(req: Request) -> Response {
-    let maybe_detected_ct = req
-        .headers()
-        .typed_get()
-        .and_then(KnownContentType::detect_from_accept_header);
-
-    match maybe_detected_ct {
-        Some(KnownContentType::Html) => generate_blocked_response_for_payload(
-            headers::ContentType::html_utf8(),
-            html_blocked_payload(GENERIC_BLOCKED_MESSAGE),
-        ),
-        Some(KnownContentType::Txt) => generate_blocked_response_for_payload(
-            headers::ContentType::text_utf8(),
-            txt_blocked_payload(GENERIC_BLOCKED_MESSAGE),
-        ),
-        Some(KnownContentType::Json) => generate_blocked_response_for_payload(
-            headers::ContentType::json(),
-            json_blocked_payload(GENERIC_BLOCKED_MESSAGE),
-        ),
-        Some(KnownContentType::Xml) => generate_blocked_response_for_payload(
-            headers::ContentType::xml(),
-            xml_blocked_payload(GENERIC_BLOCKED_MESSAGE),
-        ),
-        None => generate_blocked_response_without_payload(),
+fn blocked_message_for_reason(block_reason: &BlockReason) -> &'static str {
+    match block_reason {
+        BlockReason::Malware => MALWARE_BLOCKED_MESSAGE,
+        BlockReason::Rejected => REJECTED_BLOCKED_MESSAGE,
+        BlockReason::BlockAll => BLOCK_ALL_BLOCKED_MESSAGE,
+        BlockReason::RequestInstall => REQUEST_INSTALL_BLOCKED_MESSAGE,
     }
 }
 
-pub fn generate_malware_blocked_response_for_req(req: Request) -> Response {
+pub fn generate_blocked_response_for_req(req: Request, block_reason: &BlockReason) -> Response {
+    let message = blocked_message_for_reason(block_reason);
     let maybe_detected_ct = req
         .headers()
         .typed_get()
@@ -95,25 +82,30 @@ pub fn generate_malware_blocked_response_for_req(req: Request) -> Response {
     match maybe_detected_ct {
         Some(KnownContentType::Html) => generate_blocked_response_for_payload(
             headers::ContentType::html_utf8(),
-            html_blocked_payload(MALWARE_BLOCKED_MESSAGE),
+            html_blocked_payload(message),
         ),
         Some(KnownContentType::Txt) => generate_blocked_response_for_payload(
             headers::ContentType::text_utf8(),
-            txt_blocked_payload(MALWARE_BLOCKED_MESSAGE),
+            txt_blocked_payload(message),
         ),
         Some(KnownContentType::Json) => generate_blocked_response_for_payload(
             headers::ContentType::json(),
-            json_blocked_payload(MALWARE_BLOCKED_MESSAGE),
+            json_blocked_payload(message),
         ),
         Some(KnownContentType::Xml) => generate_blocked_response_for_payload(
             headers::ContentType::xml(),
-            xml_blocked_payload(MALWARE_BLOCKED_MESSAGE),
+            xml_blocked_payload(message),
         ),
-        // Default to plain text when content type is unknown
-        None => generate_blocked_response_for_payload(
-            headers::ContentType::text_utf8(),
-            txt_blocked_payload(MALWARE_BLOCKED_MESSAGE),
-        ),
+        None => {
+            if matches!(block_reason, BlockReason::Malware) {
+                generate_blocked_response_for_payload(
+                    headers::ContentType::text_utf8(),
+                    txt_blocked_payload(message),
+                )
+            } else {
+                generate_blocked_response_without_payload()
+            }
+        }
     }
 }
 

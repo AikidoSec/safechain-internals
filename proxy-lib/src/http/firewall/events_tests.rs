@@ -13,6 +13,7 @@ fn blocked_event_serializes_with_expected_keys() {
         artifact: BlockedArtifact {
             product: arcstr!("npm"),
             identifier: arcstr!("foo"),
+            display_name: Some(arcstr!("Foo Package")),
             version: Some(PackageVersion::from_str("1.3.0").unwrap()),
         },
         block_reason: BlockReason::Malware,
@@ -23,6 +24,7 @@ fn blocked_event_serializes_with_expected_keys() {
     assert_eq!(json["ts_ms"], 42);
     assert_eq!(json["artifact"]["product"], "npm");
     assert_eq!(json["artifact"]["identifier"], "foo");
+    assert_eq!(json["artifact"]["display_name"], "Foo Package");
     assert_eq!(json["artifact"]["version"], "1.3.0");
     assert_eq!(json["block_reason"], "malware");
 }
@@ -33,6 +35,7 @@ fn blocked_event_from_info_sets_timestamp_and_copies_artifact() {
         artifact: BlockedArtifact {
             product: arcstr!("npm"),
             identifier: arcstr!("foo"),
+            display_name: None,
             version: None,
         },
         block_reason: BlockReason::Malware,

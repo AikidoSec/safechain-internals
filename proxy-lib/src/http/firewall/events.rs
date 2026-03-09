@@ -9,11 +9,14 @@ pub struct BlockedArtifact {
     pub product: ArcStr,
     /// The name or identifier of the artifact
     pub identifier: ArcStr,
+    /// Optional human-readable name of the artifact.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<ArcStr>,
     /// Optional version
     pub version: Option<PackageVersion>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BlockReason {
     /// Blocked because the artifact is on the malware list.

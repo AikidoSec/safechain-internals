@@ -133,21 +133,21 @@ impl Rule for RuleOpenVsx {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Rejected => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&extension),
                         BlockReason::Rejected,
                     )));
                 }
                 PackagePolicyDecision::BlockAll => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&extension),
                         BlockReason::BlockAll,
                     )));
                 }
                 PackagePolicyDecision::RequestInstall => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&extension),
                         BlockReason::RequestInstall,
@@ -163,9 +163,10 @@ impl Rule for RuleOpenVsx {
                 package = %extension,
                 "blocked Open VSX extension install asset download"
             );
-            return Ok(RequestAction::Block(BlockedRequest::malware(
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
                 Self::blocked_artifact(&extension),
+                BlockReason::Malware,
             )));
         }
 
@@ -188,6 +189,7 @@ impl RuleOpenVsx {
         BlockedArtifact {
             product: arcstr!("open_vsx"),
             identifier: ArcStr::from(extension.extension_id.as_str()),
+            display_name: None,
             version: None,
         }
     }

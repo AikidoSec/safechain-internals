@@ -136,6 +136,7 @@ impl RuleNpm {
         BlockedArtifact {
             product: arcstr!("npm"),
             identifier: ArcStr::from(package_name),
+            display_name: None,
             version: Some(PackageVersion::Semver(version.clone())),
         }
     }
@@ -162,7 +163,7 @@ impl RuleNpm {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Rejected => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(
                             package.fully_qualified_name.as_str(),
@@ -172,7 +173,7 @@ impl RuleNpm {
                     )));
                 }
                 PackagePolicyDecision::BlockAll => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(
                             package.fully_qualified_name.as_str(),
@@ -182,7 +183,7 @@ impl RuleNpm {
                     )));
                 }
                 PackagePolicyDecision::RequestInstall => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(
                             package.fully_qualified_name.as_str(),
@@ -199,9 +200,10 @@ impl RuleNpm {
             let package_name = package.fully_qualified_name;
             let package_version = package.version;
             tracing::warn!("Blocked malware from {package_name}");
-            Ok(RequestAction::Block(BlockedRequest::malware(
+            Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
                 Self::blocked_artifact(package_name.as_str(), &package_version),
+                BlockReason::Malware,
             )))
         } else {
             tracing::debug!("Npm url: {path} does not contain malware: passthrough");
