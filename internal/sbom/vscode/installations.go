@@ -12,31 +12,36 @@ import (
 )
 
 type variant struct {
-	name   string
-	extDir string
-	bins   []string
+	name      string
+	ecosystem string
+	extDir    string
+	bins      []string
 }
 
 var variants = []variant{
 	{
-		name:   "code",
-		extDir: filepath.Join(".vscode", "extensions"),
-		bins:   []string{"code"},
+		name:      "code",
+		ecosystem: "vscode",
+		extDir:    filepath.Join(".vscode", "extensions"),
+		bins:      []string{"code"},
 	},
 	{
-		name:   "code-insiders",
-		extDir: filepath.Join(".vscode-insiders", "extensions"),
-		bins:   []string{"code-insiders"},
+		name:      "code-insiders",
+		ecosystem: "vscode",
+		extDir:    filepath.Join(".vscode-insiders", "extensions"),
+		bins:      []string{"code-insiders"},
 	},
 	{
-		name:   "cursor",
-		extDir: filepath.Join(".cursor", "extensions"),
-		bins:   []string{"cursor"},
+		name:      "cursor",
+		ecosystem: "open_vsx",
+		extDir:    filepath.Join(".cursor", "extensions"),
+		bins:      []string{"cursor"},
 	},
 	{
-		name:   "vscodium",
-		extDir: filepath.Join(".vscode-oss", "extensions"),
-		bins:   []string{"codium", "vscodium"},
+		name:      "vscodium",
+		ecosystem: "open_vsx",
+		extDir:    filepath.Join(".vscode-oss", "extensions"),
+		bins:      []string{"codium", "vscodium"},
 	},
 }
 
@@ -56,10 +61,11 @@ func findInstallations(ctx context.Context) ([]sbom.InstalledVersion, error) {
 		}
 		log.Printf("Found %s %s at: %s (extensions at: %s)", variant.name, version, binaryPath, extPath)
 		installations = append(installations, sbom.InstalledVersion{
-			Variant:  variant.name,
-			Version:  version,
-			Path:     binaryPath,
-			DataPath: extPath,
+			Ecosystem: variant.ecosystem,
+			Variant:   variant.name,
+			Version:   version,
+			Path:      binaryPath,
+			DataPath:  extPath,
 		})
 	}
 

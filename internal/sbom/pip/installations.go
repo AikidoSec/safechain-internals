@@ -27,8 +27,9 @@ func findInstallations(ctx context.Context) ([]sbom.InstalledVersion, error) {
 		}
 		log.Printf("Found pip %s at: %s", version, path)
 		installations = append(installations, sbom.InstalledVersion{
-			Version: version,
-			Path:    path,
+			Ecosystem: "pypi",
+			Version:   version,
+			Path:      path,
 		})
 	}
 
