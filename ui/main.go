@@ -4,7 +4,6 @@ import (
 	"changeme/appserver"
 	"changeme/daemon"
 	"embed"
-	_ "embed"
 	"flag"
 	"log"
 	"runtime"
@@ -15,85 +14,73 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 )
 
-// Wails uses Go's `embed` package to embed the frontend files into the binary.
-// Any files in the frontend/dist folder will be embedded into the binary and
-// made available to the frontend.
-// See https://pkg.go.dev/embed for more information.
-
 //go:embed all:frontend/dist
 var assets embed.FS
 
-// FocusEventPayload is emitted when the user opens the dashboard from a block notification.
+//go:embed build/imageTemplate.png
+var icon []byte
+
 type FocusEventPayload struct {
 	EventId string `json:"eventId"`
 }
 
 func init() {
-	// Register a custom event whose associated data type is string.
-	// This is not required, but the binding generator will pick up registered events
-	// and provide a strongly typed JS/TS API for them.
 	application.RegisterEvent[daemon.BlockedEvent]("blocked")
 	application.RegisterEvent[FocusEventPayload]("focus_event")
 }
 
-// App icon used for system tray (and matches build/appicon.png used for .app and notifications).
-//
-//go:embed build/imageTemplate.png
-var icon []byte
+// --- CLI flags -----------------------------------------------------------
 
-// getMainWindow returns the named window if it still exists (nil if closed/destroyed).
-func getMainWindow(app *application.App) *application.WebviewWindow {
-	w, ok := app.Window.GetByName("main")
-	if !ok || w == nil {
-		return nil
-	}
-	ww, _ := w.(*application.WebviewWindow)
-	return ww
+type appFlags struct {
+	daemonURL string
+	token     string
+	uiURL     string
+	logFile   string
 }
 
-// main function serves as the application's entry point. It initializes the application, creates a window,
-// and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
-// logs any error that might occur.
-func main() {
-	// Command-line flags (e.g. when started by a daemon: ./app -daemon_url=https://... -token=... -ui_url=127.0.0.1:9876)
-	daemonURL := flag.String("daemon_url", "", "Daemon API base URL (default http://127.0.0.1:7878)")
-	token := flag.String("token", "", "Daemon API auth token (default devtoken)")
-	uiURL := flag.String("ui_url", "", "Address the UI app server listens on (default 127.0.0.1:9876). Daemon calls POST <ui_url>/v1/proxy-status and POST <ui_url>/v1/blocked")
-	logFile := flag.String("log_file", "", "Path to the log file")
+func parseFlags() appFlags {
+	f := appFlags{}
+	flag.StringVar(&f.daemonURL, "daemon_url", "", "Daemon API base URL (default http://127.0.0.1:7878)")
+	flag.StringVar(&f.token, "token", "", "Daemon API auth token (default devtoken)")
+	flag.StringVar(&f.uiURL, "ui_url", "", "Address the UI app server listens on (default 127.0.0.1:9876)")
+	flag.StringVar(&f.logFile, "log_file", "", "Path to the log file")
 	flag.Parse()
+	return f
+}
 
-	if *logFile != "" {
-		setupLogging(*logFile)
-		log.Println("Logging to file: ", *logFile)
+func applyFlags(f appFlags) {
+	if f.logFile != "" {
+		setupLogging(f.logFile)
+		log.Println("Logging to file:", f.logFile)
 	}
+	if f.daemonURL != "" || f.token != "" {
+		daemon.SetConfig(f.daemonURL, f.token)
+	}
+	if f.uiURL != "" {
+		appserver.SetListenAddr(f.uiURL)
+	}
+}
 
-	if *daemonURL != "" || *token != "" {
-		daemon.SetConfig(*daemonURL, *token)
-	}
-	if *uiURL != "" {
-		appserver.SetListenAddr(*uiURL)
-	}
+// --- Notifications -------------------------------------------------------
 
-	// Notifications for blocked events (Open action)
-	notifier := notifications.New()
+func setupNotifications() (notifier *notifications.NotificationService, authorized bool) {
+	notifier = notifications.New()
 	notifier.RegisterNotificationCategory(notifications.NotificationCategory{
 		ID:      "aikido-blocked",
 		Actions: []notifications.NotificationAction{{ID: "OPEN", Title: "Open"}},
 	})
-	authorized, _ := notifier.CheckNotificationAuthorization()
-	log.Println("Notifications authorized: ", authorized)
+	authorized, _ = notifier.CheckNotificationAuthorization()
 	if !authorized {
 		authorized, _ = notifier.RequestNotificationAuthorization()
-		log.Println("After request, Notifications authorized: ", authorized)
 	}
-	notifAuthorized := authorized
+	log.Println("Notifications authorized:", authorized)
+	return
+}
 
-	// Create a new Wails application by providing the necessary options.
-	// Variables 'Name' and 'Description' are for application metadata.
-	// 'Assets' configures the asset server with the 'FS' variable pointing to the frontend files.
-	// 'Bind' is a list of Go struct instances. The frontend has access to the methods of these instances.
-	// 'Mac' options tailor the application when running an macOS.
-	app := application.New(application.Options{
+// --- Wails application ---------------------------------------------------
+
+func newApp(notifier *notifications.NotificationService) *application.App {
+	return application.New(application.Options{
 		Name:        "safechain-ultimate-ui",
 		Description: "A demo of using raw HTML & CSS",
 		Services: []application.Service{
@@ -108,13 +95,12 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
 	})
+}
 
-	// Create a new window with the necessary options.
-	// 'Title' is the title of the window.
-	// 'Mac' options tailor the window when running on macOS.
-	// 'BackgroundColour' is the background colour of the window.
-	// 'URL' is the URL that will be loaded into the webview.
-	mainWindowOpts := application.WebviewWindowOptions{
+// --- Window management ---------------------------------------------------
+
+func mainWindowOpts() application.WebviewWindowOptions {
+	return application.WebviewWindowOptions{
 		Name:             "main",
 		Title:            "Endpoint Protection",
 		Width:            700,
@@ -126,33 +112,46 @@ func main() {
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true,
 		},
-		Mac:          application.MacWindow{},
 		HideOnEscape: true,
 	}
-	mainWindow := app.Window.NewWithOptions(mainWindowOpts)
-	attachCloseToHide := func(w *application.WebviewWindow) {
-		w.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
-			// Intercept window close and keep the app/tray alive.
-			event.Cancel()
-			w.Hide()
-		})
-	}
-	attachCloseToHide(mainWindow)
-	showDashboard := func() {
-		w := getMainWindow(app)
-		if w == nil {
-			mainWindow = app.Window.NewWithOptions(mainWindowOpts)
-			attachCloseToHide(mainWindow)
-			w = mainWindow
+}
 
-		} else {
-			mainWindow = w
-		}
-		w.Show()
-		w.Focus()
-	}
+// windowManager handles the main window lifecycle: hiding on close instead of
+// quitting the app, and re-creating the window if it was destroyed.
+type windowManager struct {
+	app    *application.App
+	window *application.WebviewWindow
+}
 
-	// System Tray Icon and Menu
+func newWindowManager(app *application.App) *windowManager {
+	wm := &windowManager{app: app}
+	wm.window = app.Window.NewWithOptions(mainWindowOpts())
+	wm.interceptClose(wm.window)
+	return wm
+}
+
+func (wm *windowManager) interceptClose(w *application.WebviewWindow) {
+	w.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		event.Cancel()
+		w.Hide()
+	})
+}
+
+func (wm *windowManager) showDashboard() {
+	w, ok := wm.app.Window.GetByName("main")
+	if !ok || w == nil {
+		wm.window = wm.app.Window.NewWithOptions(mainWindowOpts())
+		wm.interceptClose(wm.window)
+	} else {
+		wm.window, _ = w.(*application.WebviewWindow)
+	}
+	wm.window.Show()
+	wm.window.Focus()
+}
+
+// --- System tray ---------------------------------------------------------
+
+func setupSystemTray(app *application.App, showDashboard func()) chan<- string {
 	systray := app.SystemTray.New()
 	systray.SetTooltip("Aikido Safechain")
 	if runtime.GOOS == "darwin" {
@@ -161,9 +160,8 @@ func main() {
 		systray.SetIcon(icon)
 	}
 
-	statusLabel := "Aikido Proxy: checking…"
 	menu := application.NewMenu()
-	statusItem := menu.Add(statusLabel)
+	statusItem := menu.Add("Aikido Proxy: checking…")
 	statusItem.SetEnabled(false)
 	menu.AddSeparator()
 	menu.Add("Open Dashboard").OnClick(func(_ *application.Context) {
@@ -177,11 +175,17 @@ func main() {
 			statusItem.SetLabel(label)
 		}
 	}()
+	return statusCh
+}
+
+// --- App server (receives events from daemon) ----------------------------
+
+func startAppServer(app *application.App, statusCh chan<- string, notifier *notifications.NotificationService, notifAuthorized bool) {
 	srv := appserver.New()
 	srv.SetHandlers(
 		func(displayLabel string) { statusCh <- displayLabel },
 		func(ev daemon.BlockedEvent) {
-			log.Println("Blocked event: ", ev)
+			log.Println("Blocked event:", ev)
 			app.Event.Emit("blocked", ev)
 			if notifAuthorized {
 				notifier.SendNotificationWithActions(notifications.NotificationOptions{
@@ -194,10 +198,22 @@ func main() {
 			}
 		},
 	)
-
 	srv.Start()
-	// Notification response: any click on our block notification (body or "Open" button).
-	// Re-apply accessory activation policy on the main thread so the app does not show in the dock.
+}
+
+// --- Entry point ---------------------------------------------------------
+
+func main() {
+	flags := parseFlags()
+	applyFlags(flags)
+
+	notifier, notifAuthorized := setupNotifications()
+	app := newApp(notifier)
+	wm := newWindowManager(app)
+
+	statusCh := setupSystemTray(app, wm.showDashboard)
+	startAppServer(app, statusCh, notifier, notifAuthorized)
+
 	notifier.OnNotificationResponse(func(result notifications.NotificationResult) {
 		if result.Error != nil {
 			return
@@ -206,19 +222,14 @@ func main() {
 		if eventId == "" {
 			return
 		}
-		showDashboard()
-
+		wm.showDashboard()
 		go func() {
 			time.Sleep(500 * time.Millisecond)
 			app.Event.Emit("focus_event", FocusEventPayload{EventId: eventId})
 		}()
 	})
-	// Run the application. This blocks until the application has been exited.
-	err := app.Run()
-	//dockService.HideAppIcon()
 
-	// If an error occurred while running the application, log it and exit.
-	if err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
 }

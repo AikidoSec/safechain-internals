@@ -6,9 +6,6 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
-/**
- * FocusEventPayload is emitted when the user opens the dashboard from a block notification.
- */
 export class FocusEventPayload {
     /**
      * Creates a new FocusEventPayload instance.
