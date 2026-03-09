@@ -38,7 +38,7 @@ type AikidoTheme struct {
 
 func NewAikidoTheme() *AikidoTheme {
 	th := material.NewTheme()
-	th.Shaper = text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
+	th.Shaper = text.NewShaper(text.WithCollection(gofont.Collection()))
 
 	aikidoTheme := &AikidoTheme{
 		Theme:              th,
