@@ -96,16 +96,10 @@ pub fn generate_blocked_response_for_req(req: Request, block_reason: &BlockReaso
             headers::ContentType::xml(),
             xml_blocked_payload(message),
         ),
-        None => {
-            if matches!(block_reason, BlockReason::Malware) {
-                generate_blocked_response_for_payload(
-                    headers::ContentType::text_utf8(),
-                    txt_blocked_payload(message),
-                )
-            } else {
-                generate_blocked_response_without_payload()
-            }
-        }
+        None => generate_blocked_response_for_payload(
+            headers::ContentType::text_utf8(),
+            txt_blocked_payload(message),
+        ),
     }
 }
 
@@ -116,8 +110,4 @@ fn generate_blocked_response_for_payload(
     body: impl IntoResponse,
 ) -> Response {
     (BLOCKED_STATUS_CODE, Headers::single(ct), body).into_response()
-}
-
-fn generate_blocked_response_without_payload() -> Response {
-    BLOCKED_STATUS_CODE.into_response()
 }
