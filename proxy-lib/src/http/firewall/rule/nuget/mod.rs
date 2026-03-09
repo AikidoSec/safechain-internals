@@ -123,28 +123,14 @@ impl Rule for RuleNuget {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Rejected => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(&nuget_package),
-                        BlockReason::Rejected,
-                    )));
-                }
-                PackagePolicyDecision::BlockAll => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(&nuget_package),
-                        BlockReason::BlockAll,
-                    )));
-                }
-                PackagePolicyDecision::RequestInstall => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(&nuget_package),
-                        BlockReason::RequestInstall,
-                    )));
-                }
                 PackagePolicyDecision::Defer => {}
+                decision => {
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
+                        req,
+                        Self::blocked_artifact(&nuget_package),
+                        super::block_reason_for(decision),
+                    )));
+                }
             }
         }
 

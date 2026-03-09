@@ -7,6 +7,7 @@ use rama::{
 };
 
 use super::events::{BlockReason, BlockedArtifact, BlockedEventInfo};
+use crate::endpoint_protection::PackagePolicyDecision;
 use crate::http::response::generate_blocked_response_for_req;
 
 pub struct BlockedRequest {
@@ -22,6 +23,18 @@ impl BlockedRequest {
                 artifact,
                 block_reason: reason,
             },
+        }
+    }
+}
+
+/// Maps a PackagePolicyDecision to the corresponding BlockReason.
+pub(crate) fn block_reason_for(decision: PackagePolicyDecision) -> BlockReason {
+    match decision {
+        PackagePolicyDecision::Rejected => BlockReason::Rejected,
+        PackagePolicyDecision::BlockAll => BlockReason::BlockAll,
+        PackagePolicyDecision::RequestInstall => BlockReason::RequestInstall,
+        PackagePolicyDecision::Allow | PackagePolicyDecision::Defer => {
+            unreachable!("Allow and Defer are not blocking decisions")
         }
     }
 }

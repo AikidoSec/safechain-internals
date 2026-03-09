@@ -141,28 +141,14 @@ impl Rule for RuleMaven {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Rejected => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(&artifact),
-                        BlockReason::Rejected,
-                    )));
-                }
-                PackagePolicyDecision::BlockAll => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(&artifact),
-                        BlockReason::BlockAll,
-                    )));
-                }
-                PackagePolicyDecision::RequestInstall => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(&artifact),
-                        BlockReason::RequestInstall,
-                    )));
-                }
                 PackagePolicyDecision::Defer => {}
+                decision => {
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
+                        req,
+                        Self::blocked_artifact(&artifact),
+                        super::block_reason_for(decision),
+                    )));
+                }
             }
         }
 

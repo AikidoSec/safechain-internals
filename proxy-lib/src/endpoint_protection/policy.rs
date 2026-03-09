@@ -85,6 +85,7 @@ impl PolicyEvaluator {
             );
             return PackagePolicyDecision::RequestInstall;
         }
+
         PackagePolicyDecision::Defer
     }
 }

@@ -125,28 +125,14 @@ impl Rule for RuleChrome {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Rejected => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(&extension_id, &version),
-                        BlockReason::Rejected,
-                    )));
-                }
-                PackagePolicyDecision::BlockAll => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(&extension_id, &version),
-                        BlockReason::BlockAll,
-                    )));
-                }
-                PackagePolicyDecision::RequestInstall => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(&extension_id, &version),
-                        BlockReason::RequestInstall,
-                    )));
-                }
                 PackagePolicyDecision::Defer => {}
+                decision => {
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
+                        req,
+                        Self::blocked_artifact(&extension_id, &version),
+                        super::block_reason_for(decision),
+                    )));
+                }
             }
         }
 

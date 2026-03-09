@@ -132,28 +132,14 @@ impl Rule for RuleOpenVsx {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Rejected => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(&extension),
-                        BlockReason::Rejected,
-                    )));
-                }
-                PackagePolicyDecision::BlockAll => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(&extension),
-                        BlockReason::BlockAll,
-                    )));
-                }
-                PackagePolicyDecision::RequestInstall => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(&extension),
-                        BlockReason::RequestInstall,
-                    )));
-                }
                 PackagePolicyDecision::Defer => {}
+                decision => {
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
+                        req,
+                        Self::blocked_artifact(&extension),
+                        super::block_reason_for(decision),
+                    )));
+                }
             }
         }
 

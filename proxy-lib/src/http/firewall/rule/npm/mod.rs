@@ -162,37 +162,17 @@ impl RuleNpm {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Rejected => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(
-                            package.fully_qualified_name.as_str(),
-                            &package.version,
-                        ),
-                        BlockReason::Rejected,
-                    )));
-                }
-                PackagePolicyDecision::BlockAll => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(
-                            package.fully_qualified_name.as_str(),
-                            &package.version,
-                        ),
-                        BlockReason::BlockAll,
-                    )));
-                }
-                PackagePolicyDecision::RequestInstall => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(
-                            package.fully_qualified_name.as_str(),
-                            &package.version,
-                        ),
-                        BlockReason::RequestInstall,
-                    )));
-                }
                 PackagePolicyDecision::Defer => {}
+                decision => {
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
+                        req,
+                        Self::blocked_artifact(
+                            package.fully_qualified_name.as_str(),
+                            &package.version,
+                        ),
+                        super::block_reason_for(decision),
+                    )));
+                }
             }
         }
 
