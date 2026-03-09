@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"regexp"
 	"time"
 )
 
@@ -26,7 +28,11 @@ var AgentConfig Config = Config{
 // Call this at startup before any daemon API calls.
 func SetConfig(agentURL, token string) {
 	if agentURL != "" {
-		AgentConfig.agentURL = agentURL
+		parsed, err := url.Parse(agentURL)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			panic(fmt.Sprintf("invalid daemon URL: %q", agentURL))
+		}
+		AgentConfig.agentURL = parsed.String()
 	}
 	if token != "" {
 		AgentConfig.Token = token
@@ -35,13 +41,28 @@ func SetConfig(agentURL, token string) {
 
 const timeout = 10 * time.Second
 
+var httpClient = &http.Client{
+	Timeout: timeout,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
+
 func doRequest(method, path string, body []byte) (*http.Response, error) {
-	url := AgentConfig.agentURL + path
+	target, err := url.Parse(AgentConfig.agentURL + path)
+	if err != nil {
+		return nil, fmt.Errorf("invalid request URL: %w", err)
+	}
+	base, _ := url.Parse(AgentConfig.agentURL)
+	if target.Host != base.Host || target.Scheme != base.Scheme {
+		return nil, fmt.Errorf("request URL host/scheme does not match configured daemon URL")
+	}
+
 	var bodyReader io.Reader
 	if len(body) > 0 {
 		bodyReader = bytes.NewReader(body)
 	}
-	req, err := http.NewRequest(method, url, bodyReader)
+	req, err := http.NewRequest(method, target.String(), bodyReader)
 	if err != nil {
 		return nil, err
 	}
@@ -49,8 +70,16 @@ func doRequest(method, path string, body []byte) (*http.Response, error) {
 	if len(body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	client := &http.Client{Timeout: timeout}
-	return client.Do(req)
+	return httpClient.Do(req)
+}
+
+var validID = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+func validateEventID(id string) error {
+	if id == "" || !validID.MatchString(id) {
+		return fmt.Errorf("invalid event ID: %q", id)
+	}
+	return nil
 }
 
 // ListEvents fetches GET /v1/events?limit=N.
@@ -76,6 +105,9 @@ func ListEvents(limit int) ([]BlockedEvent, error) {
 // GetEvent fetches GET /v1/events/:id.
 func GetEvent(eventID string) (BlockedEvent, error) {
 	var out BlockedEvent
+	if err := validateEventID(eventID); err != nil {
+		return out, err
+	}
 	resp, err := doRequest(http.MethodGet, "/v1/events/"+eventID, nil)
 	if err != nil {
 		return out, err
@@ -92,6 +124,9 @@ func GetEvent(eventID string) (BlockedEvent, error) {
 
 // RequestAccess sends POST /v1/events/:id/request-access with body {"message":"..."}.
 func RequestAccess(eventID, message string) error {
+	if err := validateEventID(eventID); err != nil {
+		return err
+	}
 	body, _ := json.Marshal(struct {
 		Message string `json:"message"`
 	}{Message: message})
