@@ -24,6 +24,12 @@ pub struct BlockedEvent {
     pub artifact: BlockedArtifact,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MinPackageAgeEvent {
+    pub ts_ms: i64,
+    pub artifact: BlockedArtifact,
+}
+
 impl BlockedEvent {
     pub fn from_info(info: BlockedEventInfo) -> Self {
         Self {

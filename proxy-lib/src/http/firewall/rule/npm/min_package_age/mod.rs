@@ -15,15 +15,22 @@ use rama::{
 };
 use serde_json::json;
 
-use crate::http::KnownContentType;
+use crate::http::{
+    KnownContentType,
+    firewall::{
+        events::{BlockedArtifact, MinPackageAgeEvent},
+        notifier::EventNotifier,
+    },
+};
 
 pub(in crate::http::firewall) struct MinPackageAge {
     duration: Duration,
+    notifier: Option<EventNotifier>,
 }
 
 impl MinPackageAge {
-    pub fn new(duration: Duration) -> Self {
-        Self { duration }
+    pub fn new(duration: Duration, notifier: Option<EventNotifier>) -> Self {
+        Self { duration, notifier }
     }
 
     pub fn modify_request_headers(&self, req: &mut Request) {
@@ -77,8 +84,26 @@ impl MinPackageAge {
             return Ok(Response::from_parts(parts, Body::from(bytes)));
         }
 
+        let package_name = json
+            .get("name")
+            .and_then(|n| n.as_str())
+            .unwrap_or("")
+            .to_owned();
+
         for key in versions_to_remove.iter() {
             json = Self::remove_version_from_json(json, key);
+
+            if let Some(notifier) = &self.notifier {
+                let event = MinPackageAgeEvent {
+                    ts_ms: now_unix_ms(),
+                    artifact: BlockedArtifact {
+                        product: "npm".into(),
+                        identifier: package_name.as_str().into(),
+                        version: key.parse().ok(),
+                    },
+                };
+                notifier.notify_min_package_age(event).await;
+            }
         }
         json = Self::set_latest_dist_tag(json, &versions_to_remove);
 

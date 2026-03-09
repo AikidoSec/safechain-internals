@@ -1,4 +1,5 @@
 use std::{
+    future::Future,
     sync::{
         Arc,
         atomic::{self, AtomicU64},
@@ -30,6 +31,7 @@ use rama::{
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::{
+    http::firewall::events::MinPackageAgeEvent,
     package::version::{PackageVersion, PackageVersionKey},
     utils::env::{compute_concurrent_request_count, network_service_identifier},
 };
@@ -102,7 +104,7 @@ impl EventNotifier {
         })
     }
 
-    pub async fn notify(&self, event: BlockedEvent) {
+    pub async fn notify_blocked(&self, event: BlockedEvent) {
         if !self.should_send_event(&event) {
             tracing::debug!(
                 product = %event.artifact.product,
@@ -113,6 +115,22 @@ impl EventNotifier {
             return;
         }
 
+        self.spawn_event_task(|client, reporting_endpoint| {
+            send_blocked_event(client, reporting_endpoint, event)
+        });
+    }
+
+    pub async fn notify_min_package_age(&self, event: MinPackageAgeEvent) {
+        self.spawn_event_task(|client, reporting_endpoint| {
+            send_min_package_age_event(client, reporting_endpoint, event)
+        });
+    }
+
+    fn spawn_event_task<F, Fut>(&self, f: F)
+    where
+        F: FnOnce(BoxService<Request, Response, OpaqueError>, Uri) -> Fut + Send + 'static,
+        Fut: Future<Output = ()> + Send + 'static,
+    {
         self.exec.spawn_task({
             let client = self.client.clone();
             let reporting_endpoint = self.reporting_endpoint.clone();
@@ -126,7 +144,7 @@ impl EventNotifier {
                         return;
                     }
                 };
-                send_blocked_event(client, reporting_endpoint, event).await
+                f(client, reporting_endpoint).await
             }
         });
     }
@@ -154,7 +172,7 @@ async fn send_blocked_event(
     event: BlockedEvent,
 ) {
     tracing::debug!(
-        "sending event notification: product={} artifact={:?}",
+        "sending blocked event notification: product={} artifact={:?}",
         event.artifact.product,
         event.artifact
     );
@@ -164,13 +182,41 @@ async fn send_blocked_event(
         reporting_endpoint.to_string().trim_end_matches('/')
     );
 
-    let resp = match client.post(&url).json(&event).send().await {
+    send_event(client, reporting_endpoint, event, &url).await;
+}
+
+async fn send_min_package_age_event(
+    client: BoxService<Request, Response, OpaqueError>,
+    reporting_endpoint: Uri,
+    event: MinPackageAgeEvent,
+) {
+    tracing::debug!(
+        "sending minimum package age event notification: product={} artifact={:?}",
+        event.artifact.product,
+        event.artifact
+    );
+
+    let url = format!(
+        "{}/events/min-package-age",
+        reporting_endpoint.to_string().trim_end_matches('/')
+    );
+
+    send_event(client, reporting_endpoint, event, &url).await;
+}
+
+async fn send_event<T: serde::Serialize>(
+    client: BoxService<Request, Response, OpaqueError>,
+    reporting_endpoint: Uri,
+    event: T,
+    url: &str,
+) {
+    let resp = match client.post(url).json(&event).send().await {
         Ok(resp) => resp,
         Err(err) => {
             tracing::warn!(
                 error = %err,
                 endpoint = %reporting_endpoint,
-                "failed to send blocked-event notification"
+                "failed to send event notification"
             );
             return;
         }
@@ -181,7 +227,7 @@ async fn send_blocked_event(
         tracing::warn!(
             status = %status,
             endpoint = %reporting_endpoint,
-            "blocked-event notification endpoint returned non-success status"
+            "event notification endpoint returned non-success status"
         );
         return;
     }
