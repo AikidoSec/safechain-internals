@@ -60,3 +60,10 @@ rust-update-deps:
 rust-detect-unused-deps:
     @cargo install cargo-machete
     cargo machete --skip-target-dir
+
+macos-dev-build-pkg VERSION="dev":
+    make build-pkg-sign-local VERSION="{{VERSION}}"
+
+macos-dev-run-installed:
+    make install-pkg
+    sudo launchctl kickstart -k system/com.aikidosecurity.safechainultimate
