@@ -18,7 +18,7 @@ func (s *Server) handleRequestBypass(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Received request-bypass event: key=%s", event.ID)
-
+	s.UpdateStatus(id, "request_pending")
 	w.WriteHeader(http.StatusOK)
 }
 

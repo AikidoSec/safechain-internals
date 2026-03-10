@@ -10,8 +10,7 @@ export async function getEvent(eventId: string): Promise<BlockedEvent> {
 }
 
 export async function requestAccess(
-  eventId: string,
-  message: string
+  eventId: string
 ): Promise<void> {
-  return DaemonService.RequestAccess(eventId, message);
+  return DaemonService.RequestAccess(eventId);
 }

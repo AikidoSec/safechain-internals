@@ -1,3 +1,7 @@
+export type BlockReason = "malware" | "rejected" | "block_all" | "request_install";
+
+export type EventStatus = "" | "blocked" | "request_pending";
+
 export interface BlockedEvent {
   id: string;
   ts: string;
@@ -7,5 +11,6 @@ export interface BlockedEvent {
   identifier: string;
   // Optional version
   version: string;
-  bypass_enabled: boolean;
+  block_reason: BlockReason;
+  status?: EventStatus;
  }

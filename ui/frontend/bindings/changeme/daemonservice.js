@@ -37,11 +37,10 @@ export function ListEvents(limit) {
 
 /**
  * @param {string} eventId
- * @param {string} message
  * @returns {$CancellablePromise<void>}
  */
-export function RequestAccess(eventId, message) {
-    return $Call.ByID(2623473656, eventId, message);
+export function RequestAccess(eventId) {
+    return $Call.ByID(2623473656, eventId);
 }
 
 // Private type creation functions

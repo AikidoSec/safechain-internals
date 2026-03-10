@@ -128,14 +128,11 @@ func GetEvent(eventID string) (BlockedEvent, error) {
 }
 
 // RequestAccess sends POST /v1/events/:id/request-access with body {"message":"..."}.
-func RequestAccess(eventID, message string) error {
+func RequestAccess(eventID string) error {
 	if err := validateEventID(eventID); err != nil {
 		return err
 	}
-	body, _ := json.Marshal(struct {
-		Message string `json:"message"`
-	}{Message: message})
-	resp, err := doRequest(http.MethodPost, "/v1/events/"+eventID+"/request-access", body)
+	resp, err := doRequest(http.MethodPost, "/v1/events/"+eventID+"/request-access", nil)
 	if err != nil {
 		return err
 	}

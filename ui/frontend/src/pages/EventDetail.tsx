@@ -1,7 +1,62 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import type { BlockedEvent } from "../types";
+import type { BlockedEvent, BlockReason } from "../types";
 import { getEvent, requestAccess } from "../api";
+import npmIcon from "../../assets/npm.svg";
+import pypiIcon from "../../assets/pypi.svg";
+import vscodeIcon from "../../assets/vscode.svg";
+
+const TOOL_ICONS: Record<string, string> = {
+  npm: npmIcon,
+  pip: pypiIcon,
+  pypi: pypiIcon,
+  vscode: vscodeIcon,
+};
+
+const BLOCK_REASON_INFO: Record<BlockReason, { title: string; description: string }> = {
+  malware: {
+    title: "Malware detected",
+    description: "This package was blocked because it was flagged as malware. Access cannot be requested.",
+  },
+  rejected: {
+    title: "Package blocked",
+    description: "This package has been explicitly blocked by policy. Access cannot be requested.",
+  },
+  block_all: {
+    title: "All installs blocked",
+    description: "All package installations are currently blocked by policy. Access cannot be requested.",
+  },
+  request_install: {
+    title: "Request Access",
+    description: "You need to request access to install the following package.",
+  },
+};
+
+const BLOCK_REASON_LABEL: Record<BlockReason, string> = {
+  malware: "Malware",
+  rejected: "Rejected by policy",
+  block_all: "All installs blocked",
+  request_install: "Approval required",
+};
+
+function formatEventTime(ts: string): string {
+  try {
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return ts;
+    const date = d.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const time = d.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${date}, ${time}`;
+  } catch {
+    return ts;
+  }
+}
 
 function isConnectionError(message: string): boolean {
   const s = message.toLowerCase();
@@ -15,6 +70,44 @@ function isConnectionError(message: string): boolean {
   );
 }
 
+function EventInfo({ event }: { event: BlockedEvent }) {
+  return (
+    <dl className="event-info">
+      <div className="event-info-row">
+        <dt>Package</dt>
+        <dd className="event-info-package">
+          {TOOL_ICONS[event.product?.toLowerCase()] && (
+            <img
+              src={TOOL_ICONS[event.product.toLowerCase()]}
+              alt={event.product}
+              className="event-info-icon"
+            />
+          )}
+          {event.identifier}
+        </dd>
+      </div>
+      {event.version && (
+        <div className="event-info-row">
+          <dt>Version</dt>
+          <dd>{event.version}</dd>
+        </div>
+      )}
+      <div className="event-info-row">
+        <dt>Blocked at</dt>
+        <dd>{formatEventTime(event.ts)}</dd>
+      </div>
+      <div className="event-info-row">
+        <dt>Reason</dt>
+        <dd>
+          <span className={`reason-badge reason-badge--${event.block_reason}`}>
+            {BLOCK_REASON_LABEL[event.block_reason] ?? event.block_reason}
+          </span>
+        </dd>
+      </div>
+    </dl>
+  );
+}
+
 export function EventDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -22,7 +115,6 @@ export function EventDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
-  const [email, setEmail] = useState("");
 
   const loadEvent = useCallback(() => {
     if (!id) return;
@@ -38,22 +130,21 @@ export function EventDetail() {
     loadEvent();
   }, [loadEvent]);
 
+  const [requestSent, setRequestSent] = useState(false);
+
   const handleRequestAccess = async () => {
     if (!id) return;
     setRequesting(true);
     setError(null);
     try {
-      await requestAccess(id, email.trim() || "Access requested");
+      await requestAccess(id);
       setEvent((prev) => (prev ? { ...prev, status: "request_pending" } : null));
+      setRequestSent(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setRequesting(false);
     }
-  };
-
-  const handleCancel = () => {
-    navigate("/events");
   };
 
   if (loading && !event) return <p className="loading">Loading event…</p>;
@@ -62,9 +153,6 @@ export function EventDetail() {
     const connectionFailed = isConnectionError(error);
     return (
       <div className="event-detail">
-        <button type="button" className="back" onClick={() => navigate("/events")}>
-          ← Back to list
-        </button>
         <div className="event-detail-fail">
           <h2>
             {connectionFailed ? "Can't connect to SafeChain" : "Something went wrong"}
@@ -98,40 +186,60 @@ export function EventDetail() {
 
   if (!event) return <p className="loading">Event not found.</p>;
 
-  return (
-    <div className="event-detail">
-      <button type="button" className="back" onClick={() => navigate("/events")}>
-        ← Back to list
-      </button>
+  const canRequest = event.block_reason === "request_install" && event.status !== "request_pending";
+  const info = BLOCK_REASON_INFO[event.block_reason];
 
-      {event.bypass_enabled && (
-        <div className="request-access-section">
-          <h2>Request Access</h2>
-          <p className="subtitle">
-            You need to request access to install the following package.
-          </p>
-          <div className="field">
-            <div className="field-readonly">{event.identifier}</div>
+  if (requestSent || event.status === "request_pending") {
+    return (
+      <div className="event-detail event-detail--full">
+        <div className="request-success">
+          <div className="request-success-body">
+            <div className="request-success-icon" aria-hidden>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M22 4L12 14.01l-3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h2>Request sent</h2>
+            <p className="subtitle">
+              Your access request for <strong>{event.identifier}</strong> has been submitted.
+            </p>
           </div>
-          <div className="field">
-            <label>Email</label>
-            <input
-              type="email"
-              className={`input-field${error ? " input-field--error" : ""}`}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@company.com"
-            />
-          </div>
-          {error && <p className="error">{error}</p>}
           <div className="request-access-actions">
             <button
               type="button"
-              className="button-brand button--tertiary button--normal button--rounded"
-              onClick={handleCancel}
+              className="button-brand button--primary button--normal button--rounded"
+              onClick={() => navigate("/events")}
             >
-              Cancel
+              Back to list
             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="event-detail event-detail--full">
+      <div className="request-access-section">
+        <div className="request-access-section-body">
+          <h2>{info?.title ?? "Access not available"}</h2>
+          <p className="subtitle">
+            {info?.description ?? "Access cannot be requested for this package."}
+          </p>
+          <EventInfo event={event} />
+          {error && <p className="error">{error}</p>}
+        </div>
+
+        <div className="request-access-actions">
+          <button
+            type="button"
+            className="button-brand button--tertiary button--normal button--rounded"
+            onClick={() => navigate("/events")}
+          >
+            {canRequest ? "Cancel" : "Back to list"}
+          </button>
+          {canRequest && (
             <button
               type="button"
               className="button-brand button--primary button--normal button--rounded"
@@ -140,30 +248,9 @@ export function EventDetail() {
             >
               {requesting ? "Requesting…" : "Request Access"}
             </button>
-          </div>
+          )}
         </div>
-      )}
-
-      {!event.bypass_enabled && (
-        <div className="request-access-section no-bypass-section">
-          <h2>Access not available</h2>
-          <p className="subtitle">
-            Bypass is not enabled for this event. You cannot request access for the following package.
-          </p>
-          <div className="field">
-            <div className="field-readonly">{event.identifier}</div>
-          </div>
-          <div className="request-access-actions">
-            <button
-              type="button"
-              className="button-brand button--tertiary button--normal button--rounded"
-              onClick={handleCancel}
-            >
-              Back to list
-            </button>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

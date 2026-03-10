@@ -16,8 +16,7 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-
-	log.Printf("Received block event: product=%s package=%s", event.Artifact.Product, event.Artifact)
+	log.Printf("Received block event: %+v", event)
 
 	// Save event with generated ID, then send notification in a goroutine
 	blocked := s.eventStore.Add(event)
@@ -35,8 +34,9 @@ type BlockedEvent struct {
 	// The name or identifier of the artifact
 	PackageName string `json:"identifier"`
 	// Optional version
-	PackageVersion string `json:"version,omitempty"`
-	BypassEnabled  bool   `json:"bypass_enabled"`
+	PackageVersion string      `json:"version,omitempty"`
+	BlockReason    BlockReason `json:"block_reason"`
+	Status         string      `json:"status,omitempty"`
 }
 
 // sendBlockNotification sends a notification to the UI tray app

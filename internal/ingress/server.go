@@ -84,3 +84,14 @@ func (s *Server) Stop() error {
 	}
 	return nil
 }
+
+func (s *Server) UpdateStatus(id string, status string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, ev := range s.eventStore.events {
+		if ev.ID == id {
+			s.eventStore.events[i].Status = status
+			return
+		}
+	}
+}

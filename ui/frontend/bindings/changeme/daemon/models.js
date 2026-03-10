@@ -7,6 +7,22 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
+ * @readonly
+ * @enum {string}
+ */
+export const BlockReason = {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero: "",
+
+    BlockReasonMalware: "malware",
+    BlockReasonRejected: "rejected",
+    BlockReasonBlockAll: "block_all",
+    BlockReasonRequestInstall: "request_install",
+};
+
+/**
  * BlockedEvent matches the daemon API response.
  */
 export class BlockedEvent {
@@ -53,12 +69,19 @@ export class BlockedEvent {
              */
             this["version"] = undefined;
         }
-        if (!("bypass_enabled" in $$source)) {
+        if (!("block_reason" in $$source)) {
             /**
              * @member
-             * @type {boolean}
+             * @type {BlockReason}
              */
-            this["bypass_enabled"] = false;
+            this["block_reason"] = BlockReason.$zero;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["status"] = undefined;
         }
 
         Object.assign(this, $$source);

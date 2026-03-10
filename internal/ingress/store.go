@@ -21,7 +21,7 @@ func (e *eventStore) Add(ev BlockEvent) BlockedEvent {
 		Product:        ev.Artifact.Product,
 		PackageName:    ev.Artifact.PackageName,
 		PackageVersion: ev.Artifact.PackageVersion,
-		BypassEnabled:  true,
+		BlockReason:    ev.BlockReason,
 	}
 	e.mu.Lock()
 	e.events = append(e.events, blocked)

@@ -140,7 +140,11 @@ export function EventsList() {
                     {ev.identifier}
                   </td>
                   <td>
-                    <span className={`status status-blocked`}>blocked</span>
+                    {ev.status === "request_pending" ? (
+                      <span className="status status-pending">requested</span>
+                    ) : (
+                      <span className="status status-blocked">blocked</span>
+                    )}
                   </td>
                 </tr>
               ))}

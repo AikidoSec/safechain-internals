@@ -2,6 +2,15 @@ package daemon
 
 import "fmt"
 
+type BlockReason string
+
+const (
+	BlockReasonMalware        BlockReason = "malware"
+	BlockReasonRejected       BlockReason = "rejected"
+	BlockReasonBlockAll       BlockReason = "block_all"
+	BlockReasonRequestInstall BlockReason = "request_install"
+)
+
 // BlockedEvent matches the daemon API response.
 type BlockedEvent struct {
 	ID string `json:"id"`
@@ -11,8 +20,9 @@ type BlockedEvent struct {
 	// The name or identifier of the artifact
 	PackageName string `json:"identifier"`
 	// Optional version
-	PackageVersion string `json:"version,omitempty"`
-	BypassEnabled  bool   `json:"bypass_enabled"`
+	PackageVersion string      `json:"version,omitempty"`
+	BlockReason    BlockReason `json:"block_reason"`
+	Status         string      `json:"status,omitempty"`
 }
 
 // Validate returns an error if any required field is missing or empty.

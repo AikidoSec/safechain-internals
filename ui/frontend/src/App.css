@@ -170,6 +170,11 @@ body {
   color: var(--surface-red-100);
 }
 
+.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 
 .events-list .error,
 .events-list p {
@@ -252,6 +257,12 @@ body {
   padding: 24px;
 }
 
+.event-detail--full {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 70px);
+}
+
 .event-detail .back {
   background: none;
   border: none;
@@ -291,9 +302,14 @@ body {
 }
 
 .request-access-section {
-  border-top: 1px solid var(--border);
   padding-top: 28px;
-  margin-top: 10px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.request-access-section-body {
+  flex: 1;
 }
 
 .request-access-section h2 {
@@ -363,9 +379,121 @@ body {
   overflow-wrap: break-word;
 }
 
+.event-info {
+  margin: 0;
+  padding: 0;
+}
+
+.event-info-row {
+  display: flex;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--carbon-20);
+}
+
+.event-info-row:last-child {
+  border-bottom: none;
+}
+
+.event-info dt {
+  width: 120px;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.event-info dd {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--primary-aik-140);
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.event-info-package {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.event-info-icon {
+  height: 20px;
+  width: auto;
+  display: block;
+  flex-shrink: 0;
+}
+
+.reason-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 24px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reason-badge--malware {
+  background: var(--surface-red-20);
+  color: var(--surface-red-100);
+}
+
+.reason-badge--rejected {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.reason-badge--block_all {
+  background: var(--surface-red-20);
+  color: var(--surface-red-100);
+}
+
+.reason-badge--request_install {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.request-success {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding-top: 28px;
+}
+
+.request-success-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 24px;
+}
+
+.request-success-icon {
+  color: #16a34a;
+  margin-bottom: 20px;
+}
+
+.request-success h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--primary-aik-140);
+}
+
+.request-success .subtitle {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+  max-width: 380px;
+}
+
 .request-access-actions {
   display: flex;
   gap: 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
   margin-top: 28px;
   justify-content: flex-end;
 }
