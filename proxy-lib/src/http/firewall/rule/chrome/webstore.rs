@@ -3,7 +3,10 @@ use std::time::Duration;
 use rama::{
     Service,
     error::{BoxError, ErrorContext as _},
-    http::{BodyExtractExt, HeaderValue, Request, Response, Uri, service::client::HttpClientExt as _},
+    http::{
+        BodyExtractExt, HeaderValue, Request, Response, Uri, service::client::HttpClientExt as _,
+    },
+    net::uri::util::percent_encoding::percent_encode_byte,
     telemetry::tracing,
 };
 
@@ -81,15 +84,15 @@ impl ChromeWebStore {
     /// Percent-encodes any non-ASCII bytes so the result can be parsed as a URI.
     /// ASCII bytes are left unchanged.
     fn percent_encode_non_ascii(bytes: &[u8]) -> String {
-        let mut out = String::with_capacity(bytes.len());
-        for &b in bytes {
-            if b.is_ascii() {
-                out.push(b as char);
+        let mut encoded = String::with_capacity(bytes.len());
+        for &byte in bytes {
+            if byte.is_ascii() {
+                encoded.push(byte as char);
             } else {
-                out.push_str(&format!("%{b:02X}"));
+                encoded.push_str(percent_encode_byte(byte));
             }
         }
-        out
+        encoded
     }
 
     /// Extracts the extension name from a Chrome Web Store HTML page via the `og:title` meta tag,
