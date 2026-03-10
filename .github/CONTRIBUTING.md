@@ -94,13 +94,14 @@ just proxy-har-toggle
 
 ## Local testing against a non-production backend
 
-To point the agent and proxy at a local or staging backend instead of `https://app.aikido.dev`, add a `base_url` field to the config file and restart the service.
+To point the agent and proxy at a local or staging backend instead of `https://app.aikido.dev`, add a `base_url` field to the config file 
+and restart the service. Also update the `token` field — the token can be found on the **Endpoint Protection** page of the webapp.
 
 **macOS** — config file: `/Library/Application Support/AikidoSecurity/SafeChainUltimate/run/config.json`
 
 ```json
 {
-  "token": "...",
+  "token": "<new token>",
   "device_id": "...",
   "base_url": "http://app.local.aikido.io"
 }
@@ -122,7 +123,7 @@ sc stop SafeChainUltimate
 sc start SafeChainUltimate
 ```
 
-Remove the `base_url` field (or leave it empty) to revert to the production backend.
+Remove the `base_url` field (or leave it empty) and restore the production `token` to revert to the production backend.
 
 #### Proxy: dependency management
 
