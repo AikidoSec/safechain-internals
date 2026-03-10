@@ -49,3 +49,17 @@ func (e *eventStore) List() []BlockedEvent {
 	copy(out, e.events)
 	return out
 }
+
+// UpdateStatus sets the status field on the event with the given id.
+// Returns true if the event was found.
+func (e *eventStore) UpdateStatus(id, status string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for i, ev := range e.events {
+		if ev.ID == id {
+			e.events[i].Status = status
+			return true
+		}
+	}
+	return false
+}

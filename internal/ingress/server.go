@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/AikidoSec/safechain-internals/internal/config"
+	"github.com/AikidoSec/safechain-internals/internal/uiclient"
 )
 
 const (
@@ -23,16 +24,17 @@ type Server struct {
 	listener net.Listener
 	server   *http.Server
 	config   *config.ConfigInfo
+	ui       *uiclient.Client
 
 	eventStore *eventStore
 	mu         sync.RWMutex
 }
 
-func New(cfg *config.ConfigInfo) *Server {
-	store := &eventStore{}
+func New(cfg *config.ConfigInfo, ui *uiclient.Client) *Server {
 	return &Server{
 		config:     cfg,
-		eventStore: store,
+		ui:         ui,
+		eventStore: &eventStore{},
 	}
 }
 
@@ -87,15 +89,4 @@ func (s *Server) Stop() error {
 		return s.server.Close()
 	}
 	return nil
-}
-
-func (s *Server) UpdateStatus(id string, status string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for i, ev := range s.eventStore.events {
-		if ev.ID == id {
-			s.eventStore.events[i].Status = status
-			return
-		}
-	}
 }

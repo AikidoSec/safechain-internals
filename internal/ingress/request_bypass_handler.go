@@ -2,7 +2,6 @@ package ingress
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"net/http"
 
@@ -10,7 +9,7 @@ import (
 )
 
 func (s *Server) handleRequestBypass(w http.ResponseWriter, r *http.Request) {
-	if !validateUIToken(w, r) {
+	if !s.validateUIToken(w, r) {
 		return
 	}
 	id := r.PathValue("id")
@@ -21,7 +20,7 @@ func (s *Server) handleRequestBypass(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Received request-bypass event: key=%s", event.ID)
-	s.UpdateStatus(id, "request_pending")
+	s.eventStore.UpdateStatus(id, "request_pending")
 
 	go s.sendInstallationRequest(event)
 
@@ -57,27 +56,4 @@ func buildInstallationRequestEvent(req RequestBypassEvent) *cloud.RequestPackage
 		},
 	}
 	return &installEvent
-}
-
-func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
-	if !validateUIToken(w, r) {
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(s.eventStore.List())
-}
-
-func (s *Server) handleGetEventByID(w http.ResponseWriter, r *http.Request) {
-	if !validateUIToken(w, r) {
-		return
-	}
-	id := r.PathValue("id")
-	if event, ok := s.eventStore.Get(id); ok {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(event)
-		return
-	}
-	w.WriteHeader(http.StatusNotFound)
-	w.Write([]byte("Event not found"))
 }
