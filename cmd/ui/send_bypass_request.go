@@ -9,14 +9,20 @@ import (
 )
 
 type BypassRequest struct {
-	Key string `json:"key"`
+	Key            string `json:"key"`
+	Product        string `json:"product"`
+	PackageName    string `json:"package_name"`
+	PackageVersion string `json:"package_version"`
 }
 
-func sendBypassRequest(ingress, key string) error {
+func sendBypassRequest(ingress, key, product, packageName, packageVersion string) error {
 	url := fmt.Sprintf("http://%s/request-bypass", ingress)
 
 	payload := BypassRequest{
-		Key: key,
+		Key:            key,
+		Product:        product,
+		PackageName:    packageName,
+		PackageVersion: packageVersion,
 	}
 	jsonData, err := json.Marshal(payload)
 	if err != nil {

@@ -72,3 +72,7 @@ func SendHeartbeat(ctx context.Context, config *config.ConfigInfo, event *Heartb
 func SendSBOM(ctx context.Context, config *config.ConfigInfo, event *SBOMEvent) error {
 	return sendEvent(ctx, SBOMEndpoint, config, event)
 }
+
+func SendRequestPackageInstallation(ctx context.Context, config *config.ConfigInfo, event *RequestPackageInstallationEvent) error {
+	return sendEvent(ctx, RequestPackageInstallationEndpoint, config, event)
+}
