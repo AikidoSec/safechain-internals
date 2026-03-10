@@ -14,14 +14,14 @@ const WindowTitle = "SafeChain Ultimate"
 
 func main() {
 	var (
-		title          = flag.String("title", "", "Modal title")
-		subtitle       = flag.String("subtitle", "Installing this package has been blocked because it looks malicious.", "Modal subtitle")
-		packageId      = flag.String("package-id", "", "Package identifier to display")
-		ingress        = flag.String("ingress", "", "Daemon ingress address, to report back when bypass requested.")
-		bypassEnabled  = flag.Bool("bypass-enabled", false, "Enable bypass requested.")
-		product        = flag.String("product", "", "Package ecosystem")
-		packageName    = flag.String("package-name", "", "Package name")
-		packageVersion = flag.String("package-version", "", "Package version")
+		title            = flag.String("title", "", "Modal title")
+		subtitle         = flag.String("subtitle", "Installing this package has been blocked because it looks malicious.", "Modal subtitle")
+		ingress          = flag.String("ingress", "", "Daemon ingress address, to report back when bypass requested.")
+		bypassEnabled    = flag.Bool("bypass-enabled", false, "Enable bypass requested.")
+		product          = flag.String("product", "", "Package ecosystem")
+		packageId        = flag.String("package-id", "", "Package identifier e.g. express")
+		packageVersion   = flag.String("package-version", "", "Package version e.g. 1.0.0")
+		packageHumanName = flag.String("package-human-name", "", "Human-readable package name")
 	)
 	flag.Parse()
 
@@ -36,7 +36,7 @@ func main() {
 	trimmedSubtitle := strings.Trim(*subtitle, "\"")
 
 	bypassTrigger := func() {
-		err := sendBypassRequest(*ingress, *packageId, *product, *packageId, *packageName, *packageVersion)
+		err := sendBypassRequest(*ingress, *packageId, *product, *packageId, *packageHumanName, *packageVersion)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -46,7 +46,7 @@ func main() {
 		bypassTrigger = nil
 	}
 
-	if err := ui.ShowBlockedModal(trimmedTitle, trimmedSubtitle, *packageId, WindowTitle, bypassTrigger); err != nil {
+	if err := ui.ShowBlockedModal(trimmedTitle, trimmedSubtitle, *packageId, *packageVersion, *packageHumanName, WindowTitle, bypassTrigger); err != nil {
 		log.Fatalf("Failed to show blocked modal: %v", err)
 	}
 }

@@ -34,18 +34,17 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 
 	title := buildBlockedTitle(event)
 	subtitle := buildBlockedSubtitle(event)
-	key := buildKey(event)
 
 	args := []string{
-		"--package-id", key,
+		"--product", event.Artifact.Product,
+		"--package-id", event.Artifact.PackageName,
+		"--package-version", event.Artifact.PackageVersion,
+		"--package-human-name", event.Artifact.DisplayName,
 		// Encapsulate title as an argument: It can contain spaces causing the argument parsing to fail for windows.
 		"--title", fmt.Sprintf("\"%s\"", title),
 		"--subtitle", fmt.Sprintf("\"%s\"", subtitle),
 		"--ingress", ingressAddress,
 		"--bypass-enabled=true",
-		"--product", event.Artifact.Product,
-		"--package-name", event.Artifact.PackageName,
-		"--package-version", event.Artifact.PackageVersion,
 	}
 
 	// Make sure that the modals close on their own after an hour so there are no hanging
@@ -78,18 +77,4 @@ func buildBlockedSubtitle(event BlockEvent) string {
 		return "This package requires approval before it can be installed."
 	}
 	return "Installing this package has been blocked because it looks malicious."
-}
-
-func buildKey(event BlockEvent) string {
-	if event.Artifact.PackageVersion != "" {
-		return fmt.Sprintf(
-			"%s@%s",
-			event.Artifact.PackageName,
-			event.Artifact.PackageVersion,
-		)
-	}
-	return fmt.Sprintf(
-		"%s",
-		event.Artifact.PackageName,
-	)
 }
