@@ -50,6 +50,9 @@ body {
   margin: 0 auto;
   width: 100%;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .app-header {
@@ -254,13 +257,13 @@ body {
 }
 
 .event-detail {
-  padding: 24px;
+  padding: 20px 24px;
 }
 
 .event-detail--full {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 70px);
+  flex: 1;
 }
 
 .event-detail .back {
@@ -302,7 +305,7 @@ body {
 }
 
 .request-access-section {
-  padding-top: 28px;
+  padding-top: 16px;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -388,6 +391,7 @@ body {
   display: flex;
   padding: 10px 0;
   border-bottom: 1px solid var(--carbon-20);
+  word-break: break-word;
 }
 
 .event-info-row:last-child {
@@ -492,9 +496,9 @@ body {
 .request-access-actions {
   display: flex;
   gap: 16px;
-  padding-top: 20px;
+  padding-top: 16px;
   border-top: 1px solid var(--border);
-  margin-top: 28px;
+  margin-top: auto;
   justify-content: flex-end;
 }
 
