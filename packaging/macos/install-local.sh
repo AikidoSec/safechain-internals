@@ -66,7 +66,7 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "View logs:"
     echo "  tail -f /Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.log"
-    echo "  tail -f /Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.error.log"
+    echo "  tail -f /Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.err"
     echo ""
     echo "To uninstall, run: sudo /Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall"
     echo ""

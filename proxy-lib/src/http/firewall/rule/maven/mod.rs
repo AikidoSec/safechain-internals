@@ -12,7 +12,10 @@ use rama::{
 
 use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
-    http::firewall::{domain_matcher::DomainMatcher, events::BlockedArtifact},
+    http::firewall::{
+        domain_matcher::DomainMatcher,
+        events::{BlockReason, BlockedArtifact},
+    },
     package::{
         malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
         version::{PackageVersion, PragmaticSemver},
@@ -138,28 +141,22 @@ impl Rule for RuleMaven {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Block => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                PackagePolicyDecision::Defer => {}
+                decision => {
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("maven"),
-                            identifier: artifact.fully_qualified_name.clone(),
-                            version: Some(PackageVersion::Semver(artifact.version.clone())),
-                        },
+                        Self::blocked_artifact(&artifact),
+                        super::block_reason_for(decision),
                     )));
                 }
-                PackagePolicyDecision::Defer => {}
             }
         }
 
         if self.is_package_listed_as_malware(&artifact) {
-            return Ok(RequestAction::Block(BlockedRequest::malware(
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                BlockedArtifact {
-                    product: arcstr!("maven"),
-                    identifier: artifact.fully_qualified_name.clone(),
-                    version: Some(PackageVersion::Semver(artifact.version.clone())),
-                },
+                Self::blocked_artifact(&artifact),
+                BlockReason::Malware,
             )));
         }
 
@@ -193,6 +190,15 @@ impl MavenArtifact {
 }
 
 impl RuleMaven {
+    fn blocked_artifact(artifact: &MavenArtifact) -> BlockedArtifact {
+        BlockedArtifact {
+            product: arcstr!("maven"),
+            identifier: artifact.fully_qualified_name.clone(),
+            display_name: None,
+            version: Some(PackageVersion::Semver(artifact.version.clone())),
+        }
+    }
+
     fn is_package_listed_as_malware(&self, artifact: &MavenArtifact) -> bool {
         self.remote_malware_list.has_entries_with_version(
             artifact.fully_qualified_name.as_str(),

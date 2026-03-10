@@ -7,8 +7,12 @@ pub enum PackagePolicyDecision {
     Defer,
     /// An explicit allow rule matched — bypass all further checks for this package.
     Allow,
-    /// An explicit block rule matched — block this package immediately.
-    Block,
+    /// Package is in the `rejected_packages` list — block immediately.
+    Rejected,
+    /// `block_all_installs` is enabled — block all installs for this ecosystem.
+    BlockAll,
+    /// `request_installs` is enabled — block pending approval.
+    RequestInstall,
 }
 
 #[derive(Debug, Clone)]
@@ -44,11 +48,11 @@ impl PolicyEvaluator {
             .rejected_packages
             .contains(package_name)
         {
-            tracing::debug!(
+            tracing::info!(
                 package = package_name,
                 "package is explicitly blocked by endpoint protection config"
             );
-            return PackagePolicyDecision::Block;
+            return PackagePolicyDecision::Rejected;
         }
 
         // Explicitly allowed packages
@@ -57,7 +61,7 @@ impl PolicyEvaluator {
             .allowed_packages
             .contains(package_name)
         {
-            tracing::debug!(
+            tracing::info!(
                 package = package_name,
                 "package is explicitly allowed by endpoint protection config"
             );
@@ -66,11 +70,20 @@ impl PolicyEvaluator {
 
         // Block all installs
         if ecosystem_cfg.block_all_installs {
-            tracing::debug!(
+            tracing::info!(
                 package = package_name,
                 "all package installs are blocked by endpoint protection config"
             );
-            return PackagePolicyDecision::Block;
+            return PackagePolicyDecision::BlockAll;
+        }
+
+        // Request install
+        if ecosystem_cfg.request_installs {
+            tracing::info!(
+                package = package_name,
+                "package install requires approval by endpoint protection config"
+            );
+            return PackagePolicyDecision::RequestInstall;
         }
 
         PackagePolicyDecision::Defer

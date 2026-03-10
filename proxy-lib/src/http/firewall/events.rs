@@ -9,19 +9,37 @@ pub struct BlockedArtifact {
     pub product: ArcStr,
     /// The name or identifier of the artifact
     pub identifier: ArcStr,
+    /// Optional human-readable name of the artifact.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<ArcStr>,
     /// Optional version
     pub version: Option<PackageVersion>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockReason {
+    /// Blocked because the artifact is on the malware list.
+    Malware,
+    /// Blocked because the package is in the `rejected_packages` list.
+    Rejected,
+    /// Blocked because `block_all_installs` is enabled for this ecosystem.
+    BlockAll,
+    /// Blocked because `request_installs` is enabled — install pending approval.
+    RequestInstall,
 }
 
 #[derive(Debug, Clone)]
 pub struct BlockedEventInfo {
     pub artifact: BlockedArtifact,
+    pub block_reason: BlockReason,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockedEvent {
     pub ts_ms: i64,
     pub artifact: BlockedArtifact,
+    pub block_reason: BlockReason,
 }
 
 impl BlockedEvent {
@@ -29,6 +47,7 @@ impl BlockedEvent {
         Self {
             ts_ms: now_unix_ms(),
             artifact: info.artifact,
+            block_reason: info.block_reason,
         }
     }
 }
