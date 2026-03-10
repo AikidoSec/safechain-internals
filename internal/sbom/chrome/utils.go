@@ -34,11 +34,7 @@ func runBrowserVersion(ctx context.Context, binaryPath string) (string, error) {
 // e.g. "Google Chrome 120.0.6099.109" -> "120.0.6099.109"
 func parseVersionOutput(output string) string {
 	lines := strings.SplitN(output, "\n", 2)
-	if len(lines) == 0 {
-		return ""
-	}
 	line := strings.TrimSpace(lines[0])
-
 	return versionPattern.FindString(line)
 }
 
