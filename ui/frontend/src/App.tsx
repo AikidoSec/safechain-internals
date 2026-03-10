@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { Events } from "@wailsio/runtime";
 import { EventsList } from "./pages/EventsList";
 import { EventDetail } from "./pages/EventDetail";
-// import { daemonStatus } from "./api";
 import logoUrl from "../assets/logo.svg";
 import "./App.css";
 

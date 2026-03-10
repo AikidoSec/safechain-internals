@@ -168,6 +168,9 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- string {
 		showDashboard()
 	})
 	systray.SetMenu(menu)
+	if runtime.GOOS == "windows" {
+		systray.OnClick(systray.OpenMenu)
+	}
 
 	statusCh := make(chan string, 8)
 	go func() {

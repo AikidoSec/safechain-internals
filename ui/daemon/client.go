@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"time"
 )
 
@@ -99,6 +100,10 @@ func ListEvents(limit int) ([]BlockedEvent, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, err
 	}
+	// sort by ts descending
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Ts > out[j].Ts
+	})
 	return out, nil
 }
 
