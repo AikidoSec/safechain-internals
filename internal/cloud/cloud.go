@@ -33,7 +33,7 @@ func sendEvent(ctx context.Context, endpoint string, config *config.ConfigInfo, 
 		return fmt.Errorf("device ID is not set")
 	}
 
-	url, err := url.JoinPath(BaseURL, endpoint)
+	url, err := url.JoinPath(config.GetBaseURL(), endpoint)
 	if err != nil {
 		return fmt.Errorf("failed to build URL for %s: %w", endpoint, err)
 	}
