@@ -30,7 +30,9 @@ pub fn new_web_client()
     use rama::tls::rustls::dep::rustls::ClientConfig;
     use rustls_platform_verifier::ConfigVerifierExt;
 
-    let config = ClientConfig::with_platform_verifier().context("create platform verifier")?;
+    let mut config = ClientConfig::with_platform_verifier().context("create platform verifier")?;
+
+    config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
 
     Ok(EasyHttpWebClient::connector_builder()
         .with_default_transport_connector()

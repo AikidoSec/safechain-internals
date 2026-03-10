@@ -14,12 +14,10 @@ use rama::{
 };
 
 use crate::{
-    http::{
-        firewall::{
-            domain_matcher::DomainMatcher,
-            events::{BlockedArtifact, BlockedEventInfo},
-        },
-        response::generate_malware_blocked_response_for_req,
+    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    http::firewall::{
+        domain_matcher::DomainMatcher,
+        events::{BlockReason, BlockedArtifact},
     },
     package::malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
     storage::SyncCompactDataStorage,
@@ -33,6 +31,7 @@ use super::{BlockedRequest, RequestAction, Rule};
 pub(in crate::http::firewall) struct RuleOpenVsx {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    policy_evaluator: Option<PolicyEvaluator>,
 }
 
 impl RuleOpenVsx {
@@ -40,6 +39,7 @@ impl RuleOpenVsx {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
+        policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = BoxError>,
@@ -59,6 +59,7 @@ impl RuleOpenVsx {
                 .into_iter()
                 .collect(),
             remote_malware_list,
+            policy_evaluator,
         })
     }
 }
@@ -121,22 +122,38 @@ impl Rule for RuleOpenVsx {
             "Open VSX install asset request"
         );
 
+        if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
+            let decision = policy_evaluator.evaluate_package_install(
+                "open_vsx",
+                extension.extension_id.to_ascii_lowercase().as_str(),
+            );
+
+            match decision {
+                PackagePolicyDecision::Allow => {
+                    return Ok(RequestAction::Allow(req));
+                }
+                PackagePolicyDecision::Defer => {}
+                decision => {
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
+                        req,
+                        Self::blocked_artifact(&extension),
+                        super::block_reason_for(decision),
+                    )));
+                }
+            }
+        }
+
         if self.is_package_listed_as_malware(&extension) {
             tracing::warn!(
                 http.url.path = %path,
                 package = %extension,
                 "blocked Open VSX extension install asset download"
             );
-            return Ok(RequestAction::Block(BlockedRequest {
-                response: generate_malware_blocked_response_for_req(req),
-                info: BlockedEventInfo {
-                    artifact: BlockedArtifact {
-                        product: arcstr!("open_vsx"),
-                        identifier: ArcStr::from(extension.extension_id.as_str()),
-                        version: None,
-                    },
-                },
-            }));
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
+                req,
+                Self::blocked_artifact(&extension),
+                BlockReason::Malware,
+            )));
         }
 
         tracing::debug!(
@@ -154,6 +171,15 @@ impl Rule for RuleOpenVsx {
 }
 
 impl RuleOpenVsx {
+    fn blocked_artifact(extension: &OpenVsxExtensionId) -> BlockedArtifact {
+        BlockedArtifact {
+            product: arcstr!("open_vsx"),
+            identifier: ArcStr::from(extension.extension_id.as_str()),
+            display_name: None,
+            version: None,
+        }
+    }
+
     fn is_package_listed_as_malware(&self, extension: &OpenVsxExtensionId) -> bool {
         self.remote_malware_list
             .find_entries(&extension.extension_id.to_ascii_lowercase())

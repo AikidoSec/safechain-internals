@@ -12,6 +12,7 @@
     <Icon Id="SafeChainIcon.ico" SourceFile="$(var.ProjectDir)\packaging\shared\resources\SafeChain.ico" />
     <Property Id="ARPPRODUCTICON" Value="SafeChainIcon.ico" />
     <Property Id="AIKIDO_TOKEN" Secure="yes" />
+    <SetProperty Id="AIKIDO_TOKEN_FROM_CLI" Value="1" Before="CostInitialize" Sequence="ui" Condition="AIKIDO_TOKEN" />
 
     <MajorUpgrade Schedule="afterInstallValidate" DowngradeErrorMessage="A newer version of SafeChain Ultimate is already installed." AllowSameVersionUpgrades="yes" />
 
@@ -131,10 +132,10 @@
       </Component>
     </DirectoryRef>
 
-    <!-- UI with license -->
+    <!-- UI with license and Aikido token dialog -->
     <WixVariable Id="WixUILicenseRtf" Value="$(var.ProjectDir)\packaging\windows\license.rtf" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
-    <ui:WixUI Id="WixUI_InstallDir" />
+    <UIRef Id="WixUI_InstallDir_Custom" />
 
   </Package>
 </Wix>

@@ -57,7 +57,7 @@ fn test_parse_extension_id_from_path() {
         ),
         (
             "/_apis/public/gallery/publisher/AddictedGuys/extension/vscode-har-explorer/1.0.0/assetbyname/Microsoft.VisualStudio.Code.Manifest",
-            Some("AddictedGuys.vscode-har-explorer"),
+            Some("addictedguys.vscode-har-explorer"),
         ),
         (
             "/_apis/public/gallery/publishers/ms-python/vsextensions/python/2024.22.0/assetbyname/Microsoft.VisualStudio.Code.Manifest",
@@ -69,7 +69,7 @@ fn test_parse_extension_id_from_path() {
         ),
         (
             "/_apis/public/gallery/publishers/MattFoulks/extensions/har-analyzer/0.0.11/vspackage",
-            Some("MattFoulks.har-analyzer"),
+            Some("mattfoulks.har-analyzer"),
         ),
         (
             "/extensions/ms-python/python/2024.22.0/Microsoft.VisualStudio.Services.VsixSignature",
@@ -95,24 +95,23 @@ fn test_parse_extension_id_from_path() {
 }
 
 #[test]
-fn test_parse_extension_id_from_path_preserves_case() {
-    // Extension IDs preserve original case; case-insensitive matching happens at lookup
+fn test_parse_extension_id_from_path_lowercased() {
     let test_cases = vec![
         (
             "/files/AddictedGuys/VSCode-HAR-Explorer/1.0.0/extension.vsix",
-            Some("AddictedGuys.VSCode-HAR-Explorer"),
+            Some("addictedguys.vscode-har-explorer"),
         ),
         (
             "/extensions/MS-Python/Python/2024.22.0/Microsoft.VisualStudio.Services.VSIXPackage",
-            Some("MS-Python.Python"),
+            Some("ms-python.python"),
         ),
         (
             "/_apis/public/gallery/publisher/Microsoft/VSCode/1.0.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage",
-            Some("Microsoft.VSCode"),
+            Some("microsoft.vscode"),
         ),
         (
             "/_apis/public/gallery/publishers/GitHub/vsextensions/Copilot/1.0.0/assetbyname/Microsoft.VisualStudio.Code.Manifest",
-            Some("GitHub.Copilot"),
+            Some("github.copilot"),
         ),
     ];
 

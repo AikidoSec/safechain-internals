@@ -20,11 +20,9 @@ async fn test_report_blocked_events_posts_json_to_endpoint() {
     assert_eq!(StatusCode::NO_CONTENT, resp.status());
 
     // Spawn a dedicated proxy instance so we can pass custom CLI flags.
-    let runtime = e2e::runtime::spawn_with_args(&[
-        "--reporting-endpoint",
-        "http://assert-test.internal/blocked-events",
-    ])
-    .await;
+    let runtime =
+        e2e::runtime::spawn_with_args(&["--reporting-endpoint", "http://assert-test.internal"])
+            .await;
 
     // Trigger a block, which should cause the notifier to emit one event.
     let client = runtime.client_with_http_proxy().await;
@@ -84,11 +82,9 @@ async fn test_report_blocked_events_dedupes_same_artifact_within_30s() {
         .unwrap();
     assert_eq!(StatusCode::NO_CONTENT, resp.status());
 
-    let runtime = e2e::runtime::spawn_with_args(&[
-        "--reporting-endpoint",
-        "http://assert-test.internal/blocked-events",
-    ])
-    .await;
+    let runtime =
+        e2e::runtime::spawn_with_args(&["--reporting-endpoint", "http://assert-test.internal"])
+            .await;
 
     let client = runtime.client_with_http_proxy().await;
     for _ in 0..2 {
@@ -137,11 +133,9 @@ async fn test_report_blocked_events_does_not_dedupe_different_versions_within_30
         .unwrap();
     assert_eq!(StatusCode::NO_CONTENT, resp.status());
 
-    let runtime = e2e::runtime::spawn_with_args(&[
-        "--reporting-endpoint",
-        "http://assert-test.internal/blocked-events",
-    ])
-    .await;
+    let runtime =
+        e2e::runtime::spawn_with_args(&["--reporting-endpoint", "http://assert-test.internal"])
+            .await;
 
     let client = runtime.client_with_http_proxy().await;
 

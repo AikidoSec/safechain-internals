@@ -6,11 +6,37 @@ use rama::{
     net::address::Domain,
 };
 
-use super::events::BlockedEventInfo;
+use super::events::{BlockReason, BlockedArtifact, BlockedEventInfo};
+use crate::endpoint_protection::PackagePolicyDecision;
+use crate::http::response::generate_blocked_response_for_req;
 
 pub struct BlockedRequest {
     pub response: Response,
     pub info: BlockedEventInfo,
+}
+
+impl BlockedRequest {
+    pub(crate) fn blocked(req: Request, artifact: BlockedArtifact, reason: BlockReason) -> Self {
+        Self {
+            response: generate_blocked_response_for_req(req, &reason),
+            info: BlockedEventInfo {
+                artifact,
+                block_reason: reason,
+            },
+        }
+    }
+}
+
+/// Maps a PackagePolicyDecision to the corresponding BlockReason.
+pub(crate) fn block_reason_for(decision: PackagePolicyDecision) -> BlockReason {
+    match decision {
+        PackagePolicyDecision::Rejected => BlockReason::Rejected,
+        PackagePolicyDecision::BlockAll => BlockReason::BlockAll,
+        PackagePolicyDecision::RequestInstall => BlockReason::RequestInstall,
+        PackagePolicyDecision::Allow | PackagePolicyDecision::Defer => {
+            unreachable!("Allow and Defer are not blocking decisions")
+        }
+    }
 }
 
 #[cfg(feature = "pac")]

@@ -1,3 +1,5 @@
+use rama::http::Uri;
+
 pub const fn project_name() -> &'static str {
     env!("CARGO_PKG_NAME")
 }
@@ -21,4 +23,8 @@ pub fn compute_concurrent_request_count() -> usize {
                 .unwrap_or(1);
             cpus * 64
         })
+}
+
+pub fn aikido_app_base_url() -> Uri {
+    Uri::from_static("https://app.aikido.dev")
 }

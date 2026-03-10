@@ -11,12 +11,10 @@ use rama::{
 };
 
 use crate::{
-    http::{
-        firewall::{
-            domain_matcher::DomainMatcher,
-            events::{BlockedArtifact, BlockedEventInfo},
-        },
-        response::generate_generic_blocked_response_for_req,
+    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    http::firewall::{
+        domain_matcher::DomainMatcher,
+        events::{BlockReason, BlockedArtifact},
     },
     package::{
         malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
@@ -36,6 +34,7 @@ mod test;
 pub(in crate::http::firewall) struct RuleMaven {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    policy_evaluator: Option<PolicyEvaluator>,
 }
 
 impl RuleMaven {
@@ -43,6 +42,7 @@ impl RuleMaven {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
+        policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = BoxError>,
@@ -67,6 +67,7 @@ impl RuleMaven {
             .into_iter()
             .collect(),
             remote_malware_list,
+            policy_evaluator,
         })
     }
 }
@@ -132,17 +133,31 @@ impl Rule for RuleMaven {
             "Maven package download request"
         );
 
+        if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
+            let decision = policy_evaluator
+                .evaluate_package_install("maven", artifact.fully_qualified_name.as_str());
+
+            match decision {
+                PackagePolicyDecision::Allow => {
+                    return Ok(RequestAction::Allow(req));
+                }
+                PackagePolicyDecision::Defer => {}
+                decision => {
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
+                        req,
+                        Self::blocked_artifact(&artifact),
+                        super::block_reason_for(decision),
+                    )));
+                }
+            }
+        }
+
         if self.is_package_listed_as_malware(&artifact) {
-            return Ok(RequestAction::Block(BlockedRequest {
-                response: generate_generic_blocked_response_for_req(req),
-                info: BlockedEventInfo {
-                    artifact: BlockedArtifact {
-                        product: arcstr!("maven"),
-                        identifier: artifact.fully_qualified_name.clone(),
-                        version: Some(PackageVersion::Semver(artifact.version.clone())),
-                    },
-                },
-            }));
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
+                req,
+                Self::blocked_artifact(&artifact),
+                BlockReason::Malware,
+            )));
         }
 
         tracing::debug!("Maven url: {path} does not contain malware: passthrough");
@@ -175,6 +190,15 @@ impl MavenArtifact {
 }
 
 impl RuleMaven {
+    fn blocked_artifact(artifact: &MavenArtifact) -> BlockedArtifact {
+        BlockedArtifact {
+            product: arcstr!("maven"),
+            identifier: artifact.fully_qualified_name.clone(),
+            display_name: None,
+            version: Some(PackageVersion::Semver(artifact.version.clone())),
+        }
+    }
+
     fn is_package_listed_as_malware(&self, artifact: &MavenArtifact) -> bool {
         self.remote_malware_list.has_entries_with_version(
             artifact.fully_qualified_name.as_str(),
