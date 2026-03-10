@@ -33,9 +33,13 @@ func (s *Server) sendInstallationRequest(req RequestBypassEvent) {
 }
 
 func buildInstallationRequestEvent(req RequestBypassEvent) *cloud.RequestPackageInstallationEvent {
+	name := req.PackageName
+	if name == "" {
+		name = req.PackageId
+	}
 	pkg := cloud.PackageInstallRequest{
 		ID:      req.PackageId,
-		Name:    req.PackageName,
+		Name:    name,
 		Version: req.PackageVersion,
 	}
 	var installEvent cloud.RequestPackageInstallationEvent
