@@ -11,10 +11,23 @@ fn exceptions(allowed_packages: &[&str], rejected_packages: &[&str]) -> Exceptio
 }
 
 #[test]
-fn evaluate_package_install_no_matching_rule_returns_defer() {
+fn evaluate_package_install_request_installs_blocks_unmatched_package() {
     let cfg = EcosystemConfig {
         block_all_installs: false,
         request_installs: true,
+        minimum_allowed_age_timestamp: None,
+        exceptions: exceptions(&["requests"], &["evil-package"]),
+    };
+
+    let decision = PolicyEvaluator::evaluate_package_install_for_ecosystem_config(&cfg, "numpy");
+    assert_eq!(PackagePolicyDecision::RequestInstall, decision);
+}
+
+#[test]
+fn evaluate_package_install_no_matching_rule_returns_defer() {
+    let cfg = EcosystemConfig {
+        block_all_installs: false,
+        request_installs: false,
         minimum_allowed_age_timestamp: None,
         exceptions: exceptions(&["requests"], &["evil-package"]),
     };
@@ -47,7 +60,7 @@ fn evaluate_package_install_block_all_blocks() {
     };
 
     let decision = PolicyEvaluator::evaluate_package_install_for_ecosystem_config(&cfg, "numpy");
-    assert_eq!(PackagePolicyDecision::Block, decision);
+    assert_eq!(PackagePolicyDecision::BlockAll, decision);
 }
 
 #[test]
@@ -61,7 +74,7 @@ fn evaluate_package_install_rejected_package_blocks() {
 
     let decision =
         PolicyEvaluator::evaluate_package_install_for_ecosystem_config(&cfg, "safe-chain-pi-test");
-    assert_eq!(PackagePolicyDecision::Block, decision);
+    assert_eq!(PackagePolicyDecision::Rejected, decision);
 }
 
 #[test]
@@ -75,7 +88,7 @@ fn evaluate_package_install_rejected_takes_priority_over_allowed() {
     };
 
     let decision = PolicyEvaluator::evaluate_package_install_for_ecosystem_config(&cfg, "requests");
-    assert_eq!(PackagePolicyDecision::Block, decision);
+    assert_eq!(PackagePolicyDecision::Rejected, decision);
 }
 
 #[test]
