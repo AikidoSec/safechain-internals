@@ -104,10 +104,11 @@ func findInstallations(ctx context.Context) ([]sbom.InstalledVersion, error) {
 
 		log.Printf("Found %s with %d profile(s) at: %s (binary: %s, version: %s)", browser.name, len(profiles), browser.dataDir, binaryPath, version)
 		installations = append(installations, sbom.InstalledVersion{
-			Variant:  browser.name,
-			Version:  version,
-			Path:     binaryPath,
-			DataPath: browser.dataDir,
+			Ecosystem: "chrome",
+			Variant:   browser.name,
+			Version:   version,
+			Path:      binaryPath,
+			DataPath:  browser.dataDir,
 		})
 	}
 

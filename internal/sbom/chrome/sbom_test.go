@@ -48,8 +48,9 @@ func TestSBOM(t *testing.T) {
 
 	c := &ChromeExtensions{}
 	packages, err := c.SBOM(context.Background(), sbom.InstalledVersion{
-		Variant:  "chrome",
-		DataPath: dataDir,
+		Ecosystem: "chrome",
+		Variant:   "chrome",
+		DataPath:  dataDir,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -343,4 +344,3 @@ func TestFindProfilesNonExistentDir(t *testing.T) {
 		t.Fatalf("expected 0 profiles, got %d", len(profiles))
 	}
 }
-
