@@ -11,16 +11,18 @@ import (
 type BypassRequest struct {
 	Key            string `json:"key"`
 	Product        string `json:"product"`
+	Id             string `json:"id"`
 	PackageName    string `json:"package_name"`
 	PackageVersion string `json:"package_version"`
 }
 
-func sendBypassRequest(ingress, key, product, packageName, packageVersion string) error {
+func sendBypassRequest(ingress, key, product, packageId, packageName, packageVersion string) error {
 	url := fmt.Sprintf("http://%s/request-bypass", ingress)
 
 	payload := BypassRequest{
 		Key:            key,
 		Product:        product,
+		Id:             packageId,
 		PackageName:    packageName,
 		PackageVersion: packageVersion,
 	}
