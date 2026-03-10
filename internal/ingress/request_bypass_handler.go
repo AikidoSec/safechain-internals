@@ -41,7 +41,7 @@ func buildInstallationRequestEvent(req RequestBypassEvent) *cloud.RequestPackage
 	var installEvent cloud.RequestPackageInstallationEvent
 	installEvent.SBOM.Ecosystems = []cloud.EcosystemPackages{
 		{
-			Variant:  req.Product,
+			Ecosystem: req.Product,
 			Packages: []cloud.PackageInstallRequest{pkg},
 		},
 	}

@@ -26,7 +26,7 @@ type PackageInstallRequest struct {
 
 // EcosystemPackages groups packages by ecosystem for an installation approval request.
 type EcosystemPackages struct {
-	Variant  string                  `json:"variant"`
+	Ecosystem string                 `json:"ecosystem"`
 	Packages []PackageInstallRequest `json:"packages"`
 }
 
