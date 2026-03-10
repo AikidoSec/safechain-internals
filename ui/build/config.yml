@@ -7,10 +7,10 @@ version: '3'
 info:
   companyName: "Aikido Security" # The name of the company
   productName: "safechain-ultimate-ui" # The name of the application
-  productIdentifier: "com.aikidosecurity.safechainultimateui" # The unique product identifier
-  description: "A program that does X" # The application description
-  copyright: "(c) 2025, Aikido Security" # Copyright text
-  comments: "Some Product Comments" # Comments
+  productIdentifier: "com.aikidosecurity.safechainultimate" # The unique product identifier
+  description: "safechain-ultimate-ui" # The application description
+  copyright: "(c) 2026, Aikido Security" # Copyright text
+  comments: "safechain-ultimate-ui" # Comments
   version: "0.0.1" # The application version
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
   #                               # Should match the name of your .icon file without the extension

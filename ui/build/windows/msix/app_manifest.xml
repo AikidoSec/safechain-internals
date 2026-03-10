@@ -8,7 +8,7 @@
   IgnorableNamespaces="uap3">
   
   <Identity 
-    Name="com.example.safechainultimateui"
+    Name="com.aikidosecurity.safechainultimate"
     Publisher="CN=Aikido Security"
     Version="0.1.0.0" 
     ProcessorArchitecture="x64" />
@@ -29,7 +29,7 @@
   </Resources>
   
   <Applications>
-    <Application Id="com.example.safechainultimateui" Executable="safechain-ultimate-ui" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="com.aikidosecurity.safechainultimate" Executable="safechain-ultimate-ui" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="safechain-ultimate-ui"
         Description="A safechain-ultimate-ui application"

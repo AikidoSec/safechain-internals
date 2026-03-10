@@ -25,7 +25,7 @@
         </Capabilities>
         <Applications>
             <Application
-                Id="com.example.safechainultimateui"
+                Id="com.aikidosecurity.safechainultimate"
                 Description="A safechain-ultimate-ui application"
                 DisplayName="safechain-ultimate-ui"
                 ExecutableName="safechain-ultimate-ui"
