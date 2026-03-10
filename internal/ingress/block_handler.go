@@ -59,8 +59,18 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 	}
 }
 
+// productDisplayName maps proxy product identifiers to UI display names.
+func productDisplayName(product string) string {
+	switch product {
+	case "skills_sh":
+		return "skills.sh"
+	default:
+		return product
+	}
+}
+
 func buildBlockedTitle(event BlockEvent) string {
-	return fmt.Sprintf("SafeChain blocked a %s package:", event.Artifact.Product)
+	return fmt.Sprintf("SafeChain blocked a %s package:", productDisplayName(event.Artifact.Product))
 }
 
 func buildBlockedSubtitle(event BlockEvent) string {
