@@ -88,8 +88,8 @@ func readExtensionManifest(extDir string) (*sbom.Package, error) {
 	}, nil
 }
 
-// isLocalizationPlaceholder returns true if s is a VSCode localization (i.e. display name is in different languages)
-// placeholder of the form %key%, e.g. "%displayName%".
+// isLocalizationPlaceholder checks whether the display name needs to be resolved from a localization file,
+// allowing fallback to the extension's base name for a usable human-readable identifier in the SBOM.
 func isLocalizationPlaceholder(s string) bool {
 	return len(s) > 2 && s[0] == '%' && s[len(s)-1] == '%'
 }
