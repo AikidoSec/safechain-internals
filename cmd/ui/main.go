@@ -36,7 +36,7 @@ func main() {
 	trimmedSubtitle := strings.Trim(*subtitle, "\"")
 
 	bypassTrigger := func() {
-		err := sendBypassRequest(*ingress, *packageId, *product, *packageId, *packageHumanName, *packageVersion)
+		err := sendBypassRequest(*ingress, *product, *packageId, *packageHumanName, *packageVersion)
 		if err != nil {
 			log.Fatal(err)
 		}
