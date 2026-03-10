@@ -123,10 +123,8 @@ impl Rule for RuleOpenVsx {
         );
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision = policy_evaluator.evaluate_package_install(
-                "open_vsx",
-                extension.extension_id.as_str(),
-            );
+            let decision = policy_evaluator
+                .evaluate_package_install("open_vsx", extension.extension_id.as_str());
 
             match decision {
                 PackagePolicyDecision::Allow => {
