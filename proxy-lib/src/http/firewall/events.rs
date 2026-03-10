@@ -40,7 +40,7 @@ pub struct MinPackageAgeArtifact {
     /// The name or identifier of the artifact
     pub identifier: ArcStr,
     /// Optional version
-    pub version: Option<PackageVersion>,
+    pub suppressed_versions: Vec<PackageVersion>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

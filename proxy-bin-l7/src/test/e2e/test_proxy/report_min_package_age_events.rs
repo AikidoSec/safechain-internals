@@ -62,19 +62,12 @@ async fn test_report_min_package_age_events_posts_json_to_endpoint() {
     tracing::info!(
         product = %first.artifact.product,
         identifier = %first.artifact.identifier,
-        version = ?first.artifact.version,
+        suppressed_versions = ?first.artifact.suppressed_versions,
         "captured min-package-age event"
     );
 
     assert_eq!("npm", first.artifact.product.as_str());
     assert_eq!("min-age-test-package", first.artifact.identifier.as_str());
-    assert_eq!(
-        "2.0.0",
-        first
-            .artifact
-            .version
-            .as_ref()
-            .expect("version should be present")
-            .to_string()
-    );
+    assert_eq!(1, first.artifact.suppressed_versions.len());
+    assert_eq!("2.0.0", first.artifact.suppressed_versions[0].to_string());
 }

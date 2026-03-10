@@ -92,18 +92,6 @@ impl MinPackageAge {
 
         for key in versions_to_remove.iter() {
             json = Self::remove_version_from_json(json, key);
-
-            if let Some(notifier) = &self.notifier {
-                let event = MinPackageAgeEvent {
-                    ts_ms: now_unix_ms(),
-                    artifact: MinPackageAgeArtifact {
-                        product: "npm".into(),
-                        identifier: package_name.as_str().into(),
-                        version: key.parse().ok(),
-                    },
-                };
-                notifier.notify_min_package_age(event).await;
-            }
         }
         json = Self::set_latest_dist_tag(json, &versions_to_remove);
 
@@ -115,6 +103,21 @@ impl MinPackageAge {
         parts
             .headers
             .typed_insert(CacheControl::new().with_no_cache());
+
+        if let Some(notifier) = &self.notifier {
+            let event = MinPackageAgeEvent {
+                ts_ms: now_unix_ms(),
+                artifact: MinPackageAgeArtifact {
+                    product: "npm".into(),
+                    identifier: package_name.as_str().into(),
+                    suppressed_versions: versions_to_remove
+                        .iter()
+                        .filter_map(|v| v.parse().ok())
+                        .collect(),
+                },
+            };
+            notifier.notify_min_package_age(event).await;
+        }
 
         Ok(Response::from_parts(parts, Body::from(new_bytes)))
     }
