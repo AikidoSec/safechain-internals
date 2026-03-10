@@ -167,7 +167,7 @@ func (d *Daemon) startProxyAndInstallCA(ctx context.Context) error {
 		return fmt.Errorf("ingress server failed to start")
 	}
 
-	if err := d.proxy.Start(ctx, ingressAddr); err != nil {
+	if err := d.proxy.Start(ctx, ingressAddr, d.config.GetBaseURL()); err != nil {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
