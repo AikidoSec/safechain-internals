@@ -18,7 +18,7 @@ use serde_json::json;
 use crate::http::{
     KnownContentType,
     firewall::{
-        events::{BlockedArtifact, MinPackageAgeEvent},
+        events::{MinPackageAgeArtifact, MinPackageAgeEvent},
         notifier::EventNotifier,
     },
 };
@@ -96,7 +96,7 @@ impl MinPackageAge {
             if let Some(notifier) = &self.notifier {
                 let event = MinPackageAgeEvent {
                     ts_ms: now_unix_ms(),
-                    artifact: BlockedArtifact {
+                    artifact: MinPackageAgeArtifact {
                         product: "npm".into(),
                         identifier: package_name.as_str().into(),
                         version: key.parse().ok(),

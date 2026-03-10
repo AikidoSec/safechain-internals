@@ -20,6 +20,7 @@ use safechain_proxy_lib::utils::env::aikido_app_base_url;
 mod assert_endpoint;
 mod endpoint_protection_callbacks;
 mod malware_list;
+mod npm_registry;
 mod vscode_marketplace;
 
 static ASSERT_ENDPOINT_STATE: LazyLock<assert_endpoint::MockState> =
@@ -44,6 +45,10 @@ pub fn new_mock_client()
         .with_matcher(
             HttpMatcher::domain(Domain::from_static("marketplace.visualstudio.com")),
             self::vscode_marketplace::web_svc(),
+        )
+        .with_matcher(
+            HttpMatcher::domain(Domain::from_static("registry.npmjs.org")),
+            self::npm_registry::web_svc(),
         )
         .with_matcher(
             HttpMatcher::domain(app_domain),

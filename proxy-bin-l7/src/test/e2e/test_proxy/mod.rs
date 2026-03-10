@@ -11,3 +11,4 @@ mod firewall_pypi;
 mod firewall_vscode;
 
 mod report_blocked_events;
+mod report_min_package_age_events;

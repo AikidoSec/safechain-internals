@@ -24,12 +24,6 @@ pub struct BlockedEvent {
     pub artifact: BlockedArtifact,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MinPackageAgeEvent {
-    pub ts_ms: i64,
-    pub artifact: BlockedArtifact,
-}
-
 impl BlockedEvent {
     pub fn from_info(info: BlockedEventInfo) -> Self {
         Self {
@@ -37,6 +31,22 @@ impl BlockedEvent {
             artifact: info.artifact,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MinPackageAgeArtifact {
+    /// The product type (e.g., "npm", "pypi", "vscode", "chrome")
+    pub product: ArcStr,
+    /// The name or identifier of the artifact
+    pub identifier: ArcStr,
+    /// Optional version
+    pub version: Option<PackageVersion>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MinPackageAgeEvent {
+    pub ts_ms: i64,
+    pub artifact: MinPackageAgeArtifact,
 }
 
 #[cfg(test)]
