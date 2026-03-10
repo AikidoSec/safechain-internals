@@ -212,10 +212,15 @@ impl Firewall {
                 .await
                 .context("create block rule: open vsx")?
                 .into_dyn(),
-                self::rule::skills_sh::RuleSkillsSh::try_new(guard, layered_client, data, policy_evaluator)
-                    .await
-                    .context("create block rule: skills.sh")?
-                    .into_dyn(),
+                self::rule::skills_sh::RuleSkillsSh::try_new(
+                    guard,
+                    layered_client,
+                    data,
+                    policy_evaluator,
+                )
+                .await
+                .context("create block rule: skills.sh")?
+                .into_dyn(),
             ]),
             notifier,
         })
