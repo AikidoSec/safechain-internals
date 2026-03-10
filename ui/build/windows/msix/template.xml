@@ -18,7 +18,7 @@
         PublisherName="CN=Aikido Security"
         PublisherDisplayName="Aikido Security"
         Version="0.1.0.0"
-        PackageDescription="A safechain-ultimate-ui application">
+        PackageDescription="safechain-ultimate-ui">
         <Capabilities>
             <Capability Name="runFullTrust" />
             
@@ -26,7 +26,7 @@
         <Applications>
             <Application
                 Id="com.aikidosecurity.safechainultimate"
-                Description="A safechain-ultimate-ui application"
+                Description="safechain-ultimate-ui"
                 DisplayName="safechain-ultimate-ui"
                 ExecutableName="safechain-ultimate-ui"
                 EntryPoint="Windows.FullTrustApplication">
@@ -43,7 +43,7 @@
             <Framework>false</Framework>
             <DisplayName>safechain-ultimate-ui</DisplayName>
             <PublisherDisplayName>Aikido Security</PublisherDisplayName>
-            <Description>A safechain-ultimate-ui application</Description>
+            <Description>safechain-ultimate-ui</Description>
             <Logo>Assets\AppIcon.png</Logo>
         </Properties>
     </PackageInformation>
