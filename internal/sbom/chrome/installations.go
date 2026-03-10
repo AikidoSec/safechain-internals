@@ -48,6 +48,31 @@ func getBrowsers(homeDir string) []browser {
 				dataDir: filepath.Join(appSupport, "Arc", "User Data"),
 				bins:    []string{"/Applications/Arc.app/Contents/MacOS/Arc"},
 			},
+			{
+				name:    "chrome-beta",
+				dataDir: filepath.Join(appSupport, "Google", "Chrome Beta"),
+				bins:    []string{"/Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta"},
+			},
+			{
+				name:    "chrome-canary",
+				dataDir: filepath.Join(appSupport, "Google", "Chrome Canary"),
+				bins:    []string{"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"},
+			},
+			{
+				name:    "chrome-dev",
+				dataDir: filepath.Join(appSupport, "Google", "Chrome Dev"),
+				bins:    []string{"/Applications/Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev"},
+			},
+			{
+				name:    "brave-nightly",
+				dataDir: filepath.Join(appSupport, "BraveSoftware", "Brave-Browser-Nightly"),
+				bins:    []string{"/Applications/Brave Browser Nightly.app/Contents/MacOS/Brave Browser Nightly"},
+			},
+			{
+				name:    "dia",
+				dataDir: filepath.Join(appSupport, "Dia", "User Data"),
+				bins:    []string{"/Applications/Dia.app/Contents/MacOS/Dia"},
+			},
 		}
 
 	case "windows":
@@ -81,6 +106,37 @@ func getBrowsers(homeDir string) []browser {
 			{
 				name:    "chromium",
 				dataDir: filepath.Join(localAppData, "Chromium", "User Data"),
+			},
+			{
+				name:    "chrome-beta",
+				dataDir: filepath.Join(localAppData, "Google", "Chrome Beta", "User Data"),
+				bins: []string{
+					filepath.Join(programFiles, "Google", "Chrome Beta", "Application", "chrome.exe"),
+					filepath.Join(programFilesX86, "Google", "Chrome Beta", "Application", "chrome.exe"),
+				},
+			},
+			{
+				name:    "chrome-canary",
+				dataDir: filepath.Join(localAppData, "Google", "Chrome SxS", "User Data"),
+				bins: []string{
+					filepath.Join(programFiles, "Google", "Chrome SxS", "Application", "chrome.exe"),
+					filepath.Join(programFilesX86, "Google", "Chrome SxS", "Application", "chrome.exe"),
+				},
+			},
+			{
+				name:    "chrome-dev",
+				dataDir: filepath.Join(localAppData, "Google", "Chrome Dev", "User Data"),
+				bins: []string{
+					filepath.Join(programFiles, "Google", "Chrome Dev", "Application", "chrome.exe"),
+					filepath.Join(programFilesX86, "Google", "Chrome Dev", "Application", "chrome.exe"),
+				},
+			},
+			{
+				name:    "brave-nightly",
+				dataDir: filepath.Join(localAppData, "BraveSoftware", "Brave-Browser-Nightly", "User Data"),
+				bins: []string{
+					filepath.Join(programFiles, "BraveSoftware", "Brave-Browser-Nightly", "Application", "brave.exe"),
+				},
 			},
 		}
 	}
