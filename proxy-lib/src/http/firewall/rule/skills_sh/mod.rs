@@ -11,11 +11,11 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::PolicyEvaluator,
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{BlockReason, BlockedArtifact},
-        rule::{BlockedRequest, RequestAction, Rule, block_reason_for},
+        rule::{BlockedRequest, RequestAction, Rule},
     },
     package::malware_list::{ListDataEntry, MalwareListEntryFormatter, RemoteMalwareList},
     storage::SyncCompactDataStorage,
@@ -50,6 +50,7 @@ impl MalwareListEntryFormatter for SkillsShEntryFormatter {
 pub(in crate::http::firewall) struct RuleSkillsSh {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    #[allow(dead_code)]
     policy_evaluator: Option<PolicyEvaluator>,
 }
 
@@ -134,24 +135,7 @@ impl Rule for RuleSkillsSh {
             "Skills.sh git repository operation request"
         );
 
-        if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision =
-                policy_evaluator.evaluate_package_install("skills_sh", repo_name.as_str());
-
-            match decision {
-                PackagePolicyDecision::Allow => {
-                    return Ok(RequestAction::Allow(req));
-                }
-                PackagePolicyDecision::Defer => {}
-                decision => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
-                        req,
-                        Self::blocked_artifact(&repo_name),
-                        block_reason_for(decision),
-                    )));
-                }
-            }
-        }
+        // policy evaluator is not used for skills_sh at the moment (git repos could be blocked)
 
         if self.is_repo_listed_as_malware(&repo_name) {
             tracing::warn!(
