@@ -97,7 +97,6 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 		proxy:       proxy.New(),
 		registry:    scannermanager.NewRegistry(),
 		sbomManager: newSBOMRegistry(),
-		ingress:     ingress.New(),
 		logRotator:  utils.NewLogRotator(),
 		logReaper:   utils.NewLogReaper(),
 		uiProcess:   &uiProcess{},
@@ -118,6 +117,7 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 	if d.config == nil {
 		return nil, fmt.Errorf("failed to create config")
 	}
+	d.ingress = ingress.New(d.config)
 	d.initLogging(ctx)
 	return d, nil
 }

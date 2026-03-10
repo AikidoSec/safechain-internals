@@ -10,6 +10,8 @@ import (
 	"net"
 	"net/http"
 	"sync"
+
+	"github.com/AikidoSec/safechain-internals/internal/config"
 )
 
 const (
@@ -20,14 +22,16 @@ type Server struct {
 	addr     string
 	listener net.Listener
 	server   *http.Server
+	config   *config.ConfigInfo
 
 	eventStore *eventStore
 	mu         sync.RWMutex
 }
 
-func New() *Server {
+func New(cfg *config.ConfigInfo) *Server {
 	store := &eventStore{}
 	return &Server{
+		config:     cfg,
 		eventStore: store,
 	}
 }

@@ -23,5 +23,8 @@ type BlockEvent struct {
 }
 
 type RequestBypassEvent struct {
-	Key string `json:"key"`
+	Key            string `json:"key"`
+	Product        string `json:"product"`
+	PackageName    string `json:"package_name"`
+	PackageVersion string `json:"package_version"`
 }
