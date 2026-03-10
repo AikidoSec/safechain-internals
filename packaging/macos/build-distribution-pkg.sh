@@ -90,7 +90,6 @@ cp "$COMPONENT_PKG" "$BUILD_DIR/"
 DIST_XML="$BUILD_DIR/Distribution.xml"
 cp "$SCRIPT_DIR/Distribution.xml" "$DIST_XML"
 sed -i '' "s/VERSION_PLACEHOLDER/$PKG_VERSION/g" "$DIST_XML"
-sed -i '' "s/ARCH_PLACEHOLDER/$ARCH/g" "$DIST_XML"
 
 # Copy resources
 RESOURCES_DIR="$BUILD_DIR/Resources"

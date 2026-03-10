@@ -123,7 +123,7 @@ build-pkg:
 ifeq ($(DETECTED_OS),darwin)
 	@echo "Building macOS PKG installer..."
 	@cd packaging/macos && ./build-distribution-pkg.sh -v $(VERSION) -a universal -b ../../$(BIN_DIR) -o ../../$(DIST_DIR)
-	@echo "PKG built: $(DIST_DIR)/SafeChainUltimate-$(VERSION)-universal.pkg"
+	@echo "PKG built: $(DIST_DIR)/SafeChainUltimate-$(VERSION).pkg"
 else
 	@echo "Error: PKG building is only supported on macOS"
 	@exit 1

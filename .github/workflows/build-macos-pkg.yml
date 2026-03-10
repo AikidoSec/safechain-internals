@@ -121,7 +121,7 @@ jobs:
 
       - name: Rename package
         run: |
-          mv dist/SafeChainUltimate-${{ inputs.version || 'dev' }}-universal.pkg dist/SafeChainUltimate.pkg
+          mv dist/SafeChainUltimate-${{ inputs.version || 'dev' }}.pkg dist/SafeChainUltimate.pkg
 
       - name: Create and notarize macOS packages
         env:
