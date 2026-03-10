@@ -77,7 +77,7 @@ func readExtensionManifest(extDir string) (*sbom.Package, error) {
 	}
 
 	name := manifest.DisplayName
-	if name == "" {
+	if name == "" || isLocalizationPlaceholder(name) {
 		name = manifest.Name
 	}
 
@@ -86,4 +86,10 @@ func readExtensionManifest(extDir string) (*sbom.Package, error) {
 		Name:    name,
 		Version: manifest.Version,
 	}, nil
+}
+
+// isLocalizationPlaceholder returns true if s is a VSCode localization (i.e. display name is in different languages)
+// placeholder of the form %key%, e.g. "%displayName%".
+func isLocalizationPlaceholder(s string) bool {
+	return len(s) > 2 && s[0] == '%' && s[len(s)-1] == '%'
 }
