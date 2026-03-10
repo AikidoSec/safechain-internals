@@ -6,10 +6,9 @@ use rama::{
     net::address::Domain,
 };
 
-use super::events::{BlockedArtifact, BlockedEventInfo};
-use crate::http::response::{
-    generate_generic_blocked_response_for_req, generate_malware_blocked_response_for_req,
-};
+use super::events::{BlockReason, BlockedArtifact, BlockedEventInfo};
+use crate::endpoint_protection::PackagePolicyDecision;
+use crate::http::response::generate_blocked_response_for_req;
 
 pub struct BlockedRequest {
     pub response: Response,
@@ -17,17 +16,25 @@ pub struct BlockedRequest {
 }
 
 impl BlockedRequest {
-    pub(crate) fn policy(req: Request, artifact: BlockedArtifact) -> Self {
+    pub(crate) fn blocked(req: Request, artifact: BlockedArtifact, reason: BlockReason) -> Self {
         Self {
-            response: generate_generic_blocked_response_for_req(req),
-            info: BlockedEventInfo { artifact },
+            response: generate_blocked_response_for_req(req, &reason),
+            info: BlockedEventInfo {
+                artifact,
+                block_reason: reason,
+            },
         }
     }
+}
 
-    pub(crate) fn malware(req: Request, artifact: BlockedArtifact) -> Self {
-        Self {
-            response: generate_malware_blocked_response_for_req(req),
-            info: BlockedEventInfo { artifact },
+/// Maps a PackagePolicyDecision to the corresponding BlockReason.
+pub(crate) fn block_reason_for(decision: PackagePolicyDecision) -> BlockReason {
+    match decision {
+        PackagePolicyDecision::Rejected => BlockReason::Rejected,
+        PackagePolicyDecision::BlockAll => BlockReason::BlockAll,
+        PackagePolicyDecision::RequestInstall => BlockReason::RequestInstall,
+        PackagePolicyDecision::Allow | PackagePolicyDecision::Defer => {
+            unreachable!("Allow and Defer are not blocking decisions")
         }
     }
 }
@@ -41,6 +48,7 @@ pub mod npm;
 pub mod nuget;
 pub mod open_vsx;
 pub mod pypi;
+pub mod skills_sh;
 pub mod vscode;
 
 /// Action determined by a [`Rule`] when evaluating an http [`Request`]

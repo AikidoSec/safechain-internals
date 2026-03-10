@@ -117,7 +117,7 @@ func TestCollectAllPackages(t *testing.T) {
 	r.Register(&mockPackageManager{
 		name: "npm",
 		installations: []InstalledVersion{
-			{Version: "18.0.0", Path: "/usr/bin/node", Variant: "node"},
+			{Ecosystem: "npm", Version: "18.0.0", Path: "/usr/bin/node"},
 		},
 		packages: map[string][]Package{
 			"/usr/bin/node": {
@@ -129,7 +129,7 @@ func TestCollectAllPackages(t *testing.T) {
 	r.Register(&mockPackageManager{
 		name: "pip",
 		installations: []InstalledVersion{
-			{Version: "3.11", Path: "/usr/bin/python3"},
+			{Ecosystem: "pypi", Version: "3.11", Path: "/usr/bin/python3"},
 		},
 		packages: map[string][]Package{
 			"/usr/bin/python3": {
@@ -146,27 +146,27 @@ func TestCollectAllPackages(t *testing.T) {
 
 	entryByEcosystem := make(map[string]EcosystemEntry)
 	for _, e := range sbom.Entries {
-		entryByEcosystem[e.Variant] = e
+		entryByEcosystem[e.Ecosystem] = e
 	}
 
-	nodeEntry, ok := entryByEcosystem["node"]
+	npmEntry, ok := entryByEcosystem["npm"]
 	if !ok {
-		t.Fatal("expected 'node' ecosystem entry")
+		t.Fatal("expected 'npm' ecosystem entry")
 	}
-	if nodeEntry.Version != "18.0.0" || len(nodeEntry.Packages) != 2 {
-		t.Fatalf("unexpected node entry: %+v", nodeEntry)
+	if npmEntry.Version != "18.0.0" || len(npmEntry.Packages) != 2 {
+		t.Fatalf("unexpected npm entry: %+v", npmEntry)
 	}
 
-	pipEntry, ok := entryByEcosystem["pip"]
+	pipEntry, ok := entryByEcosystem["pypi"]
 	if !ok {
-		t.Fatal("expected 'pip' ecosystem entry (fallback from empty Ecosystem)")
+		t.Fatal("expected 'pypi' ecosystem entry")
 	}
 	if pipEntry.Version != "3.11" || len(pipEntry.Packages) != 1 {
-		t.Fatalf("unexpected pip entry: %+v", pipEntry)
+		t.Fatalf("unexpected pypi entry: %+v", pipEntry)
 	}
 }
 
-func TestCollectAllPackagesEcosystemFallback(t *testing.T) {
+func TestCollectAllPackagesEmptyEcosystem(t *testing.T) {
 	r := NewRegistry()
 	r.Register(&mockPackageManager{
 		name: "pip",
@@ -182,8 +182,11 @@ func TestCollectAllPackagesEcosystemFallback(t *testing.T) {
 	if len(sbom.Entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(sbom.Entries))
 	}
-	if sbom.Entries[0].Variant != "pip" {
-		t.Fatalf("expected variant fallback to 'pip', got %q", sbom.Entries[0].Variant)
+	if sbom.Entries[0].Ecosystem != "" {
+		t.Fatalf("expected empty ecosystem, got %q", sbom.Entries[0].Ecosystem)
+	}
+	if sbom.Entries[0].Variant != "" {
+		t.Fatalf("expected empty variant, got %q", sbom.Entries[0].Variant)
 	}
 }
 
@@ -196,7 +199,7 @@ func TestCollectAllPackagesInstallationError(t *testing.T) {
 	r.Register(&mockPackageManager{
 		name: "pip",
 		installations: []InstalledVersion{
-			{Version: "3.11", Path: "/usr/bin/python3"},
+			{Ecosystem: "pypi", Version: "3.11", Path: "/usr/bin/python3"},
 		},
 		packages: map[string][]Package{
 			"/usr/bin/python3": {{Name: "requests", Version: "2.31.0"}},
@@ -208,8 +211,8 @@ func TestCollectAllPackagesInstallationError(t *testing.T) {
 	if len(sbom.Entries) != 1 {
 		t.Fatalf("expected 1 entry (npm should be skipped), got %d", len(sbom.Entries))
 	}
-	if sbom.Entries[0].Variant != "pip" {
-		t.Fatalf("expected pip entry, got %q", sbom.Entries[0].Variant)
+	if sbom.Entries[0].Ecosystem != "pypi" {
+		t.Fatalf("expected pypi entry, got %q", sbom.Entries[0].Ecosystem)
 	}
 }
 
@@ -235,8 +238,8 @@ func TestCollectAllPackagesMultipleInstallations(t *testing.T) {
 	r.Register(&mockPackageManager{
 		name: "pip",
 		installations: []InstalledVersion{
-			{Version: "3.10", Path: "/usr/bin/python3.10", Variant: "pypi"},
-			{Version: "3.11", Path: "/usr/bin/python3.11", Variant: "pypi"},
+			{Ecosystem: "pypi", Version: "3.10", Path: "/usr/bin/python3.10"},
+			{Ecosystem: "pypi", Version: "3.11", Path: "/usr/bin/python3.11"},
 		},
 		packages: map[string][]Package{
 			"/usr/bin/python3.10": {{Name: "django", Version: "4.2.0"}},
@@ -253,8 +256,8 @@ func TestCollectAllPackagesMultipleInstallations(t *testing.T) {
 	versions := map[string]bool{}
 	for _, e := range sbom.Entries {
 		versions[e.Version] = true
-		if e.Variant != "pypi" {
-			t.Fatalf("expected variant 'pypi', got %q", e.Variant)
+		if e.Ecosystem != "pypi" {
+			t.Fatalf("expected ecosystem 'pypi', got %q", e.Ecosystem)
 		}
 	}
 	if !versions["3.10"] || !versions["3.11"] {

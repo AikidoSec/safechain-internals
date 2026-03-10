@@ -166,3 +166,24 @@ async fn test_open_vsx_extension_blocked_by_endpoint_policy_rejected_package() {
 
     assert_eq!(StatusCode::FORBIDDEN, resp.status());
 }
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_open_vsx_extension_blocked_by_endpoint_policy_request_installs() {
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-request-installs-open-vsx",
+        "mock_device",
+        &[],
+    )
+    .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // "redhat/java" is not malware, but request_installs requires approval for all installs.
+    let resp = client
+        .get("https://open-vsx.org/vscode/asset/redhat/java/1.30.0/Microsoft.VisualStudio.Services.VSIXPackage")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}

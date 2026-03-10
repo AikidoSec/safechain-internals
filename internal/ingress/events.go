@@ -8,10 +8,14 @@ type Artifact struct {
 
 // BlockEvent represents a blocked request notification from the proxy.
 type BlockEvent struct {
-	TsMs     int64    `json:"ts_ms"`
-	Artifact Artifact `json:"artifact"`
+	TsMs        int64    `json:"ts_ms"`
+	Artifact    Artifact `json:"artifact"`
+	BlockReason string   `json:"block_reason"`
 }
 
 type RequestBypassEvent struct {
-	Key string `json:"key"`
+	Key            string `json:"key"`
+	Product        string `json:"product"`
+	PackageName    string `json:"package_name"`
+	PackageVersion string `json:"package_version"`
 }

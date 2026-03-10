@@ -204,13 +204,22 @@ impl Firewall {
                 .context("create block rule: maven")?
                 .into_dyn(),
                 self::rule::open_vsx::RuleOpenVsx::try_new(
-                    guard,
-                    layered_client,
-                    data,
+                    guard.clone(),
+                    layered_client.clone(),
+                    data.clone(),
                     policy_evaluator.clone(),
                 )
                 .await
                 .context("create block rule: open vsx")?
+                .into_dyn(),
+                self::rule::skills_sh::RuleSkillsSh::try_new(
+                    guard,
+                    layered_client,
+                    data,
+                    policy_evaluator,
+                )
+                .await
+                .context("create block rule: skills.sh")?
                 .into_dyn(),
             ]),
             notifier,
