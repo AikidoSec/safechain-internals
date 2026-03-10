@@ -9,6 +9,9 @@ use rama::{
 
 pub(super) struct ChromeWebStore;
 
+const LOOKUP_TIMEOUT: Duration = Duration::from_millis(500);
+const MAX_REDIRECTS: usize = 3;
+
 impl ChromeWebStore {
     /// Fetches the human-readable name of a Chrome extension from the Chrome Web Store.
     /// Returns `None` if the name cannot be determined (timeout, network error, not found).
@@ -23,75 +26,56 @@ impl ChromeWebStore {
             .parse()
             .context("build Chrome Web Store URI")?;
 
-        tracing::info!("looking up Chrome extension name for id {}", extension_id);
-        // Chrome Web Store redirects `/detail/{id}` → `/detail/{slug}/{id}` with a 301,
-        // so we follow up to 3 redirects before giving up.
-        for _ in 0..=3 {
-            let resp = tokio::time::timeout(Duration::from_millis(500), client.get(uri).send())
-                .await
-                .context("Chrome Web Store request timed out after 500ms")??;
+        for _ in 0..=MAX_REDIRECTS {
+            let resp = match tokio::time::timeout(LOOKUP_TIMEOUT, client.get(uri).send()).await {
+                Ok(result) => result?,
+                Err(_) => return Ok(None),
+            };
 
-            if resp.status().is_redirection() {
-                let new_uri = resp
+            let status = resp.status();
+            if status.is_redirection() {
+                let Some(new_uri) = resp
                     .headers()
                     .get("location")
-                    .and_then(Self::parse_redirect_location);
+                    .and_then(Self::parse_redirect_location)
+                else {
+                    return Ok(None);
+                };
 
-                if let Some(new_uri) = new_uri {
-                    tracing::debug!(
-                        extension_id,
-                        new_uri = %new_uri,
-                        "following redirect from Chrome Web Store during name lookup"
-                    );
-                    uri = new_uri;
-                    continue;
-                }
+                tracing::debug!(extension_id, new_uri = %new_uri, "following Chrome Web Store redirect");
+                uri = new_uri;
+                continue;
+            }
 
-                let location_header = resp
-                    .headers()
-                    .get("location")
-                    .map(|v| String::from_utf8_lossy(v.as_bytes()).into_owned())
-                    .unwrap_or_default();
-                tracing::info!(
-                    extension_id,
-                    location_header,
-                    "Chrome Web Store redirect has unparseable Location header"
-                );
+            if !status.is_success() {
+                tracing::debug!(extension_id, %status, "Chrome Web Store name lookup failed");
                 return Ok(None);
             }
 
-            if !resp.status().is_success() {
-                tracing::warn!(
-                    extension_id,
-                    status = %resp.status(),
-                    "Chrome Web Store returned non-success status during name lookup"
-                );
-                return Ok(None);
-            }
-
-            let body = tokio::time::timeout(Duration::from_millis(500), resp.try_into_string())
-                .await
-                .context("reading Chrome Web Store response body timed out after 500ms")??;
+            let body = match tokio::time::timeout(LOOKUP_TIMEOUT, resp.try_into_string()).await {
+                Ok(result) => result?,
+                Err(_) => return Ok(None),
+            };
 
             return Ok(Self::extract_og_title(&body));
         }
 
-        Ok(None) // redirect limit exceeded
+        Ok(None)
     }
 
     pub(super) fn parse_redirect_location(location: &HeaderValue) -> Option<Uri> {
         // Chrome Web Store sometimes emits raw UTF-8 bytes in the Location header.
         // `HeaderValue::to_str()` rejects those, so encode directly from the raw bytes.
         let encoded = ChromeWebStore::percent_encode_non_ascii(location.as_bytes());
-        if let Ok(uri) = encoded.parse::<Uri>() {
-            if uri.scheme().is_some() {
-                return Some(uri);
-            }
-        }
-
-        format!("https://chromewebstore.google.com{encoded}")
+        encoded
             .parse::<Uri>()
             .ok()
+            .filter(|uri| uri.scheme().is_some())
+            .or_else(|| {
+                format!("https://chromewebstore.google.com{encoded}")
+                    .parse::<Uri>()
+                    .ok()
+            })
     }
 
     /// Percent-encodes any non-ASCII bytes so the result can be parsed as a URI.
@@ -121,10 +105,6 @@ impl ChromeWebStore {
         let raw = &window[content_start..content_end];
         let title = raw.strip_suffix(" - Chrome Web Store")?.trim();
 
-        if title.is_empty() {
-            return None;
-        }
-
-        Some(title.to_owned())
+        (!title.is_empty()).then(|| title.to_owned())
     }
 }
