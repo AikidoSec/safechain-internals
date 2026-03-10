@@ -18,6 +18,7 @@ use rama::{
 use safechain_proxy_lib::utils::env::aikido_app_base_url;
 
 mod assert_endpoint;
+mod chrome_webstore;
 mod endpoint_protection_callbacks;
 mod malware_list;
 mod vscode_marketplace;
@@ -52,6 +53,10 @@ pub fn new_mock_client()
         .with_matcher(
             HttpMatcher::domain(Domain::from_static("assert-test.internal")),
             self::assert_endpoint::web_svc(ASSERT_ENDPOINT_STATE.clone()),
+        )
+        .with_matcher(
+            HttpMatcher::domain(Domain::from_static("chromewebstore.google.com")),
+            self::chrome_webstore::web_svc(),
         )
         // echo all non-blocked requests back
         .with_not_found(not_found_svc);
