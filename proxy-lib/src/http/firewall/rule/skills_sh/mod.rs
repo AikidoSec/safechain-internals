@@ -11,13 +11,11 @@ use rama::{
 };
 
 use crate::{
-    http::{
-        firewall::{
-            domain_matcher::DomainMatcher,
-            events::{BlockedArtifact, BlockedEventInfo},
-            rule::{BlockedRequest, RequestAction, Rule},
-        },
-        response::generate_malware_blocked_response_for_req,
+    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    http::firewall::{
+        domain_matcher::DomainMatcher,
+        events::{BlockReason, BlockedArtifact},
+        rule::{BlockedRequest, RequestAction, Rule, block_reason_for},
     },
     package::malware_list::{ListDataEntry, MalwareListEntryFormatter, RemoteMalwareList},
     storage::SyncCompactDataStorage,
@@ -52,6 +50,7 @@ impl MalwareListEntryFormatter for SkillsShEntryFormatter {
 pub(in crate::http::firewall) struct RuleSkillsSh {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    policy_evaluator: Option<PolicyEvaluator>,
 }
 
 impl RuleSkillsSh {
@@ -59,6 +58,7 @@ impl RuleSkillsSh {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
+        policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = BoxError>,
@@ -76,6 +76,7 @@ impl RuleSkillsSh {
         Ok(Self {
             target_domains: ["github.com"].into_iter().collect(),
             remote_malware_list,
+            policy_evaluator,
         })
     }
 }
@@ -133,17 +134,36 @@ impl Rule for RuleSkillsSh {
             "Skills.sh git repository operation request"
         );
 
+        if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
+            let decision =
+                policy_evaluator.evaluate_package_install("skills_sh", repo_name.as_str());
+
+            match decision {
+                PackagePolicyDecision::Allow => {
+                    return Ok(RequestAction::Allow(req));
+                }
+                PackagePolicyDecision::Defer => {}
+                decision => {
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
+                        req,
+                        Self::blocked_artifact(&repo_name),
+                        block_reason_for(decision),
+                    )));
+                }
+            }
+        }
+
         if self.is_repo_listed_as_malware(&repo_name) {
-            Ok(RequestAction::Block(BlockedRequest {
-                response: generate_malware_blocked_response_for_req(req),
-                info: BlockedEventInfo {
-                    artifact: BlockedArtifact {
-                        product: arcstr!("skills_sh"),
-                        identifier: ArcStr::from(repo_name),
-                        version: None,
-                    },
-                },
-            }))
+            tracing::warn!(
+                http.url.path = %path,
+                repo.name = %repo_name,
+                "blocked Skills.sh repository git operation"
+            );
+            Ok(RequestAction::Block(BlockedRequest::blocked(
+                req,
+                Self::blocked_artifact(&repo_name),
+                BlockReason::Malware,
+            )))
         } else {
             tracing::debug!(
                 http.url.path = %path,
@@ -155,6 +175,15 @@ impl Rule for RuleSkillsSh {
 }
 
 impl RuleSkillsSh {
+    fn blocked_artifact(repo_name: &str) -> BlockedArtifact {
+        BlockedArtifact {
+            product: arcstr!("skills_sh"),
+            identifier: ArcStr::from(repo_name),
+            display_name: None,
+            version: None,
+        }
+    }
+
     fn is_repo_listed_as_malware(&self, repo_name: &str) -> bool {
         self.remote_malware_list
             .find_entries(repo_name)
