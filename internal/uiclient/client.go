@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -32,7 +34,12 @@ func New() *Client {
 	return &Client{
 		baseURL: DefaultBaseURL,
 		token:   DefaultToken,
-		http:    &http.Client{Timeout: requestTimeout},
+		http: &http.Client{
+			Timeout: requestTimeout,
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
 	}
 }
 
@@ -52,9 +59,37 @@ func (c *Client) SetBaseURL(s string) {
 	if s == "" {
 		return
 	}
+	if !isLoopbackURL(s) {
+		log.Printf("Rejected non-loopback base URL: %s", s)
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.baseURL = s
+}
+
+// isLoopbackURL returns true only for http:// URLs whose host resolves to a
+// loopback address (127.0.0.0/8 or ::1).
+func isLoopbackURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "http" {
+		return false
+	}
+	host := u.Hostname()
+	ip := net.ParseIP(host)
+	if ip != nil {
+		return ip.IsLoopback()
+	}
+	addrs, err := net.LookupHost(host)
+	if err != nil || len(addrs) == 0 {
+		return false
+	}
+	for _, a := range addrs {
+		if parsed := net.ParseIP(a); parsed == nil || !parsed.IsLoopback() {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Client) SetToken(s string) {
