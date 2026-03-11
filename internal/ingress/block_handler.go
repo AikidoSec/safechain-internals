@@ -12,7 +12,6 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	log.Printf("Received block event: %+v", event)
 
 	blocked := s.eventStore.Add(event)
 	go s.ui.NotifyBlocked(blocked)
