@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import type { BlockedEvent, BlockReason } from "../types";
+import type { BlockEvent, BlockReason } from "../types";
 import { getEvent, requestAccess } from "../api";
 import npmIcon from "../../assets/npm.svg";
 import pypiIcon from "../../assets/pypi.svg";
@@ -39,7 +39,7 @@ const BLOCK_REASON_LABEL: Record<BlockReason, string> = {
   request_install: "Approval required",
 };
 
-function formatEventTime(ts: string): string {
+function formatEventTime(ts: number): string {
   try {
     const d = new Date(ts);
     if (Number.isNaN(d.getTime())) return ts;
@@ -70,31 +70,31 @@ function isConnectionError(message: string): boolean {
   );
 }
 
-function EventInfo({ event }: { event: BlockedEvent }) {
+function EventInfo({ event }: { event: BlockEvent }) {
   return (
     <dl className="event-info">
       <div className="event-info-row">
         <dt>Package</dt>
         <dd className="event-info-package">
-          {TOOL_ICONS[event.product?.toLowerCase()] && (
+          {TOOL_ICONS[event.artifact.product?.toLowerCase()] && (
             <img
-              src={TOOL_ICONS[event.product.toLowerCase()]}
-              alt={event.product}
+              src={TOOL_ICONS[event.artifact.product.toLowerCase()]}
+              alt={event.artifact.product}
               className="event-info-icon"
             />
           )}
-          {event.identifier}
+          {event.artifact.identifier}
         </dd>
       </div>
-      {event.version && (
+      {event.artifact.version && (
         <div className="event-info-row">
           <dt>Version</dt>
-          <dd>{event.version}</dd>
+          <dd>{event.artifact.version}</dd>
         </div>
       )}
       <div className="event-info-row">
         <dt>Blocked at</dt>
-        <dd>{formatEventTime(event.ts)}</dd>
+        <dd>{formatEventTime(event.ts_ms)}</dd>
       </div>
       <div className="event-info-row">
         <dt>Reason</dt>
@@ -111,7 +111,7 @@ function EventInfo({ event }: { event: BlockedEvent }) {
 export function EventDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [event, setEvent] = useState<BlockedEvent | null>(null);
+  const [event, setEvent] = useState<BlockEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
@@ -202,7 +202,7 @@ export function EventDetail() {
             </div>
             <h2>Request sent</h2>
             <p className="subtitle">
-              Your access request for <strong>{event.identifier}</strong> has been submitted.
+              Your access request for <strong>{event.artifact.identifier}</strong> has been submitted.
             </p>
           </div>
           <div className="request-access-actions">

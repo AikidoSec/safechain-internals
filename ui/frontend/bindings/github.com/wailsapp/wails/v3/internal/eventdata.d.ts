@@ -15,7 +15,7 @@ import type * as daemon$0 from "../../../../../changeme/daemon/models.js";
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
-            "blocked": daemon$0.BlockedEvent;
+            "blocked": daemon$0.BlockEvent;
             "focus_event": main$0.FocusEventPayload;
         }
     }

@@ -21,7 +21,7 @@ function configure() {
 }
 
 // Private type creation functions
-const $$createType0 = daemon$0.BlockedEvent.createFrom;
+const $$createType0 = daemon$0.BlockEvent.createFrom;
 const $$createType1 = main$0.FocusEventPayload.createFrom;
 
 configure();

@@ -84,7 +84,7 @@ func validateEventID(id string) error {
 }
 
 // ListEvents fetches GET /v1/events?limit=N.
-func ListEvents(limit int) ([]BlockedEvent, error) {
+func ListEvents(limit int) ([]BlockEvent, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -96,20 +96,20 @@ func ListEvents(limit int) ([]BlockedEvent, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("list events: %s", resp.Status)
 	}
-	var out []BlockedEvent
+	var out []BlockEvent
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, err
 	}
 	// sort by ts descending
 	sort.Slice(out, func(i, j int) bool {
-		return out[i].Ts > out[j].Ts
+		return out[i].TsMs > out[j].TsMs
 	})
 	return out, nil
 }
 
 // GetEvent fetches GET /v1/events/:id.
-func GetEvent(eventID string) (BlockedEvent, error) {
-	var out BlockedEvent
+func GetEvent(eventID string) (BlockEvent, error) {
+	var out BlockEvent
 	if err := validateEventID(eventID); err != nil {
 		return out, err
 	}

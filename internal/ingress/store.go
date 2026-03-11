@@ -2,7 +2,6 @@ package ingress
 
 import (
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -10,18 +9,17 @@ import (
 // eventStore holds blocked events with thread-safe add/get/list.
 type eventStore struct {
 	mu     sync.RWMutex
-	events []BlockedEvent
+	events []BlockEvent
 }
 
-// Add converts a BlockEvent to a BlockedEvent, generates a UUID, appends to the store, and returns the saved event.
-func (e *eventStore) Add(ev BlockEvent) BlockedEvent {
-	blocked := BlockedEvent{
-		ID:             uuid.New().String(),
-		Ts:             time.Now().Format(time.RFC3339),
-		Product:        ev.Artifact.Product,
-		PackageName:    ev.Artifact.PackageName,
-		PackageVersion: ev.Artifact.PackageVersion,
-		BlockReason:    ev.BlockReason,
+// Add appends the event to the store and returns the saved event.
+func (e *eventStore) Add(ev BlockEvent) BlockEvent {
+	blocked := BlockEvent{
+		ID:          uuid.New().String(),
+		TsMs:        ev.TsMs,
+		Artifact:    ev.Artifact,
+		BlockReason: ev.BlockReason,
+		Status:      "blocked",
 	}
 	e.mu.Lock()
 	e.events = append(e.events, blocked)
@@ -30,7 +28,7 @@ func (e *eventStore) Add(ev BlockEvent) BlockedEvent {
 }
 
 // Get returns the event with the given id and true, or zero value and false if not found.
-func (e *eventStore) Get(id string) (BlockedEvent, bool) {
+func (e *eventStore) Get(id string) (BlockEvent, bool) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	for _, ev := range e.events {
@@ -38,14 +36,14 @@ func (e *eventStore) Get(id string) (BlockedEvent, bool) {
 			return ev, true
 		}
 	}
-	return BlockedEvent{}, false
+	return BlockEvent{}, false
 }
 
 // List returns a copy of all events.
-func (e *eventStore) List() []BlockedEvent {
+func (e *eventStore) List() []BlockEvent {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	out := make([]BlockedEvent, len(e.events))
+	out := make([]BlockEvent, len(e.events))
 	copy(out, e.events)
 	return out
 }

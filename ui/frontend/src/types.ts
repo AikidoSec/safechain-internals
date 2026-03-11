@@ -2,15 +2,17 @@ export type BlockReason = "malware" | "rejected" | "block_all" | "request_instal
 
 export type EventStatus = "" | "blocked" | "request_pending";
 
-export interface BlockedEvent {
-  id: string;
-  ts: string;
-  // The product type (e.g., "npm", "pypi", "vscode", "chrome")
+export interface Artifact {
   product: string;
-  // The name or identifier of the artifact
   identifier: string;
-  // Optional version
-  version: string;
+  version?: string;
+}
+
+export interface BlockEvent {
+  id: string;
+  ts_ms: number;
+  // The product type (e.g., "npm", "pypi", "vscode", "chrome")
+  artifact: Artifact;
   block_reason: BlockReason;
   status?: EventStatus;
  }

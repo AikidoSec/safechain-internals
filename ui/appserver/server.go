@@ -36,14 +36,14 @@ type ProxyStatusBody struct {
 type Server struct {
 	mu             sync.Mutex
 	onStatusUpdate func(displayLabel string)
-	onBlocked      func(ev daemon.BlockedEvent)
+	onBlocked      func(ev daemon.BlockEvent)
 }
 
 func New() *Server {
 	return &Server{}
 }
 
-func (s *Server) SetHandlers(onStatus func(string), onBlocked func(daemon.BlockedEvent)) {
+func (s *Server) SetHandlers(onStatus func(string), onBlocked func(daemon.BlockEvent)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onStatusUpdate = onStatus
@@ -93,7 +93,7 @@ func (s *Server) handleBlocked(w http.ResponseWriter, r *http.Request) {
 	if !validateToken(w, r) {
 		return
 	}
-	var ev daemon.BlockedEvent
+	var ev daemon.BlockEvent
 	if err := json.NewDecoder(r.Body).Decode(&ev); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return

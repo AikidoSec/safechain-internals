@@ -27,12 +27,12 @@ func (s *Server) handleRequestBypass(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) sendInstallationRequest(event BlockedEvent) {
+func (s *Server) sendInstallationRequest(event BlockEvent) {
 	req := RequestBypassEvent{
 		Key:            event.ID,
-		Product:        event.Product,
-		PackageName:    event.PackageName,
-		PackageVersion: event.PackageVersion,
+		Product:        event.Artifact.Product,
+		PackageName:    event.Artifact.PackageName,
+		PackageVersion: event.Artifact.PackageVersion,
 	}
 	installEvent := buildInstallationRequestEvent(req)
 	if err := cloud.SendRequestPackageInstallation(context.Background(), s.config, installEvent); err != nil {

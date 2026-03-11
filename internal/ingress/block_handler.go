@@ -19,14 +19,3 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 }
-
-// BlockedEvent matches the daemon API response.
-type BlockedEvent struct {
-	ID             string      `json:"id"`
-	Ts             string      `json:"ts"`
-	Product        string      `json:"product"`
-	PackageName    string      `json:"identifier"`
-	PackageVersion string      `json:"version,omitempty"`
-	BlockReason    BlockReason `json:"block_reason"`
-	Status         string      `json:"status,omitempty"`
-}

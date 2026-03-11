@@ -17,7 +17,7 @@ import * as daemon$0 from "./daemon/models.js";
 
 /**
  * @param {string} eventId
- * @returns {$CancellablePromise<daemon$0.BlockedEvent>}
+ * @returns {$CancellablePromise<daemon$0.BlockEvent>}
  */
 export function GetEvent(eventId) {
     return $Call.ByID(901265929, eventId).then(/** @type {($result: any) => any} */(($result) => {
@@ -27,7 +27,7 @@ export function GetEvent(eventId) {
 
 /**
  * @param {number} limit
- * @returns {$CancellablePromise<daemon$0.BlockedEvent[]>}
+ * @returns {$CancellablePromise<daemon$0.BlockEvent[]>}
  */
 export function ListEvents(limit) {
     return $Call.ByID(3355743684, limit).then(/** @type {($result: any) => any} */(($result) => {
@@ -44,5 +44,5 @@ export function RequestAccess(eventId) {
 }
 
 // Private type creation functions
-const $$createType0 = daemon$0.BlockedEvent.createFrom;
+const $$createType0 = daemon$0.BlockEvent.createFrom;
 const $$createType1 = $Create.Array($$createType0);

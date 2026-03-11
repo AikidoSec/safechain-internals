@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { BlockedEvent } from "../types";
+import type { BlockEvent } from "../types";
 import { Events } from "@wailsio/runtime";
 import { listEvents } from "../api";
 import npmIcon from "../../assets/npm.svg";
@@ -14,7 +14,7 @@ const TOOL_ICONS: Record<string, string> = {
   vscode: vscodeIcon,
 };
 
-function formatEventTime(ts: string): string {
+function formatEventTime(ts: number): string {
   try {
     const d = new Date(ts);
     if (Number.isNaN(d.getTime())) return ts;
@@ -47,7 +47,7 @@ function isConnectionError(message: string): boolean {
 
 export function EventsList() {
   const navigate = useNavigate();
-  const [events, setEvents] = useState<BlockedEvent[]>([]);
+  const [events, setEvents] = useState<BlockEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,7 +69,7 @@ export function EventsList() {
   }, []);
 
   useEffect(() => {
-    const unsub = Events.On("blocked", (ev: { data?: BlockedEvent }) => {
+    const unsub = Events.On("blocked", (ev: { data?: BlockEvent }) => {
       const payload = ev.data;
       if (payload) setEvents((prev) => [payload, ...prev]);
     });
@@ -125,19 +125,19 @@ export function EventsList() {
                   className="row-clickable"
                 >
                   <td className="event-product">
-                    {TOOL_ICONS[ev.product?.toLowerCase()] ? (
+                    {TOOL_ICONS[ev.artifact.product?.toLowerCase()] ? (
                       <img
-                        src={TOOL_ICONS[ev.product.toLowerCase()]}
-                        alt={ev.product}
+                        src={TOOL_ICONS[ev.artifact.product.toLowerCase()]}
+                        alt={ev.artifact.product}
                         className="event-product-icon"
                       />
                     ) : (
-                      ev.product
+                      ev.artifact.product
                     )}
                   </td>
-                  <td className="event-time">{formatEventTime(ev.ts)}</td>
-                  <td className="event-identifier" title={ev.identifier}>
-                    {ev.identifier}
+                  <td className="event-time">{formatEventTime(ev.ts_ms)}</td>
+                  <td className="event-identifier" title={ev.artifact.identifier}>
+                    {ev.artifact.identifier}
                   </td>
                   <td>
                     {ev.status === "request_pending" ? (

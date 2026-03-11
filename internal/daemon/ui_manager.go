@@ -19,7 +19,7 @@ type UIManager struct {
 	Client  *uiclient.Client
 	process uiProcess
 
-	lastProxyStatus      bool
+	lastProxyStatus        bool
 	proxyStatusInitialized bool
 }
 

@@ -6,48 +6,14 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
-/**
- * @readonly
- * @enum {string}
- */
-export const BlockReason = {
+export class Artifact {
     /**
-     * The Go zero value for the underlying type of the enum.
-     */
-    $zero: "",
-
-    BlockReasonMalware: "malware",
-    BlockReasonRejected: "rejected",
-    BlockReasonBlockAll: "block_all",
-    BlockReasonRequestInstall: "request_install",
-};
-
-/**
- * BlockedEvent matches the daemon API response.
- */
-export class BlockedEvent {
-    /**
-     * Creates a new BlockedEvent instance.
-     * @param {Partial<BlockedEvent>} [$$source = {}] - The source object to create the BlockedEvent.
+     * Creates a new Artifact instance.
+     * @param {Partial<Artifact>} [$$source = {}] - The source object to create the Artifact.
      */
     constructor($$source = {}) {
-        if (!("id" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["id"] = "";
-        }
-        if (!("ts" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["ts"] = "";
-        }
         if (!("product" in $$source)) {
             /**
-             * The product type (e.g., "npm", "pypi", "vscode", "chrome")
              * @member
              * @type {string}
              */
@@ -55,7 +21,6 @@ export class BlockedEvent {
         }
         if (!("identifier" in $$source)) {
             /**
-             * The name or identifier of the artifact
              * @member
              * @type {string}
              */
@@ -63,18 +28,62 @@ export class BlockedEvent {
         }
         if (/** @type {any} */(false)) {
             /**
-             * Optional version
              * @member
              * @type {string | undefined}
              */
             this["version"] = undefined;
         }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Artifact instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Artifact}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Artifact(/** @type {Partial<Artifact>} */($$parsedSource));
+    }
+}
+
+/**
+ * BlockEvent represents a blocked request notification from the proxy.
+ */
+export class BlockEvent {
+    /**
+     * Creates a new BlockEvent instance.
+     * @param {Partial<BlockEvent>} [$$source = {}] - The source object to create the BlockEvent.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["id"] = undefined;
+        }
+        if (!("ts_ms" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["ts_ms"] = 0;
+        }
+        if (!("artifact" in $$source)) {
+            /**
+             * @member
+             * @type {Artifact}
+             */
+            this["artifact"] = (new Artifact());
+        }
         if (!("block_reason" in $$source)) {
             /**
              * @member
-             * @type {BlockReason}
+             * @type {string}
              */
-            this["block_reason"] = BlockReason.$zero;
+            this["block_reason"] = "";
         }
         if (/** @type {any} */(false)) {
             /**
@@ -88,12 +97,19 @@ export class BlockedEvent {
     }
 
     /**
-     * Creates a new BlockedEvent instance from a string or object.
+     * Creates a new BlockEvent instance from a string or object.
      * @param {any} [$$source = {}]
-     * @returns {BlockedEvent}
+     * @returns {BlockEvent}
      */
     static createFrom($$source = {}) {
+        const $$createField2_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new BlockedEvent(/** @type {Partial<BlockedEvent>} */($$parsedSource));
+        if ("artifact" in $$parsedSource) {
+            $$parsedSource["artifact"] = $$createField2_0($$parsedSource["artifact"]);
+        }
+        return new BlockEvent(/** @type {Partial<BlockEvent>} */($$parsedSource));
     }
 }
+
+// Private type creation functions
+const $$createType0 = Artifact.createFrom;

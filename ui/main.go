@@ -25,7 +25,7 @@ type FocusEventPayload struct {
 }
 
 func init() {
-	application.RegisterEvent[daemon.BlockedEvent]("blocked")
+	application.RegisterEvent[daemon.BlockEvent]("blocked")
 	application.RegisterEvent[FocusEventPayload]("focus_event")
 }
 
@@ -82,7 +82,7 @@ func setupNotifications() (notifier *notifications.NotificationService, authoriz
 func newApp(notifier *notifications.NotificationService) *application.App {
 	return application.New(application.Options{
 		Name:        "safechain-ultimate-ui",
-		Description: "A demo of using raw HTML & CSS",
+		Description: "safechain-ultimate-ui",
 		Services: []application.Service{
 			application.NewService(notifier),
 			application.NewService(&DaemonService{}),
@@ -165,6 +165,8 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- string {
 	statusItem.SetEnabled(false)
 	menu.AddSeparator()
 	menu.Add("Open Dashboard").OnClick(func(_ *application.Context) {
+		// unset the focus event to reset the UI
+		app.Event.Emit("focus_event", FocusEventPayload{EventId: ""})
 		showDashboard()
 	})
 	systray.SetMenu(menu)
@@ -187,14 +189,14 @@ func startAppServer(app *application.App, statusCh chan<- string, notifier *noti
 	srv := appserver.New()
 	srv.SetHandlers(
 		func(displayLabel string) { statusCh <- displayLabel },
-		func(ev daemon.BlockedEvent) {
+		func(ev daemon.BlockEvent) {
 			log.Println("Blocked event:", ev)
 			app.Event.Emit("blocked", ev)
 			if notifAuthorized {
 				notifier.SendNotificationWithActions(notifications.NotificationOptions{
 					ID:         "block-" + ev.ID,
 					Title:      "Aikido Safechain blocked an event",
-					Body:       ev.Product + ": " + ev.PackageName,
+					Body:       ev.Artifact.Product + ": " + ev.Artifact.PackageName,
 					CategoryID: "aikido-blocked",
 					Data:       map[string]interface{}{"eventId": ev.ID},
 				})

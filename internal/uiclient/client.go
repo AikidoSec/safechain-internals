@@ -139,7 +139,7 @@ func (c *Client) post(path string, body any) error {
 }
 
 // NotifyBlocked sends a block notification to the UI.
-// ev is marshaled as-is; callers typically pass an ingress.BlockedEvent.
+// ev is marshaled as-is; callers typically pass an ingress.BlockEvent.
 func (c *Client) NotifyBlocked(ev any) {
 	if err := c.post("/v1/blocked", ev); err != nil {
 		log.Printf("Failed to notify UI of blocked event: %v (UI may not be running)", err)

@@ -6,20 +6,13 @@ type Artifact struct {
 	PackageVersion string `json:"version,omitempty"`
 }
 
-type BlockReason string
-
-const (
-	BlockReasonMalware        BlockReason = "malware"
-	BlockReasonRejected       BlockReason = "rejected"
-	BlockReasonBlockAll       BlockReason = "block_all"
-	BlockReasonRequestInstall BlockReason = "request_install"
-)
-
 // BlockEvent represents a blocked request notification from the proxy.
 type BlockEvent struct {
-	TsMs        int64       `json:"ts_ms"`
-	Artifact    Artifact    `json:"artifact"`
-	BlockReason BlockReason `json:"block_reason"`
+	ID          string   `json:"id,omitempty"`
+	TsMs        int64    `json:"ts_ms"`
+	Artifact    Artifact `json:"artifact"`
+	BlockReason string   `json:"block_reason"`
+	Status      string   `json:"status,omitempty"`
 }
 
 type RequestBypassEvent struct {
