@@ -2,7 +2,6 @@ package ingress
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 )
 
