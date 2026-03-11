@@ -171,17 +171,17 @@ where
 {
     async fn lookup_display_name(&self, extension_id: &ArcStr) -> Option<ArcStr> {
         let normalized_id = extension_id.to_ascii_lowercase();
-        ChromeWebStore::get_extension_name(&self.https_client, &normalized_id)
-            .await
-            .unwrap_or_else(|err| {
-                tracing::debug!(
+        match ChromeWebStore::get_extension_name(&self.https_client, &normalized_id).await {
+            Ok(display_name) => display_name.map(ArcStr::from),
+            Err(err) => {
+                tracing::warn!(
                     extension_id = extension_id.as_str(),
                     error = %err,
-                    "failed to look up Chrome extension name"
+                    "failed to look up Chrome extension name, extension id will be shown as-is."
                 );
                 None
-            })
-            .map(ArcStr::from)
+            }
+        }
     }
 
     fn matches_malware_entry(&self, extension_id: &str, version: &PackageVersion) -> bool {

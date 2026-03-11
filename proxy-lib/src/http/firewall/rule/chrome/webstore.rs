@@ -47,13 +47,12 @@ impl ChromeWebStore {
                     return Ok(None);
                 };
 
-                tracing::debug!(extension_id, new_uri = %new_uri, "following Chrome Web Store redirect");
+                tracing::debug!(extension_id, new_uri = %new_uri, "following Chrome Web Store redirect while looking up extension name");
                 uri = new_uri;
                 continue;
             }
 
             if !status.is_success() {
-                tracing::warn!(extension_id, %status, "Chrome Web Store name lookup failed, extension id will be shown as-is.");
                 return Ok(None);
             }
 
@@ -69,9 +68,9 @@ impl ChromeWebStore {
     }
 
     pub(super) fn parse_redirect_location(location: &HeaderValue) -> Option<Uri> {
-        let location = std::str::from_utf8(location.as_bytes()).ok()?;
+        let location_str = std::str::from_utf8(location.as_bytes()).ok()?;
 
-        location
+        location_str
             .parse::<Uri>()
             .ok()
             .filter(|uri| uri.scheme().is_some())
@@ -79,7 +78,7 @@ impl ChromeWebStore {
                 Uri::builder()
                     .scheme(HTTPS_SCHEME)
                     .authority(CHROME_WEBSTORE_AUTHORITY)
-                    .path_and_query(location.parse::<PathAndQuery>().ok()?)
+                    .path_and_query(location_str.parse::<PathAndQuery>().ok()?)
                     .build()
                     .ok()
             })
