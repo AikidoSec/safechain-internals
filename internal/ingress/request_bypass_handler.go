@@ -16,7 +16,7 @@ func (s *Server) handleRequestBypass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Received request-bypass event: key=%s", req.Key)
+	log.Printf("Received request-bypass event: id=%s", req.PackageId)
 
 	go s.sendInstallationRequest(req)
 
@@ -26,16 +26,20 @@ func (s *Server) handleRequestBypass(w http.ResponseWriter, r *http.Request) {
 func (s *Server) sendInstallationRequest(req RequestBypassEvent) {
 	installEvent := buildInstallationRequestEvent(req)
 	if err := cloud.SendRequestPackageInstallation(context.Background(), s.config, installEvent); err != nil {
-		log.Printf("Failed to send installation request for %s: %v", req.Key, err)
+		log.Printf("Failed to send installation request for %s: %v", req.PackageId, err)
 		return
 	}
-	log.Printf("Installation request sent for %s", req.Key)
+	log.Printf("Installation request sent for %s", req.PackageId)
 }
 
 func buildInstallationRequestEvent(req RequestBypassEvent) *cloud.RequestPackageInstallationEvent {
+	name := req.PackageName
+	if name == "" {
+		name = req.PackageId
+	}
 	pkg := cloud.PackageInstallRequest{
-		ID:      req.PackageName,
-		Name:    req.PackageName,
+		ID:      req.PackageId,
+		Name:    name,
 		Version: req.PackageVersion,
 	}
 	var installEvent cloud.RequestPackageInstallationEvent

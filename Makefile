@@ -91,6 +91,16 @@ build-darwin-universal: build-darwin-amd64 build-darwin-arm64
 	@lipo -info $(BIN_DIR)/$(BINARY_NAME)-darwin-universal
 	@lipo -info $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal
 
+build-darwin-universal: build-darwin-amd64 build-darwin-arm64
+	@echo "Creating universal binaries..."
+	@lipo -create $(BIN_DIR)/$(BINARY_NAME)-darwin-amd64 $(BIN_DIR)/$(BINARY_NAME)-darwin-arm64 \
+		-output $(BIN_DIR)/$(BINARY_NAME)-darwin-universal
+	@lipo -create $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-amd64 $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-arm64 \
+		-output $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal
+	@echo "Universal binaries created:"
+	@lipo -info $(BIN_DIR)/$(BINARY_NAME)-darwin-universal
+	@lipo -info $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal
+
 build-windows-amd64:
 	@$(MAKE) GOOS=windows GOARCH=amd64 build-release
 
@@ -116,9 +126,26 @@ build-l7-proxy-universal:
 	@echo "Universal proxy built:"
 	@lipo -info $(BIN_DIR)/safechain-l7-proxy-darwin-universal
 
+build-l7-proxy-universal:
+	@echo "Building safechain-l7-proxy for x86_64-apple-darwin..."
+	@rustup target add x86_64-apple-darwin 2>/dev/null || true
+	@cargo build --release --bin safechain-l7-proxy --target x86_64-apple-darwin
+	@echo "Building safechain-l7-proxy for aarch64-apple-darwin..."
+	@rustup target add aarch64-apple-darwin 2>/dev/null || true
+	@cargo build --release --bin safechain-l7-proxy --target aarch64-apple-darwin
+	@mkdir -p $(BIN_DIR)
+	@lipo -create \
+		target/x86_64-apple-darwin/release/safechain-l7-proxy \
+		target/aarch64-apple-darwin/release/safechain-l7-proxy \
+		-output $(BIN_DIR)/safechain-l7-proxy-darwin-universal
+	@echo "Universal proxy built:"
+	@lipo -info $(BIN_DIR)/safechain-l7-proxy-darwin-universal
+
 build-pkg:
 ifeq ($(DETECTED_OS),darwin)
 	@echo "Building macOS PKG installer..."
+	@cd packaging/macos && ./build-distribution-pkg.sh -v $(VERSION) -a universal -b ../../$(BIN_DIR) -o ../../$(DIST_DIR)
+	@echo "PKG built: $(DIST_DIR)/SafeChainUltimate-$(VERSION).pkg"
 	@cd packaging/macos && ./build-distribution-pkg.sh -v $(VERSION) -a universal -b ../../$(BIN_DIR) -o ../../$(DIST_DIR)
 	@echo "PKG built: $(DIST_DIR)/SafeChainUltimate-$(VERSION).pkg"
 else

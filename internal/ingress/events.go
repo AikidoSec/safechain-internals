@@ -4,6 +4,7 @@ type Artifact struct {
 	Product        string `json:"product"`
 	PackageName    string `json:"identifier"`
 	PackageVersion string `json:"version,omitempty"`
+	DisplayName    string `json:"display_name,omitempty"`
 }
 
 // BlockEvent represents a blocked request notification from the proxy.
@@ -14,8 +15,8 @@ type BlockEvent struct {
 }
 
 type RequestBypassEvent struct {
-	Key            string `json:"key"`
 	Product        string `json:"product"`
+	PackageId      string `json:"package_id"`
 	PackageName    string `json:"package_name"`
 	PackageVersion string `json:"package_version"`
 }
