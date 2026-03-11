@@ -56,7 +56,7 @@ func (m *UIManager) Launch(ctx context.Context, ingressAddr string) error {
 		"--log_file", platform.GetUILogPath(),
 	}
 
-	log.Printf("Launching UI with args: %v", args)
+	log.Printf("Launching UI with args: --daemon_url %s --token *** --ui_url %s --log_file %s", daemonURL, uiURL, platform.GetUILogPath())
 	pid, err := platform.StartUIProcessInAuditSessionOfCurrentUser(ctx, binaryPath, args)
 	if err != nil {
 		return fmt.Errorf("failed to launch UI: %v", err)
