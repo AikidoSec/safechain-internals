@@ -47,12 +47,12 @@ rm -rf "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-arm64.app"
 
 echo "Building safechain-ultimate-ui (Wails app bundle) for amd64..."
 cd "$PROJECT_DIR/ui"
-GOOS=darwin GOARCH=amd64 wails3 package 
+CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 wails3 package 
 mv "$PROJECT_DIR/ui/bin/safechain-ultimate-ui.app" "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-amd64.app"
 rm -rf "$PROJECT_DIR/ui/bin/"
 
 echo "Building safechain-ultimate-ui (Wails app bundle) for arm64..."
-GOOS=darwin GOARCH=arm64 wails3 package
+CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 wails3 package
 mv "$PROJECT_DIR/ui/bin/safechain-ultimate-ui.app" "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-arm64.app"
 
 cd "$PROJECT_DIR"

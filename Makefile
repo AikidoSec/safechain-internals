@@ -82,12 +82,12 @@ build-release:
 	@echo "Binaries built:"
 	@echo "  $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
 ifeq ($(GOOS),darwin)
-	@cd ui && wails3 package
+	@cd ui && CGO_ENABLED=1 wails3 package
 	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
 	@cp -R ui/bin/$(BINARY_NAME_UI).app $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
 	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app"
 else
-	@cd ui && wails3 package
+	@cd ui && CGO_ENABLED=1 wails3 package
 	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
 	@cp -R ui/bin/$(BINARY_NAME_UI).exe $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
 	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe"
