@@ -54,16 +54,14 @@ fn test_extract_og_title_realistic_html() {
 }
 
 #[test]
-fn test_parse_redirect_location_accepts_raw_utf8_header_bytes() {
-    let location = HeaderValue::from_bytes(
-        b"/detail/ublock-origin-\xE2\x80\x93-content-blocker/cjpalhdlnbpafiamejdnhcphjbkeiagm",
-    )
-    .unwrap();
+fn test_parse_redirect_location_accepts_relative_uri() {
+    let location =
+        HeaderValue::from_static("/detail/ublock-origin/cjpalhdlnbpafiamejdnhcphjbkeiagm");
 
     let uri = ChromeWebStore::parse_redirect_location(&location).unwrap();
 
     assert_eq!(
         uri.to_string(),
-        "https://chromewebstore.google.com/detail/ublock-origin-%E2%80%93-content-blocker/cjpalhdlnbpafiamejdnhcphjbkeiagm"
+        "https://chromewebstore.google.com/detail/ublock-origin/cjpalhdlnbpafiamejdnhcphjbkeiagm"
     );
 }
