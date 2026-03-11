@@ -23,7 +23,7 @@ func runPip(ctx context.Context, pipPath string, args ...string) (string, error)
 }
 
 func getVersion(ctx context.Context, path string) (string, error) {
-	output, err := runPip(ctx, path, "--version")
+	output, err := runPip(ctx, path, "--version", "--disable-pip-version-check")
 	if err != nil {
 		return "", err
 	}

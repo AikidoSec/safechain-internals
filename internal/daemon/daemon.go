@@ -17,6 +17,7 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
 	"github.com/AikidoSec/safechain-internals/internal/sbom"
+	"github.com/AikidoSec/safechain-internals/internal/sbom/chrome"
 	"github.com/AikidoSec/safechain-internals/internal/sbom/npm"
 	"github.com/AikidoSec/safechain-internals/internal/sbom/pip"
 	"github.com/AikidoSec/safechain-internals/internal/sbom/vscode"
@@ -171,7 +172,7 @@ func (d *Daemon) startProxyAndInstallCA(ctx context.Context) error {
 		return fmt.Errorf("ingress server failed to start")
 	}
 
-	if err := d.proxy.Start(ctx, ingressAddr); err != nil {
+	if err := d.proxy.Start(ctx, ingressAddr, d.config.GetBaseURL()); err != nil {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
@@ -383,6 +384,7 @@ func (d *Daemon) heartbeat() error {
 func newSBOMRegistry() *sbom.Registry {
 	r := sbom.NewRegistry()
 	r.Register(npm.New())
+	r.Register(chrome.New())
 	r.Register(vscode.New())
 	r.Register(pip.New())
 	return r

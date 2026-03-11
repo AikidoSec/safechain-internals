@@ -108,6 +108,14 @@ pub struct Args {
     #[arg(long = "reporting-endpoint", value_name = "URL")]
     pub reporting_endpoint: Option<Uri>,
 
+    /// Aikido app base URL used to fetch endpoint protection config.
+    #[arg(
+        long = "aikido-url",
+        value_name = "URL",
+        default_value = "https://app.aikido.dev"
+    )]
+    pub aikido_url: Uri,
+
     #[cfg(target_family = "unix")]
     /// Set the limit of max open file descriptors for this process and its children.
     #[arg(long, value_name = "N", default_value_t = 262_144)]
@@ -193,6 +201,7 @@ where
             data_storage,
             args.reporting_endpoint.clone(),
             agent_identity,
+            args.aikido_url.clone(),
         ) => {
             result?
         }

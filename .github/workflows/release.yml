@@ -61,8 +61,7 @@ jobs:
           mv artifacts/SafeChainUltimate.amd64.msi/SafeChainUltimate.amd64.msi ./SafeChainUltimate-windows-amd64.msi
           mv artifacts/SafeChainUltimate.arm64.msi/SafeChainUltimate.arm64.msi ./SafeChainUltimate-windows-arm64.msi
 
-          mv artifacts/SafeChainUltimate-amd64.pkg/SafeChainUltimate-amd64.pkg ./SafeChainUltimate-darwin-amd64.pkg
-          mv artifacts/SafeChainUltimate-arm64.pkg/SafeChainUltimate-arm64.pkg ./SafeChainUltimate-darwin-arm64.pkg
+          mv artifacts/SafeChainUltimate.pkg/SafeChainUltimate.pkg ./SafeChainUltimate.pkg
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -78,8 +77,7 @@ jobs:
             safechain-l7-proxy-linux-arm64
             SafeChainUltimate-windows-amd64.msi
             SafeChainUltimate-windows-arm64.msi
-            SafeChainUltimate-darwin-amd64.pkg
-            SafeChainUltimate-darwin-arm64.pkg
+            SafeChainUltimate.pkg
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

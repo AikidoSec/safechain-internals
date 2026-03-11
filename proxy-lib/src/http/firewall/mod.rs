@@ -40,10 +40,7 @@ mod pac;
 use crate::{
     endpoint_protection::{PolicyEvaluator, RemoteEndpointConfig},
     storage::SyncCompactDataStorage,
-    utils::{
-        env::{aikido_app_base_url, network_service_identifier},
-        token::AgentIdentity,
-    },
+    utils::{env::network_service_identifier, token::AgentIdentity},
 };
 
 use self::rule::{RequestAction, Rule};
@@ -58,16 +55,15 @@ pub struct Firewall {
 }
 
 impl Firewall {
-    fn endpoint_config_uri() -> Result<Uri, BoxError> {
-        let base = aikido_app_base_url();
+    fn endpoint_config_uri(aikido_url: &Uri) -> Result<Uri, BoxError> {
         let uri_str = format!(
             "{}/api/endpoint_protection/callbacks/fetchPermissions",
-            base.to_string().trim_end_matches('/'),
+            aikido_url.to_string().trim_end_matches('/'),
         );
 
         uri_str
             .parse::<Uri>()
-            .context("aikido_app_base_url should always produce a valid absolute http(s) origin")
+            .context("aikido_url should always produce a valid absolute http(s) origin")
     }
 
     pub async fn try_new(
@@ -76,6 +72,7 @@ impl Firewall {
         data: SyncCompactDataStorage,
         reporting_endpoint: Option<rama::http::Uri>,
         agent_identity: Option<AgentIdentity>,
+        aikido_url: Uri,
     ) -> Result<Self, BoxError> {
         let layered_client = (
             MapResponseBodyLayer::new_boxed_streaming_body(),
@@ -119,7 +116,7 @@ impl Firewall {
             None => None,
         };
 
-        let endpoint_config_uri = Self::endpoint_config_uri()?;
+        let endpoint_config_uri = Self::endpoint_config_uri(&aikido_url)?;
 
         let remote_endpoint_config = match agent_identity.as_ref() {
             Some(identity) => {
