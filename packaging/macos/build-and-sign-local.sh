@@ -45,6 +45,14 @@ rm -rf "$PROJECT_DIR/ui/bin/"
 rm -rf "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-amd64.app"
 rm -rf "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-arm64.app"
 
+# check if wails3 is installed
+if ! command -v wails33 &> /dev/null; then
+    echo "wails3 could not be found. Please install it using:"
+    echo "   go install github.com/wailsapp/wails/v3/cmd/wails3@latest"
+    echo "Then run this script again (for more details, see https://v3alpha.wails.io/quick-start/installation/)."
+    exit 1
+fi
+
 echo "Building safechain-ultimate-ui (Wails app bundle) for amd64..."
 cd "$PROJECT_DIR/ui"
 CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 wails3 package 
