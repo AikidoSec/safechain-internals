@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"syscall"
 	"strings"
 	"unsafe"
 
@@ -69,12 +70,13 @@ func getLoggedInUserSIDs(ctx context.Context) ([]string, error) {
 }
 
 func buildCommandLineForWindowsProcess(binaryPath string, args []string) *uint16 {
-	cmdLine := binaryPath
-	if len(args) > 0 {
-		cmdLine = fmt.Sprintf(`"%s" %s`, binaryPath, strings.Join(args, " "))
-	} else {
-		cmdLine = fmt.Sprintf(`"%s"`, binaryPath)
+	escapedArgs := make([]string, 0, len(args)+1)
+	escapedArgs = append(escapedArgs, syscall.EscapeArg(binaryPath))
+	for _, arg := range args {
+		escapedArgs = append(escapedArgs, syscall.EscapeArg(arg))
 	}
+
+	cmdLine := strings.Join(escapedArgs, " ")
 	cmdLinePtr, err := windows.UTF16PtrFromString(cmdLine)
 	if err != nil {
 		return nil
