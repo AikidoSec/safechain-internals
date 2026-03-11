@@ -40,7 +40,7 @@ echo "Creating universal agent binary with lipo..."
 lipo -create bin/safechain-ultimate-darwin-amd64 bin/safechain-ultimate-darwin-arm64 \
     -output bin/safechain-ultimate-darwin-universal
 echo "✓ Agent built: bin/safechain-ultimate-darwin-universal"
-# remove the ui bin directory 
+# clean up any stale UI artifacts before building fresh app bundles
 rm -rf "$PROJECT_DIR/ui/bin/"
 rm -rf "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-amd64.app"
 rm -rf "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-arm64.app"

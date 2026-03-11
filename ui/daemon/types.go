@@ -18,7 +18,8 @@ type BlockEvent struct {
 	Status      string   `json:"status,omitempty"`
 }
 
-// Validate returns an error if any required field is missing or empty.
+// Validate ensures the BlockedEvent satisfies daemon API contract
+// requirements before transmission or processing.
 func (e *BlockEvent) Validate() error {
 	if e.ID == "" {
 		return fmt.Errorf("missing or empty required field: id")

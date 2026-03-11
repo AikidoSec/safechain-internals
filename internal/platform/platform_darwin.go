@@ -446,48 +446,29 @@ func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args
 // StartUIProcessInAuditSessionOfCurrentUser starts the process as the current user and returns its PID.
 // The process is not waited on; the caller may kill it later using the PID.
 func StartUIProcessInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (int, error) {
+	name := binaryPath
+	cmdArgs := args
+
 	if strings.HasSuffix(strings.ToLower(binaryPath), ".app") {
-		openArgs := []string{"-a", binaryPath}
+		name = "open"
+		cmdArgs = []string{"-a", binaryPath}
 		if len(args) > 0 {
-			openArgs = append(openArgs, "--args")
-			openArgs = append(openArgs, args...)
+			cmdArgs = append(cmdArgs, "--args")
+			cmdArgs = append(cmdArgs, args...)
 		}
+	}
 
-		if !RunningAsRoot() {
-			cmd := exec.CommandContext(ctx, "open", openArgs...)
-			if err := cmd.Start(); err != nil {
-				return 0, err
-			}
-			return cmd.Process.Pid, nil
-		}
-
+	if RunningAsRoot() {
 		_, uid, _, _, err := GetCurrentUser(ctx)
 		if err != nil {
 			return 0, fmt.Errorf("failed to get console user: %v", err)
 		}
 		uidStr := fmt.Sprintf("%d", uid)
-		launchctlArgs := append([]string{"asuser", uidStr, "open"}, openArgs...)
-		cmd := exec.CommandContext(ctx, "launchctl", launchctlArgs...)
-		if err := cmd.Start(); err != nil {
-			return 0, err
-		}
-		return cmd.Process.Pid, nil
+		cmdArgs = append([]string{"asuser", uidStr, name}, cmdArgs...)
+		name = "launchctl"
 	}
 
-	if !RunningAsRoot() {
-		cmd := exec.CommandContext(ctx, binaryPath, args...)
-		if err := cmd.Start(); err != nil {
-			return 0, err
-		}
-		return cmd.Process.Pid, nil
-	}
-	_, uid, _, _, err := GetCurrentUser(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get console user: %v", err)
-	}
-	uidStr := fmt.Sprintf("%d", uid)
-	launchctlArgs := append([]string{"asuser", uidStr, binaryPath}, args...)
-	cmd := exec.CommandContext(ctx, "launchctl", launchctlArgs...)
+	cmd := exec.CommandContext(ctx, name, cmdArgs...)
 	if err := cmd.Start(); err != nil {
 		return 0, err
 	}
