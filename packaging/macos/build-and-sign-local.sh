@@ -11,7 +11,7 @@ set -e
 # =============================================================================
 
 VERSION="${1:-dev}"
-ARCH="$(uname -m)"
+ARCH="universal"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
@@ -19,30 +19,52 @@ echo "==================================="
 echo "SafeChain Ultimate - Local PKG Builder"
 echo "==================================="
 echo "Version: $VERSION"
-echo "Architecture: $ARCH"
+echo "Architecture: $ARCH (x86_64 + arm64)"
 echo ""
 
 # =============================================================================
 # Step 1: Build Binaries
 # =============================================================================
-echo "Step 1: Building binaries..."
+echo "Step 1: Building universal binaries..."
 echo ""
 
-# Build Go agent
-echo "Building safechain-ultimate..."
 cd "$PROJECT_DIR"
-go build -o "bin/safechain-ultimate-darwin-$ARCH" cmd/daemon/main.go
-go build -o "bin/safechain-ultimate-ui-darwin-$ARCH" ./cmd/ui
-echo "✓ Agent built: bin/safechain-ultimate-darwin-$ARCH"
-echo "✓ Agent UI built: bin/safechain-ultimate-ui-darwin-$ARCH"
+mkdir -p bin
 
-# Build Rust proxy
-echo "Building safechain-l7-proxy..."
-cd "$PROJECT_DIR/proxy-bin-l7"
-cargo build --release --bin safechain-l7-proxy
-cp "../target/release/safechain-l7-proxy" "../bin/safechain-l7-proxy-darwin-$ARCH"
-cd "$PROJECT_DIR"
-echo "✓ Proxy built: bin/safechain-l7-proxy-darwin-$ARCH"
+echo "Building safechain-ultimate for amd64..."
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o "bin/safechain-ultimate-darwin-amd64" ./cmd/daemon
+CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -o "bin/safechain-ultimate-ui-darwin-amd64" ./cmd/ui
+
+echo "Building safechain-ultimate for arm64..."
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o "bin/safechain-ultimate-darwin-arm64" ./cmd/daemon
+CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o "bin/safechain-ultimate-ui-darwin-arm64" ./cmd/ui
+
+echo "Creating universal Go binaries with lipo..."
+lipo -create bin/safechain-ultimate-darwin-amd64 bin/safechain-ultimate-darwin-arm64 \
+    -output bin/safechain-ultimate-darwin-universal
+lipo -create bin/safechain-ultimate-ui-darwin-amd64 bin/safechain-ultimate-ui-darwin-arm64 \
+    -output bin/safechain-ultimate-ui-darwin-universal
+echo "✓ Agent built: bin/safechain-ultimate-darwin-universal"
+echo "✓ Agent UI built: bin/safechain-ultimate-ui-darwin-universal"
+
+echo "Building safechain-l7-proxy for x86_64-apple-darwin..."
+rustup target add x86_64-apple-darwin 2>/dev/null || true
+cargo build --release --bin safechain-l7-proxy --target x86_64-apple-darwin
+
+echo "Building safechain-l7-proxy for aarch64-apple-darwin..."
+rustup target add aarch64-apple-darwin 2>/dev/null || true
+cargo build --release --bin safechain-l7-proxy --target aarch64-apple-darwin
+
+echo "Creating universal proxy binary with lipo..."
+lipo -create \
+    target/x86_64-apple-darwin/release/safechain-l7-proxy \
+    target/aarch64-apple-darwin/release/safechain-l7-proxy \
+    -output bin/safechain-l7-proxy-darwin-universal
+echo "✓ Proxy built: bin/safechain-l7-proxy-darwin-universal"
+
+lipo -info bin/safechain-ultimate-darwin-universal
+lipo -info bin/safechain-ultimate-ui-darwin-universal
+lipo -info bin/safechain-l7-proxy-darwin-universal
 echo ""
 
 # =============================================================================
@@ -69,29 +91,28 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
              --force \
              --timestamp \
              --options runtime \
-             "$PROJECT_DIR/bin/safechain-ultimate-darwin-$ARCH"
+             "$PROJECT_DIR/bin/safechain-ultimate-darwin-universal"
     echo "✓ Agent signed"
 
     codesign --sign "$CERT_IDENTITY" \
              --force \
              --timestamp \
              --options runtime \
-             "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-$ARCH"
+             "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-universal"
     echo "✓ Agent UI signed"
 
     codesign --sign "$CERT_IDENTITY" \
              --force \
              --timestamp \
              --options runtime \
-             "$PROJECT_DIR/bin/safechain-l7-proxy-darwin-$ARCH"
+             "$PROJECT_DIR/bin/safechain-l7-proxy-darwin-universal"
     echo "✓ Proxy signed"
     echo ""
 
-    # Verify signatures
     echo "Verifying binary signatures..."
-    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-darwin-$ARCH"
-    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-$ARCH"
-    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-l7-proxy-darwin-$ARCH"
+    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-darwin-universal"
+    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-universal"
+    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-l7-proxy-darwin-universal"
     echo "✓ Binary signatures verified"
     echo ""
 else
@@ -108,9 +129,9 @@ echo "Step 3: Building PKG installer..."
 echo ""
 
 cd "$SCRIPT_DIR"
-./build-distribution-pkg.sh -v "$VERSION" -a "$ARCH" -b "$PROJECT_DIR/bin" -o "$PROJECT_DIR/dist"
+./build-distribution-pkg.sh -v "$VERSION" -a "universal" -b "$PROJECT_DIR/bin" -o "$PROJECT_DIR/dist"
 
-PKG_FILE="$PROJECT_DIR/dist/SafeChainUltimate-$VERSION-$ARCH.pkg"
+PKG_FILE="$PROJECT_DIR/dist/SafeChainUltimate-$VERSION.pkg"
 
 if [ ! -f "$PKG_FILE" ]; then
     echo "✗ PKG file not created"
@@ -136,7 +157,7 @@ if security find-identity -v -p basic | grep "Developer ID Installer" > /dev/nul
     echo ""
 
     echo "Signing PKG..."
-    SIGNED_PKG="$PROJECT_DIR/dist/SafeChainUltimate-$VERSION-$ARCH-signed.pkg"
+    SIGNED_PKG="$PROJECT_DIR/dist/SafeChainUltimate-$VERSION-signed.pkg"
 
     productsign --sign "$INSTALLER_CERT_IDENTITY" \
                 --timestamp \

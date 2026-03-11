@@ -68,7 +68,7 @@ echo ""
 echo "Step 1: Building component package..."
 "$SCRIPT_DIR/build-pkg.sh" -v "$VERSION" -a "$ARCH" -b "$BIN_DIR" -o "$OUTPUT_DIR"
 
-COMPONENT_PKG="$OUTPUT_DIR/SafeChainUltimate.$ARCH.pkg"
+COMPONENT_PKG="$OUTPUT_DIR/SafeChainUltimate.pkg"
 
 if [ ! -f "$COMPONENT_PKG" ]; then
     echo "Error: Component package not found at $COMPONENT_PKG" >&2
@@ -90,7 +90,6 @@ cp "$COMPONENT_PKG" "$BUILD_DIR/"
 DIST_XML="$BUILD_DIR/Distribution.xml"
 cp "$SCRIPT_DIR/Distribution.xml" "$DIST_XML"
 sed -i '' "s/VERSION_PLACEHOLDER/$PKG_VERSION/g" "$DIST_XML"
-sed -i '' "s/ARCH_PLACEHOLDER/$ARCH/g" "$DIST_XML"
 
 # Copy resources
 RESOURCES_DIR="$BUILD_DIR/Resources"
@@ -100,7 +99,7 @@ cp "$SCRIPT_DIR/conclusion.html" "$RESOURCES_DIR/"
 cp "$SCRIPT_DIR/license.txt" "$RESOURCES_DIR/"
 
 # Build the distribution package
-OUTPUT_DIST_PKG="$OUTPUT_DIR/SafeChainUltimate-$VERSION-$ARCH.pkg"
+OUTPUT_DIST_PKG="$OUTPUT_DIR/SafeChainUltimate-$VERSION.pkg"
 
 echo "Building distribution package..."
 productbuild \
@@ -125,7 +124,7 @@ if [ $? -eq 0 ]; then
     echo "Package size: $SIZE"
     echo ""
     echo "This is a distribution package with installer UI."
-    echo "For GitHub releases, use: SafeChainUltimate-$VERSION-$ARCH.pkg"
+    echo "For GitHub releases, use: SafeChainUltimate.pkg"
 else
     echo "Error: Distribution package build failed" >&2
     exit 1
