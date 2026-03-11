@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import type { BlockEvent } from "../types";
 import { Events } from "@wailsio/runtime";
@@ -12,7 +12,7 @@ export function EventsList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -23,15 +23,15 @@ export function EventsList() {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    load();
   }, []);
 
   useEffect(() => {
-    const unsub = Events.On("blocked", (ev: { data?: BlockEvent }) => {
-      const payload = ev.data;
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    const unsub = Events.On("blocked", (ev: unknown) => {
+      const payload = (ev as { data?: BlockEvent }).data;
       if (payload) setEvents((prev) => [payload, ...prev]);
     });
     return () => {
@@ -83,6 +83,9 @@ export function EventsList() {
                 <tr
                   key={ev.id}
                   onClick={() => navigate(`/events/${ev.id}`)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") navigate(`/events/${ev.id}`); }}
+                  tabIndex={0}
+                  role="button"
                   className="row-clickable"
                 >
                   <td className="event-product">

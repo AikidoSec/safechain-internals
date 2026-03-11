@@ -1,4 +1,4 @@
-import * as DaemonService from "../bindings/changeme/daemonservice.js";
+import * as DaemonService from "../bindings/safechain-ui/daemonservice.js";
 import type { BlockEvent } from "./types";
 
 export async function listEvents(limit: number): Promise<BlockEvent[]> {

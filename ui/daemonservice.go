@@ -1,7 +1,7 @@
 package main
 
 import (
-	"changeme/daemon"
+	"safechain-ui/daemon"
 )
 
 // DaemonService is a Wails-bound service that exposes daemon API calls to the frontend.

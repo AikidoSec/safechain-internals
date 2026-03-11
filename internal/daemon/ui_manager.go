@@ -61,6 +61,7 @@ func (m *UIManager) Launch(ctx context.Context, ingressAddr string) error {
 	if err != nil {
 		return fmt.Errorf("failed to launch UI: %v", err)
 	}
+	log.Printf("UI process PID: %d", pid)
 	m.process.setPID(pid)
 	log.Println("UI tray application launched")
 	return nil

@@ -68,8 +68,6 @@ jobs:
           files: |
             safechain-ultimate-darwin-amd64
             safechain-ultimate-darwin-arm64
-            safechain-ultimate-ui-darwin-amd64
-            safechain-ultimate-ui-darwin-arm64
             safechain-l7-proxy-darwin-amd64
             safechain-l7-proxy-darwin-arm64
             safechain-l7-proxy-linux-amd64

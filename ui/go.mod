@@ -1,4 +1,4 @@
-module changeme
+module safechain-ui
 
 go 1.25
 

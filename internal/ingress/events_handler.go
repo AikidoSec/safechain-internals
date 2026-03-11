@@ -2,6 +2,7 @@ package ingress
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -11,7 +12,9 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(s.eventStore.List())
+	if err := json.NewEncoder(w).Encode(s.eventStore.List()); err != nil {
+		log.Printf("failed to encode events: %v", err)
+	}
 }
 
 func (s *Server) handleGetEventByID(w http.ResponseWriter, r *http.Request) {
@@ -21,9 +24,13 @@ func (s *Server) handleGetEventByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if event, ok := s.eventStore.Get(id); ok {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(event)
+		if err := json.NewEncoder(w).Encode(event); err != nil {
+			log.Printf("failed to encode event %s: %v", id, err)
+		}
 		return
 	}
 	w.WriteHeader(http.StatusNotFound)
-	w.Write([]byte("Event not found"))
+	if _, err := w.Write([]byte("Event not found")); err != nil {
+		log.Printf("failed to write 404 response: %v", err)
+	}
 }

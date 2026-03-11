@@ -1,8 +1,8 @@
 package main
 
 import (
-	"changeme/appserver"
-	"changeme/daemon"
+	"safechain-ui/appserver"
+	"safechain-ui/daemon"
 	"embed"
 	"flag"
 	"log"

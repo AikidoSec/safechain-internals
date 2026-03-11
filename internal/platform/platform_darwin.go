@@ -443,13 +443,28 @@ func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args
 	return utils.RunCommandWithEnv(ctx, []string{}, "launchctl", launchctlArgs...)
 }
 
-// StartUIProcessInAuditSessionOfCurrentUser starts the process as the current user and returns its PID.
-// The process is not waited on; the caller may kill it later using the PID.
+// appBinaryName returns the name of the executable inside an .app bundle.
+// For non-.app paths it returns the base name of the path.
+func appBinaryName(binaryPath string) string {
+	base := filepath.Base(binaryPath)
+	if strings.HasSuffix(strings.ToLower(base), ".app") {
+		return strings.TrimSuffix(base, filepath.Ext(base))
+	}
+	return base
+}
+
+// StartUIProcessInAuditSessionOfCurrentUser launches the UI as the
+// logged-in console user and returns the real process PID.
+//
+// For .app bundles we must use "open -a" so macOS sets up the GUI session
+// (window server, tray, dock). Both "open" and "launchctl asuser" exit
+// immediately, so the PID is discovered afterwards via pgrep.
 func StartUIProcessInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (int, error) {
+	isApp := strings.HasSuffix(strings.ToLower(binaryPath), ".app")
+
 	name := binaryPath
 	cmdArgs := args
-
-	if strings.HasSuffix(strings.ToLower(binaryPath), ".app") {
+	if isApp {
 		name = "open"
 		cmdArgs = []string{"-a", binaryPath}
 		if len(args) > 0 {
@@ -469,10 +484,22 @@ func StartUIProcessInAuditSessionOfCurrentUser(ctx context.Context, binaryPath s
 	}
 
 	cmd := exec.CommandContext(ctx, name, cmdArgs...)
-	if err := cmd.Start(); err != nil {
-		return 0, err
+	if err := cmd.Run(); err != nil {
+		return 0, fmt.Errorf("failed to start UI: %v", err)
 	}
-	return cmd.Process.Pid, nil
+
+	// "open" / "launchctl" exit immediately after dispatching.
+	// Find the real UI process PID by executable name.
+	binName := appBinaryName(binaryPath)
+	pidOut, err := exec.CommandContext(ctx, "pgrep", "-nf", binName).Output()
+	if err != nil {
+		return 0, fmt.Errorf("UI process started but PID could not be found: %v", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidOut)))
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse UI PID: %v", err)
+	}
+	return pid, nil
 }
 
 func RunningAsRoot() bool {

@@ -32,8 +32,8 @@ function AppRoutes() {
       <FocusHandler />
       <Routes>
         <Route path="/" element={<EventsList />} />
-         <Route path="/events" element={<EventsList />} />
-        <Route path="/events/:id" element={<EventDetail />} /> 
+        <Route path="/events" element={<EventsList />} />
+        <Route path="/events/:id" element={<EventDetail />} />
       </Routes>
     </>
   );

@@ -64,12 +64,12 @@ build:
 	@echo "Binaries built:"
 	@echo "  $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)"
 ifeq ($(GOOS),darwin)
-	@cd ui && wails3 package
+	@cd ui && CGO_ENABLED=1 wails3 package
 	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
 	@cp -R ui/bin/$(BINARY_NAME_UI).app $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
 	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app"
 else ifeq ($(GOOS),windows)
-	@cd ui && wails3 package
+	@cd ui && CGO_ENABLED=1 wails3 package
 	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
 	@cp -R ui/bin/$(BINARY_NAME_UI).exe $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
 	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe"
@@ -103,11 +103,15 @@ build-darwin-universal: build-darwin-amd64 build-darwin-arm64
 	@echo "Creating universal binaries..."
 	@lipo -create $(BIN_DIR)/$(BINARY_NAME)-darwin-amd64 $(BIN_DIR)/$(BINARY_NAME)-darwin-arm64 \
 		-output $(BIN_DIR)/$(BINARY_NAME)-darwin-universal
-	@lipo -create $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-amd64 $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-arm64 \
-		-output $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal
+	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal.app
+	@cp -R $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-amd64.app $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal.app
+	@lipo -create \
+		"$(BIN_DIR)/$(BINARY_NAME_UI)-darwin-amd64.app/Contents/MacOS/$(BINARY_NAME_UI)" \
+		"$(BIN_DIR)/$(BINARY_NAME_UI)-darwin-arm64.app/Contents/MacOS/$(BINARY_NAME_UI)" \
+		-output "$(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal.app/Contents/MacOS/$(BINARY_NAME_UI)"
 	@echo "Universal binaries created:"
 	@lipo -info $(BIN_DIR)/$(BINARY_NAME)-darwin-universal
-	@lipo -info $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal
+	@lipo -info "$(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal.app/Contents/MacOS/$(BINARY_NAME_UI)"
 
 build-windows-amd64:
 	@"$(MAKE)" GOOS=windows GOARCH=amd64 build-release

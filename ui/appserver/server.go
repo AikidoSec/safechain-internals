@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"changeme/daemon"
+	"safechain-ui/daemon"
 )
 
 var ListenAddr = "127.0.0.1:9876"

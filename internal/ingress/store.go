@@ -6,6 +6,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const maxEvents = 500
+
 // eventStore holds blocked events with thread-safe add/get/list.
 type eventStore struct {
 	mu     sync.RWMutex
@@ -13,6 +15,7 @@ type eventStore struct {
 }
 
 // Add appends the event to the store and returns the saved event.
+// When the store exceeds maxEvents the oldest entries are discarded.
 func (e *eventStore) Add(ev BlockEvent) BlockEvent {
 	blocked := BlockEvent{
 		ID:          uuid.New().String(),
@@ -23,6 +26,9 @@ func (e *eventStore) Add(ev BlockEvent) BlockEvent {
 	}
 	e.mu.Lock()
 	e.events = append(e.events, blocked)
+	if len(e.events) > maxEvents {
+		e.events = e.events[len(e.events)-maxEvents:]
+	}
 	e.mu.Unlock()
 	return blocked
 }
