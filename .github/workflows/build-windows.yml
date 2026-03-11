@@ -31,7 +31,7 @@ jobs:
 
       - name: Set up Wails (v3)
         run: |
-          go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha.72
           wails3 doctor  # Verify installation
 
       - name: Run tests
