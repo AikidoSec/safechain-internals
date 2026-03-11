@@ -161,7 +161,7 @@ else ifeq ($(DETECTED_OS),windows)
 	@cp $(BIN_DIR)/$(BINARY_NAME)-windows-$(DETECTED_ARCH).exe $(BIN_DIR)/SafeChainUltimate.exe
 	@cp $(BIN_DIR)/$(BINARY_NAME_UI)-windows-$(DETECTED_ARCH).exe $(BIN_DIR)/SafeChainUltimateUI.exe
 	@echo "Building Windows MSI installer..."
-	@powershell -ExecutionPolicy Bypass -File packaging/windows/build-msi.ps1 -Version "$(VERSION)" -Arch "$(DETECTED_ARCH)" -BinDir ".\$(BIN_DIR)" -OutputDir "."
+	@powershell -ExecutionPolicy Bypass -File packaging/windows/build-msi.ps1 -Version "$(VERSION)" -BinDir ".\$(BIN_DIR)" -OutputDir "."
 	@echo "Windows MSI build completed."
 else
 	@echo "Error: PKG building is only supported on macOS"
@@ -176,7 +176,7 @@ endif
 	@cd packaging/macos && ./install-local.sh
 else ifeq ($(DETECTED_OS),windows)
 	@echo "Installing Windows MSI package..."
-	@msiexec /i SafeChainUltimate.$(DETECTED_ARCH).msi
+	@msiexec /i SafeChainUltimate.msi
 else
 	@echo "Error: PKG installation is only supported on macOS"
 	@exit 1
