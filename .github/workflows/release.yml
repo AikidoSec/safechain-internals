@@ -74,8 +74,7 @@ jobs:
             safechain-l7-proxy-darwin-arm64
             safechain-l7-proxy-linux-amd64
             safechain-l7-proxy-linux-arm64
-            SafeChainUltimate-windows-amd64.msi
-            SafeChainUltimate-windows-arm64.msi
+            SafeChainUltimate.msi
             SafeChainUltimate.pkg
 
         env:
