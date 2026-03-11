@@ -108,8 +108,7 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 	var si windows.StartupInfo
 	si.Cb = uint32(unsafe.Sizeof(si))
 	si.Desktop, _ = windows.UTF16PtrFromString("winsta0\\default")
-	si.Flags = windows.STARTF_USESTDHANDLES | windows.STARTF_USESHOWWINDOW
-	si.ShowWindow = uint16(windows.SW_HIDE)
+	si.Flags = windows.STARTF_USESTDHANDLES
 	si.StdOutput = stdoutWrite
 	si.StdErr = stdoutWrite
 
