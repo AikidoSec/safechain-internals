@@ -5,6 +5,7 @@ use rama::{
     error::{BoxError, ErrorContext as _},
     http::{
         BodyExtractExt, HeaderValue, Request, Response, Uri, service::client::HttpClientExt as _,
+        uri::PathAndQuery,
     },
     telemetry::tracing,
 };
@@ -13,6 +14,8 @@ pub(super) struct ChromeWebStore;
 
 const LOOKUP_TIMEOUT: Duration = Duration::from_millis(500);
 const MAX_REDIRECTS: usize = 3;
+const CHROME_WEBSTORE_AUTHORITY: &str = "chromewebstore.google.com";
+const HTTPS_SCHEME: &str = "https";
 
 impl ChromeWebStore {
     /// Fetches the human-readable name of a Chrome extension from the Chrome Web Store.
@@ -73,8 +76,11 @@ impl ChromeWebStore {
             .ok()
             .filter(|uri| uri.scheme().is_some())
             .or_else(|| {
-                format!("https://chromewebstore.google.com{location}")
-                    .parse::<Uri>()
+                Uri::builder()
+                    .scheme(HTTPS_SCHEME)
+                    .authority(CHROME_WEBSTORE_AUTHORITY)
+                    .path_and_query(location.parse::<PathAndQuery>().ok()?)
+                    .build()
                     .ok()
             })
     }
