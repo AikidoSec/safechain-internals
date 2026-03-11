@@ -13,7 +13,10 @@ use rama::{
 
 use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
-    http::firewall::{domain_matcher::DomainMatcher, events::BlockedArtifact},
+    http::firewall::{
+        domain_matcher::DomainMatcher,
+        events::{BlockReason, BlockedArtifact},
+    },
     package::{malware_list::RemoteMalwareList, version::PackageVersion},
     storage::SyncCompactDataStorage,
 };
@@ -122,17 +125,14 @@ impl Rule for RuleChrome {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Block => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                PackagePolicyDecision::Defer => {}
+                decision => {
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("chrome"),
-                            identifier: extension_id,
-                            version: Some(version),
-                        },
+                        Self::blocked_artifact(&extension_id, &version),
+                        super::block_reason_for(decision),
                     )));
                 }
-                PackagePolicyDecision::Defer => {}
             }
         }
 
@@ -144,13 +144,10 @@ impl Rule for RuleChrome {
                 version
             );
 
-            return Ok(RequestAction::Block(BlockedRequest::malware(
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                BlockedArtifact {
-                    product: arcstr!("chrome"),
-                    identifier: extension_id,
-                    version: Some(version),
-                },
+                Self::blocked_artifact(&extension_id, &version),
+                BlockReason::Malware,
             )));
         }
 
@@ -159,6 +156,15 @@ impl Rule for RuleChrome {
 }
 
 impl RuleChrome {
+    fn blocked_artifact(extension_id: &ArcStr, version: &PackageVersion) -> BlockedArtifact {
+        BlockedArtifact {
+            product: arcstr!("chrome"),
+            identifier: extension_id.clone(),
+            display_name: None,
+            version: Some(version.clone()),
+        }
+    }
+
     fn matches_malware_entry(&self, extension_id: &str, version: &PackageVersion) -> bool {
         let normalized_id = extension_id.to_ascii_lowercase();
         let entries = self.remote_malware_list.find_entries(&normalized_id);

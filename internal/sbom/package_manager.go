@@ -5,10 +5,11 @@ import (
 )
 
 type InstalledVersion struct {
-	Variant  string
-	Version  string
-	Path     string
-	DataPath string
+	Ecosystem string
+	Variant   string
+	Version   string
+	Path      string
+	DataPath  string
 }
 
 type Package struct {

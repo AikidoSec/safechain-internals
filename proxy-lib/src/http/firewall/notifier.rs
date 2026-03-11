@@ -36,7 +36,7 @@ use crate::{
     utils::env::{compute_concurrent_request_count, network_service_identifier},
 };
 
-use super::events::BlockedEvent;
+use super::events::{BlockReason, BlockedEvent};
 
 const EVENT_DEDUP_WINDOW: Duration = Duration::from_secs(30);
 const MAX_EVENTS: u64 = 10_000;
@@ -45,12 +45,10 @@ type DedupCache = moka::sync::Cache<DedupKey, Arc<AtomicU64>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct DedupKey {
-    /// The product type (e.g., "npm", "pypi", "vscode", "chrome")
     pub product: ArcStr,
-    /// The name or identifier of the artifact
     pub identifier: ArcStr,
-    /// Optional version of the artifact (e.g. semver)
     pub version: PackageVersionKey,
+    pub block_reason: BlockReason,
 }
 
 impl From<&BlockedEvent> for DedupKey {
@@ -65,6 +63,7 @@ impl From<&BlockedEvent> for DedupKey {
                 .as_ref()
                 .map(PackageVersion::as_key)
                 .unwrap_or_default(),
+            block_reason: value.block_reason.clone(),
         }
     }
 }
@@ -110,6 +109,7 @@ impl EventNotifier {
                 product = %event.artifact.product,
                 identifier = %event.artifact.identifier,
                 version = ?event.artifact.version,
+                block_reason = ?event.block_reason,
                 "suppressed duplicate blocked-event notification"
             );
             return;

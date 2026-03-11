@@ -17,8 +17,10 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
 	"github.com/AikidoSec/safechain-internals/internal/sbom"
+	"github.com/AikidoSec/safechain-internals/internal/sbom/chrome"
 	"github.com/AikidoSec/safechain-internals/internal/sbom/npm"
 	"github.com/AikidoSec/safechain-internals/internal/sbom/pip"
+	"github.com/AikidoSec/safechain-internals/internal/sbom/vscode"
 	"github.com/AikidoSec/safechain-internals/internal/scannermanager"
 	"github.com/AikidoSec/safechain-internals/internal/setup"
 	"github.com/AikidoSec/safechain-internals/internal/utils"
@@ -57,7 +59,6 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 		proxy:       proxy.New(),
 		registry:    scannermanager.NewRegistry(),
 		sbomManager: newSBOMRegistry(),
-		ingress:     ingress.New(),
 		logRotator:  utils.NewLogRotator(),
 		logReaper:   utils.NewLogReaper(),
 	}
@@ -77,6 +78,8 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 	if d.config == nil {
 		return nil, fmt.Errorf("failed to create config")
 	}
+
+	d.ingress = ingress.New(d.config)
 	d.initLogging()
 	return d, nil
 }
@@ -164,7 +167,7 @@ func (d *Daemon) startProxyAndInstallCA(ctx context.Context) error {
 		return fmt.Errorf("ingress server failed to start")
 	}
 
-	if err := d.proxy.Start(ctx, ingressAddr); err != nil {
+	if err := d.proxy.Start(ctx, ingressAddr, d.config.GetBaseURL()); err != nil {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
@@ -368,6 +371,8 @@ func (d *Daemon) heartbeat() error {
 func newSBOMRegistry() *sbom.Registry {
 	r := sbom.NewRegistry()
 	r.Register(npm.New())
+	r.Register(chrome.New())
+	r.Register(vscode.New())
 	r.Register(pip.New())
 	return r
 }

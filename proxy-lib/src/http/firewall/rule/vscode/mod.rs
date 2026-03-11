@@ -15,7 +15,10 @@ use rama::{
 
 use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
-    http::firewall::{domain_matcher::DomainMatcher, events::BlockedArtifact},
+    http::firewall::{
+        domain_matcher::DomainMatcher,
+        events::{BlockReason, BlockedArtifact},
+    },
     package::malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
     storage::SyncCompactDataStorage,
 };
@@ -135,17 +138,14 @@ impl Rule for RuleVSCode {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Block => {
-                    return Ok(RequestAction::Block(BlockedRequest::policy(
+                PackagePolicyDecision::Defer => {}
+                decision => {
+                    return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        BlockedArtifact {
-                            product: arcstr!("vscode"),
-                            identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
-                            version: None,
-                        },
+                        Self::blocked_artifact(&vscode_extension),
+                        super::block_reason_for(decision),
                     )));
                 }
-                PackagePolicyDecision::Defer => {}
             }
         }
 
@@ -155,13 +155,10 @@ impl Rule for RuleVSCode {
                 package = %vscode_extension,
                 "blocked VSCode extension install asset download"
             );
-            return Ok(RequestAction::Block(BlockedRequest::malware(
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                BlockedArtifact {
-                    product: arcstr!("vscode"),
-                    identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
-                    version: None,
-                },
+                Self::blocked_artifact(&vscode_extension),
+                BlockReason::Malware,
             )));
         }
 
@@ -180,6 +177,15 @@ impl Rule for RuleVSCode {
 }
 
 impl RuleVSCode {
+    fn blocked_artifact(vscode_extension: &VsCodeExtensionId) -> BlockedArtifact {
+        BlockedArtifact {
+            product: arcstr!("vscode"),
+            identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
+            display_name: None,
+            version: None,
+        }
+    }
+
     fn is_package_listed_as_malware(&self, vscode_extension: &VsCodeExtensionId) -> bool {
         self.remote_malware_list
             .find_entries(&vscode_extension.extension_id)

@@ -8,7 +8,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-PKG_FILE="$PROJECT_DIR/dist/SafeChainUltimate-dev-arm64.pkg"
+PKG_FILE="$PROJECT_DIR/dist/SafeChainUltimate-dev.pkg"
 
 echo "========================================="
 echo "SafeChain Ultimate - Local Installation"
@@ -66,7 +66,7 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "View logs:"
     echo "  tail -f /Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.log"
-    echo "  tail -f /Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.error.log"
+    echo "  tail -f /Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.err"
     echo ""
     echo "To uninstall, run: sudo /Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall"
     echo ""

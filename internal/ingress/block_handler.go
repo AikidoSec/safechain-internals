@@ -19,7 +19,7 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Received block event: product=%s package=%s", event.Artifact.Product, event.Artifact)
+	log.Printf("Received block event: product=%s package=%s reason=%s", event.Artifact.Product, event.Artifact.PackageName, event.BlockReason)
 
 	// Show UI modal in a goroutine to not block the HTTP response
 	go showBlockedModal(event, s.Addr())
@@ -32,15 +32,19 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 	cfg := platform.GetConfig()
 	binaryPath := filepath.Join(cfg.BinaryDir, platform.SafeChainUIBinaryName)
 
-	text := buildBlockedText(event)
-	key := buildKey(event)
+	title := buildBlockedTitle(event)
+	subtitle := buildBlockedSubtitle(event)
 
 	args := []string{
-		"--package-id", key,
+		"--product", event.Artifact.Product,
+		"--package-id", event.Artifact.PackageName,
+		"--package-version", event.Artifact.PackageVersion,
+		"--package-human-name", event.Artifact.DisplayName,
 		// Encapsulate title as an argument: It can contain spaces causing the argument parsing to fail for windows.
-		"--title", fmt.Sprintf("\"%s\"", text),
+		"--title", fmt.Sprintf("\"%s\"", title),
+		"--subtitle", fmt.Sprintf("\"%s\"", subtitle),
 		"--ingress", ingressAddress,
-		"--bypass-enabled", "true",
+		"--bypass-enabled=true",
 	}
 
 	// Make sure that the modals close on their own after an hour so there are no hanging
@@ -54,29 +58,23 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 	}
 }
 
-func buildBlockedText(event BlockEvent) string {
-	if event.Artifact.PackageVersion != "" {
-		return fmt.Sprintf(
-			"SafeChain blocked a potentially malicious %s package:",
-			event.Artifact.Product,
-		)
+// productDisplayName maps proxy product identifiers to UI display names.
+func productDisplayName(product string) string {
+	switch product {
+	case "skills_sh":
+		return "skills.sh"
+	default:
+		return product
 	}
-	return fmt.Sprintf(
-		"SafeChain blocked a potentially malicious %s package:",
-		event.Artifact.Product,
-	)
 }
 
-func buildKey(event BlockEvent) string {
-	if event.Artifact.PackageVersion != "" {
-		return fmt.Sprintf(
-			"%s@%s",
-			event.Artifact.PackageName,
-			event.Artifact.PackageVersion,
-		)
+func buildBlockedTitle(event BlockEvent) string {
+	return fmt.Sprintf("SafeChain blocked a %s package:", productDisplayName(event.Artifact.Product))
+}
+
+func buildBlockedSubtitle(event BlockEvent) string {
+	if event.BlockReason == "request_install" {
+		return "This package requires approval before it can be installed."
 	}
-	return fmt.Sprintf(
-		"%s",
-		event.Artifact.PackageName,
-	)
+	return "Installing this package has been blocked because it looks malicious."
 }

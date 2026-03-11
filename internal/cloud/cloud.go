@@ -33,7 +33,7 @@ func sendEvent(ctx context.Context, endpoint string, config *config.ConfigInfo, 
 		return fmt.Errorf("device ID is not set")
 	}
 
-	url, err := url.JoinPath(BaseURL, endpoint)
+	url, err := url.JoinPath(config.GetBaseURL(), endpoint)
 	if err != nil {
 		return fmt.Errorf("failed to build URL for %s: %w", endpoint, err)
 	}
@@ -71,4 +71,8 @@ func SendHeartbeat(ctx context.Context, config *config.ConfigInfo, event *Heartb
 
 func SendSBOM(ctx context.Context, config *config.ConfigInfo, event *SBOMEvent) error {
 	return sendEvent(ctx, SBOMEndpoint, config, event)
+}
+
+func SendRequestPackageInstallation(ctx context.Context, config *config.ConfigInfo, event *RequestPackageInstallationEvent) error {
+	return sendEvent(ctx, RequestPackageInstallationEndpoint, config, event)
 }

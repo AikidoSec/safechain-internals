@@ -15,6 +15,14 @@ type ConfigInfo struct {
 	DeviceID                string    `json:"device_id"`
 	LastHeartbeatReportTime time.Time `json:"last_heartbeat_report_time"`
 	LastSBOMReportTime      time.Time `json:"last_sbom_report_time"`
+	BaseURL                 string    `json:"base_url,omitempty"`
+}
+
+func (c *ConfigInfo) GetBaseURL() string {
+	if c.BaseURL != "" {
+		return c.BaseURL
+	}
+	return "https://app.aikido.dev"
 }
 
 func NewConfigInfo(deviceId string) *ConfigInfo {
