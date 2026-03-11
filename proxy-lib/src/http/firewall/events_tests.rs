@@ -10,7 +10,7 @@ use super::*;
 fn blocked_event_serializes_with_expected_keys() {
     let event = BlockedEvent {
         ts_ms: 42,
-        artifact: BlockedArtifact {
+        artifact: Artifact {
             product: arcstr!("npm"),
             identifier: arcstr!("foo"),
             display_name: Some(arcstr!("Foo Package")),
@@ -32,7 +32,7 @@ fn blocked_event_serializes_with_expected_keys() {
 #[test]
 fn blocked_event_from_info_sets_timestamp_and_copies_artifact() {
     let event = BlockedEvent::from_info(BlockedEventInfo {
-        artifact: BlockedArtifact {
+        artifact: Artifact {
             product: arcstr!("npm"),
             identifier: arcstr!("foo"),
             display_name: None,

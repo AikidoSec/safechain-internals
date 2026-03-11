@@ -14,7 +14,7 @@ use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
-        events::{BlockReason, BlockedArtifact},
+        events::{Artifact, BlockReason},
         rule::npm::min_package_age::MinPackageAge,
     },
     package::{
@@ -133,8 +133,8 @@ impl Rule for RuleNpm {
 }
 
 impl RuleNpm {
-    fn blocked_artifact(package_name: &str, version: &PragmaticSemver) -> BlockedArtifact {
-        BlockedArtifact {
+    fn blocked_artifact(package_name: &str, version: &PragmaticSemver) -> Artifact {
+        Artifact {
             product: arcstr!("npm"),
             identifier: ArcStr::from(package_name),
             display_name: None,

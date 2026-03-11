@@ -17,7 +17,7 @@ use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
-        events::{BlockReason, BlockedArtifact},
+        events::{Artifact, BlockReason},
     },
     package::malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
     storage::SyncCompactDataStorage,
@@ -177,8 +177,8 @@ impl Rule for RuleVSCode {
 }
 
 impl RuleVSCode {
-    fn blocked_artifact(vscode_extension: &VsCodeExtensionId) -> BlockedArtifact {
-        BlockedArtifact {
+    fn blocked_artifact(vscode_extension: &VsCodeExtensionId) -> Artifact {
+        Artifact {
             product: arcstr!("vscode"),
             identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
             display_name: None,

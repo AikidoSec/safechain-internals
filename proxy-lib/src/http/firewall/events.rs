@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::package::version::PackageVersion;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BlockedArtifact {
+pub struct Artifact {
     /// The product type (e.g., "npm", "pypi", "vscode", "chrome")
     pub product: ArcStr,
     /// The name or identifier of the artifact
@@ -31,14 +31,14 @@ pub enum BlockReason {
 
 #[derive(Debug, Clone)]
 pub struct BlockedEventInfo {
-    pub artifact: BlockedArtifact,
+    pub artifact: Artifact,
     pub block_reason: BlockReason,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockedEvent {
     pub ts_ms: i64,
-    pub artifact: BlockedArtifact,
+    pub artifact: Artifact,
     pub block_reason: BlockReason,
 }
 
@@ -53,19 +53,10 @@ impl BlockedEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MinPackageAgeArtifact {
-    /// The product type (e.g., "npm", "pypi", "vscode", "chrome")
-    pub product: ArcStr,
-    /// The name or identifier of the artifact
-    pub identifier: ArcStr,
-    /// Optional version
-    pub suppressed_versions: Vec<PackageVersion>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MinPackageAgeEvent {
     pub ts_ms: i64,
-    pub artifact: MinPackageAgeArtifact,
+    pub artifact: Artifact,
+    pub suppressed_versions: Vec<PackageVersion>,
 }
 
 #[cfg(test)]

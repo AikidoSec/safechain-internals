@@ -11,14 +11,14 @@ use rama::{
         },
     },
     telemetry::tracing,
-    utils::time::now_unix_ms,
+    utils::{str::arcstr::ArcStr, time::now_unix_ms},
 };
 use serde_json::json;
 
 use crate::http::{
     KnownContentType,
     firewall::{
-        events::{MinPackageAgeArtifact, MinPackageAgeEvent},
+        events::{Artifact, MinPackageAgeEvent},
         notifier::EventNotifier,
     },
 };
@@ -84,11 +84,11 @@ impl MinPackageAge {
             return Ok(Response::from_parts(parts, Body::from(bytes)));
         }
 
-        let package_name = json
+        let package_name: ArcStr = json
             .get("name")
             .and_then(|n| n.as_str())
             .unwrap_or("unknown-package")
-            .to_owned();
+            .into();
 
         for key in versions_to_remove.iter() {
             json = Self::remove_version_from_json(json, key);
@@ -107,14 +107,16 @@ impl MinPackageAge {
         if let Some(notifier) = &self.notifier {
             let event = MinPackageAgeEvent {
                 ts_ms: now_unix_ms(),
-                artifact: MinPackageAgeArtifact {
+                artifact: Artifact {
                     product: "npm".into(),
-                    identifier: package_name.as_str().into(),
-                    suppressed_versions: versions_to_remove
-                        .iter()
-                        .filter_map(|v| v.parse().ok())
-                        .collect(),
+                    identifier: package_name.clone(),
+                    display_name: Some(package_name),
+                    version: None,
                 },
+                suppressed_versions: versions_to_remove
+                    .iter()
+                    .filter_map(|v| v.parse().ok())
+                    .collect(),
             };
             notifier.notify_min_package_age(event).await;
         }
