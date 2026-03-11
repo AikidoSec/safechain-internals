@@ -87,7 +87,7 @@ impl MinPackageAge {
         let package_name: ArcStr = json
             .get("name")
             .and_then(|n| n.as_str())
-            .unwrap_or("unknown-package")
+            .unwrap_or("unknown package")
             .into();
 
         for key in versions_to_remove.iter() {
