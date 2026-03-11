@@ -443,8 +443,8 @@ func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args
 	return utils.RunCommandWithEnv(ctx, []string{}, "launchctl", launchctlArgs...)
 }
 
-// appBinaryName returns the name of the executable inside an .app bundle.
-// For non-.app paths it returns the base name of the path.
+// appBinaryName extracts the process name that pgrep will match when searching for a running application.
+// macOS .app bundles run under the bundle name without the .app extension.
 func appBinaryName(binaryPath string) string {
 	base := filepath.Base(binaryPath)
 	if strings.HasSuffix(strings.ToLower(base), ".app") {
