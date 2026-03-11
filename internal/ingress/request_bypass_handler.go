@@ -2,6 +2,7 @@ package ingress
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 
@@ -9,31 +10,20 @@ import (
 )
 
 func (s *Server) handleRequestBypass(w http.ResponseWriter, r *http.Request) {
-	if !s.validateUIToken(w, r) {
-		return
-	}
-	id := r.PathValue("id")
-	event, ok := s.eventStore.Get(id)
-	if !ok {
-		http.Error(w, "event not found", http.StatusNotFound)
+	var req RequestBypassEvent
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("Received request-bypass event: key=%s", event.ID)
-	s.eventStore.UpdateStatus(id, "request_pending")
+	log.Printf("Received request-bypass event: id=%s", req.PackageId)
 
-	go s.sendInstallationRequest(event)
+	go s.sendInstallationRequest(req)
 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) sendInstallationRequest(event BlockEvent) {
-	req := RequestBypassEvent{
-		Key:            event.ID,
-		Product:        event.Artifact.Product,
-		PackageName:    event.Artifact.PackageName,
-		PackageVersion: event.Artifact.PackageVersion,
-	}
+func (s *Server) sendInstallationRequest(req RequestBypassEvent) {
 	installEvent := buildInstallationRequestEvent(req)
 	if err := cloud.SendRequestPackageInstallation(context.Background(), s.config, installEvent); err != nil {
 		log.Printf("Failed to send installation request for %s: %v", req.PackageId, err)

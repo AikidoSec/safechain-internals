@@ -29,16 +29,41 @@ echo "Step 1: Building universal binaries..."
 echo ""
 
 cd "$PROJECT_DIR"
-go build -o "bin/safechain-ultimate-darwin-$ARCH" cmd/daemon/main.go
-# Build Wails UI bundle.
+mkdir -p bin
+
+echo "Building safechain-ultimate for amd64..."
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o "bin/safechain-ultimate-darwin-amd64" ./cmd/daemon
+echo "Building safechain-ultimate for arm64..."
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o "bin/safechain-ultimate-darwin-arm64" ./cmd/daemon
+
+echo "Creating universal agent binary with lipo..."
+lipo -create bin/safechain-ultimate-darwin-amd64 bin/safechain-ultimate-darwin-arm64 \
+    -output bin/safechain-ultimate-darwin-universal
+echo "✓ Agent built: bin/safechain-ultimate-darwin-universal"
+# remove the ui bin directory 
+rm -rf "$PROJECT_DIR/ui/bin/"
+rm -rf "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-amd64.app"
+rm -rf "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-arm64.app"
+
+echo "Building safechain-ultimate-ui (Wails app bundle) for amd64..."
 cd "$PROJECT_DIR/ui"
-wails3 package
-DEST_APP="$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-$ARCH.app"
-rm -rf "$DEST_APP"
-cp -R "$PROJECT_DIR/ui/bin/safechain-ultimate-ui.app" "$DEST_APP"
+GOOS=darwin GOARCH=amd64 wails3 package 
+mv "$PROJECT_DIR/ui/bin/safechain-ultimate-ui.app" "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-amd64.app"
+rm -rf "$PROJECT_DIR/ui/bin/"
+
+echo "Building safechain-ultimate-ui (Wails app bundle) for arm64..."
+GOOS=darwin GOARCH=arm64 wails3 package
+mv "$PROJECT_DIR/ui/bin/safechain-ultimate-ui.app" "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-arm64.app"
+
 cd "$PROJECT_DIR"
-echo "✓ Agent built: bin/safechain-ultimate-darwin-$ARCH"
-echo "✓ Agent UI built: bin/safechain-ultimate-ui-darwin-$ARCH.app"
+echo "Creating universal UI app bundle with lipo..."
+APP_BINARY_NAME="safechain-ultimate-ui"
+cp -R "bin/safechain-ultimate-ui-darwin-amd64.app" "bin/safechain-ultimate-ui-darwin-universal.app"
+lipo -create \
+    "bin/safechain-ultimate-ui-darwin-amd64.app/Contents/MacOS/$APP_BINARY_NAME" \
+    "bin/safechain-ultimate-ui-darwin-arm64.app/Contents/MacOS/$APP_BINARY_NAME" \
+    -output "bin/safechain-ultimate-ui-darwin-universal.app/Contents/MacOS/$APP_BINARY_NAME"
+echo "✓ Agent UI built: bin/safechain-ultimate-ui-darwin-universal.app"
 
 echo "Building safechain-l7-proxy for x86_64-apple-darwin..."
 rustup target add x86_64-apple-darwin 2>/dev/null || true
@@ -55,6 +80,8 @@ lipo -create \
     -output bin/safechain-l7-proxy-darwin-universal
 echo "✓ Proxy built: bin/safechain-l7-proxy-darwin-universal"
 
+lipo -info bin/safechain-ultimate-darwin-universal
+lipo -info "bin/safechain-ultimate-ui-darwin-universal.app/Contents/MacOS/$APP_BINARY_NAME"
 lipo -info bin/safechain-l7-proxy-darwin-universal
 echo ""
 
@@ -89,7 +116,7 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
              --force \
              --timestamp \
              --options runtime \
-             "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-$ARCH.app"
+             "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-universal.app"
     echo "✓ Agent UI signed"
 
     codesign --sign "$CERT_IDENTITY" \
@@ -101,9 +128,9 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
     echo ""
 
     echo "Verifying binary signatures..."
-    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-darwin-$ARCH"
-    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-$ARCH.app"
-    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-l7-proxy-darwin-$ARCH"
+    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-darwin-universal"
+    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-universal.app"
+    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-l7-proxy-darwin-universal"
     echo "✓ Binary signatures verified"
     echo ""
 else
