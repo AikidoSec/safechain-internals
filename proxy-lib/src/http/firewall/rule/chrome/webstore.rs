@@ -53,7 +53,7 @@ impl ChromeWebStore {
             }
 
             if !status.is_success() {
-                tracing::info!(extension_id, %status, "Chrome Web Store name lookup failed, extension id will be shown as-is.");
+                tracing::warn!(extension_id, %status, "Chrome Web Store name lookup failed, extension id will be shown as-is.");
                 return Ok(None);
             }
 
