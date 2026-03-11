@@ -39,6 +39,7 @@ mod pac;
 
 use crate::{
     endpoint_protection::{PolicyEvaluator, RemoteEndpointConfig},
+    http::firewall::rule::npm::min_package_age::MinPackageAge,
     storage::SyncCompactDataStorage,
     utils::{env::network_service_identifier, token::AgentIdentity},
 };
@@ -178,6 +179,10 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     policy_evaluator.clone(),
+                    Some(MinPackageAge::new(
+                        Duration::from_hours(24),
+                        notifier.clone(),
+                    )),
                 )
                 .await
                 .context("create block rule: npm")?
@@ -227,7 +232,7 @@ impl Firewall {
     pub async fn record_blocked_event(&self, info: self::events::BlockedEventInfo) {
         if let Some(notifier) = self.notifier.as_ref() {
             let event = self::events::BlockedEvent::from_info(info);
-            notifier.notify(event).await;
+            notifier.notify_blocked(event).await;
         }
     }
 

@@ -1,4 +1,4 @@
-use std::{fmt, time::Duration};
+use std::fmt;
 
 use rama::{
     Service,
@@ -14,7 +14,7 @@ use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
-        events::{BlockReason, BlockedArtifact},
+        events::{Artifact, BlockReason},
         rule::npm::min_package_age::MinPackageAge,
     },
     package::{
@@ -29,7 +29,7 @@ use crate::http::firewall::pac::PacScriptGenerator;
 
 use super::{BlockedRequest, RequestAction, Rule};
 
-mod min_package_age;
+pub mod min_package_age;
 
 pub(in crate::http::firewall) struct RuleNpm {
     target_domains: DomainMatcher,
@@ -44,6 +44,7 @@ impl RuleNpm {
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<PolicyEvaluator>,
+        min_package_age: Option<MinPackageAge>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = BoxError>,
@@ -72,7 +73,7 @@ impl RuleNpm {
             .into_iter()
             .collect(),
             remote_malware_list,
-            maybe_min_package_age: Some(MinPackageAge::new(Duration::from_hours(24))),
+            maybe_min_package_age: min_package_age,
             policy_evaluator,
         })
     }
@@ -132,8 +133,8 @@ impl Rule for RuleNpm {
 }
 
 impl RuleNpm {
-    fn blocked_artifact(package_name: &str, version: &PragmaticSemver) -> BlockedArtifact {
-        BlockedArtifact {
+    fn blocked_artifact(package_name: &str, version: &PragmaticSemver) -> Artifact {
+        Artifact {
             product: arcstr!("npm"),
             identifier: ArcStr::from(package_name),
             display_name: None,

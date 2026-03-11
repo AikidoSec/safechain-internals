@@ -15,7 +15,7 @@ use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
-        events::{BlockReason, BlockedArtifact},
+        events::{Artifact, BlockReason},
     },
     package::{malware_list::RemoteMalwareList, version::PackageVersion},
     storage::SyncCompactDataStorage,
@@ -156,8 +156,8 @@ impl Rule for RuleChrome {
 }
 
 impl RuleChrome {
-    fn blocked_artifact(extension_id: &ArcStr, version: &PackageVersion) -> BlockedArtifact {
-        BlockedArtifact {
+    fn blocked_artifact(extension_id: &ArcStr, version: &PackageVersion) -> Artifact {
+        Artifact {
             product: arcstr!("chrome"),
             identifier: extension_id.clone(),
             display_name: None,

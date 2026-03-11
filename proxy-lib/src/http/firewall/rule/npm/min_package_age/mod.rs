@@ -11,19 +11,26 @@ use rama::{
         },
     },
     telemetry::tracing,
-    utils::time::now_unix_ms,
+    utils::{str::arcstr::ArcStr, time::now_unix_ms},
 };
 use serde_json::json;
 
-use crate::http::KnownContentType;
+use crate::http::{
+    KnownContentType,
+    firewall::{
+        events::{Artifact, MinPackageAgeEvent},
+        notifier::EventNotifier,
+    },
+};
 
 pub(in crate::http::firewall) struct MinPackageAge {
     duration: Duration,
+    notifier: Option<EventNotifier>,
 }
 
 impl MinPackageAge {
-    pub fn new(duration: Duration) -> Self {
-        Self { duration }
+    pub fn new(duration: Duration, notifier: Option<EventNotifier>) -> Self {
+        Self { duration, notifier }
     }
 
     pub fn modify_request_headers(&self, req: &mut Request) {
@@ -77,6 +84,12 @@ impl MinPackageAge {
             return Ok(Response::from_parts(parts, Body::from(bytes)));
         }
 
+        let package_name: ArcStr = json
+            .get("name")
+            .and_then(|n| n.as_str())
+            .unwrap_or("unknown package")
+            .into();
+
         for key in versions_to_remove.iter() {
             json = Self::remove_version_from_json(json, key);
         }
@@ -90,6 +103,23 @@ impl MinPackageAge {
         parts
             .headers
             .typed_insert(CacheControl::new().with_no_cache());
+
+        if let Some(notifier) = &self.notifier {
+            let event = MinPackageAgeEvent {
+                ts_ms: now_unix_ms(),
+                artifact: Artifact {
+                    product: "npm".into(),
+                    identifier: package_name.clone(),
+                    display_name: Some(package_name),
+                    version: None,
+                },
+                suppressed_versions: versions_to_remove
+                    .iter()
+                    .filter_map(|v| v.parse().ok())
+                    .collect(),
+            };
+            notifier.notify_min_package_age(event).await;
+        }
 
         Ok(Response::from_parts(parts, Body::from(new_bytes)))
     }
