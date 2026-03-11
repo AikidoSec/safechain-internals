@@ -118,8 +118,11 @@ func (c *Client) post(path string, body any) error {
 		return fmt.Errorf("marshal: %w", err)
 	}
 
-	url := c.BaseURL() + path
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(data))
+	target := c.BaseURL() + path
+	if !isLoopbackURL(target) {
+		return fmt.Errorf("refused to POST to non-loopback URL: %s", target)
+	}
+	req, err := http.NewRequest(http.MethodPost, target, bytes.NewBuffer(data))
 	if err != nil {
 		return fmt.Errorf("new request: %w", err)
 	}
