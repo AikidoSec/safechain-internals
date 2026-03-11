@@ -5,9 +5,6 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$Version,
 
-    [Parameter(Mandatory=$true)]
-    [string]$Arch,
-
     [Parameter(Mandatory=$false)]
     [string]$BinDir = ".\bin",
 
@@ -64,8 +61,7 @@ if (-not (Test-Path $StoreTokenScript)) {
 }
 
 # Build the MSI
-$OutputMsi = Join-Path $OutputDir "SafeChainUltimate.$Arch.msi"
-$WixArch = if ($Arch -eq "arm64") { "arm64" } else { "x64" }
+$OutputMsi = Join-Path $OutputDir "SafeChainUltimate.msi"
 
 wix build $WxsFile $CustomUIFile `
     -d Version=$WixVersion `
@@ -73,7 +69,7 @@ wix build $WxsFile $CustomUIFile `
     -d ProjectDir=$ProjectDir `
     -ext WixToolset.UI.wixext `
     -ext WixToolset.Util.wixext `
-    -arch $WixArch `
+    -arch x64 `
     -o $OutputMsi
 
 if ($LASTEXITCODE -eq 0) {
