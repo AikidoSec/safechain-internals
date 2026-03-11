@@ -87,7 +87,7 @@ impl MinPackageAge {
         let package_name = json
             .get("name")
             .and_then(|n| n.as_str())
-            .unwrap_or("")
+            .unwrap_or("unknown-package")
             .to_owned();
 
         for key in versions_to_remove.iter() {
