@@ -17,7 +17,7 @@ use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
-        events::{BlockReason, BlockedArtifact},
+        events::{Artifact, BlockReason},
     },
     package::malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
     storage::SyncCompactDataStorage,
@@ -123,10 +123,8 @@ impl Rule for RuleOpenVsx {
         );
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision = policy_evaluator.evaluate_package_install(
-                "open_vsx",
-                extension.extension_id.to_ascii_lowercase().as_str(),
-            );
+            let decision = policy_evaluator
+                .evaluate_package_install("open_vsx", extension.extension_id.as_str());
 
             match decision {
                 PackagePolicyDecision::Allow => {
@@ -171,8 +169,8 @@ impl Rule for RuleOpenVsx {
 }
 
 impl RuleOpenVsx {
-    fn blocked_artifact(extension: &OpenVsxExtensionId) -> BlockedArtifact {
-        BlockedArtifact {
+    fn blocked_artifact(extension: &OpenVsxExtensionId) -> Artifact {
+        Artifact {
             product: arcstr!("open_vsx"),
             identifier: ArcStr::from(extension.extension_id.as_str()),
             display_name: None,

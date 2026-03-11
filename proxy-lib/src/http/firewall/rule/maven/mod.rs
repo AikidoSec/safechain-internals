@@ -14,7 +14,7 @@ use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
-        events::{BlockReason, BlockedArtifact},
+        events::{Artifact, BlockReason},
     },
     package::{
         malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
@@ -190,8 +190,8 @@ impl MavenArtifact {
 }
 
 impl RuleMaven {
-    fn blocked_artifact(artifact: &MavenArtifact) -> BlockedArtifact {
-        BlockedArtifact {
+    fn blocked_artifact(artifact: &MavenArtifact) -> Artifact {
+        Artifact {
             product: arcstr!("maven"),
             identifier: artifact.fully_qualified_name.clone(),
             display_name: None,

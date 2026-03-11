@@ -35,7 +35,10 @@ impl PolicyEvaluator {
             return PackagePolicyDecision::Defer;
         };
 
-        Self::evaluate_package_install_for_ecosystem_config(ecosystem_cfg, package_name)
+        Self::evaluate_package_install_for_ecosystem_config(
+            ecosystem_cfg,
+            &package_name.to_ascii_lowercase(),
+        )
     }
 
     fn evaluate_package_install_for_ecosystem_config(

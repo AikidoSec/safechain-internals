@@ -25,46 +25,70 @@ jobs:
 
   build-pkg:
     needs: build-unix
-    strategy:
-      matrix:
-        include:
-          - arch: amd64
-          - arch: arm64
-
     runs-on: macos-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download agent artifact
+      - name: Download agent artifact (amd64)
         uses: actions/download-artifact@v4
         with:
-          name: safechain-ultimate-darwin-${{ matrix.arch }}
-          path: bin
+          name: safechain-ultimate-darwin-amd64
+          path: bin/amd64
 
-      - name: Download agent ui artifact
+      - name: Download agent artifact (arm64)
         uses: actions/download-artifact@v4
         with:
-          name: safechain-ultimate-ui-darwin-${{ matrix.arch }}
-          path: bin
+          name: safechain-ultimate-darwin-arm64
+          path: bin/arm64
 
-      - name: Download proxy artifact
+      - name: Download agent ui artifact (amd64)
         uses: actions/download-artifact@v4
         with:
-          name: safechain-l7-proxy-darwin-${{ matrix.arch }}
-          path: bin
+          name: safechain-ultimate-ui-darwin-amd64
+          path: bin/amd64
 
-      - name: Verify binaries exist
+      - name: Download agent ui artifact (arm64)
+        uses: actions/download-artifact@v4
+        with:
+          name: safechain-ultimate-ui-darwin-arm64
+          path: bin/arm64
+
+      - name: Download proxy artifact (amd64)
+        uses: actions/download-artifact@v4
+        with:
+          name: safechain-l7-proxy-darwin-amd64
+          path: bin/amd64
+
+      - name: Download proxy artifact (arm64)
+        uses: actions/download-artifact@v4
+        with:
+          name: safechain-l7-proxy-darwin-arm64
+          path: bin/arm64
+
+      - name: Create universal binaries
         run: |
-          ls -lh bin/
-          ls -lh bin/safechain-ultimate-darwin-${{ matrix.arch }}
-          ls -lh bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}
-          ls -lh bin/safechain-l7-proxy-darwin-${{ matrix.arch }}
+          lipo -create \
+            bin/amd64/safechain-ultimate-darwin-amd64 \
+            bin/arm64/safechain-ultimate-darwin-arm64 \
+            -output bin/safechain-ultimate-darwin-universal
+          lipo -create \
+            bin/amd64/safechain-ultimate-ui-darwin-amd64 \
+            bin/arm64/safechain-ultimate-ui-darwin-arm64 \
+            -output bin/safechain-ultimate-ui-darwin-universal
+          lipo -create \
+            bin/amd64/safechain-l7-proxy-darwin-amd64 \
+            bin/arm64/safechain-l7-proxy-darwin-arm64 \
+            -output bin/safechain-l7-proxy-darwin-universal
+          echo "Universal binaries created:"
+          ls -lh bin/safechain-*-universal
+          lipo -info bin/safechain-ultimate-darwin-universal
+          lipo -info bin/safechain-ultimate-ui-darwin-universal
+          lipo -info bin/safechain-l7-proxy-darwin-universal
 
       - name: Make scripts executable
         run: chmod +x .github/scripts/macos/**/*.sh
 
-        # --- macOS signing + notarization (no entitlements for CLI) ---
       - name: Import macOS certificate
         env:
           MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
@@ -76,28 +100,28 @@ jobs:
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-ultimate-darwin-${{ matrix.arch }}
+        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-ultimate-darwin-universal
 
       - name: Sign macOS agent ui binary
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}
+        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-ultimate-ui-darwin-universal
 
       - name: Sign macOS proxy binary
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-l7-proxy-darwin-${{ matrix.arch }}
+        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-l7-proxy-darwin-universal
 
       - name: Build distribution .pkg installer
         run: |
           cd packaging/macos
-          ./build-distribution-pkg.sh -v "${{ inputs.version || 'dev' }}" -a "${{ matrix.arch }}" -b "../../bin" -o "../../dist"
+          ./build-distribution-pkg.sh -v "${{ inputs.version || 'dev' }}" -a "universal" -b "../../bin" -o "../../dist"
 
       - name: Rename package
         run: |
-          mv dist/SafeChainUltimate-${{ inputs.version || 'dev' }}-${{ matrix.arch }}.pkg dist/SafeChainUltimate-${{ matrix.arch }}.pkg
+          mv dist/SafeChainUltimate-${{ inputs.version || 'dev' }}.pkg dist/SafeChainUltimate.pkg
 
       - name: Create and notarize macOS packages
         env:
@@ -109,10 +133,10 @@ jobs:
           KEYCHAIN_PATH: ${{ env.KEYCHAIN_PATH }}
           VERSION: ${{ inputs.version }}
           BUILD_NUMBER: ${{ github.run_number }}
-        run: .github/scripts/macos/packages/sign-and-notarize-package.sh dist/SafeChainUltimate-${{ matrix.arch }}.pkg
+        run: .github/scripts/macos/packages/sign-and-notarize-package.sh dist/SafeChainUltimate.pkg
 
       - name: Upload .pkg artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SafeChainUltimate-${{ matrix.arch }}.pkg
-          path: dist/SafeChainUltimate-${{ matrix.arch }}.pkg
+          name: SafeChainUltimate.pkg
+          path: dist/SafeChainUltimate.pkg

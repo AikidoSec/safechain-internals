@@ -258,7 +258,25 @@ func UnsetSystemPAC(ctx context.Context, pacURL string) error {
 	return nil
 }
 
+func showCAInstallDialog(ctx context.Context) error {
+	script := `button returned of (display dialog "Aikido Endpoint needs to install a trusted CA certificate.\nmacOS will prompt you for administrator credentials." ` +
+		`with title "Aikido Endpoint Installation" buttons {"Cancel", "Install"} default button "Install" with icon caution)`
+	out, err := RunInAuditSessionOfCurrentUser(ctx, "osascript", []string{"-e", script})
+	if err != nil {
+		return fmt.Errorf("CA certificate installation cancelled")
+	}
+	if strings.TrimSpace(string(out)) != "Install" {
+		return fmt.Errorf("CA certificate installation cancelled")
+	}
+	return nil
+}
+
 func InstallProxyCA(ctx context.Context, certPath string) error {
+	// Show a dialog so the user understands the upcoming admin prompt is from SafeChain.
+	if err := showCAInstallDialog(ctx); err != nil {
+		return err
+	}
+
 	// CA needs to be installed as current user, in order to be prompted for security permissions
 	_, err := RunInAuditSessionOfCurrentUser(ctx, "security", []string{"add-trusted-cert",
 		"-d", // Add to admin cert store; default is user

@@ -16,3 +16,23 @@ type SBOMEvent struct {
 	VersionInfo version.VersionInfo `json:"version"`
 	SBOM        sbom.SBOM           `json:"sbom"`
 }
+
+// PackageInstallRequest represents a single package in an installation approval request.
+type PackageInstallRequest struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+}
+
+// EcosystemPackages groups packages by ecosystem for an installation approval request.
+type EcosystemPackages struct {
+	Ecosystem string                 `json:"ecosystem"`
+	Packages []PackageInstallRequest `json:"packages"`
+}
+
+// RequestPackageInstallationEvent is the body sent to requestPackageInstallation.
+type RequestPackageInstallationEvent struct {
+	SBOM struct {
+		Ecosystems []EcosystemPackages `json:"ecosystems"`
+	} `json:"sbom"`
+}

@@ -10,8 +10,8 @@ Download and run the latest PKG installer from the [releases page](https://githu
 
 Or install via command line:
 ```bash
-curl -LO "https://github.com/AikidoSec/safechain-internals/releases/latest/download/SafeChainUltimate-macos-arm64.pkg"
-echo "YOUR_TOKEN" > /tmp/aikido_endpoint_token.txt && sudo installer -pkg SafeChainUltimate.arm64.pkg -target /
+curl -LO "https://github.com/AikidoSec/safechain-internals/releases/latest/download/SafeChainUltimate.pkg"
+echo "YOUR_TOKEN" > /tmp/aikido_endpoint_token.txt && sudo installer -pkg SafeChainUltimate.pkg -target /
 ```
 
 ### Windows
@@ -20,7 +20,7 @@ Download and run the latest MSI installer from the [releases page](https://githu
 
 Or start PowerShell as Administrator and run:
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/AikidoSec/safechain-internals/releases/latest/download/SafeChainUltimate-windows-amd64.msi" -OutFile "SafeChainUltimate.msi"
+Invoke-WebRequest -Uri "https://github.com/AikidoSec/safechain-internals/releases/latest/download/SafeChainUltimate.msi" -OutFile "SafeChainUltimate.msi"
 msiexec /i SafeChainUltimate.msi /qn /norestart AIKIDO_TOKEN=YOUR_TOKEN
 ```
 

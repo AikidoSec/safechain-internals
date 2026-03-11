@@ -6,7 +6,7 @@ use rama::{
     net::address::Domain,
 };
 
-use super::events::{BlockReason, BlockedArtifact, BlockedEventInfo};
+use super::events::{Artifact, BlockReason, BlockedEventInfo};
 use crate::endpoint_protection::PackagePolicyDecision;
 use crate::http::response::generate_blocked_response_for_req;
 
@@ -16,7 +16,7 @@ pub struct BlockedRequest {
 }
 
 impl BlockedRequest {
-    pub(crate) fn blocked(req: Request, artifact: BlockedArtifact, reason: BlockReason) -> Self {
+    pub(crate) fn blocked(req: Request, artifact: Artifact, reason: BlockReason) -> Self {
         Self {
             response: generate_blocked_response_for_req(req, &reason),
             info: BlockedEventInfo {
@@ -48,6 +48,7 @@ pub mod npm;
 pub mod nuget;
 pub mod open_vsx;
 pub mod pypi;
+pub mod skills_sh;
 pub mod vscode;
 
 /// Action determined by a [`Rule`] when evaluating an http [`Request`]
