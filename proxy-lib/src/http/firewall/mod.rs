@@ -146,7 +146,7 @@ impl Firewall {
             }
             None => None,
         };
-        let policy_evaluator = remote_endpoint_config.map(PolicyEvaluator::new);
+        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
 
         Ok(Self {
             block_rules: Arc::new(vec![
@@ -182,10 +182,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     policy_evaluator.clone(),
-                    Some(MinPackageAge::new(
-                        Duration::from_hours(24),
-                        notifier.clone(),
-                    )),
+                    Some(MinPackageAge::new(notifier.clone(), remote_endpoint_config)),
                 )
                 .await
                 .context("create block rule: npm")?
