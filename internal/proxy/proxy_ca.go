@@ -6,10 +6,13 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
+
+const mdmCAInstallFlagPath = "/tmp/aikido_endpoint_mdm_ca_install.txt"
 
 func GetProxyCAInstalledMarker() string {
 	return filepath.Join(platform.GetRunDir(), ".proxy_ca_installed")
@@ -61,6 +64,12 @@ func InstallProxyCA(ctx context.Context) error {
 	if err := DownloadCACertFromProxy(); err != nil {
 		return err
 	}
+
+	if _, err := os.Stat(mdmCAInstallFlagPath); err == nil {
+		log.Println("MDM CA install flag detected, polling for MDM-managed CA cert installation...")
+		return waitForMDMCAInstall(ctx)
+	}
+
 	if err := platform.InstallProxyCA(ctx, GetCaCertPath()); err != nil {
 		return fmt.Errorf("failed to install ca cert: %v", err)
 	}
@@ -70,6 +79,30 @@ func InstallProxyCA(ctx context.Context) error {
 
 	log.Println("Installed CA cert successfully")
 	return nil
+}
+
+func waitForMDMCAInstall(ctx context.Context) error {
+	const maxAttempts = 20
+
+	for i := range maxAttempts {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Minute):
+		}
+
+		if err := platform.IsProxyCAInstalled(ctx); err == nil {
+			log.Println("MDM-managed CA cert detected, creating installed marker...")
+			if err := CreateProxyCAInstalledMarker(); err != nil {
+				return fmt.Errorf("failed to create proxy CA installed marker: %v", err)
+			}
+			log.Println("CA cert installed by MDM successfully")
+			return nil
+		}
+		log.Printf("CA cert not yet installed by MDM, still waiting... (%d/%d)", i+1, maxAttempts)
+	}
+
+	return fmt.Errorf("CA cert was not installed by MDM within %d minutes", maxAttempts)
 }
 
 func UninstallProxyCA(ctx context.Context) error {
