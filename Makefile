@@ -1,4 +1,4 @@
-.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-darwin-universal build-windows-amd64 build-windows-arm64 build-proxy build-l7-proxy-universal build-pkg build-pkg-sign-local install-pkg uninstall-pkg clean test run help
+.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-darwin-universal build-windows-amd64 build-proxy build-l7-proxy-universal build-pkg build-pkg-sign-local install-pkg uninstall-pkg clean test run help
 
 BINARY_NAME=safechain-ultimate
 BINARY_NAME_UI=safechain-ultimate-ui
