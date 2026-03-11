@@ -30,6 +30,8 @@ chown -R root:wheel "$RUN_DIR"
 AIKIDO_TOKEN=""
 CONFIG_FILE="$RUN_DIR/config.json"
 TOKEN_STAGING_FILE="/tmp/aikido_endpoint_token.txt"
+MDM_CA_FLAG="/tmp/aikido_endpoint_mdm_ca_install.txt"
+CA_CERT_PATH="$RUN_DIR/safechain-proxy-ca-crt.pem"
 
 # 1) Explicit token via staging file always wins (fresh install or re-provisioning)
 if [ -f "$TOKEN_STAGING_FILE" ]; then
@@ -84,6 +86,26 @@ if [ -f "$LAUNCHDAEMON_PLIST" ]; then
     echo "SafeChain Ultimate daemon installed and started"
 else
     echo "Warning: LaunchDaemon plist not found at $LAUNCHDAEMON_PLIST"
+fi
+
+# If MDM CA install flag is present, wait for the daemon to download the CA cert
+# before exiting so the MDM solution can immediately install it from the known path.
+# This is best-effort (120s); use the mdm-install-ca-cert.sh script on the MDM side
+# for a reliable install with a longer timeout.
+if [ -f "$MDM_CA_FLAG" ]; then
+    echo "MDM CA install flag detected, waiting for CA cert to be downloaded..."
+    echo "  Expected path: $CA_CERT_PATH"
+    MAX_WAIT=120
+    WAITED=0
+    while [ ! -f "$CA_CERT_PATH" ] && [ "$WAITED" -lt "$MAX_WAIT" ]; do
+        sleep 5
+        WAITED=$((WAITED + 5))
+    done
+    if [ -f "$CA_CERT_PATH" ]; then
+        echo "CA cert is ready at: $CA_CERT_PATH"
+    else
+        echo "Warning: CA cert not yet downloaded after ${MAX_WAIT}s — the MDM install script will keep polling."
+    fi
 fi
 
 echo "Post-installation completed"
