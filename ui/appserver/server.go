@@ -79,7 +79,7 @@ func (s *Server) handleProxyStatus(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	displayLabel := "⚫ Aikido Proxy is not reachable"
+	displayLabel := "Aikido Daemon is not reachable"
 	if body.Running {
 		displayLabel = "🟢 Aikido Proxy is running"
 	} else {
