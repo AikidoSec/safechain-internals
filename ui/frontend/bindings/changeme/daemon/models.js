@@ -33,6 +33,13 @@ export class Artifact {
              */
             this["version"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["display_name"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }

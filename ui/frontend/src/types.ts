@@ -6,6 +6,7 @@ export interface Artifact {
   product: string;
   identifier: string;
   version?: string;
+  display_name?: string;
 }
 
 export interface BlockEvent {

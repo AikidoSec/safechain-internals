@@ -132,6 +132,7 @@ func RequestAccess(eventID string) error {
 	if err := validateEventID(eventID); err != nil {
 		return err
 	}
+
 	resp, err := doRequest(http.MethodPost, "/v1/events/"+eventID+"/request-access", nil)
 	if err != nil {
 		return err

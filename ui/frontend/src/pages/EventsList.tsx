@@ -3,47 +3,8 @@ import { useNavigate } from "react-router-dom";
 import type { BlockEvent } from "../types";
 import { Events } from "@wailsio/runtime";
 import { listEvents } from "../api";
-import npmIcon from "../../assets/npm.svg";
-import pypiIcon from "../../assets/pypi.svg";
-import vscodeIcon from "../../assets/vscode.svg";
-
-const TOOL_ICONS: Record<string, string> = {
-  npm: npmIcon,
-  pip: pypiIcon,
-  pypi: pypiIcon,
-  vscode: vscodeIcon,
-};
-
-function formatEventTime(ts: number): string {
-  try {
-    const d = new Date(ts);
-    if (Number.isNaN(d.getTime())) return ts;
-    const date = d.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    const time = d.toLocaleTimeString(undefined, {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    return `${date}, ${time}`;
-  } catch {
-    return ts;
-  }
-}
-
-function isConnectionError(message: string): boolean {
-  const s = message.toLowerCase();
-  return (
-    s.includes("connection refused") ||
-    s.includes("fetch failed") ||
-    s.includes("network error") ||
-    s.includes("net::err_") ||
-    s.includes("failed to fetch") ||
-    s.includes("dial tcp")
-  );
-}
+import { TOOL_ICONS } from "../constants";
+import { formatEventTime, isConnectionError } from "../format";
 
 export function EventsList() {
   const navigate = useNavigate();
@@ -137,7 +98,7 @@ export function EventsList() {
                   </td>
                   <td className="event-time">{formatEventTime(ev.ts_ms)}</td>
                   <td className="event-identifier" title={ev.artifact.identifier}>
-                    {ev.artifact.identifier}
+                    {ev.artifact.display_name ?? ev.artifact.identifier}
                   </td>
                   <td>
                     {ev.status === "request_pending" ? (

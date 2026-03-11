@@ -15,10 +15,3 @@ type BlockEvent struct {
 	BlockReason string   `json:"block_reason"`
 	Status      string   `json:"status,omitempty"`
 }
-
-type RequestBypassEvent struct {
-	Product        string `json:"product"`
-	PackageId      string `json:"package_id"`
-	PackageName    string `json:"package_name"`
-	PackageVersion string `json:"package_version"`
-}

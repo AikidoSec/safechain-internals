@@ -2,7 +2,6 @@ package ingress
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"net/http"
 
@@ -10,42 +9,47 @@ import (
 )
 
 func (s *Server) handleRequestBypass(w http.ResponseWriter, r *http.Request) {
-	var req RequestBypassEvent
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	if !s.validateUIToken(w, r) {
+		return
+	}
+	id := r.PathValue("id")
+	event, ok := s.eventStore.Get(id)
+	if !ok {
+		http.Error(w, "event not found", http.StatusNotFound)
 		return
 	}
 
-	log.Printf("Received request-bypass event: id=%s", req.PackageId)
+	log.Printf("Received request-bypass event: name=%s, version=%s, product=%s", event.Artifact.PackageName, event.Artifact.PackageVersion, event.Artifact.Product)
+	s.eventStore.UpdateStatus(id, "request_pending")
 
-	go s.sendInstallationRequest(req)
+	go s.sendInstallationRequest(event)
 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) sendInstallationRequest(req RequestBypassEvent) {
-	installEvent := buildInstallationRequestEvent(req)
+func (s *Server) sendInstallationRequest(event BlockEvent) {
+	installEvent := buildInstallationRequestEvent(event)
 	if err := cloud.SendRequestPackageInstallation(context.Background(), s.config, installEvent); err != nil {
-		log.Printf("Failed to send installation request for %s: %v", req.PackageId, err)
+		log.Printf("Failed to send installation request for %s: %v", event.ID, err)
 		return
 	}
-	log.Printf("Installation request sent for %s", req.PackageId)
+	log.Printf("Installation request sent for %s", event.ID)
 }
 
-func buildInstallationRequestEvent(req RequestBypassEvent) *cloud.RequestPackageInstallationEvent {
-	name := req.PackageName
+func buildInstallationRequestEvent(event BlockEvent) *cloud.RequestPackageInstallationEvent {
+	name := event.Artifact.DisplayName
 	if name == "" {
-		name = req.PackageId
+		name = event.Artifact.PackageName
 	}
 	pkg := cloud.PackageInstallRequest{
-		ID:      req.PackageId,
+		ID:      event.Artifact.PackageName,
 		Name:    name,
-		Version: req.PackageVersion,
+		Version: event.Artifact.PackageVersion,
 	}
 	var installEvent cloud.RequestPackageInstallationEvent
 	installEvent.SBOM.Ecosystems = []cloud.EcosystemPackages{
 		{
-			Ecosystem: req.Product,
+			Ecosystem: event.Artifact.Product,
 			Packages:  []cloud.PackageInstallRequest{pkg},
 		},
 	}

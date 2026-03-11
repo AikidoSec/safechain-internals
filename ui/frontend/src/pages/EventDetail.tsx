@@ -2,16 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import type { BlockEvent, BlockReason } from "../types";
 import { getEvent, requestAccess } from "../api";
-import npmIcon from "../../assets/npm.svg";
-import pypiIcon from "../../assets/pypi.svg";
-import vscodeIcon from "../../assets/vscode.svg";
-
-const TOOL_ICONS: Record<string, string> = {
-  npm: npmIcon,
-  pip: pypiIcon,
-  pypi: pypiIcon,
-  vscode: vscodeIcon,
-};
+import { TOOL_ICONS } from "../constants";
+import { formatEventTime, isConnectionError } from "../format";
 
 const BLOCK_REASON_INFO: Record<BlockReason, { title: string; description: string }> = {
   malware: {
@@ -39,37 +31,6 @@ const BLOCK_REASON_LABEL: Record<BlockReason, string> = {
   request_install: "Approval required",
 };
 
-function formatEventTime(ts: number): string {
-  try {
-    const d = new Date(ts);
-    if (Number.isNaN(d.getTime())) return ts;
-    const date = d.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    const time = d.toLocaleTimeString(undefined, {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    return `${date}, ${time}`;
-  } catch {
-    return ts;
-  }
-}
-
-function isConnectionError(message: string): boolean {
-  const s = message.toLowerCase();
-  return (
-    s.includes("connection refused") ||
-    s.includes("fetch failed") ||
-    s.includes("network error") ||
-    s.includes("net::err_") ||
-    s.includes("failed to fetch") ||
-    s.includes("dial tcp")
-  );
-}
-
 function EventInfo({ event }: { event: BlockEvent }) {
   return (
     <dl className="event-info">
@@ -83,7 +44,7 @@ function EventInfo({ event }: { event: BlockEvent }) {
               className="event-info-icon"
             />
           )}
-          {event.artifact.identifier}
+          {event.artifact.display_name ?? event.artifact.identifier}
         </dd>
       </div>
       {event.artifact.version && (
@@ -202,7 +163,7 @@ export function EventDetail() {
             </div>
             <h2>Request sent</h2>
             <p className="subtitle">
-              Your access request for <strong>{event.artifact.identifier}</strong> has been submitted.
+              Your access request for <strong>{event.artifact.display_name ?? event.artifact.identifier}</strong> has been submitted.
             </p>
           </div>
           <div className="request-access-actions">
