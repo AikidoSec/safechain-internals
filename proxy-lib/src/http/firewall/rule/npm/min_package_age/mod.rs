@@ -235,7 +235,7 @@ impl MinPackageAge {
 
         if let Some(timestamp_in_seconds) = maybe_minimum_allowed_age_timestamp {
             // Needs to be converted from seconds to ms
-            return timestamp_in_seconds * 1000;
+            return timestamp_in_seconds.saturating_mul(1000);
         }
 
         now_unix_ms() - DEFAULT_MIN_PACKAGE_AGE_MS
