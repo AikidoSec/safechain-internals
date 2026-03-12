@@ -39,10 +39,14 @@ enum DataProxyRootCACrt {
 }
 
 impl DataProxyRootCACrt {
-    fn try_crt_as_pem(&self, expected_fp: &[u8]) -> Result<NonEmptyStr, BoxError> {
-        let crt_der = match self {
+    fn crt_der(&self) -> &[u8] {
+        match self {
             DataProxyRootCACrt::V1 { crt } => crt.as_slice(),
-        };
+        }
+    }
+
+    fn try_crt_as_pem(&self, expected_fp: &[u8]) -> Result<NonEmptyStr, BoxError> {
+        let crt_der = self.crt_der();
 
         let crt = X509::from_der(crt_der).context("create x509 crt from read DER")?;
         let crt_fp = crt
@@ -63,23 +67,127 @@ impl DataProxyRootCACrt {
 }
 
 const AIKIDO_SECRET_ROOT_CA_KEY: &str = "tls-root-ca-key";
-const AIKIDO_SECRET_ROOT_CA_CRT: &str = "proxy-ca-crt";
+const AIKIDO_SECRET_ROOT_CA_CRT_META: &str = "tls-root-ca-crt-meta";
+const AIKIDO_SECRET_ROOT_CA_CRT_CHUNK_PREFIX: &str = "tls-root-ca-crt-chunk";
+const AIKIDO_SECRET_ROOT_CA_CRT_LEGACY_DATA_KEY: &str = "proxy-ca-crt";
+const CRT_SECRET_CHUNK_SIZE_BYTES: usize = 768;
+
+#[derive(Serialize, Deserialize)]
+enum DataProxyRootCACrtMeta {
+    V1 { chunks: usize, fp: Vec<u8> },
+}
+
+impl DataProxyRootCACrtMeta {
+    fn chunks(&self) -> usize {
+        match self {
+            DataProxyRootCACrtMeta::V1 { chunks, .. } => *chunks,
+        }
+    }
+
+    fn crt_fingerprint(&self) -> &[u8] {
+        match self {
+            DataProxyRootCACrtMeta::V1 { fp, .. } => fp.as_slice(),
+        }
+    }
+}
+
+#[inline]
+fn crt_chunk_secret_key(index: usize) -> String {
+    format!("{AIKIDO_SECRET_ROOT_CA_CRT_CHUNK_PREFIX}-{index}")
+}
+
+fn store_crt_in_secret_storage(
+    secrets: &SyncSecrets,
+    crt_data: &DataProxyRootCACrt,
+    crt_fp: &[u8],
+) -> Result<(), BoxError> {
+    let crt_der = crt_data.crt_der();
+    let chunk_count = crt_der.len().div_ceil(CRT_SECRET_CHUNK_SIZE_BYTES);
+    if chunk_count == 0 {
+        return Err(BoxError::from(
+            "refusing to store empty CA crt bytes in secret storage",
+        ));
+    }
+
+    for (idx, chunk) in crt_der.chunks(CRT_SECRET_CHUNK_SIZE_BYTES).enumerate() {
+        let chunk_key = crt_chunk_secret_key(idx);
+        let chunk_vec = chunk.to_vec();
+        secrets
+            .store_secret(&chunk_key, &chunk_vec)
+            .context("store CA crt chunk in secret storage")
+            .context_str_field("chunk_key", &chunk_key)?;
+    }
+
+    let crt_meta = DataProxyRootCACrtMeta::V1 {
+        chunks: chunk_count,
+        fp: crt_fp.to_vec(),
+    };
+    secrets
+        .store_secret(AIKIDO_SECRET_ROOT_CA_CRT_META, &crt_meta)
+        .context("store CA crt meta in secret storage")
+}
+
+fn load_crt_from_secret_storage(
+    secrets: &SyncSecrets,
+    expected_fp: &[u8],
+) -> Result<Option<DataProxyRootCACrt>, BoxError> {
+    let Some(crt_meta) =
+        secrets.load_secret::<DataProxyRootCACrtMeta>(AIKIDO_SECRET_ROOT_CA_CRT_META)?
+    else {
+        return Ok(None);
+    };
+
+    if !crt_meta.crt_fingerprint().eq(expected_fp) {
+        return Err(BoxError::from("unexpected CA crt meta fingerprint")
+            .context_hex_field("expected_fingerprint", expected_fp.to_vec())
+            .context_hex_field("found_fingerprint", crt_meta.crt_fingerprint().to_vec()));
+    }
+
+    let mut crt_der = Vec::new();
+    for idx in 0..crt_meta.chunks() {
+        let chunk_key = crt_chunk_secret_key(idx);
+        let Some(chunk) = secrets
+            .load_secret::<Vec<u8>>(&chunk_key)
+            .context("load CA crt chunk from secret storage")
+            .context_str_field("chunk_key", &chunk_key)?
+        else {
+            return Err(BoxError::from("missing CA crt chunk in secret storage")
+                .context_str_field("chunk_key", &chunk_key));
+        };
+        crt_der.extend_from_slice(&chunk);
+    }
+
+    Ok(Some(DataProxyRootCACrt::V1 { crt: crt_der }))
+}
 
 pub(super) fn new_root_tls_crt_key_pair(
     secrets: &SyncSecrets,
     data_storage: &SyncCompactDataStorage,
 ) -> Result<PemKeyCrtPair, BoxError> {
     if let Some(key_data) = secrets.load_secret::<DataProxyRootCAKey>(AIKIDO_SECRET_ROOT_CA_KEY)? {
-        // NOTE if we want to make this more resilient we can if cert is no longer found
-        // try to recover it from system certificate storage. See note at the end of this file.
-        tracing::debug!("root ca key found — assumption: Cert MUST exist as well!");
-        let data_storage: DataProxyRootCACrt = data_storage
-            .load(AIKIDO_SECRET_ROOT_CA_CRT)
-            .context("read root ca crt data")?
-            .context("assume root ca crt exists")?;
+        tracing::debug!("root ca key found — load matching crt from secret storage");
+        let crt_data = match load_crt_from_secret_storage(secrets, key_data.crt_fingerprint())
+            .context("load root ca crt from secret storage")?
+        {
+            Some(crt_data) => crt_data,
+            None => {
+                // NOTE: in future we can remove this fallback,
+                // as this is only to be backwards compatible with older apps..
+                tracing::warn!(
+                    "root ca crt not found in secret storage; trying legacy fs data storage fallback"
+                );
+                let legacy_crt_data: DataProxyRootCACrt = data_storage
+                    .load(AIKIDO_SECRET_ROOT_CA_CRT_LEGACY_DATA_KEY)
+                    .context("read legacy root ca crt data")?
+                    .context("assume legacy root ca crt exists")?;
+                store_crt_in_secret_storage(secrets, &legacy_crt_data, key_data.crt_fingerprint())
+                    .context("migrate legacy root ca crt from data storage to secret storage")?;
+                legacy_crt_data
+            }
+        };
         tracing::debug!("root ca crt found... re-encoding it all so callee can make use of it");
 
-        let crt = data_storage
+        let crt = crt_data
             .try_crt_as_pem(key_data.crt_fingerprint())
             .context("compute PEM for found crt in data")?;
 
@@ -120,7 +228,7 @@ pub(super) fn new_root_tls_crt_key_pair(
         crt: crt.to_der().context("generate DER CA crt byte slice")?,
     };
 
-    tracing::trace!("key + crt data blobs ready for storage in secret/data storage backends...");
+    tracing::trace!("key + crt data blobs ready for storage in secret storage backend...");
 
     let pair = PemKeyCrtPair {
         crt: String::from_utf8(crt.to_pem().context("generate PEM CA crt byte slice")?)
@@ -144,9 +252,8 @@ pub(super) fn new_root_tls_crt_key_pair(
         .store_secret(AIKIDO_SECRET_ROOT_CA_KEY, &key_data)
         .context("store self-generated CA key+fp in secret storage")?;
 
-    data_storage
-        .store(AIKIDO_SECRET_ROOT_CA_CRT, &crt_data)
-        .context("store self-generated CA crt in data storage")?;
+    store_crt_in_secret_storage(secrets, &crt_data, key_data.crt_fingerprint())
+        .context("store self-generated CA crt in secret storage")?;
 
     Ok(pair)
 }

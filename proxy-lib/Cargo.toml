@@ -32,7 +32,7 @@ humantime = { workspace = true }
 linux-keyutils-keyring-store = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-apple-native-keyring-store = { workspace = true, features = ["keychain"] }
+apple-native-keyring-store = { workspace = true, features = ["keychain", "protected"] }
 sudo = { workspace = true }
 
 [target.'cfg(target_family = "unix")'.dependencies]
