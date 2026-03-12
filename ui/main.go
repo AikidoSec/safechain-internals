@@ -1,12 +1,12 @@
 package main
 
 import (
-	"safechain-ui/appserver"
-	"safechain-ui/daemon"
 	"embed"
 	"flag"
 	"log"
 	"runtime"
+	"safechain-ui/appserver"
+	"safechain-ui/daemon"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"

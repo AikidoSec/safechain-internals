@@ -8,15 +8,15 @@ import { formatEventTime, isConnectionError } from "../format";
 const BLOCK_REASON_INFO: Record<BlockReason, { title: string; description: string }> = {
   malware: {
     title: "Malware detected",
-    description: "This package was blocked because it was flagged as malware. Access cannot be requested.",
+    description: "This package was blocked because it was flagged as malware.",
   },
   rejected: {
     title: "Package blocked",
-    description: "This package has been explicitly blocked by policy. Access cannot be requested.",
+    description: "This package has been explicitly blocked by policy.",
   },
   block_all: {
     title: "All installs blocked",
-    description: "All package installations are currently blocked by policy. Access cannot be requested.",
+    description: "All package installations are currently blocked by policy.",
   },
   request_install: {
     title: "Request Access",
@@ -147,7 +147,8 @@ export function EventDetail() {
 
   if (!event) return <p className="loading">Event not found.</p>;
 
-  const canRequest = event.block_reason === "request_install" && event.status !== "request_pending";
+  // Access requests are currently permitted for all blocked events by default
+  const canRequest = true;
   const info = BLOCK_REASON_INFO[event.block_reason];
 
   if (requestSent || event.status === "request_pending") {

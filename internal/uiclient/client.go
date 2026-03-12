@@ -154,8 +154,9 @@ type proxyStatusBody struct {
 }
 
 // NotifyProxyStatus sends the current proxy running state to the UI.
-func (c *Client) NotifyProxyStatus(running bool) {
+func (c *Client) NotifyProxyStatus(running bool) error {
 	if err := c.post("/v1/proxy-status", proxyStatusBody{Running: running}); err != nil {
-		log.Printf("Failed to send proxy-status to UI: %v (UI may not be running)", err)
+		return err
 	}
+	return nil
 }

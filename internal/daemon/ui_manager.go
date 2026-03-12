@@ -76,7 +76,10 @@ func (m *UIManager) Kill() {
 // the running state has changed (or on the very first call).
 func (m *UIManager) NotifyProxyStatusIfChanged(running bool) {
 	if !m.proxyStatusInitialized || m.lastProxyStatus != running {
-		m.Client.NotifyProxyStatus(running)
+		if err := m.Client.NotifyProxyStatus(running); err != nil {
+			log.Printf("Failed to send proxy-status to UI: %v", err)
+			return
+		}
 		m.lastProxyStatus = running
 		m.proxyStatusInitialized = true
 	}
