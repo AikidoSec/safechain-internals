@@ -58,10 +58,21 @@ pub struct Args {
     pub meta_bind: Interface,
 
     /// secrets storage to use (e.g. for root CA)
-    #[arg(
-        long,
-        value_name = "keyring | memory | <dir>",
-        default_value = "keyring"
+    #[cfg_attr(
+        target_os = "macos",
+        arg(
+            long,
+            value_name = "keyring | protected[:access-group=<group>][,cloud-sync=true|false] | memory | <dir>",
+            default_value = "memory"
+        )
+    )]
+    #[cfg_attr(
+        not(target_os = "macos"),
+        arg(
+            long,
+            value_name = "keyring | memory | <dir>",
+            default_value = "memory"
+        )
     )]
     pub secrets: storage::SecretStorageKind,
 

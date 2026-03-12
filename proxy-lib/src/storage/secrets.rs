@@ -7,7 +7,9 @@ use keyring_core::api::CredentialStoreApi;
 use secrecy::{ExposeSecret, SecretBox};
 
 #[cfg(target_os = "macos")]
-use apple_native_keyring_store::keychain::Store;
+use apple_native_keyring_store::{
+    keychain::Store as AppleKeychainStore, protected::Store as AppleProtectedStore,
+};
 #[cfg(target_os = "linux")]
 use linux_keyutils_keyring_store::Store;
 #[cfg(target_os = "windows")]
@@ -36,6 +38,15 @@ enum Backend {
     Fs {
         dir: PathBuf,
     },
+    #[cfg(target_os = "macos")]
+    KeyRingLegacy {
+        store: Arc<AppleKeychainStore>,
+    },
+    #[cfg(target_os = "macos")]
+    KeyRingProtected {
+        store: Arc<AppleProtectedStore>,
+    },
+    #[cfg(not(target_os = "macos"))]
     KeyRing {
         store: Arc<Store>,
     },
@@ -51,14 +62,44 @@ impl SyncSecrets {
             StorageKind::Keyring => Self::try_new_keyring(account),
             StorageKind::Memory => Ok(Self::new_in_memory(account)),
             StorageKind::Fs(dir) => Self::try_new_fs(account, dir),
+            #[cfg(target_os = "macos")]
+            StorageKind::AppleProtected {
+                access_group,
+                cloud_sync,
+            } => Self::try_new_apple_protected_keyring(account, access_group, cloud_sync),
         }
     }
 
     #[inline(always)]
     pub(crate) fn try_new_keyring(account: &'static str) -> Result<Self, BoxError> {
+        #[cfg(target_os = "macos")]
+        {
+            return Ok(Self {
+                backend: Backend::KeyRingLegacy {
+                    store: try_new_keychain_store()?,
+                },
+                account,
+            });
+        }
+        #[cfg(not(target_os = "macos"))]
         Ok(Self {
             backend: Backend::KeyRing {
                 store: try_new_keychain_store()?,
+            },
+            account,
+        })
+    }
+
+    #[cfg(target_os = "macos")]
+    #[inline(always)]
+    pub(crate) fn try_new_apple_protected_keyring(
+        account: &'static str,
+        access_group: Option<String>,
+        cloud_sync: bool,
+    ) -> Result<Self, BoxError> {
+        Ok(Self {
+            backend: Backend::KeyRingProtected {
+                store: try_new_protected_store(access_group, cloud_sync)?,
             },
             account,
         })
@@ -88,6 +129,11 @@ impl SyncSecrets {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StorageKind {
     Keyring,
+    #[cfg(target_os = "macos")]
+    AppleProtected {
+        access_group: Option<String>,
+        cloud_sync: bool,
+    },
     Memory,
     Fs(PathBuf),
 }
@@ -99,6 +145,10 @@ impl FromStr for StorageKind {
         let s = s.trim();
         if s.eq_ignore_ascii_case("keyring") {
             return Ok(Self::Keyring);
+        }
+        #[cfg(target_os = "macos")]
+        if let Some(storage_kind) = parse_apple_protected_storage_kind(s)? {
+            return Ok(storage_kind);
         }
 
         if s.eq_ignore_ascii_case("memory") {
@@ -144,8 +194,25 @@ impl SyncSecrets {
                     .context("write secret to FS")
                     .context_debug_field("path", path)
             }
+            #[cfg(target_os = "macos")]
+            Backend::KeyRingLegacy { store } => {
+                let entry = new_key_ring_entry(store.as_ref(), key, self.account)?;
+                entry
+                    .set_secret(&raw)
+                    .context("set secret")
+                    .context_str_field("key", key)
+            }
+            #[cfg(target_os = "macos")]
+            Backend::KeyRingProtected { store } => {
+                let entry = new_key_ring_entry(store.as_ref(), key, self.account)?;
+                entry
+                    .set_secret(&raw)
+                    .context("set secret")
+                    .context_str_field("key", key)
+            }
+            #[cfg(not(target_os = "macos"))]
             Backend::KeyRing { store } => {
-                let entry = new_key_ring_entry(store, key, self.account)?;
+                let entry = new_key_ring_entry(store.as_ref(), key, self.account)?;
                 entry
                     .set_secret(&raw)
                     .context("set secret")
@@ -182,8 +249,27 @@ impl SyncSecrets {
                         .context_debug_field("path", path)),
                 }
             }
+            #[cfg(target_os = "macos")]
+            Backend::KeyRingLegacy { store } => {
+                let entry = new_key_ring_entry(store.as_ref(), key, self.account)?;
+                match entry.get_secret() {
+                    Ok(raw) => deserialize_secret(&raw, key),
+                    Err(keyring_core::Error::NoEntry) => Ok(None),
+                    Err(err) => Err(err.context("get secret").context_str_field("key", key)),
+                }
+            }
+            #[cfg(target_os = "macos")]
+            Backend::KeyRingProtected { store } => {
+                let entry = new_key_ring_entry(store.as_ref(), key, self.account)?;
+                match entry.get_secret() {
+                    Ok(raw) => deserialize_secret(&raw, key),
+                    Err(keyring_core::Error::NoEntry) => Ok(None),
+                    Err(err) => Err(err.context("get secret").context_str_field("key", key)),
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
             Backend::KeyRing { store } => {
-                let entry = new_key_ring_entry(store, key, self.account)?;
+                let entry = new_key_ring_entry(store.as_ref(), key, self.account)?;
                 match entry.get_secret() {
                     Ok(raw) => deserialize_secret(&raw, key),
                     Err(keyring_core::Error::NoEntry) => Ok(None),
@@ -209,15 +295,8 @@ fn deserialize_secret<T: DeserializeOwned>(raw: &[u8], key: &str) -> Result<Opti
 }
 
 #[cfg(target_os = "macos")]
-fn try_new_keychain_store() -> Result<Arc<Store>, BoxError> {
-    // NOTE: for production version you might prefer the 'protected' API Instead,
-    // but this does require a proper bundle ID as app-group,
-    // so certainly not possible for a test like this
-    tracing::warn!(
-        "Consider using the modern Protected MacOS/iOS capabilities for secret storage on thesse platforms!!! Keyring is considered legacy for these purposes..."
-    );
-
-    Store::new_with_configuration(&HashMap::from([(
+fn try_new_keychain_store() -> Result<Arc<AppleKeychainStore>, BoxError> {
+    AppleKeychainStore::new_with_configuration(&HashMap::from([(
         "keychain",
         if sudo::check() == sudo::RunningAs::Root {
             "system"
@@ -226,6 +305,33 @@ fn try_new_keychain_store() -> Result<Arc<Store>, BoxError> {
         },
     )]))
     .context("create Apple Keyring Secret store")
+}
+
+#[cfg(target_os = "macos")]
+fn try_new_protected_store(
+    access_group: Option<String>,
+    cloud_sync: bool,
+) -> Result<Arc<AppleProtectedStore>, BoxError> {
+    let mut config = HashMap::new();
+    if let Some(group) = access_group.as_ref() {
+        config.insert("access-group", group.as_str());
+    }
+    if cloud_sync {
+        config.insert("cloud-sync", "true");
+    }
+
+    tracing::info!(
+        access_group = ?access_group,
+        cloud_sync,
+        "using Apple Protected Data store for secrets"
+    );
+
+    if config.is_empty() {
+        AppleProtectedStore::new().context("create Apple Protected Data Secret store")
+    } else {
+        AppleProtectedStore::new_with_configuration(&config)
+            .context("create Apple Protected Data Secret store with configuration")
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -239,13 +345,82 @@ fn try_new_keychain_store() -> Result<Arc<Store>, BoxError> {
 }
 
 fn new_key_ring_entry(
-    store: &Store,
+    store: &impl CredentialStoreApi,
     key: &str,
     account: &str,
 ) -> Result<keyring_core::Entry, BoxError> {
     store
         .build(key, account, None)
         .context("create Root CA entry")
+}
+
+#[cfg(target_os = "macos")]
+fn parse_apple_protected_storage_kind(s: &str) -> Result<Option<StorageKind>, BoxError> {
+    let (rest, matched) =
+        if s.eq_ignore_ascii_case("protected") || s.eq_ignore_ascii_case("apple-protected") {
+            ("", true)
+        } else if s.len() > "protected:".len()
+            && s[..("protected:".len())].eq_ignore_ascii_case("protected:")
+        {
+            (&s["protected:".len()..], true)
+        } else if s.len() > "apple-protected:".len()
+            && s[..("apple-protected:".len())].eq_ignore_ascii_case("apple-protected:")
+        {
+            (&s["apple-protected:".len()..], true)
+        } else {
+            ("", false)
+        };
+
+    if !matched {
+        return Ok(None);
+    }
+
+    let mut access_group = None;
+    let mut cloud_sync = false;
+
+    if !rest.is_empty() {
+        for token in rest.split(',').map(str::trim).filter(|t| !t.is_empty()) {
+            if let Some((raw_key, raw_value)) = token.split_once('=') {
+                let key = raw_key.trim();
+                let value = raw_value.trim();
+                match key {
+                    "access-group" => {
+                        if value.is_empty() {
+                            return Err(BoxError::from(
+                                "protected secrets storage requires non-empty access-group value",
+                            ));
+                        }
+                        access_group = Some(value.to_string());
+                    }
+                    "cloud-sync" => match value {
+                        "true" => cloud_sync = true,
+                        "false" => cloud_sync = false,
+                        _ => {
+                            return Err(BoxError::from(
+                                "protected secrets storage cloud-sync must be either true or false",
+                            ));
+                        }
+                    },
+                    _ => {
+                        return Err(BoxError::from(
+                            "unsupported protected secrets option; supported: access-group, cloud-sync",
+                        ));
+                    }
+                }
+            } else if access_group.is_none() {
+                access_group = Some(token.to_string());
+            } else {
+                return Err(BoxError::from(
+                    "invalid protected secrets storage syntax; expected 'protected[:access-group=<group>][,cloud-sync=true|false]'",
+                ));
+            }
+        }
+    }
+
+    Ok(Some(StorageKind::AppleProtected {
+        access_group,
+        cloud_sync,
+    }))
 }
 
 #[cfg(test)]
@@ -352,6 +527,35 @@ mod tests {
                 .load_secret::<usize>("number")
                 .unwrap()
                 .unwrap()
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_storage_kind_parse_protected_short() {
+        let parsed = StorageKind::from_str("protected").unwrap();
+        assert_eq!(
+            parsed,
+            StorageKind::AppleProtected {
+                access_group: None,
+                cloud_sync: false,
+            }
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_storage_kind_parse_protected_with_options() {
+        let parsed = StorageKind::from_str(
+            "protected:access-group=group.com.aikido.safechain,cloud-sync=true",
+        )
+        .unwrap();
+        assert_eq!(
+            parsed,
+            StorageKind::AppleProtected {
+                access_group: Some("group.com.aikido.safechain".to_string()),
+                cloud_sync: true,
+            }
         );
     }
 }

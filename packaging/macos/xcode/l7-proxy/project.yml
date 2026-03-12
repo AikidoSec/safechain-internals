@@ -1,0 +1,27 @@
+name: AikidoEndpointL7Proxy
+options:
+  createIntermediateGroups: true
+configs:
+  Debug: debug
+  Release: release
+targets:
+  AikidoEndpointL7Proxy:
+    type: application
+    platform: macOS
+    deploymentTarget: "13.0"
+    preBuildScripts:
+      - path: scripts/build_and_embed_rust.sh
+        name: Build and Embed Rust Proxy
+    settings:
+      base:
+        PRODUCT_NAME: AikidoEndpointL7Proxy
+        PRODUCT_BUNDLE_IDENTIFIER: com.aikido.endpoint.proxy.l7
+        DEVELOPMENT_TEAM: 7VPF8GD6J4
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: entitlements/protected.entitlements
+        INFOPLIST_FILE: support/Info.plist
+        ENABLE_HARDENED_RUNTIME: YES
+        CLANG_ENABLE_OBJC_ARC: NO
+    scheme:
+      testTargets: []
+      gatherCoverageData: false
