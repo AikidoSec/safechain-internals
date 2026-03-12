@@ -14,7 +14,7 @@ use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
-        events::{BlockReason, BlockedArtifact},
+        events::{Artifact, BlockReason},
         rule::{BlockedRequest, RequestAction, Rule},
     },
     package::{
@@ -151,8 +151,8 @@ impl Rule for RuleNuget {
 }
 
 impl RuleNuget {
-    fn blocked_artifact(nuget_package: &NugetPackage) -> BlockedArtifact {
-        BlockedArtifact {
+    fn blocked_artifact(nuget_package: &NugetPackage) -> Artifact {
+        Artifact {
             product: arcstr!("nuget"),
             identifier: ArcStr::from(nuget_package.fully_qualified_name.as_str()),
             display_name: None,

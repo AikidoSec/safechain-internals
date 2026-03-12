@@ -19,7 +19,7 @@ use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
-        events::{BlockReason, BlockedArtifact},
+        events::{Artifact, BlockReason},
     },
     package::{
         malware_list::{LowerCaseEntryFormatter, MalwareEntry, RemoteMalwareList},
@@ -94,8 +94,8 @@ impl RulePyPI {
         Ok(entries.iter().any(|entry| package_info.matches(entry)))
     }
 
-    fn blocked_artifact(package_info: &PackageInfo) -> BlockedArtifact {
-        BlockedArtifact {
+    fn blocked_artifact(package_info: &PackageInfo) -> Artifact {
+        Artifact {
             product: arcstr!("pypi"),
             identifier: ArcStr::from(package_info.name.as_str()),
             display_name: None,

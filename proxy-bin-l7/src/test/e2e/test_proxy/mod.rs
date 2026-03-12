@@ -12,3 +12,4 @@ mod firewall_skills_sh;
 mod firewall_vscode;
 
 mod report_blocked_events;
+mod report_min_package_age_events;

@@ -15,7 +15,7 @@ use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
-        events::{BlockReason, BlockedArtifact},
+        events::{Artifact, BlockReason},
     },
     package::{malware_list::RemoteMalwareList, version::PackageVersion},
     storage::SyncCompactDataStorage,
@@ -200,8 +200,8 @@ impl<C> RuleChrome<C> {
         extension_id: &ArcStr,
         version: &PackageVersion,
         display_name: Option<ArcStr>,
-    ) -> BlockedArtifact {
-        BlockedArtifact {
+    ) -> Artifact {
+        Artifact {
             product: arcstr!("chrome"),
             identifier: extension_id.clone(),
             display_name,

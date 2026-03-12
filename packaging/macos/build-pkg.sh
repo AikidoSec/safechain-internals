@@ -132,7 +132,7 @@ chmod 755 "$PKG_SCRIPTS/preinstall"
 chmod 755 "$PKG_SCRIPTS/postinstall"
 
 # Build the package
-OUTPUT_PKG="$OUTPUT_DIR/SafeChainUltimate.$ARCH.pkg"
+OUTPUT_PKG="$OUTPUT_DIR/SafeChainUltimate.pkg"
 IDENTIFIER="com.aikidosecurity.safechainultimate"
 
 echo "Building package..."

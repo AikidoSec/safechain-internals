@@ -14,7 +14,7 @@ use crate::{
     endpoint_protection::PolicyEvaluator,
     http::firewall::{
         domain_matcher::DomainMatcher,
-        events::{BlockReason, BlockedArtifact},
+        events::{Artifact, BlockReason},
         rule::{BlockedRequest, RequestAction, Rule},
     },
     package::malware_list::{ListDataEntry, MalwareListEntryFormatter, RemoteMalwareList},
@@ -159,8 +159,8 @@ impl Rule for RuleSkillsSh {
 }
 
 impl RuleSkillsSh {
-    fn blocked_artifact(repo_name: &str) -> BlockedArtifact {
-        BlockedArtifact {
+    fn blocked_artifact(repo_name: &str) -> Artifact {
+        Artifact {
             product: arcstr!("skills_sh"),
             identifier: ArcStr::from(repo_name),
             display_name: None,

@@ -17,7 +17,7 @@ use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
-        events::{BlockReason, BlockedArtifact},
+        events::{Artifact, BlockReason},
     },
     package::malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
     storage::SyncCompactDataStorage,
@@ -169,8 +169,8 @@ impl Rule for RuleOpenVsx {
 }
 
 impl RuleOpenVsx {
-    fn blocked_artifact(extension: &OpenVsxExtensionId) -> BlockedArtifact {
-        BlockedArtifact {
+    fn blocked_artifact(extension: &OpenVsxExtensionId) -> Artifact {
+        Artifact {
             product: arcstr!("open_vsx"),
             identifier: ArcStr::from(extension.extension_id.as_str()),
             display_name: None,
