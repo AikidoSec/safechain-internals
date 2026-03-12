@@ -76,7 +76,7 @@ sign_binary() {
     log_info "Signing binary with Developer ID Application certificate..."
     
     # Use the specific identity and keychain we created
-    if codesign --force --sign "$DEV_ID_SHA" --timestamp --options runtime \
+    if codesign --force --deep --sign "$DEV_ID_SHA" --timestamp --options runtime \
         --entitlements "$ENTITLEMENTS_PATH" \
         --keychain build.keychain "$BINARY_PATH"; then
         log_success "Binary signed successfully"

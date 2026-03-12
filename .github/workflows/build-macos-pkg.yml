@@ -124,12 +124,6 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: .github/scripts/macos/core/sign-binary.sh bin/safechain-ultimate-ui-darwin-universal.app
 
-      - name: Sign macOS agent ui inner binary
-        env:
-          DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-ultimate-ui-darwin-universal.app/Contents/MacOS/safechain-ultimate-ui
-
       - name: Sign macOS proxy binary
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
