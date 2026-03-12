@@ -5,7 +5,7 @@
 !include "FileFunc.nsh"
 
 !ifndef INFO_PROJECTNAME
-    !define INFO_PROJECTNAME "safechain-ultimate-ui"
+    !define INFO_PROJECTNAME ""
 !endif
 !ifndef INFO_COMPANYNAME
     !define INFO_COMPANYNAME "Aikido Security"
@@ -14,10 +14,10 @@
     !define INFO_PRODUCTNAME "safechain-ultimate-ui"
 !endif
 !ifndef INFO_PRODUCTVERSION
-    !define INFO_PRODUCTVERSION "0.1.0"
+    !define INFO_PRODUCTVERSION "0.0.1"
 !endif
 !ifndef INFO_COPYRIGHT
-    !define INFO_COPYRIGHT "© 2026, Aikido Security"
+    !define INFO_COPYRIGHT "(c) 2026, Aikido Security"
 !endif
 !ifndef PRODUCT_EXECUTABLE
     !define PRODUCT_EXECUTABLE "${INFO_PROJECTNAME}.exe"
