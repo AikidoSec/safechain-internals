@@ -1,4 +1,4 @@
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use rama::{
     error::{BoxError, ErrorContext as _},
@@ -15,22 +15,27 @@ use rama::{
 };
 use serde_json::json;
 
-use crate::http::{
-    KnownContentType,
-    firewall::{
-        events::{Artifact, MinPackageAgeEvent},
-        notifier::EventNotifier,
+use crate::{
+    endpoint_protection::RemoteEndpointConfig,
+    http::{
+        KnownContentType,
+        firewall::{
+            events::{Artifact, MinPackageAgeEvent},
+            notifier::EventNotifier,
+        },
     },
 };
 
 pub(in crate::http::firewall) struct MinPackageAge {
-    duration: Duration,
     notifier: Option<EventNotifier>,
+    config: Option<RemoteEndpointConfig>,
 }
 
+const DEFAULT_MIN_PACKAGE_AGE_MS: i64 = 86_400_000;
+
 impl MinPackageAge {
-    pub fn new(duration: Duration, notifier: Option<EventNotifier>) -> Self {
-        Self { duration, notifier }
+    pub fn new(notifier: Option<EventNotifier>, config: Option<RemoteEndpointConfig>) -> Self {
+        Self { notifier, config }
     }
 
     pub fn modify_request_headers(&self, req: &mut Request) {
@@ -60,7 +65,7 @@ impl MinPackageAge {
             return Ok(resp);
         }
 
-        let cutoff = now_unix_ms() - self.duration.as_millis() as i64;
+        let cutoff = self.get_cutoff_timestamp();
 
         let (mut parts, body) = resp.into_parts();
 
@@ -218,6 +223,22 @@ impl MinPackageAge {
         } else {
             vec![]
         }
+    }
+
+    fn get_cutoff_timestamp(&self) -> i64 {
+        let maybe_minimum_allowed_age_timestamp = self.config.as_ref().and_then(|c| {
+            let ecosystem = c.get_ecosystem_config("npm");
+            ecosystem
+                .config()
+                .and_then(|c| c.minimum_allowed_age_timestamp)
+        });
+
+        if let Some(timestamp_in_seconds) = maybe_minimum_allowed_age_timestamp {
+            // Needs to be converted from seconds to ms
+            return timestamp_in_seconds.saturating_mul(1000);
+        }
+
+        now_unix_ms() - DEFAULT_MIN_PACKAGE_AGE_MS
     }
 }
 
