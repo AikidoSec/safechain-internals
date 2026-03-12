@@ -3,7 +3,7 @@
 <plist version="1.0">
 	<dict>
 		<key>CFBundleExecutable</key>
-		<string/>
+		<string>safechain-ultimate-ui</string>
 		<key>CFBundleGetInfoString</key>
 		<string>safechain-ultimate-ui</string>
 		<key>CFBundleIconFile</key>
