@@ -1,6 +1,6 @@
-# SafeChain Ultimate
+# Aikido Endpoint Protection
 
-A lightweight background agent that provides real-time security scanning for your development environment. The SafeChain Ultimate runs as a daemon, integrates and manages the security tooling seamlessly into your workflow.
+Internal tooling to power the Aikido Endpoint Protection product.
 
 ## Install / Upgrade
 
@@ -42,11 +42,8 @@ msiexec /x SafeChainUltimate.msi /qn /norestart
 
 ## Proxy
 
-A security-focused SOCKS5/HTTP(S) system proxy
-built with <https://ramaproxy.org/>.
-
-Read more in the proxy readme:
-[./docs/proxy.md](./docs/proxy.md).
+A security-focused SOCKS5/HTTP(S) system proxy built with <https://ramaproxy.org/>.
+Read more in the proxy readme: [./docs/proxy.md](./docs/proxy.md).
 
 ## Contributing
 
