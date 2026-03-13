@@ -3,7 +3,7 @@
     <title>SafeChain Ultimate</title>
     <organization>com.aikidosecurity</organization>
     <domains enable_localSystem="true"/>
-    <options customize="never" require-scripts="true" rootVolumeOnly="true" />
+    <options customize="never" require-scripts="true" rootVolumeOnly="true" hostArchitectures="arm64,x86_64" />
     
     <!-- Define documents displayed at various steps -->
     <welcome file="welcome.html" mime-type="text/html" />
