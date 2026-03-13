@@ -38,7 +38,7 @@ rust-qa-full: rust-qa rust-fuzz
 
 run-l4-proxy *ARGS:
     mkdir -p .aikido/safechain-l4-proxy
-    RUST_LOG=info,endpoint_protection_l4_proxy=debug,endpoint_protection_proxy_lib=debug \
+    RUST_LOG=info,safechain_l4_proxy=debug,safechain_proxy_lib=debug \
     cargo run \
         --bin safechain-l4-proxy \
         --features har \
@@ -48,7 +48,7 @@ run-l4-proxy *ARGS:
 
 run-l7-proxy *ARGS:
     mkdir -p .aikido/safechain-l7-proxy
-    RUST_LOG=info,endpoint_protection_l7_proxy=debug,endpoint_protection_proxy_lib=debug \
+    RUST_LOG=info,safechain_l7_proxy=debug,safechain_proxy_lib=debug \
     cargo run \
         --bin safechain-l7-proxy \
         --features har \

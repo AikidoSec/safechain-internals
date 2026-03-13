@@ -1,6 +1,6 @@
 use std::sync::{Arc, LazyLock};
 
-use endpoint_protection_proxy_lib::utils::env::aikido_app_base_url;
+use safechain_proxy_lib::utils::env::aikido_app_base_url;
 use rama::{
     Layer as _, Service,
     cli::service::echo::EchoServiceBuilder,

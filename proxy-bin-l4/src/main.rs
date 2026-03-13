@@ -15,7 +15,7 @@ use rama::{
 
 use clap::Parser;
 
-use endpoint_protection_proxy_lib::{storage, tls, utils as safechain_utils};
+use safechain_proxy_lib::{storage, tls, utils as safechain_utils};
 
 #[cfg(target_family = "unix")]
 #[global_allocator]
@@ -145,7 +145,7 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
 
     #[cfg(feature = "har")]
     let (_har_client, _har_export_layer) = {
-        endpoint_protection_proxy_lib::diagnostics::har::HarClient::new(
+        safechain_proxy_lib::diagnostics::har::HarClient::new(
             &args.data,
             graceful.guard(),
         )

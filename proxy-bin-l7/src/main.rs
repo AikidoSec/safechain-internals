@@ -20,7 +20,7 @@ use rama::{
 };
 
 use clap::Parser;
-use endpoint_protection_proxy_lib::{http, storage, tls, utils as safechain_utils};
+use safechain_proxy_lib::{http, storage, tls, utils as safechain_utils};
 use safechain_utils::token::AgentIdentity;
 
 pub mod client;
@@ -200,7 +200,7 @@ where
 
     #[cfg(feature = "har")]
     let (har_client, har_export_layer) = {
-        endpoint_protection_proxy_lib::diagnostics::har::HarClient::new(
+        safechain_proxy_lib::diagnostics::har::HarClient::new(
             &args.data,
             graceful.guard(),
         )
@@ -289,7 +289,7 @@ async fn run_meta_https_server(
     root_ca: tls::RootCA,
     proxy_addr_rx: tokio::sync::oneshot::Receiver<SocketAddress>,
     firewall: http::firewall::Firewall,
-    #[cfg(feature = "har")] har_client: endpoint_protection_proxy_lib::diagnostics::har::HarClient,
+    #[cfg(feature = "har")] har_client: safechain_proxy_lib::diagnostics::har::HarClient,
 ) {
     tracing::info!("spawning meta http(s) server...");
     if let Err(err) = server::meta::run_meta_https_server(
@@ -323,7 +323,7 @@ async fn run_proxy_server(
     proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
     firewall: http::firewall::Firewall,
     #[cfg(feature = "har")]
-    har_export_layer: endpoint_protection_proxy_lib::diagnostics::har::HARExportLayer,
+    har_export_layer: safechain_proxy_lib::diagnostics::har::HARExportLayer,
 ) {
     tracing::info!("spawning proxy server...");
     if let Err(err) = server::proxy::run_proxy_server(

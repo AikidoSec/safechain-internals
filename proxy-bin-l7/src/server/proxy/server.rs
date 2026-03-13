@@ -24,14 +24,14 @@ use rama::{
 
 #[cfg(feature = "har")]
 use ::{
-    endpoint_protection_proxy_lib::diagnostics::har::HARExportLayer,
+    safechain_proxy_lib::diagnostics::har::HARExportLayer,
     rama::{
         http::layer::har::extensions::RequestComment, layer::AddInputExtensionLayer,
         utils::str::arcstr::arcstr,
     },
 };
 
-use endpoint_protection_proxy_lib::http::{
+use safechain_proxy_lib::http::{
     firewall::Firewall, service::connectivity::CONNECTIVITY_DOMAIN,
 };
 

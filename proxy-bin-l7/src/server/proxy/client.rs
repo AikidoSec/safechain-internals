@@ -19,7 +19,7 @@ use rama::{
     telemetry::tracing::{self, Instrument as _},
 };
 
-use endpoint_protection_proxy_lib::http::{
+use safechain_proxy_lib::http::{
     firewall::Firewall,
     service::connectivity::{CONNECTIVITY_DOMAIN, new_connectivity_http_svc},
 };

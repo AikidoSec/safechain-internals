@@ -30,11 +30,11 @@ use rama::{
     tls::boring::server::TlsAcceptorLayer,
 };
 
-use endpoint_protection_proxy_lib::http::firewall::Firewall;
+use safechain_proxy_lib::http::firewall::Firewall;
 
 #[cfg(feature = "har")]
 use {
-    endpoint_protection_proxy_lib::diagnostics::har::HARExportLayer,
+    safechain_proxy_lib::diagnostics::har::HARExportLayer,
     rama::{
         http::layer::har::extensions::RequestComment, layer::AddInputExtensionLayer,
         utils::str::arcstr::arcstr,

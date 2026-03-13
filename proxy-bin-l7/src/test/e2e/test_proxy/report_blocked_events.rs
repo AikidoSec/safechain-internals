@@ -3,7 +3,7 @@ use rama::{
     telemetry::tracing,
 };
 
-use endpoint_protection_proxy_lib::http::firewall::events::BlockedEvent;
+use safechain_proxy_lib::http::firewall::events::BlockedEvent;
 
 use crate::test::e2e;
 
