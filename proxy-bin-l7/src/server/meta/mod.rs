@@ -25,7 +25,9 @@ use rama::{
     tls::boring::server::TlsAcceptorLayer,
 };
 
-use endpoint_protection_proxy_lib::{http::firewall::Firewall, utils::env::network_service_identifier};
+use endpoint_protection_proxy_lib::{
+    http::firewall::Firewall, utils::env::network_service_identifier,
+};
 
 #[cfg(feature = "har")]
 use endpoint_protection_proxy_lib::diagnostics::har::HarClient;

@@ -34,11 +34,11 @@ use endpoint_protection_proxy_lib::http::firewall::Firewall;
 
 #[cfg(feature = "har")]
 use {
+    endpoint_protection_proxy_lib::diagnostics::har::HARExportLayer,
     rama::{
         http::layer::har::extensions::RequestComment, layer::AddInputExtensionLayer,
         utils::str::arcstr::arcstr,
     },
-    endpoint_protection_proxy_lib::diagnostics::har::HARExportLayer,
 };
 
 use crate::Args;
