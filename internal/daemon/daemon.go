@@ -13,6 +13,7 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
 	"github.com/AikidoSec/safechain-internals/internal/device"
+	"github.com/AikidoSec/safechain-internals/internal/dockerca"
 	"github.com/AikidoSec/safechain-internals/internal/ingress"
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
@@ -225,6 +226,18 @@ func (d *Daemon) run(ctx context.Context) error {
 	if err := setup.Install(ctx); err != nil {
 		return fmt.Errorf("failed to install setup: %v", err)
 	}
+
+	if err := dockerca.ReconcileRunningContainers(ctx); err != nil {
+		log.Printf("Docker CA: initial reconciliation failed: %v", err)
+	}
+
+	d.wg.Add(1)
+	go func() {
+		defer d.wg.Done()
+		if err := dockerca.WatchContainerStarts(ctx); err != nil {
+			log.Printf("Docker CA: watcher stopped: %v", err)
+		}
+	}()
 
 	if err := d.registry.InstallAll(ctx); err != nil {
 		return fmt.Errorf("failed to install all scanners: %v", err)

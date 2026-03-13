@@ -442,6 +442,44 @@ func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ..
 	return RunAsCurrentUserWithEnv(ctx, env, binaryPath, args)
 }
 
+// CommandAsCurrentUserWithPathEnv builds a long-lived command that should run
+// as the current console user with a PATH that includes the binary's location.
+func CommandAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ...string) (*exec.Cmd, error) {
+	binDir := filepath.Dir(binaryPath)
+	pathEnv := binDir
+
+	resolved, err := filepath.EvalSymlinks(binaryPath)
+	if err == nil {
+		resolvedDir := filepath.Dir(resolved)
+		if resolvedDir != binDir {
+			pathEnv = binDir + string(os.PathListSeparator) + resolvedDir
+		}
+	}
+
+	pathEnv = pathEnv + string(os.PathListSeparator) + os.Getenv("PATH")
+	env := []string{"PATH=" + pathEnv}
+
+	if !RunningAsRoot() {
+		cmd := exec.CommandContext(ctx, binaryPath, args...)
+		cmd.Env = append(os.Environ(), env...)
+		return cmd, nil
+	}
+
+	username, _, _, _, err := GetCurrentUser(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get console user: %v", err)
+	}
+
+	suArgs := []string{"-u", username}
+	if len(env) > 0 {
+		suArgs = append(suArgs, "env")
+		suArgs = append(suArgs, env...)
+	}
+	suArgs = append(suArgs, binaryPath)
+	suArgs = append(suArgs, args...)
+	return exec.CommandContext(ctx, "sudo", suArgs...), nil
+}
+
 func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
 	return RunAsCurrentUserWithEnv(ctx, []string{}, binaryPath, args)
 }

@@ -354,6 +354,16 @@ func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ..
 	return RunAsCurrentUser(ctx, binaryPath, args)
 }
 
+// CommandAsCurrentUserWithPathEnv builds a long-lived command that should run
+// as the current user.
+func CommandAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ...string) (*exec.Cmd, error) {
+	if IsWindowsService() {
+		return nil, fmt.Errorf("long-lived current-user commands are not supported in Windows service mode")
+	}
+
+	return exec.CommandContext(ctx, binaryPath, args...), nil
+}
+
 func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
 	return RunAsCurrentUser(ctx, binaryPath, args)
 }
