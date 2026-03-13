@@ -167,6 +167,8 @@ func TestBuildInstallScript(t *testing.T) {
 				"mkdir -p /usr/local/share/ca-certificates",
 				"my-ca.crt",
 				"update-ca-certificates",
+				"apt-get install",
+				"ca-certificates",
 			},
 		},
 		{

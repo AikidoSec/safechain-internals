@@ -20,6 +20,7 @@ import (
 	"io"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
@@ -93,7 +94,7 @@ func WatchContainerStarts(ctx context.Context) error {
 		"events",
 		"--filter", "type=container",
 		"--filter", "event=start",
-		"--format", "{{.ID}}",
+		"--format", "{{.Actor.ID}}",
 	)
 	if err != nil {
 		return fmt.Errorf("build docker events watcher: %w", err)
@@ -153,12 +154,15 @@ func WatchContainerStarts(ctx context.Context) error {
 }
 
 func installCAInContainer(ctx context.Context, dockerBinary, containerID string) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+
 	method, prettyName, err := detectInstallMethod(ctx, dockerBinary, containerID)
 	if err != nil {
 		return err
 	}
 	if method == installMethodUnknown {
-		log.Printf("Docker CA: skipping container %s (%s): OS not supported (only Debian/Ubuntu family and Alpine are supported)", containerID, prettyName)
+		log.Printf("Docker CA: skipping container %s (%s): OS not supported (supported: Debian family, Alpine, RHEL family)", containerID, prettyName)
 		return nil
 	}
 
@@ -174,9 +178,11 @@ func installCAInContainer(ctx context.Context, dockerBinary, containerID string)
 	}
 
 	script := buildInstallScript(method, installedCertName)
+	log.Printf("Docker CA: waiting for %s to finish (may take a few minutes if package lists need fetching)", containerID)
 	if _, err := platform.RunAsCurrentUserWithPathEnv(ctx, dockerBinary, "exec", containerID, "sh", "-c", script); err != nil {
 		return fmt.Errorf("refresh trust store: %w", err)
 	}
+	log.Printf("Docker CA: trust store updated successfully in %s", containerID)
 
 	return nil
 }
@@ -194,11 +200,15 @@ func buildInstallScript(method installMethod, certName string) string {
 			"update-ca-certificates",
 		}, " && ")
 	case installMethodDebian:
-		return strings.Join([]string{
-			"mkdir -p /usr/local/share/ca-certificates",
-			"cp /tmp/" + certName + " /usr/local/share/ca-certificates/" + certName,
-			"update-ca-certificates",
-		}, " && ")
+		// Three-step fallback to avoid slow apt-get update when not needed:
+		// 1. update-ca-certificates directly (works if ca-certificates is already installed)
+		// 2. apt-get install without update (works if the image has a fresh package index from its own build)
+		// 3. full apt-get update + install (slow fallback for truly bare images like debian:latest)
+		return "mkdir -p /usr/local/share/ca-certificates" +
+			" && cp /tmp/" + certName + " /usr/local/share/ca-certificates/" + certName +
+			" && (update-ca-certificates 2>/dev/null" +
+			" || (DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates 2>/dev/null && update-ca-certificates)" +
+			" || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates))"
 	case installMethodRHEL:
 		return strings.Join([]string{
 			"mkdir -p /etc/pki/ca-trust/source/anchors",
