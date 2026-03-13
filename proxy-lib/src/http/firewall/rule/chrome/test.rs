@@ -17,7 +17,7 @@ fn test_parse_crx_download_url() {
         .body(Body::empty())
         .unwrap();
 
-    let result = RuleChrome::parse_crx_download_url(&req);
+    let result = RuleChrome::<()>::parse_crx_download_url(&req);
     assert!(result.is_some());
 
     let (extension_id, version) = result.unwrap();

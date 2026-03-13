@@ -27,28 +27,32 @@ use crate::http::firewall::pac::PacScriptGenerator;
 use super::{BlockedRequest, RequestAction, Rule};
 
 mod malware_key;
+mod webstore;
 
-pub(in crate::http::firewall) struct RuleChrome {
+use webstore::ChromeWebStore;
+
+pub(in crate::http::firewall) struct RuleChrome<C> {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
     policy_evaluator: Option<PolicyEvaluator>,
+    https_client: C,
 }
 
-impl RuleChrome {
-    pub(in crate::http::firewall) async fn try_new<C>(
+impl<C> RuleChrome<C>
+where
+    C: Service<Request, Output = Response, Error = BoxError> + Clone,
+{
+    pub(in crate::http::firewall) async fn try_new(
         guard: ShutdownGuard,
-        remote_malware_list_https_client: C,
+        https_client: C,
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<PolicyEvaluator>,
-    ) -> Result<Self, BoxError>
-    where
-        C: Service<Request, Output = Response, Error = BoxError>,
-    {
+    ) -> Result<Self, BoxError> {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_chrome.json"),
             sync_storage,
-            remote_malware_list_https_client,
+            https_client.clone(),
             malware_key::ChromeMalwareListEntryFormatter,
         )
         .await
@@ -64,17 +68,21 @@ impl RuleChrome {
             .collect(),
             remote_malware_list,
             policy_evaluator,
+            https_client,
         })
     }
 }
 
-impl fmt::Debug for RuleChrome {
+impl<C: Send + Sync + 'static> fmt::Debug for RuleChrome<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RuleChrome").finish()
     }
 }
 
-impl Rule for RuleChrome {
+impl<C> Rule for RuleChrome<C>
+where
+    C: Service<Request, Output = Response, Error = BoxError> + Clone + Send + Sync + 'static,
+{
     #[inline(always)]
     fn product_name(&self) -> &'static str {
         "Chrome Plugin"
@@ -127,9 +135,10 @@ impl Rule for RuleChrome {
                 }
                 PackagePolicyDecision::Defer => {}
                 decision => {
+                    let display_name = self.lookup_display_name(&extension_id).await;
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        Self::blocked_artifact(&extension_id, &version),
+                        Self::blocked_artifact(&extension_id, &version, display_name),
                         super::block_reason_for(decision),
                     )));
                 }
@@ -144,9 +153,10 @@ impl Rule for RuleChrome {
                 version
             );
 
+            let display_name = self.lookup_display_name(&extension_id).await;
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&extension_id, &version),
+                Self::blocked_artifact(&extension_id, &version, display_name),
                 BlockReason::Malware,
             )));
         }
@@ -155,13 +165,22 @@ impl Rule for RuleChrome {
     }
 }
 
-impl RuleChrome {
-    fn blocked_artifact(extension_id: &ArcStr, version: &PackageVersion) -> Artifact {
-        Artifact {
-            product: arcstr!("chrome"),
-            identifier: extension_id.clone(),
-            display_name: None,
-            version: Some(version.clone()),
+impl<C> RuleChrome<C>
+where
+    C: Service<Request, Output = Response, Error = BoxError> + Clone,
+{
+    async fn lookup_display_name(&self, extension_id: &ArcStr) -> Option<ArcStr> {
+        let normalized_id = extension_id.to_ascii_lowercase();
+        match ChromeWebStore::get_extension_name(&self.https_client, &normalized_id).await {
+            Ok(display_name) => display_name.map(ArcStr::from),
+            Err(err) => {
+                tracing::warn!(
+                    extension_id = extension_id.as_str(),
+                    error = %err,
+                    "failed to look up Chrome extension name, extension id will be shown as-is."
+                );
+                None
+            }
         }
     }
 
@@ -173,6 +192,21 @@ impl RuleChrome {
         };
 
         entries.iter().any(|e| e.version.eq(version))
+    }
+}
+
+impl<C> RuleChrome<C> {
+    fn blocked_artifact(
+        extension_id: &ArcStr,
+        version: &PackageVersion,
+        display_name: Option<ArcStr>,
+    ) -> Artifact {
+        Artifact {
+            product: arcstr!("chrome"),
+            identifier: extension_id.clone(),
+            display_name,
+            version: Some(version.clone()),
+        }
     }
 
     fn parse_crx_download_url(req: &Request) -> Option<(ArcStr, PackageVersion)> {
@@ -200,3 +234,5 @@ impl RuleChrome {
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod webstore_test;
