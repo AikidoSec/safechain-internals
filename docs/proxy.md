@@ -9,9 +9,9 @@ built with <https://ramaproxy.org/>.
 Other proxy docs:
 
 - [./proxy/auth-flow.md](./proxy/auth-flow.md): learn more about the proxy authentication flow,
-  and specifically how to pass a user config when connecting to the Endpoint Protection proxy.
+  and specifically how to pass a user config when connecting to the safechain proxy.
 - [./proxy/pac.md](./proxy/pac.md): learn more about Proxy Auto Configuration
-  and how the Endpoint Protection proxy project supports this flow.
+  and how the safechain proxy project supports this flow.
 - [`./proxy/troubleshooting.md](./proxy/troubleshooting.md): proxy troubleshooting doc.
 
 ## Quick Start

@@ -15,7 +15,7 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/version"
 )
 
-const serviceName = "EndpointProtection"
+const serviceName = "AikidoEndpoint"
 
 func main() {
 	var (
