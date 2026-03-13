@@ -1,8 +1,8 @@
-# Aikido Safechain UI
+# Aikido Endpoint Protection UI
 
-Desktop tray application for Aikido Safechain endpoint protection. Built with [Wails v3](https://v3.wails.io/) (Go backend + web frontend).
+Desktop tray application for Aikido Endpoint Protection. Built with [Wails v3](https://v3.wails.io/) (Go backend + web frontend).
 
-The app runs as a **system-tray icon** (no dock icon). It receives proxy-status updates and blocked-event notifications from the Safechain daemon, displays them in a dashboard window, and pushes native OS notifications.
+The app runs as a **system-tray icon** (no dock icon). It receives proxy-status updates and blocked-event notifications from the Endpoint Protection daemon, displays them in a dashboard window, and pushes native OS notifications.
 
 ## Architecture
 

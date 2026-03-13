@@ -114,11 +114,11 @@ export function EventDetail() {
       <div className="event-detail">
         <div className="event-detail-fail">
           <h2>
-            {connectionFailed ? "Can't connect to SafeChain" : "Something went wrong"}
+            {connectionFailed ? "Can't connect to Aikido Endpoint" : "Something went wrong"}
           </h2>
           <p className="event-detail-fail-subtitle">
             {connectionFailed
-              ? "The app couldn't reach the SafeChain service. Make sure it's running, then try again."
+              ? "The app couldn't reach the Aikido Endpoint service. Make sure it's running, then try again."
               : "We couldn't load this event. You can try again or go back to the list."}
           </p>
           <div className="request-access-actions">

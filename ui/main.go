@@ -2,11 +2,11 @@ package main
 
 import (
 	"embed"
+	"endpoint-protection-ui/appserver"
+	"endpoint-protection-ui/daemon"
 	"flag"
 	"log"
 	"runtime"
-	"safechain-ui/appserver"
-	"safechain-ui/daemon"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -81,8 +81,8 @@ func setupNotifications() (notifier *notifications.NotificationService, authoriz
 
 func newApp(notifier *notifications.NotificationService) *application.App {
 	return application.New(application.Options{
-		Name:        "safechain-ultimate-ui",
-		Description: "safechain-ultimate-ui",
+		Name:        "Aikido Endpoint",
+		Description: "Aikido Endpoint",
 		Services: []application.Service{
 			application.NewService(notifier),
 			application.NewService(&DaemonService{}),
@@ -102,7 +102,7 @@ func newApp(notifier *notifications.NotificationService) *application.App {
 func mainWindowOpts() application.WebviewWindowOptions {
 	return application.WebviewWindowOptions{
 		Name:             "main",
-		Title:            "Endpoint Protection",
+		Title:            "Aikido Endpoint",
 		Width:            700,
 		Height:           550,
 		Hidden:           true,
@@ -153,7 +153,7 @@ func (wm *windowManager) showDashboard() {
 
 func setupSystemTray(app *application.App, showDashboard func()) chan<- string {
 	systray := app.SystemTray.New()
-	systray.SetTooltip("Aikido Safechain")
+	systray.SetTooltip("Aikido Endpoint")
 	if runtime.GOOS == "darwin" {
 		systray.SetTemplateIcon(icon)
 	} else {
@@ -195,7 +195,7 @@ func startAppServer(app *application.App, statusCh chan<- string, notifier *noti
 			if notifAuthorized {
 				notifier.SendNotificationWithActions(notifications.NotificationOptions{
 					ID:         "block-" + ev.ID,
-					Title:      "Aikido Safechain blocked an event",
+					Title:      "Aikido Endpoint blocked an event",
 					Body:       ev.Artifact.Product + ": " + ev.Artifact.PackageName,
 					CategoryID: "aikido-blocked",
 					Data:       map[string]interface{}{"eventId": ev.ID},

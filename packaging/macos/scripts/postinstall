@@ -19,10 +19,10 @@ chmod 755 "$LOGS_DIR"
 echo "Setting permissions on binaries..."
 chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
 
-if [ -d "$INSTALL_DIR/bin/safechain-ultimate-ui.app" ]; then
-    chmod -R 755 "$INSTALL_DIR/bin/safechain-ultimate-ui.app"
+if [ -d "$INSTALL_DIR/bin/endpoint-protection-ui.app" ]; then
+    chmod -R 755 "$INSTALL_DIR/bin/endpoint-protection-ui.app"
 else
-    echo "Warning: UI app bundle not found at $INSTALL_DIR/bin/safechain-ultimate-ui.app"
+    echo "Warning: UI app bundle not found at $INSTALL_DIR/bin/endpoint-protection-ui.app"
 fi
 chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 

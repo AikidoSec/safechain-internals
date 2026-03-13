@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"safechain-ui/daemon"
+	"endpoint-protection-ui/daemon"
 )
 
 var ListenAddr = "127.0.0.1:9876"

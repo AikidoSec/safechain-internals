@@ -6,10 +6,10 @@
 		"0000": {
 			"ProductVersion": "0.0.1",
 			"CompanyName": "Aikido Security",
-			"FileDescription": "safechain-ultimate-ui",
+			"FileDescription": "endpoint-protection-ui",
 			"LegalCopyright": "(c) 2026, Aikido Security",
-			"ProductName": "safechain-ultimate-ui",
-			"Comments": "safechain-ultimate-ui"
+			"ProductName": "Aikido Endpoint",
+			"Comments": "Aikido Endpoint"
 		}
 	}
 }
