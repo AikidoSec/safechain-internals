@@ -128,18 +128,26 @@ func GetEvent(eventID string) (BlockEvent, error) {
 }
 
 // RequestAccess sends POST /v1/events/:id/request-access
-func RequestAccess(eventID string) error {
+func RequestAccess(eventID string) (BlockEvent, error) {
+	var out BlockEvent
 	if err := validateEventID(eventID); err != nil {
-		return err
+		return out, err
 	}
 
 	resp, err := doRequest(http.MethodPost, "/v1/events/"+eventID+"/request-access", nil)
 	if err != nil {
-		return err
+		return out, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("request-access: %s", resp.Status)
+		body, _ := io.ReadAll(resp.Body)
+		if len(body) > 0 {
+			return out, fmt.Errorf("request-access %s: %s", resp.Status, string(body))
+		}
+		return out, fmt.Errorf("request-access: %s", resp.Status)
 	}
-	return nil
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return out, err
+	}
+	return out, nil
 }
