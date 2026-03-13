@@ -211,7 +211,7 @@ func (d *Daemon) run(ctx context.Context) error {
 
 	// Wait briefly for ingress server to bind
 	time.Sleep(100 * time.Millisecond)
-	// Start UI manager
+	// Launch UI with ingress address so it can communicate with the daemon
 	go func() {
 		if err := d.uiManager.Launch(ctx, d.ingress.Addr()); err != nil {
 			log.Printf("Failed to launch UI: %v", err)
