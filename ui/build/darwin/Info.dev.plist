@@ -5,7 +5,7 @@
 		<key>CFBundleExecutable</key>
 		<string>endpoint-protection-ui</string>
 		<key>CFBundleGetInfoString</key>
-		<string>Endpoint Protection UI</string>
+		<string>Aikido Endpoint</string>
 		<key>CFBundleIconFile</key>
 		<string>icons</string>
 		<key>CFBundleIconName</key>
@@ -13,7 +13,7 @@
 		<key>CFBundleIdentifier</key>
 		<string>com.aikidosecurity.safechainultimate</string>
 		<key>CFBundleName</key>
-		<string>Endpoint Protection UI</string>
+		<string>Aikido Endpoint</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
