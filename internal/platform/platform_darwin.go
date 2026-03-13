@@ -445,6 +445,10 @@ func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ..
 // CommandAsCurrentUserWithPathEnv builds a long-lived command that should run
 // as the current console user with a PATH that includes the binary's location.
 func CommandAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ...string) (*exec.Cmd, error) {
+	if !filepath.IsAbs(binaryPath) {
+		return nil, fmt.Errorf("binaryPath must be absolute, got %q", binaryPath)
+	}
+
 	binDir := filepath.Dir(binaryPath)
 	pathEnv := binDir
 
@@ -460,6 +464,8 @@ func CommandAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, arg
 	env := []string{"PATH=" + pathEnv}
 
 	if !RunningAsRoot() {
+		// No shell is involved: args are passed directly to execve as
+		// separate arguments.
 		cmd := exec.CommandContext(ctx, binaryPath, args...)
 		cmd.Env = append(os.Environ(), env...)
 		return cmd, nil
@@ -477,6 +483,8 @@ func CommandAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, arg
 	}
 	suArgs = append(suArgs, binaryPath)
 	suArgs = append(suArgs, args...)
+	// No shell is involved: args are passed directly to execve as
+	// separate arguments.
 	return exec.CommandContext(ctx, "sudo", suArgs...), nil
 }
 

@@ -129,6 +129,7 @@ func WatchContainerStarts(ctx context.Context) error {
 			continue
 		}
 
+		log.Printf("Docker CA: container start event received: %s", containerID)
 		if err := installCAInContainer(ctx, dockerBinary, containerID); err != nil {
 			log.Printf("Docker CA: failed to update started container %s: %v", containerID, err)
 		}
@@ -229,6 +230,7 @@ func detectInstallMethod(ctx context.Context, dockerBinary, containerID string) 
 	}
 
 	method, prettyName := detectMethodFromOSRelease(output)
+	log.Printf("Docker CA: container %s detected as %q (method=%s)", containerID, prettyName, method)
 	return method, prettyName, nil
 }
 
