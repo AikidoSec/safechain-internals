@@ -14,10 +14,10 @@ use rama::{
         server::HttpServer,
         service::web::response::IntoResponse,
     },
+    io::Io,
     layer::ConsumeErrLayer,
     net::{address::ProxyAddress, proxy::ProxyTarget, tls::server::TlsPeekRouter},
     rt::Executor,
-    stream::Stream,
     telemetry::tracing,
     tls::boring::server::TlsAcceptorLayer,
 };
@@ -52,7 +52,7 @@ impl From<StaticHttpProxyError> for Response {
     }
 }
 
-pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
+pub(super) fn new_mitm_server<S: Io + ExtensionsMut + Unpin>(
     guard: ShutdownGuard,
     mitm_all: bool,
     upstream_proxy_address: Option<ProxyAddress>,
@@ -96,7 +96,7 @@ pub(super) fn new_mitm_server<S: Stream + ExtensionsMut + Unpin>(
 impl<T, S> Service<S> for MitmServer<T>
 where
     T: Service<S, Output = (), Error = BoxError>,
-    S: Unpin + Stream + ExtensionsMut,
+    S: Unpin + Io + ExtensionsMut,
 {
     type Output = T::Output;
     type Error = Infallible;
