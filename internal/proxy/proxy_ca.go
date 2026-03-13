@@ -43,7 +43,7 @@ func DownloadCACertFromProxy() error {
 		return fmt.Errorf("failed to get meta url: %v", err)
 	}
 
-	caCertPath := filepath.Join(platform.GetRunDir(), "safechain-proxy-ca-crt.pem")
+	caCertPath := filepath.Join(platform.GetRunDir(), "endpoint-protection-proxy-ca-crt.pem")
 	if err := utils.DownloadBinary(context.Background(), metaUrl+"/ca", caCertPath); err != nil {
 		return fmt.Errorf("failed to download ca cert: %v", err)
 	}
@@ -53,7 +53,7 @@ func DownloadCACertFromProxy() error {
 }
 
 func GetCaCertPath() string {
-	return filepath.Join(platform.GetRunDir(), "safechain-proxy-ca-crt.pem")
+	return filepath.Join(platform.GetRunDir(), "endpoint-protection-proxy-ca-crt.pem")
 }
 
 func InstallProxyCA(ctx context.Context) error {

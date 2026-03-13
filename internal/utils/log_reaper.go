@@ -94,7 +94,7 @@ func (r *LogReaper) reapOldLogs(lf reapableLog) {
 			continue
 		}
 
-		// Skip the current log file itself (e.g. safechain-ultimate.log); only reap rotated files with a timestamp in the name
+		// Skip the current log file itself (e.g. endpoint-protection.log); only reap rotated files with a timestamp in the name
 		if name == baseName {
 			continue
 		}

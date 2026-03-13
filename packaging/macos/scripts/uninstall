@@ -1,23 +1,23 @@
 #!/bin/bash
 
 # =============================================================================
-# SafeChain Ultimate - Uninstall Script
+# Aikido Endpoint Protection - Uninstall Script
 # =============================================================================
-# This script completely removes SafeChain Ultimate from the system.
+# This script completely removes Aikido Endpoint Protection from the system.
 # It is intended to be shipped within the .pkg installer and installed to:
-# /Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall
+# /Library/Application Support/AikidoSecurity/EndpointProtection/scripts/uninstall
 # =============================================================================
 
 set -e
 
-INSTALL_DIR="/Library/Application Support/AikidoSecurity/SafeChainUltimate"
-LOGS_DIR="/Library/Logs/AikidoSecurity/SafeChainUltimate"
-LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist"
-DAEMON_LABEL="com.aikidosecurity.safechainultimate"
-BINARY="$INSTALL_DIR/bin/safechain-ultimate"
+INSTALL_DIR="/Library/Application Support/AikidoSecurity/EndpointProtection"
+LOGS_DIR="/Library/Logs/AikidoSecurity/EndpointProtection"
+LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.endpointprotection.plist"
+DAEMON_LABEL="com.aikidosecurity.endpointprotection"
+BINARY="$INSTALL_DIR/bin/endpoint-protection"
 
 echo "========================================="
-echo "SafeChain Ultimate - Uninstaller"
+echo "Aikido Endpoint Protection - Uninstaller"
 echo "========================================="
 echo ""
 
@@ -26,7 +26,7 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-echo "Stopping SafeChain Ultimate processes..."
+echo "Stopping Aikido Endpoint Protection processes..."
 
 if launchctl list | grep -q "$DAEMON_LABEL"; then
     echo "  Stopping daemon via launchctl..."
@@ -41,7 +41,7 @@ fi
 
 pkill -f "endpoint-protection-ui" 2>/dev/null && echo "  ✓ UI process stopped" || echo "  UI process not running"
 pkill -f "safechain-l7-proxy" 2>/dev/null && echo "  ✓ L7 Proxy process stopped" || echo "  L7 Proxy process not running"
-pkill -f "safechain-ultimate" 2>/dev/null && echo "  ✓ Daemon process stopped" || echo "  Daemon process not running"
+pkill -f "endpoint-protection" 2>/dev/null && echo "  ✓ Daemon process stopped" || echo "  Daemon process not running"
 
 echo ""
 
@@ -87,11 +87,11 @@ fi
 
 echo ""
 echo "Removing package receipt..."
-pkgutil --forget com.aikidosecurity.safechainultimate 2>/dev/null && echo "  ✓ Package receipt removed" || echo "  Package receipt not found"
+pkgutil --forget com.aikidosecurity.endpointprotection 2>/dev/null && echo "  ✓ Package receipt removed" || echo "  Package receipt not found"
 
 echo ""
 echo "========================================="
-echo "✓ SafeChain Ultimate has been uninstalled"
+echo "✓ Aikido Endpoint Protection has been uninstalled"
 echo "========================================="
 echo ""
 

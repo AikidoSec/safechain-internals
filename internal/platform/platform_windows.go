@@ -21,22 +21,22 @@ import (
 )
 
 const (
-	SafeChainUltimateLogName       = "SafeChainUltimate.log"
-	SafeChainUltimateErrLogName    = "SafeChainUltimate.err"
-	SafeChainUILogName             = "SafeChainUltimateUI.log"
-	SafeChainUIAppName             = "SafeChainUltimateUI.exe"
+	EndpointProtectionLogName      = "EndpointProtection.log"
+	EndpointProtectionErrLogName   = "EndpointProtection.err"
+	SafeChainUILogName             = "EndpointProtectionUI.log"
+	SafeChainUIAppName             = "EndpointProtectionUI.exe"
 	SafeChainL7ProxyBinaryName     = "SafeChainL7Proxy.exe"
 	SafeChainL7ProxyLogName        = "SafeChainL7Proxy.log"
 	SafeChainL7ProxyErrLogName     = "SafeChainL7Proxy.err"
-	SafeChainSbomJSONName          = "SafeChainUltimateSBOM.json"
+	SafeChainSbomJSONName          = "EndpointProtectionSBOM.json"
 	SafeChainInstallScriptName     = "install-safe-chain.ps1"
 	SafeChainUninstallScriptName   = "uninstall-safe-chain.ps1"
 	registryInternetSettingsSuffix = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
 )
 
 func initConfig() error {
-	programDataDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainUltimate")
-	config.BinaryDir = `C:\Program Files\AikidoSecurity\SafeChainUltimate\bin`
+	programDataDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "EndpointProtection")
+	config.BinaryDir = `C:\Program Files\AikidoSecurity\EndpointProtection\bin`
 	config.LogDir = filepath.Join(programDataDir, "logs")
 	config.RunDir = filepath.Join(programDataDir, "run")
 
@@ -127,7 +127,7 @@ func SetupLogging() (io.Writer, error) {
 		return os.Stdout, err
 	}
 
-	logPath := filepath.Join(config.LogDir, SafeChainUltimateLogName)
+	logPath := filepath.Join(config.LogDir, EndpointProtectionLogName)
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return os.Stdout, err

@@ -1,4 +1,4 @@
-# Build MSI installer for SafeChain Ultimate
+# Build MSI installer for Aikido Endpoint Protection
 # Requires: WiX Toolset v4+ (dotnet tool install -g wix)
 
 param(
@@ -26,27 +26,27 @@ if (-not (Test-Path $OutputDir)) {
 }
 
 $ProjectDir = (Get-Item (Split-Path -Parent $MyInvocation.MyCommand.Path)).Parent.Parent.FullName
-$WxsFile = Join-Path $ProjectDir "packaging\windows\SafeChainUltimate.wxs"
+$WxsFile = Join-Path $ProjectDir "packaging\windows\EndpointProtection.wxs"
 $CustomUIFile = Join-Path $ProjectDir "packaging\windows\WixUI_InstallDir_Custom.wxs"
 
-Write-Host "Building MSI installer for Aikido SafeChain Ultimate v$Version (WiX version: $WixVersion)"
+Write-Host "Building MSI installer for Aikido Aikido Endpoint Protection v$Version (WiX version: $WixVersion)"
 Write-Host "  Binary directory: $BinDir"
 Write-Host "  Output directory: $OutputDir"
 Write-Host "  Project directory: $ProjectDir"
 
 # Verify required binaries exist
-$AgentExe = Join-Path $BinDir "SafeChainUltimate.exe"
-$AgentUIExe = Join-Path $BinDir "SafeChainUltimateUI.exe"
+$AgentExe = Join-Path $BinDir "EndpointProtection.exe"
+$AgentUIExe = Join-Path $BinDir "EndpointProtectionUI.exe"
 $ProxyExe = Join-Path $BinDir "SafeChainL7Proxy.exe"
 $StoreTokenScript = Join-Path $ProjectDir "packaging\windows\scripts\StoreToken.ps1"
 
 if (-not (Test-Path $AgentExe)) {
-    Write-Host "Error: SafeChainUltimate.exe not found at $AgentExe" -ForegroundColor Red
+    Write-Host "Error: EndpointProtection.exe not found at $AgentExe" -ForegroundColor Red
     exit 1
 }
 
 if (-not (Test-Path $AgentUIExe)) {
-    Write-Host "Error: SafeChainUltimateUI.exe not found at $AgentUIExe" -ForegroundColor Red
+    Write-Host "Error: EndpointProtectionUI.exe not found at $AgentUIExe" -ForegroundColor Red
     exit 1
 }
 
@@ -61,7 +61,7 @@ if (-not (Test-Path $StoreTokenScript)) {
 }
 
 # Build the MSI
-$OutputMsi = Join-Path $OutputDir "SafeChainUltimate.msi"
+$OutputMsi = Join-Path $OutputDir "EndpointProtection.msi"
 
 wix build $WxsFile $CustomUIFile `
     -d Version=$WixVersion `

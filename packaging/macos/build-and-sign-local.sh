@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 echo "==================================="
-echo "SafeChain Ultimate - Local PKG Builder"
+echo "Aikido Endpoint Protection - Local PKG Builder"
 echo "==================================="
 echo "Version: $VERSION"
 echo "Architecture: $ARCH (x86_64 + arm64)"
@@ -31,15 +31,15 @@ echo ""
 cd "$PROJECT_DIR"
 mkdir -p bin
 
-echo "Building safechain-ultimate for amd64..."
-CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o "bin/safechain-ultimate-darwin-amd64" ./cmd/daemon
-echo "Building safechain-ultimate for arm64..."
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o "bin/safechain-ultimate-darwin-arm64" ./cmd/daemon
+echo "Building endpoint-protection for amd64..."
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o "bin/endpoint-protection-darwin-amd64" ./cmd/daemon
+echo "Building endpoint-protection for arm64..."
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o "bin/endpoint-protection-darwin-arm64" ./cmd/daemon
 
 echo "Creating universal agent binary with lipo..."
-lipo -create bin/safechain-ultimate-darwin-amd64 bin/safechain-ultimate-darwin-arm64 \
-    -output bin/safechain-ultimate-darwin-universal
-echo "✓ Agent built: bin/safechain-ultimate-darwin-universal"
+lipo -create bin/endpoint-protection-darwin-amd64 bin/endpoint-protection-darwin-arm64 \
+    -output bin/endpoint-protection-darwin-universal
+echo "✓ Agent built: bin/endpoint-protection-darwin-universal"
 # clean up any stale UI artifacts before building fresh app bundles
 rm -rf "$PROJECT_DIR/ui/bin/"
 rm -rf "$PROJECT_DIR/bin/endpoint-protection-ui-darwin-amd64.app"
@@ -88,7 +88,7 @@ lipo -create \
     -output bin/safechain-l7-proxy-darwin-universal
 echo "✓ Proxy built: bin/safechain-l7-proxy-darwin-universal"
 
-lipo -info bin/safechain-ultimate-darwin-universal
+lipo -info bin/endpoint-protection-darwin-universal
 lipo -info "bin/endpoint-protection-ui-darwin-universal.app/Contents/MacOS/$APP_BINARY_NAME"
 lipo -info bin/safechain-l7-proxy-darwin-universal
 echo ""
@@ -117,7 +117,7 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
              --force \
              --timestamp \
              --options runtime \
-             "$PROJECT_DIR/bin/safechain-ultimate-darwin-universal"
+             "$PROJECT_DIR/bin/endpoint-protection-darwin-universal"
     echo "✓ Agent signed"
 
     codesign --sign "$CERT_IDENTITY" \
@@ -137,7 +137,7 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
     echo ""
 
     echo "Verifying binary signatures..."
-    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-ultimate-darwin-universal"
+    codesign --verify --verbose "$PROJECT_DIR/bin/endpoint-protection-darwin-universal"
     codesign --verify --verbose "$PROJECT_DIR/bin/endpoint-protection-ui-darwin-universal.app"
     codesign --verify --verbose "$PROJECT_DIR/bin/safechain-l7-proxy-darwin-universal"
     echo "✓ Binary signatures verified"
@@ -158,7 +158,7 @@ echo ""
 cd "$SCRIPT_DIR"
 ./build-distribution-pkg.sh -v "$VERSION" -a "universal" -b "$PROJECT_DIR/bin" -o "$PROJECT_DIR/dist"
 
-PKG_FILE="$PROJECT_DIR/dist/SafeChainUltimate-$VERSION.pkg"
+PKG_FILE="$PROJECT_DIR/dist/EndpointProtection-$VERSION.pkg"
 
 if [ ! -f "$PKG_FILE" ]; then
     echo "✗ PKG file not created"
@@ -184,7 +184,7 @@ if security find-identity -v -p basic | grep "Developer ID Installer" > /dev/nul
     echo ""
 
     echo "Signing PKG..."
-    SIGNED_PKG="$PROJECT_DIR/dist/SafeChainUltimate-$VERSION-signed.pkg"
+    SIGNED_PKG="$PROJECT_DIR/dist/EndpointProtection-$VERSION-signed.pkg"
 
     productsign --sign "$INSTALLER_CERT_IDENTITY" \
                 --timestamp \

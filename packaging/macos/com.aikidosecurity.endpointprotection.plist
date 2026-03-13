@@ -7,7 +7,7 @@
         <key>ThrottleInterval</key>
         <integer>60</integer>
         <key>Label</key>
-        <string>com.aikidosecurity.safechainultimate</string>
+        <string>com.aikidosecurity.endpointprotection</string>
         <key>LimitLoadToSessionType</key>
         <array>
                 <string>Aqua</string>
@@ -18,15 +18,15 @@
         </array>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Library/Application Support/AikidoSecurity/SafeChainUltimate/bin/safechain-ultimate</string>
+		<string>/Library/Application Support/AikidoSecurity/EndpointProtection/bin/endpoint-protection</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
 	<key>StandardErrorPath</key>
-	<string>/Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.err</string>
+	<string>/Library/Logs/AikidoSecurity/EndpointProtection/endpoint-protection.err</string>
 	<key>StandardOutPath</key>
-	<string>/Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.log</string>
+	<string>/Library/Logs/AikidoSecurity/EndpointProtection/endpoint-protection.log</string>
 	<key>WorkingDirectory</key>
-	<string>/Library/Application Support/AikidoSecurity/SafeChainUltimate</string>
+	<string>/Library/Application Support/AikidoSecurity/EndpointProtection</string>
 </dict>
 </plist>

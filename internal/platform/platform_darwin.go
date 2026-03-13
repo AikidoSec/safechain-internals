@@ -20,14 +20,14 @@ import (
 )
 
 const (
-	SafeChainUltimateLogName     = "safechain-ultimate.log"
-	SafeChainUltimateErrLogName  = "safechain-ultimate.err"
+	EndpointProtectionLogName    = "endpoint-protection.log"
+	EndpointProtectionErrLogName = "endpoint-protection.err"
 	SafeChainUILogName           = "endpoint-protection-ui.log"
 	SafeChainUIAppName           = "endpoint-protection-ui.app"
 	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
 	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
 	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
-	SafeChainSbomJSONName        = "safechain-ultimate-sbom.json"
+	SafeChainSbomJSONName        = "endpoint-protection-sbom.json"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
 )
@@ -50,9 +50,9 @@ func initConfig() error {
 		}
 	}
 	safeChainHomeDir := filepath.Join(config.HomeDir, ".safe-chain")
-	config.BinaryDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/bin"
-	config.RunDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/run"
-	config.LogDir = "/Library/Logs/AikidoSecurity/SafeChainUltimate"
+	config.BinaryDir = "/Library/Application Support/AikidoSecurity/EndpointProtection/bin"
+	config.RunDir = "/Library/Application Support/AikidoSecurity/EndpointProtection/run"
+	config.LogDir = "/Library/Logs/AikidoSecurity/EndpointProtection"
 	config.SafeChainBinaryPath = filepath.Join(safeChainHomeDir, "bin", "safe-chain")
 	return nil
 }
@@ -278,8 +278,8 @@ func UnsetSystemPAC(ctx context.Context, pacURL string) error {
 }
 
 func showCAInstallDialog(ctx context.Context) error {
-	script := `button returned of (display dialog "Aikido Endpoint needs to install a trusted CA certificate.\nmacOS will prompt you for administrator credentials." ` +
-		`with title "Aikido Endpoint Installation" buttons {"Cancel", "Install"} default button "Install" with icon caution)`
+	script := `button returned of (display dialog "Aikido Endpoint Protection needs to install a trusted CA certificate.\nmacOS will prompt you for administrator credentials." ` +
+		`with title "Aikido Endpoint Protection Installation" buttons {"Cancel", "Install"} default button "Install" with icon caution)`
 	out, err := RunInAuditSessionOfCurrentUser(ctx, "osascript", []string{"-e", script})
 	if err != nil {
 		return fmt.Errorf("CA certificate installation cancelled")

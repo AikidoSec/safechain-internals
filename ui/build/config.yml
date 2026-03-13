@@ -7,7 +7,7 @@ version: '3'
 info:
   companyName: "Aikido Security" # The name of the company
   productName: "endpoint-protection-ui" # The name of the application
-  productIdentifier: "com.aikidosecurity.safechainultimate" # The unique product identifier
+  productIdentifier: "com.aikidosecurity.endpointprotection" # The unique product identifier
   description: "endpoint-protection-ui" # The application description
   copyright: "(c) 2026, Aikido Security" # Copyright text
   comments: "endpoint-protection-ui" # Comments

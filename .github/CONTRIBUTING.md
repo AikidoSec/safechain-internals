@@ -1,6 +1,6 @@
-# Contributing to SafeChain Ultimate
+# Contributing to Aikido Endpoint Protection
 
-Thank you for your interest in contributing to SafeChain Ultimate! This guide will help you get started with setting up your development environment, running tests, and building the project.
+Thank you for your interest in contributing to Aikido Endpoint Protection! This guide will help you get started with setting up your development environment, running tests, and building the project.
 
 ## Prerequisites
 
@@ -97,7 +97,7 @@ just proxy-har-toggle
 To point the agent and proxy at a local or staging backend instead of `https://app.aikido.dev`, add a `base_url` field to the config file 
 and restart the service. Also update the `token` field — the token can be found on the **Endpoint Protection** page of the webapp.
 
-**macOS** — config file: `/Library/Application Support/AikidoSecurity/SafeChainUltimate/run/config.json`
+**macOS** — config file: `/Library/Application Support/AikidoSecurity/EndpointProtection/run/config.json`
 
 ```json
 {
@@ -110,17 +110,17 @@ and restart the service. Also update the `token` field — the token can be foun
 Restart the service:
 
 ```sh
-sudo launchctl bootout system/com.aikidosecurity.safechainultimate
-sudo launchctl bootstrap system /Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist
+sudo launchctl bootout system/com.aikidosecurity.endpointprotection
+sudo launchctl bootstrap system /Library/LaunchDaemons/com.aikidosecurity.endpointprotection.plist
 ```
 
-**Windows** — config file: `%ProgramData%\AikidoSecurity\SafeChainUltimate\run\config.json`
+**Windows** — config file: `%ProgramData%\AikidoSecurity\EndpointProtection\run\config.json`
 
 Restart the service:
 
 ```sh
-sc stop SafeChainUltimate
-sc start SafeChainUltimate
+sc stop EndpointProtection
+sc start EndpointProtection
 ```
 
 Remove the `base_url` field (or leave it empty) and restore the production `token` to revert to the production backend.
