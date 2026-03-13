@@ -1,4 +1,4 @@
-# Build MSI installer for Aikido Endpoint
+# Build MSI installer for Aikido Endpoint Protection
 # Requires: WiX Toolset v4+ (dotnet tool install -g wix)
 
 param(
@@ -29,7 +29,7 @@ $ProjectDir = (Get-Item (Split-Path -Parent $MyInvocation.MyCommand.Path)).Paren
 $WxsFile = Join-Path $ProjectDir "packaging\windows\EndpointProtection.wxs"
 $CustomUIFile = Join-Path $ProjectDir "packaging\windows\WixUI_InstallDir_Custom.wxs"
 
-Write-Host "Building MSI installer for Aikido Aikido Endpoint v$Version (WiX version: $WixVersion)"
+Write-Host "Building MSI installer for Aikido Aikido Endpoint Protection v$Version (WiX version: $WixVersion)"
 Write-Host "  Binary directory: $BinDir"
 Write-Host "  Output directory: $OutputDir"
 Write-Host "  Project directory: $ProjectDir"

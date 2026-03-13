@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
-    <title>Aikido Endpoint</title>
+    <title>Aikido Endpoint Protection</title>
     <organization>com.aikidosecurity</organization>
     <domains enable_localSystem="true"/>
     <options customize="never" require-scripts="true" rootVolumeOnly="true" hostArchitectures="arm64,x86_64" />
@@ -31,7 +31,7 @@
         function pm_install_check() {
             if(!(system.compareVersions(system.version.ProductVersion, '10.15') >= 0)) {
                 my.result.title = 'Unable to install';
-                my.result.message = 'Aikido Endpoint requires macOS 10.15 or later.';
+                my.result.message = 'Aikido Endpoint Protection requires macOS 10.15 or later.';
                 my.result.type = 'Fatal';
                 return false;
             }

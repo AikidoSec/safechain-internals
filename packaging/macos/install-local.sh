@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =============================================================================
-# Aikido Endpoint - Local Installation Helper
+# Aikido Endpoint Protection - Local Installation Helper
 # =============================================================================
 # This script helps install the unsigned local PKG build
 # =============================================================================
@@ -11,7 +11,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PKG_FILE="$PROJECT_DIR/dist/EndpointProtection-dev.pkg"
 
 echo "========================================="
-echo "Aikido Endpoint - Local Installation"
+echo "Aikido Endpoint Protection - Local Installation"
 echo "========================================="
 echo ""
 
@@ -34,7 +34,7 @@ if pkgutil --check-signature "$PKG_FILE" 2>&1 | grep -q "no signature"; then
 fi
 
 # Install using sudo installer (bypasses Gatekeeper)
-echo "Installing Aikido Endpoint..."
+echo "Installing Aikido Endpoint Protection..."
 echo "This will:"
 echo "  - Install binaries to /Library/Application Support/AikidoSecurity/EndpointProtection/"
 echo "  - Install LaunchDaemon to /Library/LaunchDaemons/"
@@ -57,7 +57,7 @@ if [ $? -eq 0 ]; then
     echo "✓ Installation Complete!"
     echo "========================================="
     echo ""
-    echo "Aikido Endpoint has been installed and started."
+    echo "Aikido Endpoint Protection has been installed and started."
     echo ""
     echo "Service management:"
     echo "  Check status:  sudo launchctl list | grep endpointprotection"
