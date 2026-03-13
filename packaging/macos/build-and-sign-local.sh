@@ -44,6 +44,7 @@ echo "✓ Agent built: bin/safechain-ultimate-darwin-universal"
 rm -rf "$PROJECT_DIR/ui/bin/"
 rm -rf "$PROJECT_DIR/bin/endpoint-protection-ui-darwin-amd64.app"
 rm -rf "$PROJECT_DIR/bin/endpoint-protection-ui-darwin-arm64.app"
+rm -rf "$PROJECT_DIR/bin/endpoint-protection-ui-darwin-universal.app"
 
 # check if wails3 is installed
 if ! command -v wails3 &> /dev/null; then
