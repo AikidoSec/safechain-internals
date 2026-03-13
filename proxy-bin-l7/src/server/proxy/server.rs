@@ -24,16 +24,14 @@ use rama::{
 
 #[cfg(feature = "har")]
 use ::{
-    safechain_proxy_lib::diagnostics::har::HARExportLayer,
     rama::{
         http::layer::har::extensions::RequestComment, layer::AddInputExtensionLayer,
         utils::str::arcstr::arcstr,
     },
+    safechain_proxy_lib::diagnostics::har::HARExportLayer,
 };
 
-use safechain_proxy_lib::http::{
-    firewall::Firewall, service::connectivity::CONNECTIVITY_DOMAIN,
-};
+use safechain_proxy_lib::http::{firewall::Firewall, service::connectivity::CONNECTIVITY_DOMAIN};
 
 #[derive(Debug)]
 pub(super) struct MitmServer<S> {

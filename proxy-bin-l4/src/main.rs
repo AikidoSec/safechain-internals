@@ -144,12 +144,8 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
     let graceful = graceful::Shutdown::default();
 
     #[cfg(feature = "har")]
-    let (_har_client, _har_export_layer) = {
-        safechain_proxy_lib::diagnostics::har::HarClient::new(
-            &args.data,
-            graceful.guard(),
-        )
-    };
+    let (_har_client, _har_export_layer) =
+        { safechain_proxy_lib::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
 
     // the actual proxy initialisation is platform-specific
     self::platform::init_platform(args)

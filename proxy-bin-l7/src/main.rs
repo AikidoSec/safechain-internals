@@ -199,12 +199,8 @@ where
     let graceful = graceful::Shutdown::new(new_shutdown_signal(error_rx, base_shutdown_signal));
 
     #[cfg(feature = "har")]
-    let (har_client, har_export_layer) = {
-        safechain_proxy_lib::diagnostics::har::HarClient::new(
-            &args.data,
-            graceful.guard(),
-        )
-    };
+    let (har_client, har_export_layer) =
+        { safechain_proxy_lib::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
 
     // ensure to not wait for firewall creation in case shutdown was initiated,
     // this can happen for example in case remote lists need to be fetched and the
@@ -322,8 +318,7 @@ async fn run_proxy_server(
     tls_acceptor: TlsAcceptorLayer,
     proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
     firewall: http::firewall::Firewall,
-    #[cfg(feature = "har")]
-    har_export_layer: safechain_proxy_lib::diagnostics::har::HARExportLayer,
+    #[cfg(feature = "har")] har_export_layer: safechain_proxy_lib::diagnostics::har::HARExportLayer,
 ) {
     tracing::info!("spawning proxy server...");
     if let Err(err) = server::proxy::run_proxy_server(

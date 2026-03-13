@@ -34,11 +34,11 @@ use safechain_proxy_lib::http::firewall::Firewall;
 
 #[cfg(feature = "har")]
 use {
-    safechain_proxy_lib::diagnostics::har::HARExportLayer,
     rama::{
         http::layer::har::extensions::RequestComment, layer::AddInputExtensionLayer,
         utils::str::arcstr::arcstr,
     },
+    safechain_proxy_lib::diagnostics::har::HARExportLayer,
 };
 
 use crate::Args;
