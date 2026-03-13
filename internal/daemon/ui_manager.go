@@ -52,7 +52,7 @@ func (m *UIManager) Launch(ctx context.Context, ingressAddr string) error {
 	args := []string{
 		"--daemon_url", daemonURL,
 		"--token", token,
-		"--ui_url", fmt.Sprintf("127.0.0.1:%d", port),
+		"--ui_url", uiURL,
 		"--log_file", platform.GetUILogPath(),
 	}
 
