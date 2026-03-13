@@ -24,9 +24,9 @@ const (
 	EndpointProtectionErrLogName = "endpoint-protection.err"
 	SafeChainUILogName           = "endpoint-protection-ui.log"
 	SafeChainUIAppName           = "endpoint-protection-ui.app"
-	SafeChainL7ProxyBinaryName   = "endpoint-protection-l7-proxy"
-	SafeChainL7ProxyLogName      = "endpoint-protection-l7-proxy.log"
-	SafeChainL7ProxyErrLogName   = "endpoint-protection-l7-proxy.err"
+	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
+	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
+	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
 	SafeChainSbomJSONName        = "endpoint-protection-sbom.json"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
@@ -278,8 +278,8 @@ func UnsetSystemPAC(ctx context.Context, pacURL string) error {
 }
 
 func showCAInstallDialog(ctx context.Context) error {
-	script := `button returned of (display dialog "Aikido Endpoint needs to install a trusted CA certificate.\nmacOS will prompt you for administrator credentials." ` +
-		`with title "Aikido Endpoint Installation" buttons {"Cancel", "Install"} default button "Install" with icon caution)`
+	script := `button returned of (display dialog "Aikido Endpoint Protection needs to install a trusted CA certificate.\nmacOS will prompt you for administrator credentials." ` +
+		`with title "Aikido Endpoint Protection Installation" buttons {"Cancel", "Install"} default button "Install" with icon caution)`
 	out, err := RunInAuditSessionOfCurrentUser(ctx, "osascript", []string{"-e", script})
 	if err != nil {
 		return fmt.Errorf("CA certificate installation cancelled")

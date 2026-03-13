@@ -81,8 +81,8 @@ func setupNotifications() (notifier *notifications.NotificationService, authoriz
 
 func newApp(notifier *notifications.NotificationService) *application.App {
 	return application.New(application.Options{
-		Name:        "Aikido Endpoint",
-		Description: "Aikido Endpoint",
+		Name:        "Aikido Endpoint Protection",
+		Description: "Aikido Endpoint Protection",
 		Services: []application.Service{
 			application.NewService(notifier),
 			application.NewService(&DaemonService{}),
@@ -102,7 +102,7 @@ func newApp(notifier *notifications.NotificationService) *application.App {
 func mainWindowOpts() application.WebviewWindowOptions {
 	return application.WebviewWindowOptions{
 		Name:             "main",
-		Title:            "Aikido Endpoint",
+		Title:            "Aikido Endpoint Protection",
 		Width:            700,
 		Height:           550,
 		Hidden:           true,
@@ -153,7 +153,7 @@ func (wm *windowManager) showDashboard() {
 
 func setupSystemTray(app *application.App, showDashboard func()) chan<- string {
 	systray := app.SystemTray.New()
-	systray.SetTooltip("Aikido Endpoint")
+	systray.SetTooltip("Aikido Endpoint Protection")
 	if runtime.GOOS == "darwin" {
 		systray.SetTemplateIcon(icon)
 	} else {
@@ -195,7 +195,7 @@ func startAppServer(app *application.App, statusCh chan<- string, notifier *noti
 			if notifAuthorized {
 				notifier.SendNotificationWithActions(notifications.NotificationOptions{
 					ID:         "block-" + ev.ID,
-					Title:      "Aikido Endpoint blocked an event",
+					Title:      "Aikido Endpoint Protection blocked an event",
 					Body:       ev.Artifact.Product + ": " + ev.Artifact.PackageName,
 					CategoryID: "aikido-blocked",
 					Data:       map[string]interface{}{"eventId": ev.ID},

@@ -65,7 +65,7 @@ echo "  Project directory: $PROJECT_DIR"
 # Verify binaries exist
 AGENT_BIN="$BIN_DIR/endpoint-protection-darwin-$ARCH"
 AGENT_UI_APP="$BIN_DIR/endpoint-protection-ui-darwin-$ARCH.app"
-PROXY_BIN="$BIN_DIR/endpoint-protection-l7-proxy-darwin-$ARCH"
+PROXY_BIN="$BIN_DIR/safechain-l7-proxy-darwin-$ARCH"
 
 
 if [ ! -f "$AGENT_BIN" ]; then
@@ -79,7 +79,7 @@ if [ ! -d "$AGENT_UI_APP" ]; then
 fi
 
 if [ ! -f "$PROXY_BIN" ]; then
-    echo "Error: endpoint-protection-l7-proxy binary not found at $PROXY_BIN" >&2
+    echo "Error: safechain-l7-proxy binary not found at $PROXY_BIN" >&2
     exit 1
 fi
 
@@ -109,9 +109,9 @@ chmod 644 "$LOGS_DIR/.keep"
 echo "Copying binaries..."
 cp "$AGENT_BIN" "$INSTALL_DIR/bin/endpoint-protection"
 cp -R "$AGENT_UI_APP" "$INSTALL_DIR/bin/endpoint-protection-ui.app"
-cp "$PROXY_BIN" "$INSTALL_DIR/bin/endpoint-protection-l7-proxy"
+cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-l7-proxy"
 chmod 755 "$INSTALL_DIR/bin/endpoint-protection"
-chmod 755 "$INSTALL_DIR/bin/endpoint-protection-l7-proxy"
+chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 
 # Copy scripts
 echo "Copying scripts..."

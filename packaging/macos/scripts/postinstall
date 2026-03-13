@@ -24,7 +24,7 @@ if [ -d "$INSTALL_DIR/bin/endpoint-protection-ui.app" ]; then
 else
     echo "Warning: UI app bundle not found at $INSTALL_DIR/bin/endpoint-protection-ui.app"
 fi
-chmod 755 "$INSTALL_DIR/bin/endpoint-protection-l7-proxy"
+chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 
 
 # Set proper ownership (root:wheel for system daemon)

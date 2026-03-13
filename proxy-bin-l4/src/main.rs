@@ -30,8 +30,8 @@ pub mod utils;
 
 /// CLI arguments for configuring proxy behavior.
 #[derive(Debug, Clone, Parser)]
-#[command(name = "endpoint-protection-l4-proxy")]
-#[command(bin_name = "endpoint-protection-l4-proxy")]
+#[command(name = "safechain-l4-proxy")]
+#[command(bin_name = "safechain-l4-proxy")]
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// secrets storage to use (e.g. for root CA)
@@ -67,9 +67,9 @@ pub struct Args {
         short = 'D',
         default_value = {
             #[cfg(not(target_os = "windows"))]
-            { ".aikido/endpoint-protection-l4-proxy" }
+            { ".aikido/safechain-l4-proxy" }
             #[cfg(target_os = "windows")]
-            { ".aikido\\endpoint-protection-l4-proxy" }
+            { ".aikido\\safechain-l4-proxy" }
         },
     )]
     pub data: PathBuf,
@@ -112,7 +112,7 @@ async fn main() -> Result<(), BoxError> {
     Ok(())
 }
 
-/// Runs all the endpoint-protection-l4-proxy services and blocks until
+/// Runs all the safechain-l4-proxy services and blocks until
 /// a critical error occurs or the (graceful) shutdown has been initiated.
 async fn run_with_args(args: Args) -> Result<(), BoxError> {
     tokio::fs::create_dir_all(&args.data)

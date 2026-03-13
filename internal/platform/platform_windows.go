@@ -262,7 +262,7 @@ func IsProxyCAInstalled(ctx context.Context) error {
 func UninstallProxyCA(ctx context.Context) error {
 	commandsToExecute := []utils.Command{
 		{Command: "certutil", Args: []string{"-delstore", "Root", "aikidosafechain.com"}},
-		{Command: "cmdkey", Args: []string{"/delete:endpoint-protection-l7-proxy.tls-root-ca-key"}},
+		{Command: "cmdkey", Args: []string{"/delete:safechain-l7-proxy.tls-root-ca-key"}},
 	}
 	_, err := utils.RunCommands(ctx, commandsToExecute)
 	if err != nil {

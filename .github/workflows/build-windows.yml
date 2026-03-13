@@ -78,20 +78,20 @@ jobs:
           env-vars: "RUST_TOOLCHAIN=stable"
 
       - name: cargo check
-        run: cargo check -p endpoint-protection-l7-proxy --target x86_64-pc-windows-msvc
+        run: cargo check -p safechain-l7-proxy --target x86_64-pc-windows-msvc
 
       - name: clippy
-        run: cargo clippy -p endpoint-protection-l7-proxy --target x86_64-pc-windows-msvc
+        run: cargo clippy -p safechain-l7-proxy --target x86_64-pc-windows-msvc
 
       - name: rustfmt
         run: cargo fmt --check
 
       - name: Build proxy binary
-        run: cargo build --release -p endpoint-protection-l7-proxy --target x86_64-pc-windows-msvc
+        run: cargo build --release -p safechain-l7-proxy --target x86_64-pc-windows-msvc
 
       - name: Copy proxy binary
         run: |
-          Copy-Item -Path "target\x86_64-pc-windows-msvc\release\endpoint-protection-l7-proxy.exe" -Destination "SafeChainL7Proxy.exe" -Force
+          Copy-Item -Path "target\x86_64-pc-windows-msvc\release\safechain-l7-proxy.exe" -Destination "SafeChainL7Proxy.exe" -Force
         shell: pwsh
 
       - name: Upload Windows artifacts

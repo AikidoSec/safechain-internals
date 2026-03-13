@@ -25,7 +25,7 @@ postcard = { version = "1.1", default-features = false }
 radix_trie = "0.3"
 rand = "0.10"
 rustls-platform-verifier = "0.6"
-endpoint-protection-proxy-lib = { path = "./proxy-lib" }
+safechain-proxy-lib = { path = "./proxy-lib" }
 secrecy = "0.10"
 serde = "1.0"
 serde_html_form = "0.4"
@@ -46,6 +46,6 @@ strip = true
 lto = true
 codegen-units = 1
 
-[profile.release.package.endpoint-protection-proxy-fuzz]
+[profile.release.package.safechain-proxy-fuzz]
 strip = false
 codegen-units = 16

@@ -1,5 +1,5 @@
 [package]
-name = "endpoint-protection-proxy-lib"
+name = "safechain-proxy-lib"
 description = "SafeChain Common Proxy Lib"
 version = { workspace = true }  # keep in sync with GH releases
 edition = { workspace = true }

@@ -726,11 +726,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "869b0adbda23651a9c5c0c3d270aac9fcb52e8622a8f2b17e57802d7791962f2"
 
 [[package]]
-name = "endpoint-protection-l4-proxy"
+name = "safechain-l4-proxy"
 version = "1.0.0"
 dependencies = [
  "clap",
- "endpoint-protection-proxy-lib",
+ "safechain-proxy-lib",
  "mimalloc",
  "rama",
  "static_vcruntime",
@@ -739,12 +739,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "endpoint-protection-l7-proxy"
+name = "safechain-l7-proxy"
 version = "1.0.0"
 dependencies = [
  "arc-swap",
  "clap",
- "endpoint-protection-proxy-lib",
+ "safechain-proxy-lib",
  "humantime",
  "libc",
  "mimalloc",
@@ -760,15 +760,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "endpoint-protection-proxy-fuzz"
+name = "safechain-proxy-fuzz"
 version = "1.0.0"
 dependencies = [
- "endpoint-protection-proxy-lib",
+ "safechain-proxy-lib",
  "libfuzzer-sys",
 ]
 
 [[package]]
-name = "endpoint-protection-proxy-lib"
+name = "safechain-proxy-lib"
 version = "1.0.0"
 dependencies = [
  "apple-native-keyring-store",

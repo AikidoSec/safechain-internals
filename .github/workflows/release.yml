@@ -52,11 +52,11 @@ jobs:
           mv artifacts/endpoint-protection-darwin-amd64/endpoint-protection-darwin-amd64 .
           mv artifacts/endpoint-protection-darwin-arm64/endpoint-protection-darwin-arm64 .
 
-          mv artifacts/endpoint-protection-l7-proxy-darwin-amd64/endpoint-protection-l7-proxy-darwin-amd64 .
-          mv artifacts/endpoint-protection-l7-proxy-darwin-arm64/endpoint-protection-l7-proxy-darwin-arm64 .
+          mv artifacts/safechain-l7-proxy-darwin-amd64/safechain-l7-proxy-darwin-amd64 .
+          mv artifacts/safechain-l7-proxy-darwin-arm64/safechain-l7-proxy-darwin-arm64 .
 
-          mv artifacts/endpoint-protection-l7-proxy-linux-amd64/endpoint-protection-l7-proxy-linux-amd64 .
-          mv artifacts/endpoint-protection-l7-proxy-linux-arm64/endpoint-protection-l7-proxy-linux-arm64 .
+          mv artifacts/safechain-l7-proxy-linux-amd64/safechain-l7-proxy-linux-amd64 .
+          mv artifacts/safechain-l7-proxy-linux-arm64/safechain-l7-proxy-linux-arm64 .
 
           mv artifacts/EndpointProtection.msi/EndpointProtection.msi ./EndpointProtection.msi
 
@@ -68,10 +68,10 @@ jobs:
           files: |
             endpoint-protection-darwin-amd64
             endpoint-protection-darwin-arm64
-            endpoint-protection-l7-proxy-darwin-amd64
-            endpoint-protection-l7-proxy-darwin-arm64
-            endpoint-protection-l7-proxy-linux-amd64
-            endpoint-protection-l7-proxy-linux-arm64
+            safechain-l7-proxy-darwin-amd64
+            safechain-l7-proxy-darwin-arm64
+            safechain-l7-proxy-linux-amd64
+            safechain-l7-proxy-linux-arm64
             EndpointProtection.msi
             EndpointProtection.pkg
 
