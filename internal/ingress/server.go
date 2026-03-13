@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/AikidoSec/safechain-internals/internal/config"
+	"github.com/AikidoSec/safechain-internals/internal/uiclient"
 )
 
 const (
@@ -23,13 +24,17 @@ type Server struct {
 	listener net.Listener
 	server   *http.Server
 	config   *config.ConfigInfo
+	ui       *uiclient.Client
 
-	mu sync.RWMutex
+	eventStore *eventStore
+	mu         sync.RWMutex
 }
 
-func New(cfg *config.ConfigInfo) *Server {
+func New(cfg *config.ConfigInfo, ui *uiclient.Client) *Server {
 	return &Server{
-		config: cfg,
+		config:     cfg,
+		ui:         ui,
+		eventStore: &eventStore{},
 	}
 }
 
@@ -43,7 +48,10 @@ func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /events/blocks", s.handleBlock)
 	mux.HandleFunc("GET /ping", s.handlePing)
-	mux.HandleFunc("POST /request-bypass", s.handleRequestBypass)
+
+	mux.HandleFunc("POST /v1/events/{id}/request-access", s.handleRequestBypass)
+	mux.HandleFunc("GET /v1/events", s.handleEvents)
+	mux.HandleFunc("GET /v1/events/{id}", s.handleGetEventByID)
 
 	listener, err := net.Listen("tcp", DefaultBind)
 	if err != nil {

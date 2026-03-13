@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -222,4 +223,14 @@ func RunCommandWithEnv(ctx context.Context, env []string, command string, args .
 		log.Printf("\t- Command output: %s", string(output))
 	}
 	return string(output), err
+}
+
+func GetRandomFreePort() (int, error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, fmt.Errorf("failed to listen on random port: %v", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+	return port, nil
 }

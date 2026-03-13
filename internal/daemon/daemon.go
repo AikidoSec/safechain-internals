@@ -39,7 +39,8 @@ type Daemon struct {
 	registry    *scannermanager.Registry
 	sbomManager *sbom.Registry
 
-	ingress *ingress.Server
+	uiManager *UIManager
+	ingress   *ingress.Server
 
 	logRotator *utils.LogRotator
 	logReaper  *utils.LogReaper
@@ -52,6 +53,8 @@ type Daemon struct {
 }
 
 func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
+	uiMgr := NewUIManager()
+
 	d := &Daemon{
 		versionInfo: version.Info,
 		ctx:         ctx,
@@ -61,6 +64,7 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 		sbomManager: newSBOMRegistry(),
 		logRotator:  utils.NewLogRotator(),
 		logReaper:   utils.NewLogReaper(),
+		uiManager:   uiMgr,
 	}
 
 	if err := platform.Init(); err != nil {
@@ -78,9 +82,8 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 	if d.config == nil {
 		return nil, fmt.Errorf("failed to create config")
 	}
-
-	d.ingress = ingress.New(d.config)
-	d.initLogging()
+	d.ingress = ingress.New(d.config, uiMgr.Client)
+	d.initLogging(ctx)
 	return d, nil
 }
 
@@ -129,6 +132,8 @@ func (d *Daemon) Stop(ctx context.Context) error {
 	var err error
 	d.stopOnce.Do(func() {
 		log.Println("Stopping SafeChain Daemon...")
+
+		d.uiManager.Kill()
 
 		if err := setup.Teardown(ctx); err != nil {
 			log.Printf("Error teardown setup: %v", err)
@@ -206,6 +211,12 @@ func (d *Daemon) run(ctx context.Context) error {
 
 	// Wait briefly for ingress server to bind
 	time.Sleep(100 * time.Millisecond)
+	// Launch UI with ingress address so it can communicate with the daemon
+	go func() {
+		if err := d.uiManager.Launch(ctx, d.ingress.Addr()); err != nil {
+			log.Printf("Failed to launch UI: %v", err)
+		}
+	}()
 
 	if err := d.startProxyAndInstallCA(ctx); err != nil {
 		return fmt.Errorf("failed to start proxy and install CA: %v", err)
@@ -340,6 +351,8 @@ func (d *Daemon) heartbeat() error {
 		log.Printf("Failed to start proxy: %v", err)
 	}
 
+	d.uiManager.NotifyProxyStatusIfChanged(proxy.IsProxyRunning())
+
 	d.runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() error {
 		d.printDaemonStatus()
 		return nil
@@ -392,7 +405,7 @@ func (d *Daemon) runIfIntervalExceeded(lastRun *time.Time, interval time.Duratio
 	}
 }
 
-func (d *Daemon) initLogging() {
+func (d *Daemon) initLogging(ctx context.Context) {
 	writer, err := platform.SetupLogging()
 	if err != nil {
 		log.Printf("Failed to setup file logging: %v, using stdout only", err)
@@ -400,8 +413,13 @@ func (d *Daemon) initLogging() {
 	log.SetOutput(writer)
 	log.SetFlags(log.LstdFlags)
 
+	if err := platform.PrepareUILogFile(ctx); err != nil {
+		log.Printf("Failed to prepare UI log file: %v", err)
+	}
+
 	rotatableLogs := []string{
 		platform.GetUltimateLogPath(),
+		platform.GetUILogPath(),
 	}
 	for _, path := range rotatableLogs {
 		d.logRotator.AddLogFile(path, constants.LogRotationSizeInBytes)
@@ -410,6 +428,7 @@ func (d *Daemon) initLogging() {
 	reapableLogs := []string{
 		platform.GetUltimateLogPath(),
 		platform.GetProxyLogPath(),
+		platform.GetUILogPath(),
 	}
 	for _, path := range reapableLogs {
 		d.logReaper.AddLogFile(path, constants.LogReapingAgeInHours)

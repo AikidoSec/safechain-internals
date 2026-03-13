@@ -5,6 +5,7 @@ go 1.25
 require (
 	gioui.org v0.9.0
 	github.com/google/go-github/v82 v82.0.0
+	github.com/google/uuid v1.6.0
 	golang.org/x/sys v0.40.0
 )
 

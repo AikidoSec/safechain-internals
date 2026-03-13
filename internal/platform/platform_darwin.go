@@ -22,7 +22,8 @@ import (
 const (
 	SafeChainUltimateLogName     = "safechain-ultimate.log"
 	SafeChainUltimateErrLogName  = "safechain-ultimate.err"
-	SafeChainUIBinaryName        = "safechain-ultimate-ui"
+	SafeChainUILogName           = "safechain-ultimate-ui.log"
+	SafeChainUIAppName           = "safechain-ultimate-ui.app"
 	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
 	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
 	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
@@ -62,6 +63,24 @@ func PrepareShellEnvironment(_ context.Context) error {
 
 func SetupLogging() (io.Writer, error) {
 	return os.Stdout, nil
+}
+
+func PrepareUILogFile(ctx context.Context) error {
+	logPath := GetUILogPath()
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create UI log file %s: %w", logPath, err)
+	}
+	f.Close()
+
+	_, uid, _, gid, err := GetCurrentUser(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get current user for UI log chown: %w", err)
+	}
+	if err := os.Chown(logPath, uid, gid); err != nil {
+		return fmt.Errorf("failed to chown UI log file %s: %w", logPath, err)
+	}
+	return nil
 }
 
 /*
@@ -440,6 +459,65 @@ func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args
 	uidStr := fmt.Sprintf("%d", uid)
 	launchctlArgs := append([]string{"asuser", uidStr, binaryPath}, args...)
 	return utils.RunCommandWithEnv(ctx, []string{}, "launchctl", launchctlArgs...)
+}
+
+// appBinaryName extracts the process name that pgrep will match when searching for a running application.
+// macOS .app bundles run under the bundle name without the .app extension.
+func appBinaryName(binaryPath string) string {
+	base := filepath.Base(binaryPath)
+	if strings.HasSuffix(strings.ToLower(base), ".app") {
+		return strings.TrimSuffix(base, filepath.Ext(base))
+	}
+	return base
+}
+
+// StartUIProcessInAuditSessionOfCurrentUser launches the UI as the
+// logged-in console user and returns the real process PID.
+//
+// For .app bundles we must use "open -a" so macOS sets up the GUI session
+// (window server, tray, dock). Both "open" and "launchctl asuser" exit
+// immediately, so the PID is discovered afterwards via pgrep.
+func StartUIProcessInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (int, error) {
+	isApp := strings.HasSuffix(strings.ToLower(binaryPath), ".app")
+
+	name := binaryPath
+	cmdArgs := args
+	if isApp {
+		name = "open"
+		cmdArgs = []string{"-a", binaryPath}
+		if len(args) > 0 {
+			cmdArgs = append(cmdArgs, "--args")
+			cmdArgs = append(cmdArgs, args...)
+		}
+	}
+
+	if RunningAsRoot() {
+		_, uid, _, _, err := GetCurrentUser(ctx)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get console user: %v", err)
+		}
+		uidStr := fmt.Sprintf("%d", uid)
+		cmdArgs = append([]string{"asuser", uidStr, name}, cmdArgs...)
+		name = "launchctl"
+	}
+
+	cmd := exec.CommandContext(ctx, name, cmdArgs...)
+	if err := cmd.Run(); err != nil {
+		return 0, fmt.Errorf("failed to start UI: %v", err)
+	}
+
+	// "open" / "launchctl" exit immediately after dispatching.
+	// Find the real UI process PID by executable name.
+	binName := appBinaryName(binaryPath)
+	pidOut, err := exec.CommandContext(ctx, "pgrep", "-nf", binName).Output()
+	if err != nil {
+		return 0, fmt.Errorf("UI process started but PID could not be found: %v", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidOut)))
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse UI PID: %v", err)
+	}
+	return pid, nil
 }
 
 func RunningAsRoot() bool {

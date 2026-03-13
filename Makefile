@@ -61,48 +61,63 @@ build:
 	@echo "Building $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT) ./cmd/daemon
-	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME_UI)$(BINARY_EXT) ./cmd/ui
 	@echo "Binaries built:"
-	@echo "$(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)"
-	@echo "$(BIN_DIR)/$(BINARY_NAME_UI)$(BINARY_EXT)"
+	@echo "  $(BIN_DIR)/$(BINARY_NAME)$(BINARY_EXT)"
+ifeq ($(GOOS),darwin)
+	@cd ui && CGO_ENABLED=1 wails3 package
+	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
+	@cp -R ui/bin/$(BINARY_NAME_UI).app $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
+	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app"
+else ifeq ($(GOOS),windows)
+	@cd ui && CGO_ENABLED=1 wails3 package
+	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
+	@cp -R ui/bin/$(BINARY_NAME_UI).exe $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
+	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe"
+endif
 
 build-release:
 	@echo "Building release $(BINARY_NAME) for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/daemon
-	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(RELEASE_LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH)$(BINARY_EXT) ./cmd/ui
 	@echo "Binaries built:"
-	@echo "$(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
-	@echo "$(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
+	@echo "  $(BIN_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(BINARY_EXT)"
+ifeq ($(GOOS),darwin)
+	@cd ui && CGO_ENABLED=1 wails3 package
+	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
+	@cp -R ui/bin/$(BINARY_NAME_UI).app $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app
+	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).app"
+else
+	@cd ui && CGO_ENABLED=1 wails3 package
+	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
+	@cp -R ui/bin/$(BINARY_NAME_UI).exe $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe
+	@echo "  $(BIN_DIR)/$(BINARY_NAME_UI)-$(GOOS)-$(GOARCH).exe"
+endif
 
 build-darwin-amd64:
-	@$(MAKE) GOOS=darwin GOARCH=amd64 build-release
+	@"$(MAKE)" GOOS=darwin GOARCH=amd64 build-release
 
 build-darwin-arm64:
-	@$(MAKE) GOOS=darwin GOARCH=arm64 build-release
+	@"$(MAKE)" GOOS=darwin GOARCH=arm64 build-release
 
 build-darwin-universal: build-darwin-amd64 build-darwin-arm64
 	@echo "Creating universal binaries..."
 	@lipo -create $(BIN_DIR)/$(BINARY_NAME)-darwin-amd64 $(BIN_DIR)/$(BINARY_NAME)-darwin-arm64 \
 		-output $(BIN_DIR)/$(BINARY_NAME)-darwin-universal
-	@lipo -create $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-amd64 $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-arm64 \
-		-output $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal
+	@rm -rf $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal.app
+	@cp -R $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-amd64.app $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal.app
+	@lipo -create \
+		"$(BIN_DIR)/$(BINARY_NAME_UI)-darwin-amd64.app/Contents/MacOS/$(BINARY_NAME_UI)" \
+		"$(BIN_DIR)/$(BINARY_NAME_UI)-darwin-arm64.app/Contents/MacOS/$(BINARY_NAME_UI)" \
+		-output "$(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal.app/Contents/MacOS/$(BINARY_NAME_UI)"
 	@echo "Universal binaries created:"
 	@lipo -info $(BIN_DIR)/$(BINARY_NAME)-darwin-universal
-	@lipo -info $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal
-
-build-darwin-universal: build-darwin-amd64 build-darwin-arm64
-	@echo "Creating universal binaries..."
-	@lipo -create $(BIN_DIR)/$(BINARY_NAME)-darwin-amd64 $(BIN_DIR)/$(BINARY_NAME)-darwin-arm64 \
-		-output $(BIN_DIR)/$(BINARY_NAME)-darwin-universal
-	@lipo -create $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-amd64 $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-arm64 \
-		-output $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal
-	@echo "Universal binaries created:"
-	@lipo -info $(BIN_DIR)/$(BINARY_NAME)-darwin-universal
-	@lipo -info $(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal
+	@lipo -info "$(BIN_DIR)/$(BINARY_NAME_UI)-darwin-universal.app/Contents/MacOS/$(BINARY_NAME_UI)"
 
 build-windows-amd64:
-	@$(MAKE) GOOS=windows GOARCH=amd64 build-release
+	@"$(MAKE)" GOOS=windows GOARCH=amd64 build-release
+
+build-windows-arm64:
+	@"$(MAKE)" GOOS=windows GOARCH=arm64 build-release
 
 build-l7-proxy:
 	@echo "Building safechain-l7-proxy..."
@@ -126,26 +141,9 @@ build-l7-proxy-universal:
 	@echo "Universal proxy built:"
 	@lipo -info $(BIN_DIR)/safechain-l7-proxy-darwin-universal
 
-build-l7-proxy-universal:
-	@echo "Building safechain-l7-proxy for x86_64-apple-darwin..."
-	@rustup target add x86_64-apple-darwin 2>/dev/null || true
-	@cargo build --release --bin safechain-l7-proxy --target x86_64-apple-darwin
-	@echo "Building safechain-l7-proxy for aarch64-apple-darwin..."
-	@rustup target add aarch64-apple-darwin 2>/dev/null || true
-	@cargo build --release --bin safechain-l7-proxy --target aarch64-apple-darwin
-	@mkdir -p $(BIN_DIR)
-	@lipo -create \
-		target/x86_64-apple-darwin/release/safechain-l7-proxy \
-		target/aarch64-apple-darwin/release/safechain-l7-proxy \
-		-output $(BIN_DIR)/safechain-l7-proxy-darwin-universal
-	@echo "Universal proxy built:"
-	@lipo -info $(BIN_DIR)/safechain-l7-proxy-darwin-universal
-
 build-pkg:
 ifeq ($(DETECTED_OS),darwin)
 	@echo "Building macOS PKG installer..."
-	@cd packaging/macos && ./build-distribution-pkg.sh -v $(VERSION) -a universal -b ../../$(BIN_DIR) -o ../../$(DIST_DIR)
-	@echo "PKG built: $(DIST_DIR)/SafeChainUltimate-$(VERSION).pkg"
 	@cd packaging/macos && ./build-distribution-pkg.sh -v $(VERSION) -a universal -b ../../$(BIN_DIR) -o ../../$(DIST_DIR)
 	@echo "PKG built: $(DIST_DIR)/SafeChainUltimate-$(VERSION).pkg"
 else
@@ -157,6 +155,18 @@ build-pkg-sign-local:
 ifeq ($(DETECTED_OS),darwin)
 	@echo "Building complete macOS package..."
 	@cd packaging/macos && ./build-and-sign-local.sh $(VERSION)
+else ifeq ($(DETECTED_OS),windows)
+	@echo "Building Windows binaries for $(DETECTED_ARCH)..."
+	@"$(MAKE)" build-windows-$(DETECTED_ARCH) VERSION=$(VERSION)
+	@echo "Building Windows proxy (safechain-l7-proxy)..."
+	@cargo build --release -p safechain-l7-proxy --target x86_64-pc-windows-msvc
+	@mkdir -p $(BIN_DIR)
+	@cp target/x86_64-pc-windows-msvc/release/safechain-l7-proxy.exe $(BIN_DIR)/SafeChainL7Proxy.exe
+	@cp $(BIN_DIR)/$(BINARY_NAME)-windows-$(DETECTED_ARCH).exe $(BIN_DIR)/SafeChainUltimate.exe
+	@cp $(BIN_DIR)/$(BINARY_NAME_UI)-windows-$(DETECTED_ARCH).exe $(BIN_DIR)/SafeChainUltimateUI.exe
+	@echo "Building Windows MSI installer..."
+	@powershell -ExecutionPolicy Bypass -File packaging/windows/build-msi.ps1 -Version "$(VERSION)" -BinDir ".\$(BIN_DIR)" -OutputDir "."
+	@echo "Windows MSI build completed."
 else
 	@echo "Error: PKG building is only supported on macOS"
 	@exit 1
@@ -168,6 +178,9 @@ ifdef TOKEN
 	@echo "$(TOKEN)" > /tmp/aikido_endpoint_token.txt
 endif
 	@cd packaging/macos && ./install-local.sh
+else ifeq ($(DETECTED_OS),windows)
+	@echo "Installing Windows MSI package..."
+	@msiexec /i SafeChainUltimate.msi
 else
 	@echo "Error: PKG installation is only supported on macOS"
 	@exit 1
