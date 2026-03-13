@@ -31,6 +31,45 @@ const BLOCK_REASON_LABEL: Record<BlockReason, string> = {
   request_install: "Approval required",
 };
 
+const RESULT_ICONS = {
+  success: (
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M22 4L12 14.01l-3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  failure: (
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M15 9l-6 6M9 9l6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+};
+
+function ResultScreen({ variant, title, subtitle, actions }: {
+  variant: "success" | "failure";
+  title: string;
+  subtitle: React.ReactNode;
+  actions: React.ReactNode;
+}) {
+  return (
+    <div className="event-detail event-detail--full">
+      <div className="request-result">
+        <div className="request-result-body">
+          <div className={`request-result-icon request-result-icon--${variant}`} aria-hidden>
+            {RESULT_ICONS[variant]}
+          </div>
+          <h2>{title}</h2>
+          <p className="subtitle">{subtitle}</p>
+        </div>
+        <div className="request-access-actions">
+          {actions}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EventInfo({ event }: { event: BlockEvent }) {
   return (
     <dl className="event-info">
@@ -74,6 +113,8 @@ export function EventDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
+  const [requestFailed, setRequestFailed] = useState(false);
 
   const loadEvent = useCallback(() => {
     if (!id) return;
@@ -89,18 +130,18 @@ export function EventDetail() {
     loadEvent();
   }, [loadEvent]);
 
-  const [requestSent, setRequestSent] = useState(false);
-
   const handleRequestAccess = async () => {
     if (!id) return;
     setRequesting(true);
     setError(null);
+    setRequestFailed(false);
     try {
-      await requestAccess(id);
-      setEvent((prev) => (prev ? { ...prev, status: "request_pending" } : null));
+      const updated = await requestAccess(id);
+      setEvent(updated);
       setRequestSent(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setRequestFailed(true);
     } finally {
       setRequesting(false);
     }
@@ -149,33 +190,51 @@ export function EventDetail() {
   const canRequest = true;
   const info = BLOCK_REASON_INFO[event.block_reason];
 
+  const packageLabel = event.artifact.display_name ?? event.artifact.identifier;
+
+  if (requestFailed && error) {
+    return (
+      <ResultScreen
+        variant="failure"
+        title="Request failed"
+        subtitle={<>We couldn't submit your access request for <strong>{packageLabel}</strong>. Please try again.</>}
+        actions={<>
+          <button
+            type="button"
+            className="button-brand button--tertiary button--normal button--rounded"
+            onClick={() => navigate("/events")}
+          >
+            Back to list
+          </button>
+          <button
+            type="button"
+            className="button-brand button--primary button--normal button--rounded"
+            onClick={handleRequestAccess}
+            disabled={requesting}
+          >
+            {requesting ? "Requesting…" : "Try again"}
+          </button>
+        </>}
+      />
+    );
+  }
+
   if (requestSent || event.status === "request_pending") {
     return (
-      <div className="event-detail event-detail--full">
-        <div className="request-success">
-          <div className="request-success-body">
-            <div className="request-success-icon" aria-hidden>
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M22 4L12 14.01l-3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            <h2>Request sent</h2>
-            <p className="subtitle">
-              Your access request for <strong>{event.artifact.display_name ?? event.artifact.identifier}</strong> has been submitted.
-            </p>
-          </div>
-          <div className="request-access-actions">
-            <button
-              type="button"
-              className="button-brand button--primary button--normal button--rounded"
-              onClick={() => navigate("/events")}
-            >
-              Back to list
-            </button>
-          </div>
-        </div>
-      </div>
+      <ResultScreen
+        variant="success"
+        title="Request sent"
+        subtitle={<>Your access request for <strong>{packageLabel}</strong> has been submitted.</>}
+        actions={
+          <button
+            type="button"
+            className="button-brand button--primary button--normal button--rounded"
+            onClick={() => navigate("/events")}
+          >
+            Back to list
+          </button>
+        }
+      />
     );
   }
 
@@ -188,7 +247,6 @@ export function EventDetail() {
             {info?.description ?? "Access cannot be requested for this package."}
           </p>
           <EventInfo event={event} />
-          {error && <p className="error">{error}</p>}
         </div>
 
         <div className="request-access-actions">

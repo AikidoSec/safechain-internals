@@ -15,6 +15,6 @@ func (s *DaemonService) GetEvent(eventId string) (daemon.BlockEvent, error) {
 	return daemon.GetEvent(eventId)
 }
 
-func (s *DaemonService) RequestAccess(eventId string) error {
+func (s *DaemonService) RequestAccess(eventId string) (daemon.BlockEvent, error) {
 	return daemon.RequestAccess(eventId)
 }
