@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use rama::{
     Service,
-    error::{BoxError, ErrorContext},
+    error::{BoxError, ErrorContext, ErrorExt as _},
     graceful::ShutdownGuard,
     http::{
         BodyExtractExt, Request, Response, StatusCode, Uri, service::client::HttpClientExt as _,
@@ -207,6 +207,17 @@ where
                 start.elapsed()
             );
             return Ok(None);
+        }
+
+        if !resp.status().is_success() {
+            let http_status_code = resp.status();
+            let maybe_error_msg = resp.try_into_string().await.unwrap_or_default();
+            return Err(
+                BoxError::from("failed to download reported config from remote endpoint")
+                    .with_context_field("uri", || self.uri.clone())
+                    .context_field("status", http_status_code)
+                    .context_field("message", maybe_error_msg),
+            );
         }
 
         let e_tag: Option<ArcStr> = resp
