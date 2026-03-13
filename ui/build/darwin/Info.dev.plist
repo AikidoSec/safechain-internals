@@ -11,7 +11,7 @@
 		<key>CFBundleIconName</key>
 		<string>appicon</string>
 		<key>CFBundleIdentifier</key>
-		<string>com.aikidosecurity.safechainultimate</string>
+		<string>com.aikidosecurity.endpointprotection</string>
 		<key>CFBundleName</key>
 		<string>Aikido Endpoint</string>
 		<key>CFBundlePackageType</key>

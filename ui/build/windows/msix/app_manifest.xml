@@ -8,7 +8,7 @@
   IgnorableNamespaces="uap3">
   
   <Identity 
-    Name="com.aikidosecurity.safechainultimate"
+    Name="com.aikidosecurity.endpointprotection"
     Publisher="CN=Aikido Security"
     Version="0.1.0.0" 
     ProcessorArchitecture="x64" />
@@ -29,7 +29,7 @@
   </Resources>
   
   <Applications>
-    <Application Id="com.aikidosecurity.safechainultimate" Executable="endpoint-protection-ui" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="com.aikidosecurity.endpointprotection" Executable="endpoint-protection-ui" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="endpoint-protection-ui"
         Description="endpoint-protection-ui"

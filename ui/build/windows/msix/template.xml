@@ -25,7 +25,7 @@
         </Capabilities>
         <Applications>
             <Application
-                Id="com.aikidosecurity.safechainultimate"
+                Id="com.aikidosecurity.endpointprotection"
                 Description="endpoint-protection-ui"
                 DisplayName="endpoint-protection-ui"
                 ExecutableName="endpoint-protection-ui"

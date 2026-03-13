@@ -15,7 +15,7 @@ use rama::{
 
 use clap::Parser;
 
-use safechain_proxy_lib::{storage, tls, utils as safechain_utils};
+use endpoint_protection_proxy_lib::{storage, tls, utils as safechain_utils};
 
 #[cfg(target_family = "unix")]
 #[global_allocator]
@@ -30,8 +30,8 @@ pub mod utils;
 
 /// CLI arguments for configuring proxy behavior.
 #[derive(Debug, Clone, Parser)]
-#[command(name = "safechain-l4-proxy")]
-#[command(bin_name = "safechain-l4-proxy")]
+#[command(name = "endpoint-protection-l4-proxy")]
+#[command(bin_name = "endpoint-protection-l4-proxy")]
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// secrets storage to use (e.g. for root CA)
@@ -67,9 +67,9 @@ pub struct Args {
         short = 'D',
         default_value = {
             #[cfg(not(target_os = "windows"))]
-            { ".aikido/safechain-l4-proxy" }
+            { ".aikido/endpoint-protection-l4-proxy" }
             #[cfg(target_os = "windows")]
-            { ".aikido\\safechain-l4-proxy" }
+            { ".aikido\\endpoint-protection-l4-proxy" }
         },
     )]
     pub data: PathBuf,
@@ -112,7 +112,7 @@ async fn main() -> Result<(), BoxError> {
     Ok(())
 }
 
-/// Runs all the safechain-l4-proxy services and blocks until
+/// Runs all the endpoint-protection-l4-proxy services and blocks until
 /// a critical error occurs or the (graceful) shutdown has been initiated.
 async fn run_with_args(args: Args) -> Result<(), BoxError> {
     tokio::fs::create_dir_all(&args.data)
@@ -145,7 +145,7 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
 
     #[cfg(feature = "har")]
     let (_har_client, _har_export_layer) =
-        { safechain_proxy_lib::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
+        { endpoint_protection_proxy_lib::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
 
     // the actual proxy initialisation is platform-specific
     self::platform::init_platform(args)

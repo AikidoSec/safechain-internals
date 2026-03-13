@@ -2,14 +2,14 @@
 
 set -e
 
-echo "SafeChain Ultimate Uninstaller - Pre-uninstall"
+echo "Aikido Endpoint Protection Uninstaller - Pre-uninstall"
 
-LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist"
+LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.endpointprotection.plist"
 
 # Stop and unload the daemon
-if launchctl list | grep -q "com.aikidosecurity.safechainultimate"; then
-    echo "Stopping SafeChain Ultimate daemon..."
-    launchctl bootout system/com.aikidosecurity.safechainultimate 2>/dev/null || {
+if launchctl list | grep -q "com.aikidosecurity.endpointprotection"; then
+    echo "Stopping Aikido Endpoint Protection daemon..."
+    launchctl bootout system/com.aikidosecurity.endpointprotection 2>/dev/null || {
         # Fallback to launchctl unload (old way of stopping the daemon on older macOS versions)
         echo "Trying alternative unload method..."
         launchctl unload "$LAUNCHDAEMON_PLIST" 2>/dev/null || true
@@ -22,8 +22,8 @@ if [ -f "$LAUNCHDAEMON_PLIST" ]; then
     rm -f "$LAUNCHDAEMON_PLIST"
 fi
 
-echo "Running SafeChain Ultimate teardown..."
-sudo "/Library/Application Support/AikidoSecurity/SafeChainUltimate/bin/safechain-ultimate" --teardown
+echo "Running Aikido Endpoint Protection teardown..."
+sudo "/Library/Application Support/AikidoSecurity/EndpointProtection/bin/endpoint-protection" --teardown
 
 echo "Pre-uninstall completed"
 

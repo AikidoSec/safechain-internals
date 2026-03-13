@@ -2,7 +2,7 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
-  <Package Name="SafeChain Ultimate"
+  <Package Name="Aikido Endpoint Protection"
            Manufacturer="Aikido Security BV"
            Version="$(var.Version)"
            ProductCode="*"
@@ -14,14 +14,14 @@
     <Property Id="AIKIDO_TOKEN" Secure="yes" />
     <SetProperty Id="AIKIDO_TOKEN_FROM_CLI" Value="1" Before="CostInitialize" Sequence="ui" Condition="AIKIDO_TOKEN" />
 
-    <MajorUpgrade Schedule="afterInstallValidate" DowngradeErrorMessage="A newer version of SafeChain Ultimate is already installed." AllowSameVersionUpgrades="yes" />
+    <MajorUpgrade Schedule="afterInstallValidate" DowngradeErrorMessage="A newer version of Aikido Endpoint Protection is already installed." AllowSameVersionUpgrades="yes" />
 
-    <Media Id="1" Cabinet="SafeChainUltimate.cab" EmbedCab="yes" />
+    <Media Id="1" Cabinet="EndpointProtection.cab" EmbedCab="yes" />
 
     <!-- Define installation directory structure -->
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLDIR" Name="AikidoSecurity">
-        <Directory Id="AGENTDIR" Name="SafeChainUltimate">
+        <Directory Id="AGENTDIR" Name="EndpointProtection">
           <Directory Id="BINDIR" Name="bin" />
           <Directory Id="SCRIPTSDIR" Name="scripts" />
         </Directory>
@@ -31,7 +31,7 @@
     <!-- ProgramData directory for cleanup on uninstall -->
     <StandardDirectory Id="CommonAppDataFolder">
       <Directory Id="APPDATAAIKIDO" Name="AikidoSecurity">
-        <Directory Id="APPDATAAGENT" Name="SafeChainUltimate">
+        <Directory Id="APPDATAAGENT" Name="EndpointProtection">
           <Directory Id="APPDATALOGSDIR" Name="logs" />
           <Directory Id="APPDATARUNDIR" Name="run" />
           <Directory Id="APPDATABINDIR" Name="bin" />
@@ -40,7 +40,7 @@
     </StandardDirectory>
 
     <!-- Main feature -->
-    <Feature Id="MainFeature" Title="SafeChain Ultimate" Level="1">
+    <Feature Id="MainFeature" Title="Aikido Endpoint Protection" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
       <ComponentRef Id="PathComponent" />
       <ComponentRef Id="CleanupProgramData" />
@@ -50,31 +50,31 @@
     <!-- Components -->
     <ComponentGroup Id="ProductComponents" Directory="BINDIR">
       <Component Id="AikidoAgentExe" Guid="3a2f5c8e-e57f-4ce4-ab7f-fa89e94c48cb">
-        <File Id="AikidoAgentExeFile" Source="$(var.BinDir)\SafeChainUltimate.exe" KeyPath="yes" />
-        <ServiceInstall Id="SafeChainUltimateService"
-                        Name="SafeChainUltimate"
-                        DisplayName="SafeChain Ultimate"
-                        Description="Aikido Security SafeChain Ultimate - monitors and secures the software supply chain"
+        <File Id="AikidoAgentExeFile" Source="$(var.BinDir)\EndpointProtection.exe" KeyPath="yes" />
+        <ServiceInstall Id="EndpointProtectionService"
+                        Name="EndpointProtection"
+                        DisplayName="Aikido Endpoint Protection"
+                        Description="Aikido Security Aikido Endpoint Protection - monitors and secures the software supply chain"
                         Start="auto"
                         Type="ownProcess"
                         ErrorControl="normal"
                         Account="LocalSystem" />
         <util:ServiceConfig
-                        ServiceName="SafeChainUltimate"
+                        ServiceName="EndpointProtection"
                         FirstFailureActionType="restart"
                         SecondFailureActionType="restart"
                         ThirdFailureActionType="restart"
                         RestartServiceDelayInSeconds="60"
                         ResetPeriodInDays="1" />
-        <ServiceControl Id="SafeChainUltimateServiceControl"
-                        Name="SafeChainUltimate"
+        <ServiceControl Id="EndpointProtectionServiceControl"
+                        Name="EndpointProtection"
                         Start="install"
                         Stop="both"
                         Remove="uninstall"
                         Wait="yes" />
       </Component>
-      <Component Id="SafeChainUltimateUIExe" Guid="ceafd8b2-da4d-4c92-ace7-8736cdd67162">
-        <File Id="SafeChainUltimateUIExe" Source="$(var.BinDir)\SafeChainUltimateUI.exe" KeyPath="yes" />
+      <Component Id="EndpointProtectionUIExe" Guid="ceafd8b2-da4d-4c92-ace7-8736cdd67162">
+        <File Id="EndpointProtectionUIExe" Source="$(var.BinDir)\EndpointProtectionUI.exe" KeyPath="yes" />
       </Component>
       <Component Id="SafeChainL7ProxyExe" Guid="8a745110-05f7-4bb8-8013-5fca733409ef">
         <File Id="SafeChainL7ProxyExeFile" Source="$(var.BinDir)\SafeChainL7Proxy.exe" KeyPath="yes" />

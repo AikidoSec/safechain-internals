@@ -49,31 +49,31 @@ jobs:
       - name: Prepare release files
         id: checksums
         run: |
-          mv artifacts/safechain-ultimate-darwin-amd64/safechain-ultimate-darwin-amd64 .
-          mv artifacts/safechain-ultimate-darwin-arm64/safechain-ultimate-darwin-arm64 .
+          mv artifacts/endpoint-protection-darwin-amd64/endpoint-protection-darwin-amd64 .
+          mv artifacts/endpoint-protection-darwin-arm64/endpoint-protection-darwin-arm64 .
 
-          mv artifacts/safechain-l7-proxy-darwin-amd64/safechain-l7-proxy-darwin-amd64 .
-          mv artifacts/safechain-l7-proxy-darwin-arm64/safechain-l7-proxy-darwin-arm64 .
+          mv artifacts/endpoint-protection-l7-proxy-darwin-amd64/endpoint-protection-l7-proxy-darwin-amd64 .
+          mv artifacts/endpoint-protection-l7-proxy-darwin-arm64/endpoint-protection-l7-proxy-darwin-arm64 .
 
-          mv artifacts/safechain-l7-proxy-linux-amd64/safechain-l7-proxy-linux-amd64 .
-          mv artifacts/safechain-l7-proxy-linux-arm64/safechain-l7-proxy-linux-arm64 .
+          mv artifacts/endpoint-protection-l7-proxy-linux-amd64/endpoint-protection-l7-proxy-linux-amd64 .
+          mv artifacts/endpoint-protection-l7-proxy-linux-arm64/endpoint-protection-l7-proxy-linux-arm64 .
 
-          mv artifacts/SafeChainUltimate.msi/SafeChainUltimate.msi ./SafeChainUltimate.msi
+          mv artifacts/EndpointProtection.msi/EndpointProtection.msi ./EndpointProtection.msi
 
-          mv artifacts/SafeChainUltimate.pkg/SafeChainUltimate.pkg ./SafeChainUltimate.pkg
+          mv artifacts/EndpointProtection.pkg/EndpointProtection.pkg ./EndpointProtection.pkg
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            safechain-ultimate-darwin-amd64
-            safechain-ultimate-darwin-arm64
-            safechain-l7-proxy-darwin-amd64
-            safechain-l7-proxy-darwin-arm64
-            safechain-l7-proxy-linux-amd64
-            safechain-l7-proxy-linux-arm64
-            SafeChainUltimate.msi
-            SafeChainUltimate.pkg
+            endpoint-protection-darwin-amd64
+            endpoint-protection-darwin-arm64
+            endpoint-protection-l7-proxy-darwin-amd64
+            endpoint-protection-l7-proxy-darwin-arm64
+            endpoint-protection-l7-proxy-linux-amd64
+            endpoint-protection-l7-proxy-linux-arm64
+            EndpointProtection.msi
+            EndpointProtection.pkg
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

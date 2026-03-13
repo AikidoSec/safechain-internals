@@ -1,6 +1,6 @@
 .PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-darwin-universal build-windows-amd64 build-proxy build-l7-proxy-universal build-pkg build-pkg-sign-local install-pkg uninstall-pkg clean test run help
 
-BINARY_NAME=safechain-ultimate
+BINARY_NAME=endpoint-protection
 BINARY_NAME_UI=endpoint-protection-ui
 VERSION?=dev
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
@@ -120,32 +120,32 @@ build-windows-arm64:
 	@"$(MAKE)" GOOS=windows GOARCH=arm64 build-release
 
 build-l7-proxy:
-	@echo "Building safechain-l7-proxy..."
-	@cargo build --release --bin safechain-l7-proxy
+	@echo "Building endpoint-protection-l7-proxy..."
+	@cargo build --release --bin endpoint-protection-l7-proxy
 	@mkdir -p $(BIN_DIR)
-	@cp target/release/safechain-l7-proxy $(BIN_DIR)/safechain-l7-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)
-	@echo "Proxy built: $(BIN_DIR)/safechain-l7-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)"
+	@cp target/release/endpoint-protection-l7-proxy $(BIN_DIR)/endpoint-protection-l7-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)
+	@echo "Proxy built: $(BIN_DIR)/endpoint-protection-l7-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)"
 
 build-l7-proxy-universal:
-	@echo "Building safechain-l7-proxy for x86_64-apple-darwin..."
+	@echo "Building endpoint-protection-l7-proxy for x86_64-apple-darwin..."
 	@rustup target add x86_64-apple-darwin 2>/dev/null || true
-	@cargo build --release --bin safechain-l7-proxy --target x86_64-apple-darwin
-	@echo "Building safechain-l7-proxy for aarch64-apple-darwin..."
+	@cargo build --release --bin endpoint-protection-l7-proxy --target x86_64-apple-darwin
+	@echo "Building endpoint-protection-l7-proxy for aarch64-apple-darwin..."
 	@rustup target add aarch64-apple-darwin 2>/dev/null || true
-	@cargo build --release --bin safechain-l7-proxy --target aarch64-apple-darwin
+	@cargo build --release --bin endpoint-protection-l7-proxy --target aarch64-apple-darwin
 	@mkdir -p $(BIN_DIR)
 	@lipo -create \
-		target/x86_64-apple-darwin/release/safechain-l7-proxy \
-		target/aarch64-apple-darwin/release/safechain-l7-proxy \
-		-output $(BIN_DIR)/safechain-l7-proxy-darwin-universal
+		target/x86_64-apple-darwin/release/endpoint-protection-l7-proxy \
+		target/aarch64-apple-darwin/release/endpoint-protection-l7-proxy \
+		-output $(BIN_DIR)/endpoint-protection-l7-proxy-darwin-universal
 	@echo "Universal proxy built:"
-	@lipo -info $(BIN_DIR)/safechain-l7-proxy-darwin-universal
+	@lipo -info $(BIN_DIR)/endpoint-protection-l7-proxy-darwin-universal
 
 build-pkg:
 ifeq ($(DETECTED_OS),darwin)
 	@echo "Building macOS PKG installer..."
 	@cd packaging/macos && ./build-distribution-pkg.sh -v $(VERSION) -a universal -b ../../$(BIN_DIR) -o ../../$(DIST_DIR)
-	@echo "PKG built: $(DIST_DIR)/SafeChainUltimate-$(VERSION).pkg"
+	@echo "PKG built: $(DIST_DIR)/EndpointProtection-$(VERSION).pkg"
 else
 	@echo "Error: PKG building is only supported on macOS"
 	@exit 1
@@ -158,12 +158,12 @@ ifeq ($(DETECTED_OS),darwin)
 else ifeq ($(DETECTED_OS),windows)
 	@echo "Building Windows binaries for $(DETECTED_ARCH)..."
 	@"$(MAKE)" build-windows-$(DETECTED_ARCH) VERSION=$(VERSION)
-	@echo "Building Windows proxy (safechain-l7-proxy)..."
-	@cargo build --release -p safechain-l7-proxy --target x86_64-pc-windows-msvc
+	@echo "Building Windows proxy (endpoint-protection-l7-proxy)..."
+	@cargo build --release -p endpoint-protection-l7-proxy --target x86_64-pc-windows-msvc
 	@mkdir -p $(BIN_DIR)
-	@cp target/x86_64-pc-windows-msvc/release/safechain-l7-proxy.exe $(BIN_DIR)/SafeChainL7Proxy.exe
-	@cp $(BIN_DIR)/$(BINARY_NAME)-windows-$(DETECTED_ARCH).exe $(BIN_DIR)/SafeChainUltimate.exe
-	@cp $(BIN_DIR)/$(BINARY_NAME_UI)-windows-$(DETECTED_ARCH).exe $(BIN_DIR)/SafeChainUltimateUI.exe
+	@cp target/x86_64-pc-windows-msvc/release/endpoint-protection-l7-proxy.exe $(BIN_DIR)/SafeChainL7Proxy.exe
+	@cp $(BIN_DIR)/$(BINARY_NAME)-windows-$(DETECTED_ARCH).exe $(BIN_DIR)/EndpointProtection.exe
+	@cp $(BIN_DIR)/$(BINARY_NAME_UI)-windows-$(DETECTED_ARCH).exe $(BIN_DIR)/EndpointProtectionUI.exe
 	@echo "Building Windows MSI installer..."
 	@powershell -ExecutionPolicy Bypass -File packaging/windows/build-msi.ps1 -Version "$(VERSION)" -BinDir ".\$(BIN_DIR)" -OutputDir "."
 	@echo "Windows MSI build completed."
@@ -180,7 +180,7 @@ endif
 	@cd packaging/macos && ./install-local.sh
 else ifeq ($(DETECTED_OS),windows)
 	@echo "Installing Windows MSI package..."
-	@msiexec /i SafeChainUltimate.msi
+	@msiexec /i EndpointProtection.msi
 else
 	@echo "Error: PKG installation is only supported on macOS"
 	@exit 1
@@ -188,7 +188,7 @@ endif
 
 uninstall-pkg:
 ifeq ($(DETECTED_OS),darwin)
-	sudo "/Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall"
+	sudo "/Library/Application Support/AikidoSecurity/EndpointProtection/scripts/uninstall"
 else
 	@echo "Error: PKG uninstallation is only supported on macOS"
 	@exit 1

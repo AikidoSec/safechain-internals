@@ -9,8 +9,8 @@ l7_access_group := l7_team_id + "." + l7_bundle_id
 xcode_l7_project_dir := "packaging/macos/xcode/l7-proxy"
 xcode_l7_project_file := xcode_l7_project_dir + "/AikidoEndpointL7Proxy.xcodeproj"
 xcode_l7_scheme := "AikidoEndpointL7Proxy"
-xcode_l7_derived_data := ".aikido/xcode/safechain-l7-proxy-wrapper"
-xcode_l7_app_exe := xcode_l7_derived_data + "/Build/Products/Debug/" + xcode_l7_scheme + ".app/Contents/MacOS/safechain-l7-proxy-bin"
+xcode_l7_derived_data := ".aikido/xcode/endpoint-protection-l7-proxy-wrapper"
+xcode_l7_app_exe := xcode_l7_derived_data + "/Build/Products/Debug/" + xcode_l7_scheme + ".app/Contents/MacOS/endpoint-protection-l7-proxy-bin"
 
 rust-qa:
     cargo fmt
@@ -37,25 +37,25 @@ rust-qa-full: rust-qa rust-fuzz
     cargo nextest run --workspace --all-features --run-ignored=only
 
 run-l4-proxy *ARGS:
-    mkdir -p .aikido/safechain-l4-proxy
-    RUST_LOG=info,safechain_l4_proxy=debug,safechain_proxy_lib=debug \
+    mkdir -p .aikido/endpoint-protection-l4-proxy
+    RUST_LOG=info,endpoint_protection_l4_proxy=debug,endpoint_protection_proxy_lib=debug \
     cargo run \
-        --bin safechain-l4-proxy \
+        --bin endpoint-protection-l4-proxy \
         --features har \
         -- \
-        --secrets .aikido/safechain-l4-proxy \
+        --secrets .aikido/endpoint-protection-l4-proxy \
         {{ARGS}}
 
 run-l7-proxy *ARGS:
-    mkdir -p .aikido/safechain-l7-proxy
-    RUST_LOG=info,safechain_l7_proxy=debug,safechain_proxy_lib=debug \
+    mkdir -p .aikido/endpoint-protection-l7-proxy
+    RUST_LOG=info,endpoint_protection_l7_proxy=debug,endpoint_protection_proxy_lib=debug \
     cargo run \
-        --bin safechain-l7-proxy \
+        --bin endpoint-protection-l7-proxy \
         --features har \
         -- \
         --bind '127.0.0.1:8080' \
         --meta '127.0.0.1:8088' \
-        --secrets .aikido/safechain-l7-proxy \
+        --secrets .aikido/endpoint-protection-l7-proxy \
         --pretty \
         {{ARGS}}
 
@@ -84,7 +84,7 @@ macos-l7-xcodegen-build-debug: macos-l7-xcodegen-generate
 
 macos-l7-xcode-verify-signing: macos-l7-xcodegen-build-debug
     @codesign -dvv "{{xcode_l7_app_exe}}" 2>&1 | rg "Identifier=|TeamIdentifier="
-    @codesign -dv --verbose=4 "{{xcode_l7_derived_data}}/Build/Products/Debug/{{xcode_l7_scheme}}.app/Contents/MacOS/safechain-l7-proxy-bin" 2>&1 | rg "Identifier=|TeamIdentifier="
+    @codesign -dv --verbose=4 "{{xcode_l7_derived_data}}/Build/Products/Debug/{{xcode_l7_scheme}}.app/Contents/MacOS/endpoint-protection-l7-proxy-bin" 2>&1 | rg "Identifier=|TeamIdentifier="
 
 run-macos-l7-proxy-protected-xcode *ARGS: macos-l7-xcode-verify-signing
     "{{xcode_l7_app_exe}}" \

@@ -1,6 +1,6 @@
 [package]
-name = "safechain-proxy-fuzz"
-description = "fuzzing modules for safechain-proxy-lib code"
+name = "endpoint-protection-proxy-fuzz"
+description = "fuzzing modules for endpoint-protection-proxy-lib code"
 version = { workspace = true }
 edition = { workspace = true }
 publish = false
@@ -11,7 +11,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = { workspace = true }
-safechain-proxy-lib = { workspace = true }
+endpoint-protection-proxy-lib = { workspace = true }
 
 [[bin]]
 name = "parse_pragmatic_semver_version"

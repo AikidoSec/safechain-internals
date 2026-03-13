@@ -15,12 +15,12 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/version"
 )
 
-const serviceName = "SafeChainUltimate"
+const serviceName = "EndpointProtection"
 
 func main() {
 	var (
 		showVersion    = flag.Bool("version", false, "Show version information")
-		teardown       = flag.Bool("teardown", false, "Teardown SafeChain Ultimate")
+		teardown       = flag.Bool("teardown", false, "Teardown Aikido Endpoint Protection")
 		removeScanners = flag.Bool("remove-scanners", false, "Remove all scanners on teardown")
 	)
 	flag.Parse()

@@ -69,7 +69,7 @@ PAC offers several advantages over static proxy configurations:
 
 ## Implementation in Safechain Proxy
 
-The `safechain` proxy provides a built-in meta-server to host and generate these files.
+The `Endpoint Protection` proxy provides a built-in meta-server to host and generate these files.
 
 * **Logic Location**: `proxy/src/firewall/pac.rs` (Handles the generation of domain lists).
 * **Router Location**: `proxy/src/server/meta/mod.rs` (Serves the file).

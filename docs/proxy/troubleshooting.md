@@ -6,7 +6,7 @@
 
 If you get a "port already in use" error:
 - Try running without `--port` to let the OS assign an available port
-- Or choose a different port: `./safechain-l7-proxy --port 8080`
+- Or choose a different port: `./endpoint-protection-l7-proxy --port 8080`
 
 ### Proxy Not Working
 
@@ -74,7 +74,7 @@ Enable debug (or trace even) logging to troubleshoot issues:
 
 ```bash
 # macOS/Linux
-RUST_LOG=debug ./safechain-l7-proxy
+RUST_LOG=debug ./endpoint-protection-l7-proxy
 
 # Windows (Command Prompt)
 set RUST_LOG=trace

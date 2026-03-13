@@ -726,6 +726,75 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "869b0adbda23651a9c5c0c3d270aac9fcb52e8622a8f2b17e57802d7791962f2"
 
 [[package]]
+name = "endpoint-protection-l4-proxy"
+version = "1.0.0"
+dependencies = [
+ "clap",
+ "endpoint-protection-proxy-lib",
+ "mimalloc",
+ "rama",
+ "static_vcruntime",
+ "tikv-jemallocator",
+ "tokio",
+]
+
+[[package]]
+name = "endpoint-protection-l7-proxy"
+version = "1.0.0"
+dependencies = [
+ "arc-swap",
+ "clap",
+ "endpoint-protection-proxy-lib",
+ "humantime",
+ "libc",
+ "mimalloc",
+ "rama",
+ "rustls-platform-verifier",
+ "serde",
+ "serde_html_form",
+ "serde_json",
+ "static_vcruntime",
+ "tikv-jemallocator",
+ "tokio",
+ "tracing-test",
+]
+
+[[package]]
+name = "endpoint-protection-proxy-fuzz"
+version = "1.0.0"
+dependencies = [
+ "endpoint-protection-proxy-lib",
+ "libfuzzer-sys",
+]
+
+[[package]]
+name = "endpoint-protection-proxy-lib"
+version = "1.0.0"
+dependencies = [
+ "apple-native-keyring-store",
+ "arc-swap",
+ "humantime",
+ "keyring-core",
+ "libc",
+ "linux-keyutils-keyring-store",
+ "lz4_flex",
+ "moka",
+ "parking_lot",
+ "postcard",
+ "radix_trie",
+ "rama",
+ "rand 0.10.0",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "serde_test",
+ "sudo",
+ "tokio",
+ "tracing-test",
+ "windows-native-keyring-store",
+]
+
+[[package]]
 name = "enum-as-inner"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2896,75 +2965,6 @@ name = "ryu"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
-
-[[package]]
-name = "safechain-l4-proxy"
-version = "1.0.0"
-dependencies = [
- "clap",
- "mimalloc",
- "rama",
- "safechain-proxy-lib",
- "static_vcruntime",
- "tikv-jemallocator",
- "tokio",
-]
-
-[[package]]
-name = "safechain-l7-proxy"
-version = "1.0.0"
-dependencies = [
- "arc-swap",
- "clap",
- "humantime",
- "libc",
- "mimalloc",
- "rama",
- "rustls-platform-verifier",
- "safechain-proxy-lib",
- "serde",
- "serde_html_form",
- "serde_json",
- "static_vcruntime",
- "tikv-jemallocator",
- "tokio",
- "tracing-test",
-]
-
-[[package]]
-name = "safechain-proxy-fuzz"
-version = "1.0.0"
-dependencies = [
- "libfuzzer-sys",
- "safechain-proxy-lib",
-]
-
-[[package]]
-name = "safechain-proxy-lib"
-version = "1.0.0"
-dependencies = [
- "apple-native-keyring-store",
- "arc-swap",
- "humantime",
- "keyring-core",
- "libc",
- "linux-keyutils-keyring-store",
- "lz4_flex",
- "moka",
- "parking_lot",
- "postcard",
- "radix_trie",
- "rama",
- "rand 0.10.0",
- "secrecy",
- "serde",
- "serde_json",
- "serde_test",
- "sudo",
- "tokio",
- "tracing-test",
- "windows-native-keyring-store",
-]
 
 [[package]]
 name = "same-file"

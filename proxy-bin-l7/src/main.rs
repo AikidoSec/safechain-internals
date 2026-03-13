@@ -20,7 +20,7 @@ use rama::{
 };
 
 use clap::Parser;
-use safechain_proxy_lib::{http, storage, tls, utils as safechain_utils};
+use endpoint_protection_proxy_lib::{http, storage, tls, utils as safechain_utils};
 use safechain_utils::token::AgentIdentity;
 
 pub mod client;
@@ -40,8 +40,8 @@ pub mod test;
 
 /// CLI arguments for configuring proxy behavior.
 #[derive(Debug, Clone, Parser)]
-#[command(name = "safechain-l7-proxy")]
-#[command(bin_name = "safechain-l7-proxy")]
+#[command(name = "endpoint-protection-l7-proxy")]
+#[command(bin_name = "endpoint-protection-l7-proxy")]
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// network interface to bind the proxy to
@@ -98,9 +98,9 @@ pub struct Args {
         short = 'D',
         default_value = {
             #[cfg(not(target_os = "windows"))]
-            { ".aikido/safechain-l7-proxy" }
+            { ".aikido/endpoint-protection-l7-proxy" }
             #[cfg(target_os = "windows")]
-            { ".aikido\\safechain-l7-proxy" }
+            { ".aikido\\endpoint-protection-l7-proxy" }
         },
     )]
     pub data: PathBuf,
@@ -158,7 +158,7 @@ async fn main() -> Result<(), BoxError> {
     Ok(())
 }
 
-/// Runs all the safechain-l7-proxy services and blocks until
+/// Runs all the endpoint-protection-l7-proxy services and blocks until
 /// a critical error occurs or the (graceful) shutdown has been initiated.
 ///
 /// This entry point is used by both the (binary) `main` function as well as
@@ -200,7 +200,7 @@ where
 
     #[cfg(feature = "har")]
     let (har_client, har_export_layer) =
-        { safechain_proxy_lib::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
+        { endpoint_protection_proxy_lib::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
 
     // ensure to not wait for firewall creation in case shutdown was initiated,
     // this can happen for example in case remote lists need to be fetched and the
@@ -285,7 +285,7 @@ async fn run_meta_https_server(
     root_ca: tls::RootCA,
     proxy_addr_rx: tokio::sync::oneshot::Receiver<SocketAddress>,
     firewall: http::firewall::Firewall,
-    #[cfg(feature = "har")] har_client: safechain_proxy_lib::diagnostics::har::HarClient,
+    #[cfg(feature = "har")] har_client: endpoint_protection_proxy_lib::diagnostics::har::HarClient,
 ) {
     tracing::info!("spawning meta http(s) server...");
     if let Err(err) = server::meta::run_meta_https_server(
@@ -318,7 +318,7 @@ async fn run_proxy_server(
     tls_acceptor: TlsAcceptorLayer,
     proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
     firewall: http::firewall::Firewall,
-    #[cfg(feature = "har")] har_export_layer: safechain_proxy_lib::diagnostics::har::HARExportLayer,
+    #[cfg(feature = "har")] har_export_layer: endpoint_protection_proxy_lib::diagnostics::har::HARExportLayer,
 ) {
     tracing::info!("spawning proxy server...");
     if let Err(err) = server::proxy::run_proxy_server(

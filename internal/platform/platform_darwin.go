@@ -20,14 +20,14 @@ import (
 )
 
 const (
-	SafeChainUltimateLogName     = "safechain-ultimate.log"
-	SafeChainUltimateErrLogName  = "safechain-ultimate.err"
+	EndpointProtectionLogName    = "endpoint-protection.log"
+	EndpointProtectionErrLogName = "endpoint-protection.err"
 	SafeChainUILogName           = "endpoint-protection-ui.log"
 	SafeChainUIAppName           = "endpoint-protection-ui.app"
-	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
-	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
-	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
-	SafeChainSbomJSONName        = "safechain-ultimate-sbom.json"
+	SafeChainL7ProxyBinaryName   = "endpoint-protection-l7-proxy"
+	SafeChainL7ProxyLogName      = "endpoint-protection-l7-proxy.log"
+	SafeChainL7ProxyErrLogName   = "endpoint-protection-l7-proxy.err"
+	SafeChainSbomJSONName        = "endpoint-protection-sbom.json"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
 )
@@ -50,9 +50,9 @@ func initConfig() error {
 		}
 	}
 	safeChainHomeDir := filepath.Join(config.HomeDir, ".safe-chain")
-	config.BinaryDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/bin"
-	config.RunDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/run"
-	config.LogDir = "/Library/Logs/AikidoSecurity/SafeChainUltimate"
+	config.BinaryDir = "/Library/Application Support/AikidoSecurity/EndpointProtection/bin"
+	config.RunDir = "/Library/Application Support/AikidoSecurity/EndpointProtection/run"
+	config.LogDir = "/Library/Logs/AikidoSecurity/EndpointProtection"
 	config.SafeChainBinaryPath = filepath.Join(safeChainHomeDir, "bin", "safe-chain")
 	return nil
 }

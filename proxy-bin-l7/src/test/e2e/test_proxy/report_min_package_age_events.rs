@@ -3,7 +3,7 @@ use rama::{
     telemetry::tracing,
 };
 
-use safechain_proxy_lib::http::firewall::events::MinPackageAgeEvent;
+use endpoint_protection_proxy_lib::http::firewall::events::MinPackageAgeEvent;
 
 use crate::test::e2e;
 

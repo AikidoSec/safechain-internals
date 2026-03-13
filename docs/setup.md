@@ -6,8 +6,8 @@ Download and run the latest PKG installer from the [releases page](https://githu
 
 Or install via command line:
 ```bash
-curl -LO "https://github.com/AikidoSec/safechain-internals/releases/latest/download/SafeChainUltimate.pkg"
-echo "YOUR_TOKEN" > /tmp/aikido_endpoint_token.txt && sudo installer -pkg SafeChainUltimate.pkg -target /
+curl -LO "https://github.com/AikidoSec/safechain-internals/releases/latest/download/EndpointProtection.pkg"
+echo "YOUR_TOKEN" > /tmp/aikido_endpoint_token.txt && sudo installer -pkg EndpointProtection.pkg -target /
 ```
 
 ### Windows
@@ -16,8 +16,8 @@ Download and run the latest MSI installer from the [releases page](https://githu
 
 Or start PowerShell as Administrator and run:
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/AikidoSec/safechain-internals/releases/latest/download/SafeChainUltimate.msi" -OutFile "SafeChainUltimate.msi"
-msiexec /i SafeChainUltimate.msi /qn /norestart AIKIDO_TOKEN=YOUR_TOKEN
+Invoke-WebRequest -Uri "https://github.com/AikidoSec/safechain-internals/releases/latest/download/EndpointProtection.msi" -OutFile "EndpointProtection.msi"
+msiexec /i EndpointProtection.msi /qn /norestart AIKIDO_TOKEN=YOUR_TOKEN
 ```
 
 ## Uninstall
@@ -26,14 +26,14 @@ msiexec /i SafeChainUltimate.msi /qn /norestart AIKIDO_TOKEN=YOUR_TOKEN
 
 Run the uninstall script that was installed with the package:
 ```bash
-sudo "/Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall"
+sudo "/Library/Application Support/AikidoSecurity/EndpointProtection/scripts/uninstall"
 ```
 
 ### Windows
 
 Start PowerShell as Administrator and run:
 ```powershell
-msiexec /x SafeChainUltimate.msi /qn /norestart
+msiexec /x EndpointProtection.msi /qn /norestart
 ```
 
 ## Proxy

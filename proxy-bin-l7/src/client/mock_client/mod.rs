@@ -15,7 +15,7 @@ use rama::{
     service::service_fn,
     telemetry::tracing,
 };
-use safechain_proxy_lib::utils::env::aikido_app_base_url;
+use endpoint_protection_proxy_lib::utils::env::aikido_app_base_url;
 
 mod assert_endpoint;
 mod endpoint_protection_callbacks;

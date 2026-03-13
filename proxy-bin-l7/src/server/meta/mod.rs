@@ -25,10 +25,10 @@ use rama::{
     tls::boring::server::TlsAcceptorLayer,
 };
 
-use safechain_proxy_lib::{http::firewall::Firewall, utils::env::network_service_identifier};
+use endpoint_protection_proxy_lib::{http::firewall::Firewall, utils::env::network_service_identifier};
 
 #[cfg(feature = "har")]
-use safechain_proxy_lib::diagnostics::har::HarClient;
+use endpoint_protection_proxy_lib::diagnostics::har::HarClient;
 
 use crate::{Args, tls::RootCA};
 

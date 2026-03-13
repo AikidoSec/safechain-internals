@@ -248,7 +248,7 @@ func (d *Daemon) run(ctx context.Context) error {
 }
 
 func (d *Daemon) Uninstall(ctx context.Context, removeScanners bool) error {
-	log.Println("Uninstalling the SafeChain Ultimate...")
+	log.Println("Uninstalling the Aikido Endpoint Protection...")
 
 	if removeScanners {
 		if err := d.registry.UninstallAll(ctx); err != nil {

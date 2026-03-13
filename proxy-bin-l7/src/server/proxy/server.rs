@@ -28,10 +28,10 @@ use ::{
         http::layer::har::extensions::RequestComment, layer::AddInputExtensionLayer,
         utils::str::arcstr::arcstr,
     },
-    safechain_proxy_lib::diagnostics::har::HARExportLayer,
+    endpoint_protection_proxy_lib::diagnostics::har::HARExportLayer,
 };
 
-use safechain_proxy_lib::http::{firewall::Firewall, service::connectivity::CONNECTIVITY_DOMAIN};
+use endpoint_protection_proxy_lib::http::{firewall::Firewall, service::connectivity::CONNECTIVITY_DOMAIN};
 
 #[derive(Debug)]
 pub(super) struct MitmServer<S> {
