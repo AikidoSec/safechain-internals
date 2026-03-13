@@ -44,7 +44,7 @@ func (m *UIManager) Launch(ctx context.Context, ingressAddr string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get random free port: %v", err)
 	}
-	uiURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+	uiURL := fmt.Sprintf("127.0.0.1:%d", port)
 	m.Client.SetBaseURL(uiURL)
 
 	cfg := platform.GetConfig()
