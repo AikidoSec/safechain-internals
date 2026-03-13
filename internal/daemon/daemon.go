@@ -227,8 +227,8 @@ func (d *Daemon) run(ctx context.Context) error {
 		return fmt.Errorf("failed to install setup: %v", err)
 	}
 
-	if err := dockerca.ReconcileRunningContainers(ctx); err != nil {
-		log.Printf("Docker CA: initial reconciliation failed: %v", err)
+	if err := dockerca.InstallCAOnRunningContainers(ctx); err != nil {
+		log.Printf("Docker CA: failed to install CA on running containers: %v", err)
 	}
 
 	d.wg.Add(1)

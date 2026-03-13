@@ -55,7 +55,7 @@ var rhelFamilyIDs = map[string]struct{}{
 	"ol":        {},
 }
 
-func ReconcileRunningContainers(ctx context.Context) error {
+func InstallCAOnRunningContainers(ctx context.Context) error {
 	dockerBinary, err := findDockerBinary()
 	if err != nil {
 		log.Println("Docker CA: docker binary not found, skipping reconcile")
@@ -118,7 +118,9 @@ func WatchContainerStarts(ctx context.Context) error {
 
 	stderrDone := make(chan string, 1)
 	go func() {
-		b, err := io.ReadAll(stderr)
+		// Cap stderr capture to 4 KiB — enough for any error message from
+		// docker events, prevents unbounded memory growth on long-running watchers.
+		b, err := io.ReadAll(io.LimitReader(stderr, 4096))
 		if err != nil {
 			log.Printf("Docker CA: error reading docker events stderr: %v", err)
 		}
