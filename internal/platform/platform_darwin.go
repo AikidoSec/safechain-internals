@@ -464,8 +464,8 @@ func CommandAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, arg
 	env := []string{"PATH=" + pathEnv}
 
 	if !RunningAsRoot() {
-		// No shell is involved: args are passed directly to execve as
-		// separate arguments.
+		// Use exec.CommandContext to avoid shell interpretation of arguments,
+		// preventing injection when passing user-controlled values through sudo.
 		cmd := exec.CommandContext(ctx, binaryPath, args...)
 		cmd.Env = append(os.Environ(), env...)
 		return cmd, nil
@@ -483,8 +483,8 @@ func CommandAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, arg
 	}
 	suArgs = append(suArgs, binaryPath)
 	suArgs = append(suArgs, args...)
-	// No shell is involved: args are passed directly to execve as
-	// separate arguments.
+	// Use exec.CommandContext to avoid shell interpretation of arguments,
+	// preventing injection when passing user-controlled values through sudo.
 	return exec.CommandContext(ctx, "sudo", suArgs...), nil
 }
 

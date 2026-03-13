@@ -118,7 +118,10 @@ func WatchContainerStarts(ctx context.Context) error {
 
 	stderrDone := make(chan string, 1)
 	go func() {
-		b, _ := io.ReadAll(stderr)
+		b, err := io.ReadAll(stderr)
+		if err != nil {
+			log.Printf("Docker CA: error reading docker events stderr: %v", err)
+		}
 		stderrDone <- strings.TrimSpace(string(b))
 	}()
 
