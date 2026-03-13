@@ -40,9 +40,8 @@ func showBlockedModal(event BlockEvent, ingressAddress string) {
 		"--package-id", event.Artifact.PackageName,
 		"--package-version", event.Artifact.PackageVersion,
 		"--package-human-name", event.Artifact.DisplayName,
-		// Encapsulate title as an argument: It can contain spaces causing the argument parsing to fail for windows.
-		"--title", fmt.Sprintf("\"%s\"", title),
-		"--subtitle", fmt.Sprintf("\"%s\"", subtitle),
+		"--title", title,
+		"--subtitle", subtitle,
 		"--ingress", ingressAddress,
 		"--bypass-enabled=true",
 	}
