@@ -122,6 +122,7 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
 
     codesign --sign "$CERT_IDENTITY" \
              --force \
+             --deep \
              --timestamp \
              --options runtime \
              "$PROJECT_DIR/bin/safechain-ultimate-ui-darwin-universal.app"

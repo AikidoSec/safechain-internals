@@ -89,15 +89,11 @@ export function EventsList() {
                   className="row-clickable"
                 >
                   <td className="event-product">
-                    {getToolIcon(ev.artifact.product) ? (
-                      <img
-                        src={getToolIcon(ev.artifact.product)}
-                        alt={ev.artifact.product}
-                        className="event-product-icon"
-                      />
-                    ) : (
-                      ev.artifact.product
-                    )}
+                    <img
+                      src={getToolIcon(ev.artifact.product)}
+                      alt={ev.artifact.product}
+                      className="event-product-icon"
+                    />
                   </td>
                   <td className="event-time">{formatEventTime(ev.ts_ms)}</td>
                   <td className="event-identifier" title={ev.artifact.identifier}>

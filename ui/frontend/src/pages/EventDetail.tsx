@@ -37,13 +37,11 @@ function EventInfo({ event }: { event: BlockEvent }) {
       <div className="event-info-row">
         <dt>Package</dt>
         <dd className="event-info-package">
-          {getToolIcon(event.artifact.product) && (
-            <img
-              src={getToolIcon(event.artifact.product)}
-              alt={event.artifact.product}
-              className="event-info-icon"
-            />
-          )}
+          <img
+            src={getToolIcon(event.artifact.product)}
+            alt={event.artifact.product}
+            className="event-info-icon"
+          />
           {event.artifact.display_name ?? event.artifact.identifier}
         </dd>
       </div>
