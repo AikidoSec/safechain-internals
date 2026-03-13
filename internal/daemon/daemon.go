@@ -20,6 +20,7 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/sbom/chrome"
 	"github.com/AikidoSec/safechain-internals/internal/sbom/npm"
 	"github.com/AikidoSec/safechain-internals/internal/sbom/pip"
+	"github.com/AikidoSec/safechain-internals/internal/sbom/skills"
 	"github.com/AikidoSec/safechain-internals/internal/sbom/vscode"
 	"github.com/AikidoSec/safechain-internals/internal/scannermanager"
 	"github.com/AikidoSec/safechain-internals/internal/setup"
@@ -374,6 +375,7 @@ func newSBOMRegistry() *sbom.Registry {
 	r.Register(chrome.New())
 	r.Register(vscode.New())
 	r.Register(pip.New())
+	r.Register(skills.New())
 	return r
 }
 
