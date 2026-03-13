@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import type { BlockEvent, BlockReason } from "../types";
 import { getEvent, requestAccess } from "../api";
-import { TOOL_ICONS } from "../constants";
+import { getToolIcon } from "../constants";
 import { formatEventTime, isConnectionError } from "../format";
 
 const BLOCK_REASON_INFO: Record<BlockReason, { title: string; description: string }> = {
@@ -37,9 +37,9 @@ function EventInfo({ event }: { event: BlockEvent }) {
       <div className="event-info-row">
         <dt>Package</dt>
         <dd className="event-info-package">
-          {TOOL_ICONS[event.artifact.product?.toLowerCase()] && (
+          {getToolIcon(event.artifact.product) && (
             <img
-              src={TOOL_ICONS[event.artifact.product.toLowerCase()]}
+              src={getToolIcon(event.artifact.product)}
               alt={event.artifact.product}
               className="event-info-icon"
             />

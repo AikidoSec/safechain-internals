@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { BlockEvent } from "../types";
 import { Events } from "@wailsio/runtime";
 import { listEvents } from "../api";
-import { TOOL_ICONS } from "../constants";
+import { getToolIcon } from "../constants";
 import { formatEventTime, isConnectionError } from "../format";
 
 export function EventsList() {
@@ -89,9 +89,9 @@ export function EventsList() {
                   className="row-clickable"
                 >
                   <td className="event-product">
-                    {TOOL_ICONS[ev.artifact.product?.toLowerCase()] ? (
+                    {getToolIcon(ev.artifact.product) ? (
                       <img
-                        src={TOOL_ICONS[ev.artifact.product.toLowerCase()]}
+                        src={getToolIcon(ev.artifact.product)}
                         alt={ev.artifact.product}
                         className="event-product-icon"
                       />

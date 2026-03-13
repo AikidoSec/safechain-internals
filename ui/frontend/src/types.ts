@@ -12,7 +12,6 @@ export interface Artifact {
 export interface BlockEvent {
   id: string;
   ts_ms: number;
-  // The product type (e.g., "npm", "pypi", "vscode", "chrome")
   artifact: Artifact;
   block_reason: BlockReason;
   status?: EventStatus;
