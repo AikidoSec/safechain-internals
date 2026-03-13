@@ -45,7 +45,7 @@ jobs:
       - name: Rename binary for artifact
         run: |
           mv bin/safechain-ultimate-windows-amd64.exe bin/SafeChainUltimate.exe
-          mv bin/safechain-ultimate-ui-windows-amd64.exe bin/SafeChainUltimateUI.exe
+          mv bin/endpoint-protection-ui-windows-amd64.exe bin/SafeChainUltimateUI.exe
         shell: bash
 
       - name: Upload Windows ultimate artifact

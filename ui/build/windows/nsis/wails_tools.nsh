@@ -11,7 +11,7 @@
     !define INFO_COMPANYNAME "Aikido Security"
 !endif
 !ifndef INFO_PRODUCTNAME
-    !define INFO_PRODUCTNAME "safechain-ultimate-ui"
+    !define INFO_PRODUCTNAME "endpoint-protection-ui"
 !endif
 !ifndef INFO_PRODUCTVERSION
     !define INFO_PRODUCTVERSION "0.0.1"

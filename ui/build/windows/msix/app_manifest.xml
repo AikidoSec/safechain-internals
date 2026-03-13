@@ -14,9 +14,9 @@
     ProcessorArchitecture="x64" />
   
   <Properties>
-    <DisplayName>safechain-ultimate-ui</DisplayName>
+    <DisplayName>endpoint-protection-ui</DisplayName>
     <PublisherDisplayName>Aikido Security</PublisherDisplayName>
-    <Description>safechain-ultimate-ui</Description>
+    <Description>endpoint-protection-ui</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   
@@ -29,10 +29,10 @@
   </Resources>
   
   <Applications>
-    <Application Id="com.aikidosecurity.safechainultimate" Executable="safechain-ultimate-ui" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="com.aikidosecurity.safechainultimate" Executable="endpoint-protection-ui" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="safechain-ultimate-ui"
-        Description="safechain-ultimate-ui"
+        DisplayName="endpoint-protection-ui"
+        Description="endpoint-protection-ui"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
@@ -41,7 +41,7 @@
       </uap:VisualElements>
       
       <Extensions>
-        <desktop:Extension Category="windows.fullTrustProcess" Executable="safechain-ultimate-ui" />
+        <desktop:Extension Category="windows.fullTrustProcess" Executable="endpoint-protection-ui" />
         
         
       </Extensions>

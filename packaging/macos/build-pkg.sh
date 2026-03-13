@@ -64,7 +64,7 @@ echo "  Project directory: $PROJECT_DIR"
 
 # Verify binaries exist
 AGENT_BIN="$BIN_DIR/safechain-ultimate-darwin-$ARCH"
-AGENT_UI_APP="$BIN_DIR/safechain-ultimate-ui-darwin-$ARCH.app"
+AGENT_UI_APP="$BIN_DIR/endpoint-protection-ui-darwin-$ARCH.app"
 PROXY_BIN="$BIN_DIR/safechain-l7-proxy-darwin-$ARCH"
 
 
@@ -74,7 +74,7 @@ if [ ! -f "$AGENT_BIN" ]; then
 fi
 
 if [ ! -d "$AGENT_UI_APP" ]; then
-    echo "Error: safechain-ultimate-ui app not found at $AGENT_UI_APP" >&2
+    echo "Error: endpoint-protection-ui app not found at $AGENT_UI_APP" >&2
     exit 1
 fi
 
@@ -108,7 +108,7 @@ chmod 644 "$LOGS_DIR/.keep"
 # Copy binaries
 echo "Copying binaries..."
 cp "$AGENT_BIN" "$INSTALL_DIR/bin/safechain-ultimate"
-cp -R "$AGENT_UI_APP" "$INSTALL_DIR/bin/safechain-ultimate-ui.app"
+cp -R "$AGENT_UI_APP" "$INSTALL_DIR/bin/endpoint-protection-ui.app"
 cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-l7-proxy"
 chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
 chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"

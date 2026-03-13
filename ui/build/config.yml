@@ -6,11 +6,11 @@ version: '3'
 # This information is used to generate the build assets.
 info:
   companyName: "Aikido Security" # The name of the company
-  productName: "safechain-ultimate-ui" # The name of the application
+  productName: "endpoint-protection-ui" # The name of the application
   productIdentifier: "com.aikidosecurity.safechainultimate" # The unique product identifier
-  description: "safechain-ultimate-ui" # The application description
+  description: "endpoint-protection-ui" # The application description
   copyright: "(c) 2026, Aikido Security" # Copyright text
-  comments: "safechain-ultimate-ui" # Comments
+  comments: "endpoint-protection-ui" # Comments
   version: "0.0.1" # The application version
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
   #                               # Should match the name of your .icon file without the extension

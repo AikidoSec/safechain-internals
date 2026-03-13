@@ -39,7 +39,7 @@ else
     echo "  Daemon not running"
 fi
 
-pkill -f "safechain-ultimate-ui" 2>/dev/null && echo "  ✓ UI process stopped" || echo "  UI process not running"
+pkill -f "endpoint-protection-ui" 2>/dev/null && echo "  ✓ UI process stopped" || echo "  UI process not running"
 pkill -f "safechain-l7-proxy" 2>/dev/null && echo "  ✓ L7 Proxy process stopped" || echo "  L7 Proxy process not running"
 pkill -f "safechain-ultimate" 2>/dev/null && echo "  ✓ Daemon process stopped" || echo "  Daemon process not running"
 
