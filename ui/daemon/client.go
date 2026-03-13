@@ -127,7 +127,7 @@ func GetEvent(eventID string) (BlockEvent, error) {
 	return out, nil
 }
 
-// RequestAccess sends POST /v1/events/:id/request-access with body {"message":"..."}.
+// RequestAccess sends POST /v1/events/:id/request-access
 func RequestAccess(eventID string) error {
 	if err := validateEventID(eventID); err != nil {
 		return err

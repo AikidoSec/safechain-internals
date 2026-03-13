@@ -4,7 +4,7 @@ import type { BlockEvent } from "../types";
 import { Events } from "@wailsio/runtime";
 import { listEvents } from "../api";
 import { getToolIcon } from "../constants";
-import { formatEventTime, isConnectionError } from "../format";
+import { formatEventTime, isConnectionError } from "../utils";
 
 export function EventsList() {
   const navigate = useNavigate();

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import type { BlockEvent, BlockReason } from "../types";
 import { getEvent, requestAccess } from "../api";
 import { getToolIcon } from "../constants";
-import { formatEventTime, isConnectionError } from "../format";
+import { formatEventTime, isConnectionError } from "../utils";
 
 const BLOCK_REASON_INFO: Record<BlockReason, { title: string; description: string }> = {
   malware: {
