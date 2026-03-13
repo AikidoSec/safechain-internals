@@ -12,7 +12,6 @@ use rama::{
     http::Uri,
     net::{
         address::{ProxyAddress, SocketAddress},
-        socket::Interface,
         tls::ApplicationProtocol,
     },
     telemetry::tracing::{self, Instrument as _},
@@ -45,17 +44,12 @@ pub mod test;
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// network interface to bind the proxy to
-    #[arg(
-        long,
-        short = 'b',
-        value_name = "INTERFACE",
-        default_value = "127.0.0.1:0"
-    )]
-    pub bind: Interface,
+    #[arg(long, short = 'b', default_value = "127.0.0.1:0")]
+    pub bind: SocketAddress,
 
     /// network interface to bind the meta http(s) service to
-    #[arg(long = "meta", value_name = "INTERFACE", default_value = "127.0.0.1:0")]
-    pub meta_bind: Interface,
+    #[arg(long = "meta", default_value = "127.0.0.1:0")]
+    pub meta_bind: SocketAddress,
 
     /// secrets storage to use (e.g. for root CA)
     #[cfg_attr(

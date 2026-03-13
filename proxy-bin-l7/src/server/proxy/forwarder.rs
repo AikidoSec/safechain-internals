@@ -6,14 +6,14 @@ use rama::{
     error::{BoxError, ErrorContext as _},
     extensions::ExtensionsMut,
     http::client::{ProxyConnector, ProxyConnectorLayer, proxy::layer::HttpProxyConnectorLayer},
+    io::{BridgeIo, Io},
     net::{
         address::ProxyAddress,
         client::{ConnectorService, EstablishedClientConnection},
-        proxy::{ProxyRequest, ProxyTarget, StreamForwardService},
+        proxy::{IoForwardService, ProxyTarget},
     },
     proxy::socks5::Socks5ProxyConnectorLayer,
     rt::Executor,
-    stream::Stream,
     tcp::client::{Request, service::TcpConnector},
 };
 
@@ -58,7 +58,7 @@ impl TcpForwarder {
 
 impl<T> Service<T> for TcpForwarder
 where
-    T: Stream + Unpin + ExtensionsMut,
+    T: Io + Unpin + ExtensionsMut,
 {
     type Output = ();
     type Error = BoxError;
@@ -96,8 +96,8 @@ where
             }
         };
 
-        let proxy_req = ProxyRequest { source, target };
-
-        StreamForwardService::default().serve(proxy_req).await
+        IoForwardService::new()
+            .serve(BridgeIo(source, target))
+            .await
     }
 }

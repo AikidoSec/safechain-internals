@@ -17,7 +17,7 @@ keyring-core = "0.7"
 libc = "0.2"
 libfuzzer-sys = "0.4"
 linux-keyutils-keyring-store = "0.2"
-lz4_flex = "0.12"
+lz4_flex = "0.13"
 mimalloc = { version = "0.1", default-features = false }
 moka = "0.12"
 parking_lot = "0.12.5"
@@ -39,7 +39,7 @@ windows-native-keyring-store = "0.5"
 
 [workspace.dependencies.rama]
 git = "https://github.com/plabayo/rama"
-rev = "8dc9c5457ba08ebffdf08042fb5c18b5b889f008"
+rev = "f5882670fe8d8b358236f56cc6b0565e7a596878"
 
 [profile.release]
 strip = true

@@ -69,7 +69,7 @@ pub async fn run_proxy_server(
     let exec = Executor::graceful(guard.clone());
 
     let tcp_service = TcpListener::build(exec.clone())
-        .bind(args.bind)
+        .bind_address(args.bind)
         .await
         .context("bind TCP network interface for proxy")?;
 
