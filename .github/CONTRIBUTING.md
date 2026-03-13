@@ -1,6 +1,6 @@
-# Contributing to Aikido Endpoint Protection
+# Contributing to Aikido Endpoint
 
-Thank you for your interest in contributing to Aikido Endpoint Protection! This guide will help you get started with setting up your development environment, running tests, and building the project.
+Thank you for your interest in contributing to Aikido Endpoint! This guide will help you get started with setting up your development environment, running tests, and building the project.
 
 ## Prerequisites
 

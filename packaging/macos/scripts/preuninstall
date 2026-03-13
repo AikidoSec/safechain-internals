@@ -2,13 +2,13 @@
 
 set -e
 
-echo "Aikido Endpoint Protection Uninstaller - Pre-uninstall"
+echo "Aikido Endpoint Uninstaller - Pre-uninstall"
 
 LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.endpointprotection.plist"
 
 # Stop and unload the daemon
 if launchctl list | grep -q "com.aikidosecurity.endpointprotection"; then
-    echo "Stopping Aikido Endpoint Protection daemon..."
+    echo "Stopping Aikido Endpoint daemon..."
     launchctl bootout system/com.aikidosecurity.endpointprotection 2>/dev/null || {
         # Fallback to launchctl unload (old way of stopping the daemon on older macOS versions)
         echo "Trying alternative unload method..."
@@ -22,7 +22,7 @@ if [ -f "$LAUNCHDAEMON_PLIST" ]; then
     rm -f "$LAUNCHDAEMON_PLIST"
 fi
 
-echo "Running Aikido Endpoint Protection teardown..."
+echo "Running Aikido Endpoint teardown..."
 sudo "/Library/Application Support/AikidoSecurity/EndpointProtection/bin/endpoint-protection" --teardown
 
 echo "Pre-uninstall completed"

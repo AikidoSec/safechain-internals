@@ -2,7 +2,7 @@
 
 set -e
 
-# Build macOS .pkg installer for Aikido Endpoint Protection
+# Build macOS .pkg installer for Aikido Endpoint
 # Usage: ./build-pkg.sh -v VERSION -a ARCH [-b BIN_DIR] [-o OUTPUT_DIR]
 
 VERSION=""
@@ -56,7 +56,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BIN_DIR="$(cd "$BIN_DIR" 2>/dev/null && pwd || echo "$PROJECT_DIR/$BIN_DIR")"
 OUTPUT_DIR="$(mkdir -p "$OUTPUT_DIR" && cd "$OUTPUT_DIR" && pwd)"
 
-echo "Building macOS .pkg installer for Aikido Endpoint Protection v$VERSION"
+echo "Building macOS .pkg installer for Aikido Endpoint v$VERSION"
 echo "  Architecture: $ARCH"
 echo "  Binary directory: $BIN_DIR"
 echo "  Output directory: $OUTPUT_DIR"

@@ -20,7 +20,7 @@ const serviceName = "EndpointProtection"
 func main() {
 	var (
 		showVersion    = flag.Bool("version", false, "Show version information")
-		teardown       = flag.Bool("teardown", false, "Teardown Aikido Endpoint Protection")
+		teardown       = flag.Bool("teardown", false, "Teardown Aikido Endpoint")
 		removeScanners = flag.Bool("remove-scanners", false, "Remove all scanners on teardown")
 	)
 	flag.Parse()

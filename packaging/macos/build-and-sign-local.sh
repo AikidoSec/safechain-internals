@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 echo "==================================="
-echo "Aikido Endpoint Protection - Local PKG Builder"
+echo "Aikido Endpoint - Local PKG Builder"
 echo "==================================="
 echo "Version: $VERSION"
 echo "Architecture: $ARCH (x86_64 + arm64)"

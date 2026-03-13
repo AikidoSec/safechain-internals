@@ -2,7 +2,7 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
-  <Package Name="Aikido Endpoint Protection"
+  <Package Name="Aikido Endpoint"
            Manufacturer="Aikido Security BV"
            Version="$(var.Version)"
            ProductCode="*"
@@ -14,7 +14,7 @@
     <Property Id="AIKIDO_TOKEN" Secure="yes" />
     <SetProperty Id="AIKIDO_TOKEN_FROM_CLI" Value="1" Before="CostInitialize" Sequence="ui" Condition="AIKIDO_TOKEN" />
 
-    <MajorUpgrade Schedule="afterInstallValidate" DowngradeErrorMessage="A newer version of Aikido Endpoint Protection is already installed." AllowSameVersionUpgrades="yes" />
+    <MajorUpgrade Schedule="afterInstallValidate" DowngradeErrorMessage="A newer version of Aikido Endpoint is already installed." AllowSameVersionUpgrades="yes" />
 
     <Media Id="1" Cabinet="EndpointProtection.cab" EmbedCab="yes" />
 
@@ -40,7 +40,7 @@
     </StandardDirectory>
 
     <!-- Main feature -->
-    <Feature Id="MainFeature" Title="Aikido Endpoint Protection" Level="1">
+    <Feature Id="MainFeature" Title="Aikido Endpoint" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
       <ComponentRef Id="PathComponent" />
       <ComponentRef Id="CleanupProgramData" />
@@ -53,8 +53,8 @@
         <File Id="AikidoAgentExeFile" Source="$(var.BinDir)\EndpointProtection.exe" KeyPath="yes" />
         <ServiceInstall Id="EndpointProtectionService"
                         Name="EndpointProtection"
-                        DisplayName="Aikido Endpoint Protection"
-                        Description="Aikido Security Aikido Endpoint Protection - monitors and secures the software supply chain"
+                        DisplayName="Aikido Endpoint"
+                        Description="Aikido Security Aikido Endpoint - monitors and secures the software supply chain"
                         Start="auto"
                         Type="ownProcess"
                         ErrorControl="normal"
