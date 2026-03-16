@@ -228,22 +228,7 @@ func (d *Daemon) run(ctx context.Context) error {
 	}
 
 	d.wg.Add(1)
-	go func() {
-		defer d.wg.Done()
-		for {
-			if err := dockerca.InstallCAOnRunningContainers(ctx); err != nil {
-				log.Printf("Docker CA: failed to install CA on running containers: %v", err)
-			}
-			if err := dockerca.WatchContainerStarts(ctx); err != nil {
-				log.Printf("Docker CA: watcher stopped: %v", err)
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(30 * time.Second): // Check every 30 seconds for docker daemon restarts or new containers
-			}
-		}
-	}()
+	go d.runDockerCALoop(ctx)
 
 	if err := d.registry.InstallAll(ctx); err != nil {
 		return fmt.Errorf("failed to install all scanners: %v", err)
@@ -279,6 +264,46 @@ func (d *Daemon) Uninstall(ctx context.Context, removeScanners bool) error {
 		return fmt.Errorf("failed to uninstall proxy CA: %v", err)
 	}
 	return nil
+}
+
+func (d *Daemon) runDockerCALoop(ctx context.Context) {
+	defer d.wg.Done()
+
+	// quietCtx suppresses verbose platform-layer command logging (RunCommandWithEnv)
+	// since these operations run on a polling loop and would otherwise spam the logs.
+	quietCtx := context.WithValue(ctx, "disable_logging", true)
+	pollTicker := time.NewTicker(30 * time.Second)
+	defer pollTicker.Stop()
+
+	dockerOnline := true
+	for {
+		cycleErr := runDockerCACycle(quietCtx)
+		if ctx.Err() != nil {
+			return
+		}
+
+		switch {
+		case cycleErr != nil && dockerOnline:
+			log.Println("Docker CA: daemon offline")
+			dockerOnline = false
+		case cycleErr == nil && !dockerOnline:
+			log.Println("Docker CA: daemon back online")
+			dockerOnline = true
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-pollTicker.C:
+		}
+	}
+}
+
+func runDockerCACycle(ctx context.Context) error {
+	if err := dockerca.InstallCAOnRunningContainers(ctx); err != nil {
+		return err
+	}
+	return dockerca.WatchContainerStarts(ctx)
 }
 
 func (d *Daemon) printDaemonStatus() {

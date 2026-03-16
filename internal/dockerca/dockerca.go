@@ -90,6 +90,8 @@ func WatchContainerStarts(ctx context.Context) error {
 		return nil
 	}
 
+	log.Println("Docker CA: event watcher started")
+
 	cmd, err := platform.CommandAsCurrentUserWithPathEnv(ctx, dockerBinary,
 		"events",
 		"--filter", "type=container",
@@ -113,8 +115,6 @@ func WatchContainerStarts(ctx context.Context) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start docker events watcher: %w", err)
 	}
-
-	log.Println("Docker CA: watching container start events")
 
 	stderrDone := make(chan string, 1)
 	go func() {
