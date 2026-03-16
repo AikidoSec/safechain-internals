@@ -227,15 +227,21 @@ func (d *Daemon) run(ctx context.Context) error {
 		return fmt.Errorf("failed to install setup: %v", err)
 	}
 
-	if err := dockerca.InstallCAOnRunningContainers(ctx); err != nil {
-		log.Printf("Docker CA: failed to install CA on running containers: %v", err)
-	}
-
 	d.wg.Add(1)
 	go func() {
 		defer d.wg.Done()
-		if err := dockerca.WatchContainerStarts(ctx); err != nil {
-			log.Printf("Docker CA: watcher stopped: %v", err)
+		for {
+			if err := dockerca.InstallCAOnRunningContainers(ctx); err != nil {
+				log.Printf("Docker CA: failed to install CA on running containers: %v", err)
+			}
+			if err := dockerca.WatchContainerStarts(ctx); err != nil {
+				log.Printf("Docker CA: watcher stopped: %v", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(30 * time.Second): // Check every 30 seconds for docker daemon restarts or new containers
+			}
 		}
 	}()
 
