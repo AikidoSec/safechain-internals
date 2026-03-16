@@ -59,13 +59,14 @@ func (c *Client) SetBaseURL(s string) {
 	if s == "" {
 		return
 	}
-	if !isLoopbackURL(s) {
-		log.Printf("Rejected non-loopback base URL: %s", s)
+	url := fmt.Sprintf("http://%s", s)
+	if !isLoopbackURL(url) {
+		log.Printf("Rejected non-loopback base URL: %s", url)
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.baseURL = s
+	c.baseURL = url
 }
 
 // isLoopbackURL returns true only for http:// URLs whose host resolves to a

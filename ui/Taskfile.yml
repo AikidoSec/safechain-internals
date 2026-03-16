@@ -6,7 +6,7 @@ includes:
   darwin: ./build/darwin/Taskfile.yml
 
 vars:
-  APP_NAME: "safechain-ultimate-ui"
+  APP_NAME: "endpoint-protection-ui"
   BIN_DIR: "bin"
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
 

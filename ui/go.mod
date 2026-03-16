@@ -1,4 +1,4 @@
-module safechain-ui
+module endpoint-protection-ui
 
 go 1.25
 

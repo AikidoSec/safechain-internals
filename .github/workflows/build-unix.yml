@@ -50,21 +50,21 @@ jobs:
 
       - name: Prepare artifacts
         run: |
-          mv bin/safechain-ultimate-darwin-${{ matrix.arch }} safechain-ultimate-darwin-${{ matrix.arch }}
-          mv bin/safechain-ultimate-ui-darwin-${{ matrix.arch }}.app safechain-ultimate-ui-darwin-${{ matrix.arch }}.app
+          mv bin/endpoint-protection-darwin-${{ matrix.arch }} endpoint-protection-darwin-${{ matrix.arch }}
+          mv bin/endpoint-protection-ui-darwin-${{ matrix.arch }}.app endpoint-protection-ui-darwin-${{ matrix.arch }}.app
 
-      - name: Upload safechain-ultimate artifact
+      - name: Upload endpoint-protection artifact
         uses: actions/upload-artifact@v4
         with:
-          name: safechain-ultimate-darwin-${{ matrix.arch }}
+          name: endpoint-protection-darwin-${{ matrix.arch }}
           path: |
-            safechain-ultimate-darwin-${{ matrix.arch }}
-      - name: Upload safechain-ultimate-ui app bundle artifact
+            endpoint-protection-darwin-${{ matrix.arch }}
+      - name: Upload endpoint-protection-ui app bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: safechain-ultimate-ui-darwin-${{ matrix.arch }}.app
+          name: endpoint-protection-ui-darwin-${{ matrix.arch }}.app
           path: |
-            safechain-ultimate-ui-darwin-${{ matrix.arch }}.app
+            endpoint-protection-ui-darwin-${{ matrix.arch }}.app
 
   build-unix-proxy:
     strategy:

@@ -44,7 +44,7 @@ func (m *UIManager) Launch(ctx context.Context, ingressAddr string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get random free port: %v", err)
 	}
-	uiURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+	uiURL := fmt.Sprintf("127.0.0.1:%d", port)
 	m.Client.SetBaseURL(uiURL)
 
 	cfg := platform.GetConfig()
@@ -52,7 +52,7 @@ func (m *UIManager) Launch(ctx context.Context, ingressAddr string) error {
 	args := []string{
 		"--daemon_url", daemonURL,
 		"--token", token,
-		"--ui_url", fmt.Sprintf("127.0.0.1:%d", port),
+		"--ui_url", uiURL,
 		"--log_file", platform.GetUILogPath(),
 	}
 

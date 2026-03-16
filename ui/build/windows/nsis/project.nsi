@@ -19,9 +19,9 @@ Unicode true
 ####
 ## The following information is taken from the wails_tools.nsh file, but they can be overwritten here.
 ####
-## !define INFO_PROJECTNAME    "my-project" # Default "safechain-ultimate-ui"
+## !define INFO_PROJECTNAME    "my-project" # Default "endpoint-protection-ui"
 ## !define INFO_COMPANYNAME    "Aikido Security" # Default "Aikido Security"
-## !define INFO_PRODUCTNAME    "safechain-ultimate-ui Name" # Default "safechain-ultimate-ui"
+## !define INFO_PRODUCTNAME    "endpoint-protection-ui Name" # Default "endpoint-protection-ui"
 ## !define INFO_PRODUCTVERSION "1.0.0"     # Default "0.1.0"
 ## !define INFO_COPYRIGHT      "(c) Now, Aikido Security" # Default "© 2026, Aikido Security"
 ###

@@ -2,12 +2,12 @@
 
 set -e
 
-echo "SafeChain Ultimate Installer - Post-installation"
+echo "Aikido Endpoint Protection Installer - Post-installation"
 
-INSTALL_DIR="/Library/Application Support/AikidoSecurity/SafeChainUltimate"
-LOGS_DIR="/Library/Logs/AikidoSecurity/SafeChainUltimate"
+INSTALL_DIR="/Library/Application Support/AikidoSecurity/EndpointProtection"
+LOGS_DIR="/Library/Logs/AikidoSecurity/EndpointProtection"
 RUN_DIR="$INSTALL_DIR/run"
-LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist"
+LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.endpointprotection.plist"
 
 # Ensure logs directory exists and has proper permissions
 echo "Setting up logs directory..."
@@ -17,12 +17,12 @@ chmod 755 "$LOGS_DIR"
 
 # Set proper permissions on binaries
 echo "Setting permissions on binaries..."
-chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
+chmod 755 "$INSTALL_DIR/bin/endpoint-protection"
 
-if [ -d "$INSTALL_DIR/bin/safechain-ultimate-ui.app" ]; then
-    chmod -R 755 "$INSTALL_DIR/bin/safechain-ultimate-ui.app"
+if [ -d "$INSTALL_DIR/bin/endpoint-protection-ui.app" ]; then
+    chmod -R 755 "$INSTALL_DIR/bin/endpoint-protection-ui.app"
 else
-    echo "Warning: UI app bundle not found at $INSTALL_DIR/bin/safechain-ultimate-ui.app"
+    echo "Warning: UI app bundle not found at $INSTALL_DIR/bin/endpoint-protection-ui.app"
 fi
 chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 
@@ -55,12 +55,17 @@ fi
 if [ -z "$AIKIDO_TOKEN" ] && [ -z "$EXISTING_TOKEN" ]; then
     echo "No token found, prompting user..."
     AIKIDO_TOKEN=$(osascript <<'APPLESCRIPT' 2>/dev/null
-set dialogResult to display dialog "Enter your Token to activate Aikido Endpoint Protection." & return & return & "You can find this token in your Aikido Security dashboard." with title "SafeChain Ultimate — Token Setup" default answer "" buttons {"Skip", "OK"} default button "OK" with icon caution
-if button returned of dialogResult is "OK" then
-    return text returned of dialogResult
-else
-    return ""
-end if
+set dashboardURL to "https://app.aikido.dev/endpoint-protection"
+repeat
+    set dialogResult to display dialog "Enter your Token to activate Aikido Endpoint Protection." & return & return & "You can find this token in your Aikido Security dashboard." with title "Aikido Endpoint Protection — Token Setup" default answer "" buttons {"Skip", "Open Dashboard", "OK"} default button "OK" with icon caution
+    if button returned of dialogResult is "Open Dashboard" then
+        do shell script "open " & quoted form of dashboardURL
+    else if button returned of dialogResult is "OK" then
+        return text returned of dialogResult
+    else
+        return ""
+    end if
+end repeat
 APPLESCRIPT
     ) || true
     AIKIDO_TOKEN="$(echo "$AIKIDO_TOKEN" | tr -d '[:space:]')"
@@ -87,14 +92,14 @@ if [ -f "$LAUNCHDAEMON_PLIST" ]; then
         echo "LaunchDaemon bootstrap failed, trying load..."
         launchctl load "$LAUNCHDAEMON_PLIST" || true
     }
-    echo "SafeChain Ultimate daemon installed and started"
+    echo "Aikido Endpoint Protection daemon installed and started"
 else
     echo "Warning: LaunchDaemon plist not found at $LAUNCHDAEMON_PLIST"
 fi
 
 echo "Post-installation completed"
 echo ""
-echo "SafeChain Ultimate has been installed successfully!"
+echo "Aikido Endpoint Protection has been installed successfully!"
 echo "  Binaries: $INSTALL_DIR/bin"
 echo "  Logs: $LOGS_DIR"
 echo ""

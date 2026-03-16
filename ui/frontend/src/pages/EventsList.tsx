@@ -53,9 +53,9 @@ export function EventsList() {
       )}
       {error && connectionFailed && (
         <div className="events-list-connection-message">
-          <h2>Can't connect to SafeChain daemon</h2>
+          <h2>Can't connect to Aikido Endpoint Protection daemon</h2>
           <p className="events-list-connection-message-subtitle">
-            The app couldn't reach the SafeChain daemon. Make sure it's running, then try again.
+            The app couldn't reach the Aikido Endpoint Protection daemon. Make sure it's running, then try again.
           </p>
           <button
             type="button"
@@ -122,7 +122,7 @@ export function EventsList() {
           </div>
           <h2 className="events-list-empty-state-title">No blocked events</h2>
           <p className="events-list-empty-state-subtitle">
-            When SafeChain blocks an installation or extension, it will appear here. You can then open it to request access.
+            When Aikido Endpoint Protection blocks an installation or extension, it will appear here. You can then open it to request access.
           </p>
         </div>
       )}

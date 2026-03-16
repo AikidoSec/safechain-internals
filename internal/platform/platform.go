@@ -43,11 +43,11 @@ func GetLogDir() string {
 }
 
 func GetUltimateLogPath() string {
-	return filepath.Join(config.LogDir, SafeChainUltimateLogName)
+	return filepath.Join(config.LogDir, EndpointProtectionLogName)
 }
 
 func GetUltimateErrLogPath() string {
-	return filepath.Join(config.LogDir, SafeChainUltimateErrLogName)
+	return filepath.Join(config.LogDir, EndpointProtectionErrLogName)
 }
 
 func GetProxyLogPath() string {

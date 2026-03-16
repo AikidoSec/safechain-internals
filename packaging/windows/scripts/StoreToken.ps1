@@ -3,7 +3,7 @@ param(
     [string]$Token
 )
 
-$dir = Join-Path $env:ProgramData "AikidoSecurity\SafeChainUltimate\run"
+$dir = Join-Path $env:ProgramData "AikidoSecurity\EndpointProtection\run"
 if (-not (Test-Path $dir)) {
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
 }

@@ -8,27 +8,27 @@
         AllowPromptForPassword="false">
     </Settings>
     <Installer
-        Path="safechain-ultimate-ui"
+        Path="endpoint-protection-ui"
         Arguments=""
-        InstallLocation="C:\Program Files\Aikido Security\safechain-ultimate-ui">
+        InstallLocation="C:\Program Files\Aikido Security\endpoint-protection-ui">
     </Installer>
     <PackageInformation
-        PackageName="safechain-ultimate-ui"
-        PackageDisplayName="safechain-ultimate-ui"
+        PackageName="endpoint-protection-ui"
+        PackageDisplayName="endpoint-protection-ui"
         PublisherName="CN=Aikido Security"
         PublisherDisplayName="Aikido Security"
         Version="0.1.0.0"
-        PackageDescription="safechain-ultimate-ui">
+        PackageDescription="endpoint-protection-ui">
         <Capabilities>
             <Capability Name="runFullTrust" />
             
         </Capabilities>
         <Applications>
             <Application
-                Id="com.aikidosecurity.safechainultimate"
-                Description="safechain-ultimate-ui"
-                DisplayName="safechain-ultimate-ui"
-                ExecutableName="safechain-ultimate-ui"
+                Id="com.aikidosecurity.endpointprotection"
+                Description="endpoint-protection-ui"
+                DisplayName="endpoint-protection-ui"
+                ExecutableName="endpoint-protection-ui"
                 EntryPoint="Windows.FullTrustApplication">
                 
             </Application>
@@ -41,13 +41,13 @@
         </Dependencies>
         <Properties>
             <Framework>false</Framework>
-            <DisplayName>safechain-ultimate-ui</DisplayName>
+            <DisplayName>endpoint-protection-ui</DisplayName>
             <PublisherDisplayName>Aikido Security</PublisherDisplayName>
-            <Description>safechain-ultimate-ui</Description>
+            <Description>endpoint-protection-ui</Description>
             <Logo>Assets\AppIcon.png</Logo>
         </Properties>
     </PackageInformation>
-    <SaveLocation PackagePath="safechain-ultimate-ui.msix" />
+    <SaveLocation PackagePath="endpoint-protection-ui.msix" />
     <PackageIntegrity>
         <CertificatePath></CertificatePath>
     </PackageIntegrity>

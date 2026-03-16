@@ -1,7 +1,7 @@
 .PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-darwin-universal build-windows-amd64 build-proxy build-l7-proxy-universal build-pkg build-pkg-sign-local install-pkg uninstall-pkg clean test run help
 
-BINARY_NAME=safechain-ultimate
-BINARY_NAME_UI=safechain-ultimate-ui
+BINARY_NAME=endpoint-protection
+BINARY_NAME_UI=endpoint-protection-ui
 VERSION?=dev
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -145,7 +145,7 @@ build-pkg:
 ifeq ($(DETECTED_OS),darwin)
 	@echo "Building macOS PKG installer..."
 	@cd packaging/macos && ./build-distribution-pkg.sh -v $(VERSION) -a universal -b ../../$(BIN_DIR) -o ../../$(DIST_DIR)
-	@echo "PKG built: $(DIST_DIR)/SafeChainUltimate-$(VERSION).pkg"
+	@echo "PKG built: $(DIST_DIR)/EndpointProtection-$(VERSION).pkg"
 else
 	@echo "Error: PKG building is only supported on macOS"
 	@exit 1
@@ -162,8 +162,8 @@ else ifeq ($(DETECTED_OS),windows)
 	@cargo build --release -p safechain-l7-proxy --target x86_64-pc-windows-msvc
 	@mkdir -p $(BIN_DIR)
 	@cp target/x86_64-pc-windows-msvc/release/safechain-l7-proxy.exe $(BIN_DIR)/SafeChainL7Proxy.exe
-	@cp $(BIN_DIR)/$(BINARY_NAME)-windows-$(DETECTED_ARCH).exe $(BIN_DIR)/SafeChainUltimate.exe
-	@cp $(BIN_DIR)/$(BINARY_NAME_UI)-windows-$(DETECTED_ARCH).exe $(BIN_DIR)/SafeChainUltimateUI.exe
+	@cp $(BIN_DIR)/$(BINARY_NAME)-windows-$(DETECTED_ARCH).exe $(BIN_DIR)/EndpointProtection.exe
+	@cp $(BIN_DIR)/$(BINARY_NAME_UI)-windows-$(DETECTED_ARCH).exe $(BIN_DIR)/EndpointProtectionUI.exe
 	@echo "Building Windows MSI installer..."
 	@powershell -ExecutionPolicy Bypass -File packaging/windows/build-msi.ps1 -Version "$(VERSION)" -BinDir ".\$(BIN_DIR)" -OutputDir "."
 	@echo "Windows MSI build completed."
@@ -180,7 +180,7 @@ endif
 	@cd packaging/macos && ./install-local.sh
 else ifeq ($(DETECTED_OS),windows)
 	@echo "Installing Windows MSI package..."
-	@msiexec /i SafeChainUltimate.msi
+	@msiexec /i EndpointProtection.msi
 else
 	@echo "Error: PKG installation is only supported on macOS"
 	@exit 1
@@ -188,7 +188,7 @@ endif
 
 uninstall-pkg:
 ifeq ($(DETECTED_OS),darwin)
-	sudo "/Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall"
+	sudo "/Library/Application Support/AikidoSecurity/EndpointProtection/scripts/uninstall"
 else
 	@echo "Error: PKG uninstallation is only supported on macOS"
 	@exit 1
