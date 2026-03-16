@@ -13,6 +13,7 @@ use crate::http::response::generate_blocked_response_for_req;
 pub struct BlockedRequest {
     pub response: Response,
     pub info: BlockedEventInfo,
+    pub suppress_notification: bool,
 }
 
 impl BlockedRequest {
@@ -23,7 +24,13 @@ impl BlockedRequest {
                 artifact,
                 block_reason: reason,
             },
+            suppress_notification: false,
         }
+    }
+
+    pub(crate) fn with_suppressed_notification(mut self) -> Self {
+        self.suppress_notification = true;
+        self
     }
 }
 

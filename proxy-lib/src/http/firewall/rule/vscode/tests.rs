@@ -1,6 +1,31 @@
 use super::*;
 
 #[test]
+fn test_is_update_query_detects_update_param() {
+    assert!(RuleVSCode::is_update_query(Some("update=true")));
+    assert!(RuleVSCode::is_update_query(Some(
+        "redirect=true&update=true"
+    )));
+    assert!(RuleVSCode::is_update_query(Some(
+        "update=true&install=true"
+    )));
+    assert!(RuleVSCode::is_update_query(Some(
+        "foo=bar&update=true&baz=qux"
+    )));
+}
+
+#[test]
+fn test_is_update_query_rejects_non_update() {
+    assert!(!RuleVSCode::is_update_query(None));
+    assert!(!RuleVSCode::is_update_query(Some("install=true")));
+    assert!(!RuleVSCode::is_update_query(Some(
+        "redirect=true&install=true"
+    )));
+    assert!(!RuleVSCode::is_update_query(Some("update=false")));
+    assert!(!RuleVSCode::is_update_query(Some("")));
+}
+
+#[test]
 fn test_is_extension_install_asset_path() {
     // .vsix files should be blocked
     assert!(RuleVSCode::is_extension_install_asset_path(

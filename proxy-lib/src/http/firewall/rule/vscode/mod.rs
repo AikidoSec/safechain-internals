@@ -129,6 +129,8 @@ impl Rule for RuleVSCode {
             "VSCode install asset request"
         );
 
+        let is_update = Self::is_update_query(req.uri().query());
+
         // Apply endpoint policy (rejected packages, allow exceptions, block_all_installs).
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
             let decision = policy_evaluator
@@ -140,11 +142,15 @@ impl Rule for RuleVSCode {
                 }
                 PackagePolicyDecision::Defer => {}
                 decision => {
-                    return Ok(RequestAction::Block(BlockedRequest::blocked(
+                    let mut blocked = BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&vscode_extension),
                         super::block_reason_for(decision),
-                    )));
+                    );
+                    if is_update {
+                        blocked = blocked.with_suppressed_notification();
+                    }
+                    return Ok(RequestAction::Block(blocked));
                 }
             }
         }
@@ -155,11 +161,15 @@ impl Rule for RuleVSCode {
                 package = %vscode_extension,
                 "blocked VSCode extension install asset download"
             );
-            return Ok(RequestAction::Block(BlockedRequest::blocked(
+            let mut blocked = BlockedRequest::blocked(
                 req,
                 Self::blocked_artifact(&vscode_extension),
                 BlockReason::Malware,
-            )));
+            );
+            if is_update {
+                blocked = blocked.with_suppressed_notification();
+            }
+            return Ok(RequestAction::Block(blocked));
         }
 
         tracing::trace!(
@@ -191,6 +201,12 @@ impl RuleVSCode {
             .find_entries(&vscode_extension.extension_id)
             .entries()
             .is_some()
+    }
+
+    fn is_update_query(query: Option<&str>) -> bool {
+        query
+            .map(|q| q.split('&').any(|p| p == "update=true"))
+            .unwrap_or(false)
     }
 
     fn is_extension_install_asset_path(path: &str) -> bool {

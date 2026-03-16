@@ -254,7 +254,9 @@ impl Firewall {
             match rule.evaluate_request(mod_req).await? {
                 RequestAction::Allow(new_mod_req) => mod_req = new_mod_req,
                 RequestAction::Block(blocked) => {
-                    self.record_blocked_event(blocked.info.clone()).await;
+                    if !blocked.suppress_notification {
+                        self.record_blocked_event(blocked.info.clone()).await;
+                    }
                     return Ok(RequestAction::Block(blocked));
                 }
             }
