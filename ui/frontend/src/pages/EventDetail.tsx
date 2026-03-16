@@ -160,7 +160,7 @@ export function EventDetail() {
           <p className="event-detail-fail-subtitle">
             {connectionFailed
               ? "The app couldn't reach the SafeChain service. Make sure it's running, then try again."
-              : "We couldn't load this event. You can try again or go back to the list."}
+              : "Failed to load this event. You can try again or go back to the list."}
           </p>
           <div className="request-access-actions">
             <button
@@ -197,7 +197,7 @@ export function EventDetail() {
       <ResultScreen
         variant="failure"
         title="Request failed"
-        subtitle={<>We couldn't submit your access request for <strong>{packageLabel}</strong>. Please try again.</>}
+        subtitle={<>Your access request for <strong>{packageLabel}</strong> could not be submitted. Please try again.</>}
         actions={<>
           <button
             type="button"
