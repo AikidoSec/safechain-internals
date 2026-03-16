@@ -240,8 +240,7 @@ func detectInstallMethod(ctx context.Context, dockerBinary, containerID string) 
 }
 
 // detectMethodFromOSRelease determines the install method and pretty name from
-// the raw contents of /etc/os-release. It is a pure function, making it easy
-// to unit-test independently of Docker.
+// the raw contents of /etc/os-release.
 func detectMethodFromOSRelease(contents string) (installMethod, string) {
 	osRelease := parseOSRelease(contents)
 	prettyName := osRelease["PRETTY_NAME"]
