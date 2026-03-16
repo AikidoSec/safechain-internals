@@ -142,12 +142,13 @@ impl Rule for RuleVSCode {
                 }
                 PackagePolicyDecision::Defer => {}
                 decision => {
+                    let block_reason = super::block_reason_for(decision);
                     let mut blocked = BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&vscode_extension),
-                        super::block_reason_for(decision),
+                        block_reason.clone(),
                     );
-                    if is_update {
+                    if is_update && block_reason == BlockReason::BlockAll {
                         blocked = blocked.with_suppressed_notification();
                     }
                     return Ok(RequestAction::Block(blocked));
@@ -161,15 +162,11 @@ impl Rule for RuleVSCode {
                 package = %vscode_extension,
                 "blocked VSCode extension install asset download"
             );
-            let mut blocked = BlockedRequest::blocked(
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
                 Self::blocked_artifact(&vscode_extension),
                 BlockReason::Malware,
-            );
-            if is_update {
-                blocked = blocked.with_suppressed_notification();
-            }
-            return Ok(RequestAction::Block(blocked));
+            )));
         }
 
         tracing::trace!(
