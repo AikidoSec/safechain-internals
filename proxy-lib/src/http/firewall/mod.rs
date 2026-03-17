@@ -39,7 +39,7 @@ mod pac;
 
 use crate::{
     endpoint_protection::{PolicyEvaluator, RemoteEndpointConfig},
-    http::firewall::rule::npm::min_package_age::MinPackageAge,
+    http::{firewall::rule::npm::min_package_age::MinPackageAge, service::hijack::HIJACK_DOMAIN},
     storage::SyncCompactDataStorage,
     utils::{env::network_service_identifier, token::AgentIdentity},
 };
@@ -234,9 +234,11 @@ impl Firewall {
     }
 
     pub fn match_domain(&self, domain: &Domain) -> bool {
-        self.block_rules
-            .iter()
-            .any(|rule| rule.match_domain(domain))
+        domain.eq(&HIJACK_DOMAIN)
+            || self
+                .block_rules
+                .iter()
+                .any(|rule| rule.match_domain(domain))
     }
 
     pub fn into_evaluate_request_layer(self) -> self::layer::evaluate_req::EvaluateRequestLayer {

@@ -10,7 +10,10 @@ use rama::{
             response::{Html, IntoResponse},
         },
     },
+    net::address::Domain,
 };
+
+pub const HIJACK_DOMAIN: Domain = Domain::from_static("mitm.ramaproxy.org");
 
 pub fn new_service(
     root_ca_pem: &'static [u8],

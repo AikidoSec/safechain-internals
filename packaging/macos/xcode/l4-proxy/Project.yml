@@ -1,0 +1,74 @@
+name: AikidoEndpointL4Proxy
+options:
+  bundleIdPrefix: 7VPF8GD6J4
+  deploymentTarget:
+    macOS: "13.0"
+
+packages:
+  RamaAppleNetworkExtension:
+    url: https://github.com/plabayo/rama.git
+    revision: cdf668fd15e17bff2b08c218c1fd6eb863e2107e
+
+targets:
+  AikidoEndpointL4ProxyHost:
+    type: application
+    platform: macOS
+    sources:
+      - path: Host
+    dependencies:
+      - target: AikidoEndpointL4ProxyExtension
+        embed: true
+        codeSign: true
+    postBuildScripts:
+      - name: Sign Embedded Extension
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          if [ "${CODE_SIGNING_ALLOWED:-YES}" != "YES" ]; then
+            exit 0
+          fi
+          APP="$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
+          if [ -d "$APP" ]; then
+            /usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --preserve-metadata=entitlements --timestamp=none "$APP"
+          fi
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aikido.endpoint.proxy.l4
+        CURRENT_PROJECT_VERSION: 1
+        INFOPLIST_FILE: Host/Info.plist
+        MARKETING_VERSION: 0.1
+        CODE_SIGN_ENTITLEMENTS: Host/Host.entitlements
+        CODE_SIGNING_ALLOWED: YES
+        CODE_SIGNING_REQUIRED: YES
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: "7VPF8GD6J4"
+        CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
+
+  AikidoEndpointL4ProxyExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Extension
+    dependencies:
+      - package: RamaAppleNetworkExtension
+        product: RamaAppleNetworkExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aikido.endpoint.proxy.l4.extension
+        CURRENT_PROJECT_VERSION: 1
+        INFOPLIST_FILE: Extension/Info.plist
+        MARKETING_VERSION: 0.1
+        CODE_SIGN_ENTITLEMENTS: Extension/Extension.entitlements
+        CODE_SIGNING_ALLOWED: YES
+        CODE_SIGNING_REQUIRED: YES
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: "7VPF8GD6J4"
+        CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
+        ENABLE_DEBUG_DYLIB: NO
+        OTHER_LDFLAGS:
+          - "$(SRCROOT)/../../../../target/universal/libsafechain_lib_l4_proxy_macos.a"
+          - "-framework"
+          - "NetworkExtension"
+          - "-lz"

@@ -1,4 +1,10 @@
-use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    convert::Infallible,
+    path::PathBuf,
+    sync::{Arc, mpsc},
+    thread,
+    time::Duration,
+};
 
 use rama::{
     Layer, Service,
@@ -24,7 +30,6 @@ use rama::{
     io::{BridgeIo, Io},
     layer::{ArcLayer, ConsumeErrLayer, HijackLayer},
     net::{
-        address::Domain,
         apple::networkextension::{TcpFlow, tproxy::TransparentProxyServiceContext},
         client::ConnectorService,
         http::server::HttpPeekRouter,
@@ -39,19 +44,18 @@ use rama::{
     tls::boring::proxy::{TlsMitmRelay, cert_issuer::BoringMitmCertIssuer},
 };
 
-use tokio::runtime::Handle;
-
 use safechain_proxy_lib::{
     client,
-    http::{firewall::Firewall, service::hijack},
+    http::{
+        firewall::Firewall,
+        service::hijack::{self, HIJACK_DOMAIN},
+    },
     storage,
     tls::mitm_relay_policy::TlsMitmRelayPolicyLayer,
     utils::token::AgentIdentity,
 };
 
 use crate::config::ProxyConfig;
-
-const HIJACK_DOMAIN: Domain = Domain::from_static("mitm.ramaproxy.org");
 
 const TCP_KEEPALIVE_TIME: Duration = Duration::from_mins(2);
 const TCP_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
@@ -69,14 +73,14 @@ pub(super) fn try_new_service(
     let data_storage = storage::SyncCompactDataStorage::try_new(data_path.clone())
         .context("create compact data storage using (app) storage dir")
         .with_context_debug_field("path", || data_path.clone())?;
+    // Network Extension startup must stay non-interactive. The protected data
+    // backend can trigger LocalAuthentication prompts, which causes the tunnel
+    // to stall during startup and disconnect. Use the regular keychain store.
     let secret_storage = storage::SyncSecrets::try_new(
         crate::utils::env::project_name(),
-        storage::SecretStorageKind::AppleProtected {
-            access_group: None,
-            cloud_sync: false,
-        },
+        storage::SecretStorageKind::Keyring,
     )
-    .context("create protected secrets storage for MITM CA")?;
+    .context("create keyring secrets storage for MITM CA")?;
 
     let root_ca =
         safechain_proxy_lib::tls::load_or_create_root_ca_key_pair(&secret_storage, &data_storage)
@@ -100,14 +104,28 @@ pub(super) fn try_new_service(
     let config = ProxyConfig::from_opaque_config(ctx.opaque_config())
         .context("decode proxy config (json)")?;
 
-    let tokio_handle = Handle::current();
-    let firewall = tokio_handle.block_on(create_firewall(
-        guard,
-        Some(data_path),
-        config.agent_identity,
-        config.reporting_endpoint,
-        config.aikido_url,
-    ))?;
+    tracing::debug!("creating firewall state for transparent proxy extension");
+    let (firewall_tx, firewall_rx) = mpsc::sync_channel(1);
+    thread::spawn(move || {
+        let result = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .context("build local tokio runtime for firewall initialization")
+            .and_then(|runtime| {
+                runtime.block_on(create_firewall(
+                    guard,
+                    Some(data_path),
+                    config.agent_identity,
+                    config.reporting_endpoint,
+                    config.aikido_url,
+                ))
+            });
+
+        let _ = firewall_tx.send(result);
+    });
+    let firewall = firewall_rx
+        .recv()
+        .map_err(|_| BoxError::from("firewall initialization task did not return a result"))??;
     let tls_mitm_relay_policy = TlsMitmRelayPolicyLayer::new(firewall.clone());
     let tls_mitm_relay = TlsMitmRelay::new_cached_in_memory(ca_crt, ca_key);
 
