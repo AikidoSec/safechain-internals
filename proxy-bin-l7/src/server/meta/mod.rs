@@ -96,7 +96,7 @@ pub async fn run_meta_https_server(
         TlsPeekRouter::new(tls_acceptor.into_layer(http_server.clone())).with_fallback(http_server),
     );
 
-    let tcp_listener = TcpListener::bind(args.meta_bind, exec)
+    let tcp_listener = TcpListener::bind_address(args.meta_bind, exec)
         .await
         .context("bind proxy meta http(s) server")?;
 
