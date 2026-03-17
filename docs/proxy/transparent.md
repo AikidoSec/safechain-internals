@@ -170,14 +170,14 @@ just macos-l4-start --reset-profile
 Stream live logs from the host and extension:
 
 ```bash
-log stream --style compact \
+log stream --style compact --level debug \
   --predicate 'subsystem == "com.aikido.endpoint.proxy.l4"'
 ```
 
 Show recent logs from the last 5 minutes:
 
 ```bash
-log show --last 5m --style compact \
+log show --last 5m --style compact --level debug \
   --predicate 'subsystem == "com.aikido.endpoint.proxy.l4"'
 ```
 
@@ -185,7 +185,7 @@ Export recent logs to a file for sharing or later analysis:
 
 ```bash
 mkdir -p .aikido/logs
-log show --last 30m --style compact \
+log show --last 30m --style compact --level debug \
   --predicate 'subsystem == "com.aikido.endpoint.proxy.l4"' \
   > .aikido/logs/macos-l4-transparent-proxy.log
 ```

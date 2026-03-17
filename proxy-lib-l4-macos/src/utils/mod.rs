@@ -2,8 +2,9 @@ use std::sync::OnceLock;
 
 use rama::{
     error::{BoxError, ErrorContext as _},
-    telemetry::tracing::subscriber::{
-        self, filter, layer::SubscriberExt as _, util::SubscriberInitExt as _,
+    telemetry::tracing::{
+        self,
+        subscriber::{self, filter, layer::SubscriberExt as _, util::SubscriberInitExt as _},
     },
 };
 use tracing_oslog::OsLogger;
@@ -42,6 +43,8 @@ fn setup_tracing() -> Result<TraceContext, BoxError> {
         .with(oslog_layer)
         .try_init()
         .context("init tracing subsriber")?;
+
+    tracing::info!("aikido L4 proxy's tracing subscriber initialized");
 
     Ok(TraceContext)
 }
