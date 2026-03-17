@@ -1,5 +1,5 @@
 [package]
-name = "safechain-l4-proxy-macos"
+name = "safechain-lib-l4-proxy-macos"
 description = "Aikido SafeChain MITM MacOS l4 Proxy"
 version = { workspace = true }
 edition = { workspace = true }

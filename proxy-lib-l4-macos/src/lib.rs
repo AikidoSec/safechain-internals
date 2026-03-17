@@ -15,11 +15,8 @@ use rama::{
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
-mod client;
 mod config;
-mod http;
 mod tcp;
-mod tls;
 mod utils;
 
 fn init(config: Option<&apple_ne::ffi::tproxy::TransparentProxyInitConfig>) -> bool {
@@ -27,7 +24,7 @@ fn init(config: Option<&apple_ne::ffi::tproxy::TransparentProxyInitConfig>) -> b
         // SAFETY: pointer + length validity is guaranteed by FFI contract.
         if let Some(path) = unsafe { config.storage_dir() } {
             tracing::debug!(path = %path.display(), "received storage directory: pass to set_storage_dir");
-            self::utils::set_storage_dir(Some(path));
+            self::utils::storage::set_storage_dir(Some(path));
         }
         // SAFETY: pointer + length validity is guaranteed by FFI contract.
         if let Some(app_group_dir) = unsafe { config.app_group_dir() } {

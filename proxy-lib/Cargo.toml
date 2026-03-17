@@ -27,6 +27,7 @@ moka = { workspace = true }
 rand = { workspace = true }
 parking_lot = { workspace = true }
 humantime = { workspace = true }
+rustls-platform-verifier = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 linux-keyutils-keyring-store = { workspace = true }

@@ -2941,21 +2941,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "safechain-l4-proxy-macos"
-version = "1.0.0"
-dependencies = [
- "moka",
- "rama",
- "rustls-platform-verifier",
- "safechain-proxy-lib",
- "serde",
- "serde_json",
- "tikv-jemallocator",
- "tokio",
- "tracing-oslog",
-]
-
-[[package]]
 name = "safechain-l7-proxy"
 version = "1.0.0"
 dependencies = [
@@ -2974,6 +2959,21 @@ dependencies = [
  "tikv-jemallocator",
  "tokio",
  "tracing-test",
+]
+
+[[package]]
+name = "safechain-lib-l4-proxy-macos"
+version = "1.0.0"
+dependencies = [
+ "moka",
+ "rama",
+ "rustls-platform-verifier",
+ "safechain-proxy-lib",
+ "serde",
+ "serde_json",
+ "tikv-jemallocator",
+ "tokio",
+ "tracing-oslog",
 ]
 
 [[package]]
@@ -3001,6 +3001,7 @@ dependencies = [
  "radix_trie",
  "rama",
  "rand 0.10.0",
+ "rustls-platform-verifier",
  "secrecy",
  "serde",
  "serde_json",

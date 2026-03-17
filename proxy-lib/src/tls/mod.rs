@@ -23,6 +23,7 @@ use secrecy::{ExposeSecret, SecretBox};
 
 use crate::storage::{SyncCompactDataStorage, SyncSecrets};
 
+pub mod mitm_relay_policy;
 mod root;
 
 #[derive(Clone)]

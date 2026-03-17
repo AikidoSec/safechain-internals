@@ -1,10 +1,10 @@
 [workspace]
 members = [
     "proxy-bin-l4",
-    "proxy-bin-l4-macos",
     "proxy-bin-l7",
     "proxy-fuzz",
     "proxy-lib",
+    "proxy-lib-l4-macos",
 ]
 resolver = "3"
 

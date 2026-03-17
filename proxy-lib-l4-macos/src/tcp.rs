@@ -38,10 +38,18 @@ use rama::{
     telemetry::tracing,
     tls::boring::proxy::{TlsMitmRelay, cert_issuer::BoringMitmCertIssuer},
 };
-use safechain_proxy_lib::{http::firewall::Firewall, storage, utils::token::AgentIdentity};
+
 use tokio::runtime::Handle;
 
-use crate::{config::ProxyConfig, tls::mitm_relay_policy::TlsMitmRelayPolicyLayer};
+use safechain_proxy_lib::{
+    client,
+    http::{firewall::Firewall, service::hijack},
+    storage,
+    tls::mitm_relay_policy::TlsMitmRelayPolicyLayer,
+    utils::token::AgentIdentity,
+};
+
+use crate::config::ProxyConfig;
 
 const HIJACK_DOMAIN: Domain = Domain::from_static("mitm.ramaproxy.org");
 
@@ -54,7 +62,7 @@ pub(super) fn try_new_service(
 ) -> Result<impl Service<TcpFlow, Output = (), Error = Infallible>, BoxError> {
     let demo_config = ProxyConfig::from_opaque_config(ctx.opaque_config())?;
     let executor = ctx.executor.clone();
-    let data_path = crate::utils::storage_dir().context("(app) data path is missing")?;
+    let data_path = crate::utils::storage::storage_dir().context("(app) data path is missing")?;
     std::fs::create_dir_all(&data_path)
         .context("create (app) data directory")
         .with_context_debug_field("path", || data_path.clone())?;
@@ -100,7 +108,7 @@ pub(super) fn try_new_service(
         config.reporting_endpoint,
         config.aikido_url,
     ))?;
-    let tls_mitm_relay_policy = TlsMitmRelayPolicyLayer::new(firewall);
+    let tls_mitm_relay_policy = TlsMitmRelayPolicyLayer::new(firewall.clone());
     let tls_mitm_relay = TlsMitmRelay::new_cached_in_memory(ca_crt, ca_key);
 
     let mitm_svc = new_tcp_service_inner(
@@ -108,6 +116,7 @@ pub(super) fn try_new_service(
         demo_config,
         tls_mitm_relay_policy,
         tls_mitm_relay,
+        firewall,
         ca_crt_pem_bytes,
         false,
     );
@@ -126,6 +135,7 @@ fn new_tcp_service_inner<Issuer, Ingress, Egress>(
     demo_config: ProxyConfig,
     tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
     tls_mitm_relay: TlsMitmRelay<Issuer>,
+    firewall: Firewall,
     ca_crt_pem_bytes: &'static [u8],
     within_connect_tunnel: bool,
 ) -> impl Service<BridgeIo<Ingress, Egress>, Output = (), Error = Infallible> + Clone
@@ -142,6 +152,7 @@ where
             demo_config,
             tls_mitm_relay_policy.clone(),
             tls_mitm_relay.clone(),
+            firewall,
             ca_crt_pem_bytes,
             within_connect_tunnel,
         ));
@@ -173,6 +184,7 @@ fn http_relay_middleware<S, Issuer>(
     demo_config: ProxyConfig,
     tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
     tls_mitm_relay: TlsMitmRelay<Issuer>,
+    firewall: Firewall,
     ca_crt_pem_bytes: &'static [u8],
     within_connect_tunnel: bool,
 ) -> impl Layer<S, Service: Service<Request, Output = Response, Error = BoxError> + Clone>
@@ -184,39 +196,45 @@ where
     S: Service<Request, Output = Response, Error = BoxError>,
     Issuer: BoringMitmCertIssuer<Error: Into<BoxError>> + Clone,
 {
+    let http_conn_upgrade_svc = if within_connect_tunnel {
+        ConsumeErrLayer::trace_as_debug()
+            .into_layer(IoForwardService::new())
+            .boxed()
+    } else {
+        new_tcp_service_inner(
+            exec.clone(),
+            demo_config,
+            tls_mitm_relay_policy,
+            tls_mitm_relay,
+            firewall.clone(),
+            ca_crt_pem_bytes,
+            true,
+        )
+        .boxed()
+    };
+
     (
         MapResponseBodyLayer::new_boxed_streaming_body(),
         StreamCompressionLayer::new(),
+        firewall.clone().into_evaluate_response_layer(),
+        firewall.into_evaluate_request_layer(),
+        MapResponseBodyLayer::new_boxed_streaming_body(),
         DecompressionLayer::new(),
         HttpUpgradeMitmRelayLayer::new(
-            exec.clone(),
+            exec,
             (
                 HttpWebSocketRelayServiceRequestMatcher::new(
                     // NOTE: change service of HttpWebSocketRelayServiceRequestMatcher with WS MitmRelay
                     // if you ever to inspect Websocket traffic :)
                     ConsumeErrLayer::trace_as_debug().into_layer(IoForwardService::new()),
                 ),
-                HttpProxyConnectRelayServiceRequestMatcher::new(if within_connect_tunnel {
-                    ConsumeErrLayer::trace_as_debug()
-                        .into_layer(IoForwardService::new())
-                        .boxed()
-                } else {
-                    new_tcp_service_inner(
-                        exec,
-                        demo_config,
-                        tls_mitm_relay_policy,
-                        tls_mitm_relay,
-                        ca_crt_pem_bytes,
-                        true,
-                    )
-                    .boxed()
-                }),
+                HttpProxyConnectRelayServiceRequestMatcher::new(http_conn_upgrade_svc),
             ),
         ),
         DpiProxyCredentialExtractorLayer::new(),
         HijackLayer::new(
             DomainMatcher::exact(HIJACK_DOMAIN),
-            Arc::new(crate::http::hijack::new_service(ca_crt_pem_bytes)),
+            Arc::new(hijack::new_service(ca_crt_pem_bytes)),
         ),
         ArcLayer::new(),
     )
@@ -264,7 +282,7 @@ async fn create_firewall(
     tokio::select! {
         result = Firewall::try_new(
             guard.clone(),
-            crate::client::new_web_client()?,
+            client::new_web_client()?,
             data_storage,
             reporting_endpoint,
             agent_identity,

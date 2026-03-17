@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::OnceLock};
+use std::sync::OnceLock;
 
 use rama::{
     error::{BoxError, ErrorContext as _},
@@ -9,6 +9,7 @@ use rama::{
 use tracing_oslog::OsLogger;
 
 pub mod env;
+pub mod storage;
 
 pub fn init_tracing() -> bool {
     static CTX: OnceLock<Option<TraceContext>> = OnceLock::new();
@@ -20,18 +21,6 @@ pub fn init_tracing() -> bool {
         }
     })
     .is_some()
-}
-
-static STORAGE_DIR: OnceLock<PathBuf> = OnceLock::new();
-
-pub fn set_storage_dir(path: Option<PathBuf>) {
-    if let Some(path) = path {
-        let _ = STORAGE_DIR.set(path);
-    }
-}
-
-pub fn storage_dir() -> Option<PathBuf> {
-    STORAGE_DIR.get().cloned()
 }
 
 #[derive(Debug)]

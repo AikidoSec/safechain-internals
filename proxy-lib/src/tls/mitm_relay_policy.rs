@@ -16,7 +16,8 @@ use rama::{
         proxy::{TlsMitmRelayService, cert_issuer::BoringMitmCertIssuer},
     },
 };
-use safechain_proxy_lib::http::firewall::Firewall;
+
+use crate::http::firewall::Firewall;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum PolicyKey {
