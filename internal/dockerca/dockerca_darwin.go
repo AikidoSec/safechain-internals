@@ -36,6 +36,20 @@ func findDockerBinary() (string, error) {
 func watchContainerStarts(ctx context.Context, dockerBinary string) error {
 	log.Println("Docker CA: event watcher started")
 
+	cmd, stdout, stderr, err := startDockerEventsWatcher(ctx, dockerBinary)
+	if err != nil {
+		return err
+	}
+
+	stderrDone := captureDockerWatcherStderr(stderr)
+	if err := processDockerEventStream(ctx, dockerBinary, stdout); err != nil {
+		return err
+	}
+
+	return waitForDockerEventsWatcher(ctx, cmd, stderrDone)
+}
+
+func startDockerEventsWatcher(ctx context.Context, dockerBinary string) (*exec.Cmd, io.ReadCloser, io.ReadCloser, error) {
 	cmd, err := platform.CommandAsCurrentUserWithPathEnv(ctx, dockerBinary,
 		"events",
 		"--filter", "type=container",
@@ -43,23 +57,27 @@ func watchContainerStarts(ctx context.Context, dockerBinary string) error {
 		"--format", "{{.Actor.ID}}",
 	)
 	if err != nil {
-		return fmt.Errorf("build docker events watcher: %w", err)
+		return nil, nil, nil, fmt.Errorf("build docker events watcher: %w", err)
 	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("docker events stdout pipe: %w", err)
+		return nil, nil, nil, fmt.Errorf("docker events stdout pipe: %w", err)
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("docker events stderr pipe: %w", err)
+		return nil, nil, nil, fmt.Errorf("docker events stderr pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start docker events watcher: %w", err)
+		return nil, nil, nil, fmt.Errorf("start docker events watcher: %w", err)
 	}
 
+	return cmd, stdout, stderr, nil
+}
+
+func captureDockerWatcherStderr(stderr io.Reader) <-chan string {
 	stderrDone := make(chan string, 1)
 	go func() {
 		// Cap stderr capture to 4 KiB; enough for docker events failures without unbounded growth.
@@ -69,7 +87,10 @@ func watchContainerStarts(ctx context.Context, dockerBinary string) error {
 		}
 		stderrDone <- strings.TrimSpace(string(b))
 	}()
+	return stderrDone
+}
 
+func processDockerEventStream(ctx context.Context, dockerBinary string, stdout io.Reader) error {
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		containerID := strings.TrimSpace(scanner.Text())
@@ -87,17 +108,22 @@ func watchContainerStarts(ctx context.Context, dockerBinary string) error {
 		return fmt.Errorf("read docker events: %w", err)
 	}
 
-	err = cmd.Wait()
+	return nil
+}
+
+func waitForDockerEventsWatcher(ctx context.Context, cmd *exec.Cmd, stderrDone <-chan string) error {
+	err := cmd.Wait()
 	if ctx.Err() != nil {
 		return nil
 	}
-	if err != nil {
-		errOutput := <-stderrDone
-		if errOutput != "" {
-			return fmt.Errorf("docker events watcher failed: %w: %s", err, errOutput)
-		}
-		return fmt.Errorf("docker events watcher failed: %w", err)
+	if err == nil {
+		return nil
 	}
 
-	return nil
+	errOutput := <-stderrDone
+	if errOutput != "" {
+		return fmt.Errorf("docker events watcher failed: %w: %s", err, errOutput)
+	}
+
+	return fmt.Errorf("docker events watcher failed: %w", err)
 }
