@@ -1,10 +1,12 @@
 # Transparent Proxy
 
-This document covers the macOS L4 transparent proxy packaging in this repository.
+## MacOS
+
+This chapter covers the macOS L4 transparent proxy packaging in this repository.
 It is the developer-facing wrapper around the Rust transparent proxy extension and
 is also the shape intended for future daemon or MDM-driven activation flows.
 
-## macOS Operating Model
+### perating Model
 
 The macOS transparent proxy consists of:
 
@@ -89,16 +91,15 @@ Relevant sources:
 - Rust entrypoint: [`proxy-lib-l4-macos/src/lib.rs`](../../proxy-lib-l4-macos/src/lib.rs)
 - Rust TCP proxy service: [`proxy-lib-l4-macos/src/tcp.rs`](../../proxy-lib-l4-macos/src/tcp.rs)
 - Rust config schema: [`proxy-lib-l4-macos/src/config.rs`](../../proxy-lib-l4-macos/src/config.rs)
-- Rama transparent proxy example: <https://github.com/plabayo/rama/tree/main/ffi/apple/examples/transparent_proxy>
 - Rama transparent proxy guide: <https://ramaproxy.org/book/proxies/transparent.html>
 
-## Relevant Files
+### Relevant Files
 
 - Rust transparent proxy library: `proxy-lib-l4-macos/`
 - Xcode packaging: `packaging/macos/xcode/l4-proxy/` (Host+Extension)
 
 
-## Build And Install
+### Build And Install
 
 The `Justfile` contains the supported developer commands.
 
@@ -123,13 +124,21 @@ just macos-l4-install-signed
 
 The install step also registers the embedded extension with `pluginkit`.
 
-## Run As A Developer
+### Run As A Developer
 
 Check current state:
 
 ```bash
 just macos-l4-status
 ```
+
+The current state of the proxy can also be seen in the
+system settings of your MacOS machine, under Network,
+you should see the Aikido Endpoint L4 Proxy listed
+in the "Filters & Proxies" section with a status next to it
+that says either "enabled" (green) or "disabled" (red).
+
+![Aikido L4 Endpoint Proxy MacOS Network System Settings: Filters & Proxies](../img/aikido_l4_macos_settings_network_filters_and_proxies.png)
 
 Start the transparent proxy with defaults:
 
@@ -165,7 +174,7 @@ Reset the saved Network Extension profile before starting:
 just macos-l4-start --reset-profile
 ```
 
-## Logs
+### Logs
 
 Stream live logs from the host and extension:
 
@@ -190,7 +199,7 @@ log show --last 30m --style compact --level debug \
   > .aikido/logs/macos-l4-transparent-proxy.log
 ```
 
-## Notes For Developers
+### Notes For Developers
 
 - The host executable lives inside the installed app bundle at:
   `/Applications/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost`
@@ -198,30 +207,3 @@ log show --last 30m --style compact --level debug \
 - The transparent proxy profile is persisted by `NETransparentProxyManager`.
 - The extension is expected to be restarted by the system according to the saved profile state;
   the host CLI is a controller, not a long-running supervisor.
-- The extension uses the regular keychain backend for the MITM CA because the protected-data
-  backend can trigger LocalAuthentication during extension startup.
-
-## Further Reading
-
-Relevant Rama book references:
-
-- Transparent proxy guide: <https://ramaproxy.org/book/proxies/transparent.html>
-- Book index: <https://ramaproxy.org/book/>
-
-General Rama documentation:
-
-- <https://ramaproxy.org/docs/rama/>
-
-## Platform Roadmap
-
-### macOS
-
-macOS transparent proxy support is implemented in this repository and is the current reference platform.
-
-### Linux
-
-Transparent proxy support for Linux still needs to be built and delivered in the near future.
-
-### Windows
-
-Transparent proxy support for Windows still needs to be built and delivered in the near future.
