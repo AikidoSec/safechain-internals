@@ -9,7 +9,13 @@ use rama::{
             ServerAuth, ServerAuthData, ServerCertIssuerData, ServerCertIssuerKind, ServerConfig,
         },
     },
-    tls::boring::server::TlsAcceptorLayer,
+    tls::boring::{
+        core::{
+            pkey::{PKey, Private},
+            x509::X509,
+        },
+        server::TlsAcceptorLayer,
+    },
     utils::str::NonEmptyStr,
 };
 
@@ -19,9 +25,30 @@ use crate::storage::{SyncCompactDataStorage, SyncSecrets};
 
 mod root;
 
-struct PemKeyCrtPair {
-    pub crt: NonEmptyStr,
-    pub key: NonEmptyStr,
+#[derive(Clone)]
+pub struct RootCaKeyPair {
+    crt_pem: NonEmptyStr,
+    key_pem: NonEmptyStr,
+    crt_x509: X509,
+    key_x509: PKey<Private>,
+}
+
+impl RootCaKeyPair {
+    pub fn certificate_pem(&self) -> &NonEmptyStr {
+        &self.crt_pem
+    }
+
+    pub fn private_key_pem(&self) -> &NonEmptyStr {
+        &self.key_pem
+    }
+
+    pub fn certificate(&self) -> &X509 {
+        &self.crt_x509
+    }
+
+    pub fn private_key(&self) -> &PKey<Private> {
+        &self.key_x509
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -39,7 +66,9 @@ pub fn new_tls_acceptor_layer(
     data_storage: &SyncCompactDataStorage,
     application_layer_protocol_negotiation: Option<Vec<ApplicationProtocol>>,
 ) -> Result<(TlsAcceptorLayer, RootCA), BoxError> {
-    let PemKeyCrtPair { crt, key } = self::root::new_root_tls_crt_key_pair(secrets, data_storage)?;
+    let root_ca_key_pair = load_or_create_root_ca_key_pair(secrets, data_storage)?;
+    let crt = root_ca_key_pair.certificate_pem().clone();
+    let key = root_ca_key_pair.private_key_pem().clone();
 
     let root_ca = RootCA(Arc::new(SecretBox::new(Box::new(crt.as_ref().to_owned()))));
 
@@ -95,4 +124,11 @@ pub fn new_tls_acceptor_layer(
         TlsAcceptorLayer::new(tls_acceptor_data).with_store_client_hello(true),
         root_ca,
     ))
+}
+
+pub fn load_or_create_root_ca_key_pair(
+    secrets: &SyncSecrets,
+    data_storage: &SyncCompactDataStorage,
+) -> Result<RootCaKeyPair, BoxError> {
+    self::root::new_root_tls_crt_key_pair(secrets, data_storage)
 }

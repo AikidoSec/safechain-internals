@@ -71,7 +71,7 @@ impl Firewall {
         guard: ShutdownGuard,
         client: impl Service<Request, Output = Response, Error = OpaqueError> + Clone,
         data: SyncCompactDataStorage,
-        reporting_endpoint: Option<rama::http::Uri>,
+        reporting_endpoint: Option<Uri>,
         agent_identity: Option<AgentIdentity>,
         aikido_url: Uri,
     ) -> Result<Self, BoxError> {

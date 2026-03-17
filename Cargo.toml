@@ -1,5 +1,11 @@
 [workspace]
-members = ["proxy-bin-l4", "proxy-bin-l7", "proxy-fuzz", "proxy-lib"]
+members = [
+    "proxy-bin-l4",
+    "proxy-bin-l4-macos",
+    "proxy-bin-l7",
+    "proxy-fuzz",
+    "proxy-lib",
+]
 resolver = "3"
 
 [workspace.package]
@@ -34,12 +40,13 @@ serde_test = "1"
 static_vcruntime = "3.0"
 sudo = "0.6"
 tokio = { version = "1.48" }
+tracing-oslog = "0.3"
 tracing-test = "0.2"
 windows-native-keyring-store = "0.5"
 
 [workspace.dependencies.rama]
 git = "https://github.com/plabayo/rama"
-rev = "f5882670fe8d8b358236f56cc6b0565e7a596878"
+rev = "cdf668fd15e17bff2b08c218c1fd6eb863e2107e"
 
 [profile.release]
 strip = true
