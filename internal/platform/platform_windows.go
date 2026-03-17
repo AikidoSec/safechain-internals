@@ -435,3 +435,17 @@ func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 		"uninstall-safe-chain-*.ps1",
 	)
 }
+
+// IsProcessAlive reports whether a process with the given PID is still running.
+func IsProcessAlive(pid int) bool {
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	if err != nil {
+		return false
+	}
+	defer windows.CloseHandle(h)
+	var exitCode uint32
+	if err := windows.GetExitCodeProcess(h, &exitCode); err != nil {
+		return false
+	}
+	return exitCode == 259 // STILL_ACTIVE
+}

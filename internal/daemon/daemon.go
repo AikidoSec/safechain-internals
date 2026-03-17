@@ -82,7 +82,7 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 	if d.config == nil {
 		return nil, fmt.Errorf("failed to create config")
 	}
-	d.ingress = ingress.New(d.config, uiMgr.Client)
+	d.ingress = ingress.New(d.config, uiMgr)
 	d.initLogging(ctx)
 	return d, nil
 }
@@ -350,6 +350,9 @@ func (d *Daemon) heartbeat() error {
 	if err != nil {
 		log.Printf("Failed to start proxy: %v", err)
 	}
+
+	// Ensure the UI is running, if not, relaunch it
+	d.uiManager.EnsureRunning()
 
 	d.uiManager.NotifyProxyStatusIfChanged(proxy.IsProxyRunning())
 
