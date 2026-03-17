@@ -4,7 +4,7 @@ use rama::{
     telemetry::tracing,
     tls::boring::{
         core::{hash::MessageDigest, pkey::PKey, x509::X509},
-        server::utils::self_signed_server_ca,
+        server::utils::self_signed_server_auth_gen_ca,
     },
     utils::str::NonEmptyStr,
 };
@@ -206,7 +206,7 @@ pub(super) fn new_root_tls_crt_key_pair(
 
     tracing::debug!("no CA key was present in secret storage, generate + store pair now...");
 
-    let (crt, key) = self_signed_server_ca(&SelfSignedData {
+    let (crt, key) = self_signed_server_auth_gen_ca(&SelfSignedData {
         organisation_name: Some("Aikido safe-chain proxy".to_owned()),
         common_name: Some(Domain::from_static("aikidosafechain.com")),
         subject_alternative_names: None,
