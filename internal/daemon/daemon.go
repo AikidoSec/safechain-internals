@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"runtime"
 	"sync"
 	"time"
 
@@ -273,13 +272,6 @@ func (d *Daemon) runDockerCALoop(ctx context.Context) {
 	// quietCtx suppresses verbose platform-layer command logging (RunCommandWithEnv)
 	// since these operations run on a polling loop and would otherwise spam the logs.
 	quietCtx := context.WithValue(ctx, "disable_logging", true)
-
-	if runtime.GOOS == "windows" {
-		if err := dockerca.InstallCAOnRunningContainers(quietCtx); err != nil {
-			log.Printf("Docker CA: failed to install CA on running containers: %v", err)
-		}
-		return
-	}
 
 	pollTicker := time.NewTicker(30 * time.Second)
 	defer pollTicker.Stop()
