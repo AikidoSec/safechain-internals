@@ -5,7 +5,6 @@ package platform
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"unsafe"
 

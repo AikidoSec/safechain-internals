@@ -273,6 +273,14 @@ func (d *Daemon) runDockerCALoop(ctx context.Context) {
 	// quietCtx suppresses verbose platform-layer command logging (RunCommandWithEnv)
 	// since these operations run on a polling loop and would otherwise spam the logs.
 	quietCtx := context.WithValue(ctx, "disable_logging", true)
+
+	if runtime.GOOS == "windows" {
+		if err := dockerca.InstallCAOnRunningContainers(quietCtx); err != nil {
+			log.Printf("Docker CA: failed to install CA on running containers: %v", err)
+		}
+		return
+	}
+
 	pollTicker := time.NewTicker(30 * time.Second)
 	defer pollTicker.Stop()
 
@@ -303,13 +311,6 @@ func (d *Daemon) runDockerCALoop(ctx context.Context) {
 func runDockerCACycle(ctx context.Context) error {
 	if err := dockerca.InstallCAOnRunningContainers(ctx); err != nil {
 		return err
-	}
-	// On Windows service runs we intentionally skip the long-lived `docker events`
-	// watcher. The current platform layer supports one-shot commands in the active
-	// user session, but not long-lived current-user processes from the service, so
-	// we rely on the polling reconcile above to pick up newly started containers.
-	if runtime.GOOS == "windows" {
-		return nil
 	}
 	return dockerca.WatchContainerStarts(ctx)
 }
