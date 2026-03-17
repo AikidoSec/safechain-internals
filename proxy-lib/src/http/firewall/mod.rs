@@ -78,7 +78,7 @@ impl Firewall {
         let layered_client = (
             MapResponseBodyLayer::new_boxed_streaming_body(),
             DecompressionLayer::new(),
-            MapErrLayer::into_box_error(),
+            MapErrLayer::into_opaque_error(),
             TimeoutLayer::new(Duration::from_secs(60)), // NOTE: if you have slow servers this might need to be more
             RetryLayer::new(
                 ManagedPolicy::default().with_backoff(

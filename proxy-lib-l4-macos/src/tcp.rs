@@ -1,10 +1,4 @@
-use std::{
-    convert::Infallible,
-    path::PathBuf,
-    sync::{Arc, mpsc},
-    thread,
-    time::Duration,
-};
+use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
 
 use rama::{
     Layer, Service,
@@ -61,7 +55,7 @@ const TCP_KEEPALIVE_TIME: Duration = Duration::from_mins(2);
 const TCP_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 const TCP_KEEPALIVE_RETRIES: u32 = 5;
 
-pub(super) fn try_new_service(
+pub(super) async fn try_new_service(
     ctx: TransparentProxyServiceContext,
 ) -> Result<impl Service<TcpFlow, Output = (), Error = Infallible>, BoxError> {
     let demo_config = ProxyConfig::from_opaque_config(ctx.opaque_config())?;
@@ -105,27 +99,15 @@ pub(super) fn try_new_service(
         .context("decode proxy config (json)")?;
 
     tracing::debug!("creating firewall state for transparent proxy extension");
-    let (firewall_tx, firewall_rx) = mpsc::sync_channel(1);
-    thread::spawn(move || {
-        let result = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .context("build local tokio runtime for firewall initialization")
-            .and_then(|runtime| {
-                runtime.block_on(create_firewall(
-                    guard,
-                    Some(data_path),
-                    config.agent_identity,
-                    config.reporting_endpoint,
-                    config.aikido_url,
-                ))
-            });
+    let firewall = create_firewall(
+        guard,
+        Some(data_path),
+        config.agent_identity,
+        config.reporting_endpoint,
+        config.aikido_url,
+    )
+    .await?;
 
-        let _ = firewall_tx.send(result);
-    });
-    let firewall = firewall_rx
-        .recv()
-        .map_err(|_| BoxError::from("firewall initialization task did not return a result"))??;
     let tls_mitm_relay_policy = TlsMitmRelayPolicyLayer::new(firewall.clone());
     let tls_mitm_relay = TlsMitmRelay::new_cached_in_memory(ca_crt, ca_key);
 

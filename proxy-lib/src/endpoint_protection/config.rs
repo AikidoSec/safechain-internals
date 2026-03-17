@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use rama::{
     Service,
-    error::{BoxError, ErrorContext, ErrorExt as _},
+    error::{BoxError, ErrorContext, ErrorExt as _, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{
         BodyExtractExt, Request, Response, StatusCode, Uri, service::client::HttpClientExt as _,
@@ -52,7 +52,7 @@ impl RemoteEndpointConfig {
         client: C,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = BoxError>,
+        C: Service<Request, Output = Response, Error = OpaqueError>,
     {
         let filename = uri_to_filename(&uri);
         let refresh_interval = Duration::from_secs(60);
@@ -156,7 +156,7 @@ struct RemoteConfigClient<C> {
 
 impl<C> RemoteConfigClient<C>
 where
-    C: Service<Request, Output = Response, Error = BoxError>,
+    C: Service<Request, Output = Response, Error = OpaqueError>,
 {
     async fn download_config(
         &self,
@@ -294,7 +294,7 @@ async fn config_update_loop<C>(
     shared_config: Arc<ArcSwap<EndpointConfig>>,
     trigger_notify: Arc<tokio::sync::Notify>,
 ) where
-    C: Service<Request, Output = Response, Error = BoxError>,
+    C: Service<Request, Output = Response, Error = OpaqueError>,
 {
     tracing::debug!(
         "remote endpoint config (uri = {}), update loop task up and running",
