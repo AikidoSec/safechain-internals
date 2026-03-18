@@ -175,23 +175,27 @@ where
                 client_hello,
             })
             .await
-            && err.is_relay_cert_issue()
         {
-            if let Some(sni) = err.sni().cloned() {
-                tracing::debug!(
-                    "adding SNI ({sni}) exception for follow-up tls relay inputs due to Relay Cert Issue"
-                );
-                self.cache.insert(PolicyKey::Sni(sni), ());
-            }
-            if let Some(target) = err.proxy_target() {
-                tracing::debug!(
-                    "adding ProxyTarget ({target}) exception for follow-up tls relay inputs due to Relay Cert Issue"
-                );
-                self.cache
-                    .insert(PolicyKey::Target(target.host.clone()), ());
+            if err.is_relay_cert_issue() {
+                if let Some(sni) = err.sni().cloned() {
+                    tracing::debug!(
+                        "adding SNI ({sni}) exception for follow-up tls relay inputs due to Relay Cert Issue"
+                    );
+                    self.cache.insert(PolicyKey::Sni(sni), ());
+                }
+                if let Some(target) = err.proxy_target() {
+                    tracing::debug!(
+                        "adding ProxyTarget ({target}) exception for follow-up tls relay inputs due to Relay Cert Issue"
+                    );
+                    self.cache
+                        .insert(PolicyKey::Target(target.host.clone()), ());
+                }
             }
 
-            return Err(err.context("serve via tls relay"));
+            let sni = err.sni().cloned();
+            return Err(err
+                .context("serve via tls relay")
+                .context_debug_field("sni", sni));
         }
 
         Ok(())

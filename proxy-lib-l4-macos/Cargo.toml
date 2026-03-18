@@ -13,7 +13,7 @@ crate-type = ["staticlib"]
 [features]
 har = ["safechain-proxy-lib/har"]
 
-[dependencies]
+[target.'cfg(target_os = "macos")'.dependencies]
 tokio = { version = "1.48", features = ["net", "io-std"] }
 safechain-proxy-lib = { workspace = true, features = ["pac"] }
 jemallocator = { workspace = true }

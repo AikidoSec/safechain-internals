@@ -84,8 +84,8 @@ fn export_private_key(key: &SecKey) -> Result<PKey<Private>, BoxError> {
         .map(|data| data.to_vec())
         .ok_or_else(|| BoxError::from("managed identity private key is not exportable"))?;
 
-    if let Ok(key) = PKey::private_key_from_der(&der) {
-        return Ok(key);
+    if let Ok(parsed_key) = PKey::private_key_from_der(&der) {
+        return Ok(parsed_key);
     }
 
     let key_type = key_type(key).context("read managed identity private key type")?;

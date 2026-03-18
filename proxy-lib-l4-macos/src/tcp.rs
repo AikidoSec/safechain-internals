@@ -58,7 +58,9 @@ const TCP_KEEPALIVE_RETRIES: u32 = 5;
 pub(super) async fn try_new_service(
     ctx: TransparentProxyServiceContext,
 ) -> Result<impl Service<TcpFlow, Output = (), Error = Infallible>, BoxError> {
-    let demo_config = ProxyConfig::from_opaque_config(ctx.opaque_config())?;
+    let config = ProxyConfig::from_opaque_config(ctx.opaque_config())
+        .context("decode proxy config (json)")?;
+
     let executor = ctx.executor.clone();
     let data_path = crate::utils::storage::storage_dir().context("(app) data path is missing")?;
     std::fs::create_dir_all(&data_path)
@@ -67,7 +69,7 @@ pub(super) async fn try_new_service(
     let data_storage = storage::SyncCompactDataStorage::try_new(data_path.clone())
         .context("create compact data storage using (app) storage dir")
         .with_context_debug_field("path", || data_path.clone())?;
-    let root_ca = match crate::tls::load_root_ca_key_pair(demo_config.use_vpn_shared_identity)
+    let root_ca = match crate::tls::load_root_ca_key_pair(config.use_vpn_shared_identity)
         .context("load managed identity MITM CA Crt/Key pair")?
     {
         Some(root_ca) => root_ca,
@@ -104,16 +106,13 @@ pub(super) async fn try_new_service(
         .cloned()
         .context("L4 engine runtime is expected to inject shutdown guard")?;
 
-    let config = ProxyConfig::from_opaque_config(ctx.opaque_config())
-        .context("decode proxy config (json)")?;
-
     tracing::debug!("creating firewall state for transparent proxy extension");
     let firewall = create_firewall(
         guard,
         Some(data_path),
-        config.agent_identity,
-        config.reporting_endpoint,
-        config.aikido_url,
+        config.agent_identity.clone(),
+        config.reporting_endpoint.clone(),
+        config.aikido_url.clone(),
     )
     .await?;
 
@@ -122,7 +121,7 @@ pub(super) async fn try_new_service(
 
     let mitm_svc = new_tcp_service_inner(
         executor.clone(),
-        demo_config,
+        config,
         tls_mitm_relay_policy,
         tls_mitm_relay,
         firewall,
