@@ -34,6 +34,14 @@ fn init(config: Option<&apple_ne::ffi::tproxy::TransparentProxyInitConfig>) -> b
     }
 
     let init_status = self::utils::init_tracing();
+
+    const FD_LIMIT: rama::unix::utils::rlim_t = 262_144;
+    if let Err(err) = rama::unix::utils::raise_nofile(FD_LIMIT) {
+        tracing::error!("failed to increase FD limit for L4 (t)proxy: {err}");
+    } else {
+        tracing::info!("increased FD limit for L4 (t)proxy to: {FD_LIMIT}");
+    }
+
     tracing::info!("aikido L4 proxy initialized: {init_status}");
     init_status
 }
