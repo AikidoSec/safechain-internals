@@ -381,25 +381,27 @@ func (d *Daemon) heartbeat() error {
 		}
 		return nil
 	})
-	d.runIfIntervalExceeded(&d.daemonLastExtensionUninstallTime, constants.ExtensionUninstallCheckInterval, func() error {
-		resp, err := blocked_packages.GetBlockedPackages(d.ctx, d.config)
-		if err != nil {
-			return err
-		}
+	d.runIfIntervalExceeded(&d.daemonLastExtensionUninstallTime, constants.ExtensionUninstallCheckInterval, d.uninstallBlockedExtensions)
+	return nil
+}
 
-		vscodeExceptions, vscodeOk := resp.Ecosystems["vscode"]
-		openVsxExceptions, openVsxOk := resp.Ecosystems["open_vsx"]
-		if vscodeOk && openVsxOk {
-			vscode.UninstallBlockedExtensions(d.ctx, vscodeExceptions.Exceptions.RejectedPackages, openVsxExceptions.Exceptions.RejectedPackages)
-		}
+func (d *Daemon) uninstallBlockedExtensions() error {
+	resp, err := blocked_packages.GetBlockedPackages(d.ctx, d.config)
+	if err != nil {
+		return err
+	}
 
-		chromeExceptions, chromeOk := resp.Ecosystems["chrome"]
-		if chromeOk {
-			chrome.UninstallBlockedExtensions(d.ctx, chromeExceptions.Exceptions.RejectedPackages)
-		}
+	vscodeExceptions, vscodeOk := resp.Ecosystems["vscode"]
+	openVsxExceptions, openVsxOk := resp.Ecosystems["open_vsx"]
+	if vscodeOk && openVsxOk {
+		vscode.UninstallBlockedExtensions(d.ctx, vscodeExceptions.Exceptions.RejectedPackages, openVsxExceptions.Exceptions.RejectedPackages)
+	}
 
-		return nil
-	})
+	chromeExceptions, chromeOk := resp.Ecosystems["chrome"]
+	if chromeOk {
+		chrome.UninstallBlockedExtensions(d.ctx, chromeExceptions.Exceptions.RejectedPackages)
+	}
+
 	return nil
 }
 
