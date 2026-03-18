@@ -158,6 +158,12 @@ macos-l4-install-signed: macos-l4-xcodegen-build-debug-signed
 macos-l4-status:
     "{{xcode_l4_installed_app_exe}}" status
 
+macos-l4-log-stream:
+    log stream --style compact --level debug \
+        --predicate 'subsystem == "com.aikido.endpoint.proxy.l4" \
+        OR process == "AikidoEndpointL4ProxyExtension" \
+        OR process == "AikidoEndpointL4ProxyHost"'
+
 macos-l4-start *ARGS:
     "{{xcode_l4_installed_app_exe}}" start {{ARGS}}
 
