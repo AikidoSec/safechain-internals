@@ -237,7 +237,7 @@ where
             (
                 HttpWebSocketRelayServiceRequestMatcher::new(
                     // NOTE: change service of HttpWebSocketRelayServiceRequestMatcher with WS MitmRelay
-                    // if you ever to inspect Websocket traffic :)
+                    // if you ever want to inspect Websocket traffic :)
                     ConsumeErrLayer::trace_as_debug().into_layer(IoForwardService::new()),
                 ),
                 HttpProxyConnectRelayServiceRequestMatcher::new(http_conn_upgrade_svc),
