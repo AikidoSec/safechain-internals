@@ -21,7 +21,6 @@ type extensionToUninstall struct {
 
 func UninstallBlockedExtensions(ctx context.Context, extensionsToUninstall []string) {
 	log.Printf("Chrome extension uninstall check (homeDir=%s)", platform.GetConfig().HomeDir)
-	// killBrowsers(ctx)
 
 	installations, err := findInstallations(ctx)
 	if err != nil {
@@ -70,22 +69,6 @@ func UninstallBlockedExtensions(ctx context.Context, extensionsToUninstall []str
 		}
 	}
 }
-
-// func killBrowsers(ctx context.Context) {
-// 	switch runtime.GOOS {
-// 	case "darwin":
-// 		homeDir := platform.GetConfig().HomeDir
-// 		for _, b := range getBrowsers(homeDir) {
-// 			for _, bin := range b.bins {
-// 				_ = exec.CommandContext(ctx, "pkill", "-9", "-f", bin).Run()
-// 			}
-// 		}
-// 	case "windows":
-// 		for _, exe := range []string{"chrome.exe", "brave.exe", "msedge.exe", "chromium.exe"} {
-// 			_ = exec.CommandContext(ctx, "taskkill", "/F", "/IM", exe).Run()
-// 		}
-// 	}
-// }
 
 func removeExtension(profileDir, extensionId string) error {
 	if err := os.RemoveAll(filepath.Join(profileDir, "Extensions", extensionId)); err != nil {
