@@ -281,9 +281,6 @@ async fn create_firewall(
         .with_context_debug_field("path", || data_path.clone())?;
     tracing::info!(path = ?data_path, "(app) data directory ready to be used");
 
-    // NOTE: HAR support not yet enable for L4 proxy,
-    // check with Glen if this is ever a desired feature :)
-
     // ensure to not wait for firewall creation in case shutdown was initiated,
     // this can happen for example in case remote lists need to be fetched and the
     // something on the network on either side is not working
