@@ -3,11 +3,11 @@ use std::time::Duration;
 use rama::{
     Layer, Service,
     error::{BoxError, ErrorContext as _, ErrorExt as _},
-    extensions::{self, ExtensionsRef},
+    extensions::{self},
     io::{BridgeIo, Io},
     net::{
-        address::{Domain, Host},
-        proxy::{IoForwardService, ProxyTarget},
+        address::Domain,
+        proxy::IoForwardService,
         tls::{client::ClientHelloExtension, server::InputWithClientHello},
     },
     telemetry::tracing,
@@ -19,13 +19,7 @@ use rama::{
 
 use crate::http::firewall::Firewall;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum PolicyKey {
-    Sni(Domain),
-    Target(Host),
-}
-
-type Cache = moka::sync::Cache<PolicyKey, ()>;
+type Cache = moka::sync::Cache<Domain, ()>;
 
 #[derive(Debug, Clone)]
 pub struct TlsMitmRelayPolicyLayer {
@@ -134,11 +128,7 @@ where
                     .context_field("sni", server_name);
             }
 
-            if self
-                .cache
-                .get(&PolicyKey::Sni(server_name.clone()))
-                .is_some()
-            {
+            if self.cache.get(&server_name).is_some() {
                 tracing::debug!(
                     "serving via fallback IO due to exception in cache for SNI = {server_name}"
                 );
@@ -149,23 +139,13 @@ where
                     .context("serve via fallback IO (skip TLS due to cached exception)")
                     .context_field("sni", server_name);
             }
-        }
-
-        if let Some(ProxyTarget(target)) = bridge_io.extensions().get().cloned()
-            && self
-                .cache
-                .get(&PolicyKey::Target(target.host.clone()))
-                .is_some()
-        {
-            tracing::debug!(
-                "serving via fallback IO due to exception in cache for ProxyTarget = {target}"
-            );
+        } else {
+            tracing::debug!("serving via fallback IO due to no SNI found");
             return self
                 .fallback
                 .serve(bridge_io)
                 .await
-                .context("serve via fallback IO (skip TLS due to cached exception)")
-                .context_field("proxy_target", target);
+                .context("serve via fallback IO (skip TLS due to no SNI found)");
         }
 
         if let Err(err) = self
@@ -176,20 +156,13 @@ where
             })
             .await
         {
-            if err.is_relay_cert_issue() {
-                if let Some(sni) = err.sni().cloned() {
-                    tracing::debug!(
-                        "adding SNI ({sni}) exception for follow-up tls relay inputs due to Relay Cert Issue"
-                    );
-                    self.cache.insert(PolicyKey::Sni(sni), ());
-                }
-                if let Some(target) = err.proxy_target() {
-                    tracing::debug!(
-                        "adding ProxyTarget ({target}) exception for follow-up tls relay inputs due to Relay Cert Issue"
-                    );
-                    self.cache
-                        .insert(PolicyKey::Target(target.host.clone()), ());
-                }
+            if err.is_relay_cert_issue()
+                && let Some(sni) = err.sni().cloned()
+            {
+                tracing::debug!(
+                    "adding SNI ({sni}) exception for follow-up tls relay inputs due to Relay Cert Issue"
+                );
+                self.cache.insert(sni, ());
             }
 
             let sni = err.sni().cloned();
