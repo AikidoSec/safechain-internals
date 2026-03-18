@@ -6,12 +6,11 @@ use rama::{
         core::{hash::MessageDigest, pkey::PKey, x509::X509},
         server::utils::self_signed_server_auth_gen_ca,
     },
-    utils::str::NonEmptyStr,
 };
 
 use serde::{Deserialize, Serialize};
 
-use super::PemKeyCrtPair;
+use super::RootCaKeyPair;
 use crate::storage::{SyncCompactDataStorage, SyncSecrets};
 
 #[derive(Serialize, Deserialize)]
@@ -43,26 +42,6 @@ impl DataProxyRootCACrt {
         match self {
             DataProxyRootCACrt::V1 { crt } => crt.as_slice(),
         }
-    }
-
-    fn try_crt_as_pem(&self, expected_fp: &[u8]) -> Result<NonEmptyStr, BoxError> {
-        let crt_der = self.crt_der();
-
-        let crt = X509::from_der(crt_der).context("create x509 crt from read DER")?;
-        let crt_fp = crt
-            .digest(MessageDigest::sha256())
-            .context("(re)compute CA crt fingerprint (digest) for verification")?;
-
-        if !crt_fp.eq(expected_fp) {
-            return Err(BoxError::from("unexpected CA crt fingerprint")
-                .context_hex_field("computed_fingerprint", crt_fp)
-                .context_hex_field("expected_fingerprint", expected_fp.to_vec()));
-        }
-
-        String::from_utf8(crt.to_pem().context("generate PEM CA crt byte slice")?)
-            .context("PEM CA crt byte slice as String")?
-            .try_into()
-            .context("PEM CA crt string as NonEmpty variant")
     }
 }
 
@@ -163,7 +142,7 @@ fn load_crt_from_secret_storage(
 pub(super) fn new_root_tls_crt_key_pair(
     secrets: &SyncSecrets,
     data_storage: &SyncCompactDataStorage,
-) -> Result<PemKeyCrtPair, BoxError> {
+) -> Result<RootCaKeyPair, BoxError> {
     if let Some(key_data) = secrets.load_secret::<DataProxyRootCAKey>(AIKIDO_SECRET_ROOT_CA_KEY)? {
         tracing::debug!("root ca key found — load matching crt from secret storage");
         let crt_data = match load_crt_from_secret_storage(secrets, key_data.crt_fingerprint())
@@ -187,13 +166,29 @@ pub(super) fn new_root_tls_crt_key_pair(
         };
         tracing::debug!("root ca crt found... re-encoding it all so callee can make use of it");
 
-        let crt = crt_data
-            .try_crt_as_pem(key_data.crt_fingerprint())
-            .context("compute PEM for found crt in data")?;
+        let crt_x509 =
+            X509::from_der(crt_data.crt_der()).context("parse stored CA crt from DER")?;
+        let crt_fp = crt_x509
+            .digest(MessageDigest::sha256())
+            .context("recompute CA crt fingerprint from stored DER")?;
+        if !crt_fp.eq(key_data.crt_fingerprint()) {
+            return Err(BoxError::from("unexpected CA crt fingerprint")
+                .context_hex_field("computed_fingerprint", crt_fp)
+                .context_hex_field("expected_fingerprint", key_data.crt_fingerprint().to_vec()));
+        }
+        let crt = String::from_utf8(
+            crt_x509
+                .to_pem()
+                .context("generate PEM CA crt byte slice")?,
+        )
+        .context("PEM CA crt byte slice as String")?
+        .try_into()
+        .context("PEM CA crt string as NonEmpty variant")?;
 
+        let key_x509 = PKey::private_key_from_der(key_data.key())
+            .context("parse (secret) private key from DER")?;
         let key = String::from_utf8(
-            PKey::private_key_from_der(key_data.key())
-                .context("parse (secret) private key from DER")?
+            key_x509
                 .private_key_to_pem_pkcs8()
                 .context("generate PEM CA key byte slice")?,
         )
@@ -201,7 +196,12 @@ pub(super) fn new_root_tls_crt_key_pair(
         .try_into()
         .context("PEM CA key string as NonEmpty variant")?;
 
-        return Ok(PemKeyCrtPair { crt, key });
+        return Ok(RootCaKeyPair {
+            crt_pem: crt,
+            key_pem: key,
+            crt_x509,
+            key_x509,
+        });
     }
 
     tracing::debug!("no CA key was present in secret storage, generate + store pair now...");
@@ -230,18 +230,20 @@ pub(super) fn new_root_tls_crt_key_pair(
 
     tracing::trace!("key + crt data blobs ready for storage in secret storage backend...");
 
-    let pair = PemKeyCrtPair {
-        crt: String::from_utf8(crt.to_pem().context("generate PEM CA crt byte slice")?)
+    let pair = RootCaKeyPair {
+        crt_pem: String::from_utf8(crt.to_pem().context("generate PEM CA crt byte slice")?)
             .context("PEM CA crt byte slice as String")?
             .try_into()
             .context("PEM CA crt string as NonEmpty variant")?,
-        key: String::from_utf8(
+        key_pem: String::from_utf8(
             key.private_key_to_pem_pkcs8()
                 .context("generate PEM CA key byte slice")?,
         )
         .context("PEM CA key byte slice as String")?
         .try_into()
         .context("PEM CA key string as NonEmpty variant")?,
+        crt_x509: crt,
+        key_x509: key,
     };
 
     tracing::trace!(

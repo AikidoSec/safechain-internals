@@ -2,7 +2,7 @@ use std::fmt;
 
 use rama::{
     Service,
-    error::{BoxError, ErrorContext as _},
+    error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
@@ -47,7 +47,7 @@ impl RuleNpm {
         min_package_age: Option<MinPackageAge>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = BoxError>,
+        C: Service<Request, Output = Response, Error = OpaqueError>,
     {
         // NOTE: should you ever need to share a remote malware list between different rules,
         // you would simply create it outside of the rule, clone and pass it in.
