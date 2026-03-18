@@ -3,7 +3,6 @@ package vscode
 import (
 	"context"
 	"log"
-	"slices"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
@@ -21,6 +20,19 @@ func UninstallBlockedExtensions(ctx context.Context, vsCodeBlockList []string, o
 		return
 	}
 
+	if len(installations) == 0 {
+		return
+	}
+
+	vsCodeBlockSet := make(map[string]struct{}, len(vsCodeBlockList))
+	for _, id := range vsCodeBlockList {
+		vsCodeBlockSet[id] = struct{}{}
+	}
+	openVsxBlockSet := make(map[string]struct{}, len(openVsxBlockList))
+	for _, id := range openVsxBlockList {
+		openVsxBlockSet[id] = struct{}{}
+	}
+
 	scanner := &VSCodeExtensions{}
 	var toUninstall []extensionToUninstall
 
@@ -32,17 +44,17 @@ func UninstallBlockedExtensions(ctx context.Context, vsCodeBlockList []string, o
 			continue
 		}
 
-		var blockList []string
+		var blockSet map[string]struct{}
 
 		switch inst.Ecosystem {
 		case "vscode":
-			blockList = vsCodeBlockList
+			blockSet = vsCodeBlockSet
 		case "open_vsx":
-			blockList = openVsxBlockList
+			blockSet = openVsxBlockSet
 		}
 
 		for _, pkg := range packages {
-			if slices.Contains(blockList, pkg.Id) {
+			if _, blocked := blockSet[pkg.Id]; blocked {
 				toUninstall = append(toUninstall, extensionToUninstall{
 					binaryPath:  inst.Path,
 					extensionId: pkg.Id,

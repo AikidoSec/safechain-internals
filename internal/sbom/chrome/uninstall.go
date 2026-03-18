@@ -8,8 +8,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"slices"
-	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
@@ -31,6 +29,10 @@ func UninstallBlockedExtensions(ctx context.Context, extensionsToUninstall []str
 		log.Printf("Chrome extension uninstall check: no installations found")
 	}
 
+	extensionBlockSet := make(map[string]struct{}, len(extensionsToUninstall))
+	for _, id := range extensionsToUninstall {
+		extensionBlockSet[id] = struct{}{}
+	}
 	var toUninstall []extensionToUninstall
 
 	for _, inst := range installations {
@@ -46,8 +48,7 @@ func UninstallBlockedExtensions(ctx context.Context, extensionsToUninstall []str
 				if !entry.IsDir() {
 					continue
 				}
-				id := strings.ToLower(entry.Name())
-				if slices.Contains(extensionsToUninstall, id) {
+				if _, blocked := extensionBlockSet[entry.Name()]; blocked {
 					toUninstall = append(toUninstall, extensionToUninstall{
 						extensionId: entry.Name(),
 						profileDir:  profileDir,
@@ -74,8 +75,12 @@ func removeExtension(profileDir, extensionId string) error {
 	if err := os.RemoveAll(filepath.Join(profileDir, "Extensions", extensionId)); err != nil {
 		return err
 	}
-	_ = os.RemoveAll(filepath.Join(profileDir, "Sync Extension Settings", extensionId))
-	_ = removeFromPrefsFile(filepath.Join(profileDir, "Preferences"), extensionId)
+	if err := os.RemoveAll(filepath.Join(profileDir, "Sync Extension Settings", extensionId)); err != nil {
+		return err
+	}
+	if err := removeFromPrefsFile(filepath.Join(profileDir, "Preferences"), extensionId); err != nil {
+		return err
+	}
 	return removeFromPrefsFile(filepath.Join(profileDir, "Secure Preferences"), extensionId)
 }
 
