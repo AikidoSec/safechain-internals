@@ -93,6 +93,8 @@ func buildCommandLineForWindowsProcess(binaryPath string, args []string) *uint16
 	all := append([]string{binaryPath}, args...)
 	parts := make([]string, len(all))
 	for i, a := range all {
+		// EscapeArg quotes and escapes each argument to prevent command-line
+		// injection
 		parts[i] = windows.EscapeArg(a)
 	}
 	cmdLine := strings.Join(parts, " ")

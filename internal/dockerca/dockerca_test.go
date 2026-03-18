@@ -176,6 +176,7 @@ func TestBuildInstallScript(t *testing.T) {
 			method:   installMethodAlpine,
 			certName: "my-ca.crt",
 			contains: []string{
+				"apk info -e ca-certificates",
 				"apk add --no-cache ca-certificates",
 				"mkdir -p /usr/local/share/ca-certificates",
 				"my-ca.crt",
@@ -228,6 +229,36 @@ func TestBuildInstallScript(t *testing.T) {
 	alpineScript := buildInstallScript(installMethodAlpine, "ca.crt")
 	if strings.Index(alpineScript, "apk add") > strings.Index(alpineScript, "update-ca-certificates") {
 		t.Fatalf("apk add must precede update-ca-certificates in alpine script\ngot: %s", alpineScript)
+	}
+}
+
+func TestIsValidContainerID(t *testing.T) {
+	testCases := []struct {
+		id   string
+		want bool
+	}{
+		// valid short ID (12 hex chars)
+		{id: "abc123def456", want: true},
+		// valid full ID (64 hex chars)
+		{id: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", want: true},
+		// uppercase hex rejected
+		{id: "ABC123DEF456", want: false},
+		// wrong length (11 chars)
+		{id: "abc123def45", want: false},
+		// wrong length (13 chars)
+		{id: "abc123def4567", want: false},
+		// non-hex characters
+		{id: "abc123defxyz", want: false},
+		// path traversal attempt
+		{id: "../../../etc/passwd:", want: false},
+		// empty
+		{id: "", want: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.id, func(t *testing.T) {
+			assertEqual(t, isValidContainerID(tc.id), tc.want)
+		})
 	}
 }
 

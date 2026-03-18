@@ -278,17 +278,23 @@ func (d *Daemon) runDockerCALoop(ctx context.Context) {
 
 	dockerOnline := true
 	for {
-		cycleErr := runDockerCACycle(quietCtx)
+		var cycleErr error
+		if dockerOnline {
+			cycleErr = runDockerCACycle(quietCtx)
+		} else {
+			// Docker was running but went offline. Probe the daemon.
+			cycleErr = dockerca.ProbeDockerDaemon(quietCtx)
+		}
 		if ctx.Err() != nil {
 			return
 		}
 
 		switch {
 		case cycleErr != nil && dockerOnline:
-			log.Println("Docker CA: daemon offline")
+			log.Println("Docker CA: Docker daemon went offline")
 			dockerOnline = false
 		case cycleErr == nil && !dockerOnline:
-			log.Println("Docker CA: daemon back online")
+			log.Println("Docker CA: Docker daemon is back online")
 			dockerOnline = true
 		}
 

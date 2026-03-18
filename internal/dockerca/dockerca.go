@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 
@@ -34,24 +35,6 @@ const (
 	installMethodAlpine  installMethod = "alpine"
 	installMethodRHEL    installMethod = "rhel"
 )
-
-var debianFamilyIDs = map[string]struct{}{
-	"debian":    {},
-	"ubuntu":    {},
-	"linuxmint": {},
-	"pop":       {},
-	"kali":      {},
-}
-
-var rhelFamilyIDs = map[string]struct{}{
-	"rhel":      {},
-	"centos":    {},
-	"fedora":    {},
-	"amzn":      {},
-	"rocky":     {},
-	"almalinux": {},
-	"ol":        {},
-}
 
 func InstallCAOnRunningContainers(ctx context.Context) error {
 	dockerBinary, err := findDockerBinary()
@@ -91,7 +74,34 @@ func WatchContainerStarts(ctx context.Context) error {
 	return watchContainerStarts(ctx, dockerBinary)
 }
 
+func ProbeDockerDaemon(ctx context.Context) error {
+	dockerBinary, err := findDockerBinary()
+	if err != nil {
+		log.Println("Docker CA: docker binary not found, skipping daemon probe")
+		return nil
+	}
+
+	if _, err := platform.RunAsCurrentUserWithPathEnv(ctx, dockerBinary, "info", "--format", "{{.ServerVersion}}"); err != nil {
+		return fmt.Errorf("probe docker daemon: %w", err)
+	}
+
+	return nil
+}
+
+// containerIDRe matches a valid Docker container ID: 12 (short) or 64 (full)
+// lowercase hex characters, as returned by `docker ps -q` and `docker events`.
+var containerIDRe = regexp.MustCompile(`^[0-9a-f]{12}$|^[0-9a-f]{64}$`)
+
+// isValidContainerID reports whether id is a valid Docker container ID.
+func isValidContainerID(id string) bool {
+	return containerIDRe.MatchString(id)
+}
+
 func installCAInContainer(ctx context.Context, dockerBinary, containerID string) error {
+	if !isValidContainerID(containerID) {
+		return fmt.Errorf("skipping container: invalid ID %q (expected 12 or 64 hex chars)", containerID)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
@@ -132,7 +142,8 @@ func buildInstallScript(method installMethod, certName string) string {
 	switch method {
 	case installMethodAlpine:
 		return strings.Join([]string{
-			"apk add --no-cache ca-certificates",
+			// Skip the network install if the package is already present.
+			"apk info -e ca-certificates || apk add --no-cache ca-certificates",
 			"mkdir -p /usr/local/share/ca-certificates",
 			"cp /tmp/" + certName + " /usr/local/share/ca-certificates/" + certName,
 			"update-ca-certificates",
@@ -142,11 +153,14 @@ func buildInstallScript(method installMethod, certName string) string {
 		// 1. update-ca-certificates directly (works if ca-certificates is already installed)
 		// 2. apt-get install without update (works if the image has a fresh package index from its own build)
 		// 3. full apt-get update + install (slow fallback for truly bare images like debian:latest)
-		return "mkdir -p /usr/local/share/ca-certificates" +
-			" && cp /tmp/" + certName + " /usr/local/share/ca-certificates/" + certName +
-			" && (update-ca-certificates 2>/dev/null" +
+		refreshTrust := "(update-ca-certificates 2>/dev/null" +
 			" || (DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates 2>/dev/null && update-ca-certificates)" +
 			" || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates))"
+		return strings.Join([]string{
+			"mkdir -p /usr/local/share/ca-certificates",
+			"cp /tmp/" + certName + " /usr/local/share/ca-certificates/" + certName,
+			refreshTrust,
+		}, " && ")
 	case installMethodRHEL:
 		return strings.Join([]string{
 			"mkdir -p /etc/pki/ca-trust/source/anchors",
@@ -193,42 +207,6 @@ func detectMethodFromOSRelease(contents string) (installMethod, string) {
 	default:
 		return installMethodUnknown, prettyName
 	}
-}
-
-func isAlpine(id string) bool {
-	return id == "alpine"
-}
-
-func isDebianFamily(id, idLike string) bool {
-	if _, ok := debianFamilyIDs[id]; ok {
-		return true
-	}
-	return strings.Contains(idLike, "debian") || strings.Contains(idLike, "ubuntu")
-}
-
-func isRHELFamily(id, idLike string) bool {
-	if _, ok := rhelFamilyIDs[id]; ok {
-		return true
-	}
-	return strings.Contains(idLike, "rhel") || strings.Contains(idLike, "fedora") || strings.Contains(idLike, "centos")
-}
-
-func parseOSRelease(contents string) map[string]string {
-	values := make(map[string]string)
-	for _, line := range strings.Split(contents, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		key, value, found := strings.Cut(line, "=")
-		if !found {
-			continue
-		}
-
-		values[key] = strings.Trim(value, `"`)
-	}
-	return values
 }
 
 // splitNonEmptyLines normalizes Docker CLI output that is expected to be a
