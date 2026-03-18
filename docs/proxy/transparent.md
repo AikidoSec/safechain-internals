@@ -99,6 +99,55 @@ Relevant sources:
 - Rust transparent proxy library: `proxy-lib-l4-macos/`
 - Xcode packaging: `packaging/macos/xcode/l4-proxy/` (Host+Extension)
 
+### CA Modes
+
+The macOS transparent proxy currently supports two CA sources.
+
+#### CA Mode: Self-Managed CA
+
+This mode, similar in capability to the L7 Proxy, attempts to load a self-signed
+CA certificate and key from a fixed location in the Protected App storage (only accessible by the proxy).
+
+If the CA does not exist (for example on first run), it will be generated automatically and stored in that location.
+On subsequent starts, the proxy will reuse the existing CA.
+
+This is the default mode and works well for:
+
+- quickly building and testing the L4 proxy on a local machine
+- non-MDM flows where the following dynamic process is acceptable:
+  - during enrollment, installation, or first-time use, the proxy must be started first
+  - the CA certificate can then be installed by retrieving it from the hijacked domain at `/data/root.ca.pem`
+
+#### CA Mode: Managed VPN Shared Identity
+
+This mode is designed specifically for MDM environments where a static root CA is required across an entire organisation.
+
+In this setup, the proxy still uses its own CA, but instead of being self-signed, it acts as an intermediate CA signed by the organisation’s root CA.
+
+The flow is roughly as follows:
+
+1. A device is enrolled via an MDM solution (Device Management).
+2. As part of enrollment, a SCEP profile is installed. This profile includes:
+   - the SCEP server details (operated by Aikido or the organisation)
+   - the identity (Apple Bundle ID) of the L4 Proxy
+3. A new key and certificate are generated on the device. The certificate is sent to the SCEP server and returned after being signed by the organisation’s root CA.
+4. The signed certificate and key are stored as a `SecIdentity` in the `com.apple.managed.vpn.shared` access group. This group is accessible to applications with the Network Extension entitlement. However, because the identity is scoped to the proxy, only the proxy can access it.
+5. When the proxy is started with the `--use-vpn-shared-identity` CLI flag (on the host), it looks up the `SecIdentity` in this access group using its identity. Once found, it:
+   - extracts the private key
+   - copies the certificate
+   - converts both into an in-memory representation compatible with the (rama) boring library
+
+Steps 1 through 4 are performed only once during enrollment, or whenever the certificate and key need to be rotated.
+Step 5 is executed every time the proxy (app extension) starts.
+
+Current managed identity assumptions:
+
+- the identity lookup is hardcoded to `com.aikido.endpoint.proxy.l4`
+- the access group is hardcoded to `com.apple.managed.vpn.shared`
+- the private key is assumed to be exportable (for example, allowed by the SCEP profile)
+
+The latter is typically configurable as an option when creating the SCEP profile.
+If exporting the private key is not allowed or not desirable, the codebase will need to be updated to support a (rama) boring(ssl) issuer that operates directly on the macOS `SecIdentity` via native APIs.
 
 ### Build And Install
 
@@ -214,24 +263,3 @@ log show --last 30m --style compact --level debug \
 - The transparent proxy profile is persisted by `NETransparentProxyManager`.
 - The extension is expected to be restarted by the system according to the saved profile state;
   the host CLI is a controller, not a long-running supervisor.
-
-### CA Modes
-
-The macOS transparent proxy currently supports two CA sources:
-
-- Self-managed CA, default:
-  the proxy stores and reloads its own MITM CA using Apple Protected storage.
-- Managed VPN shared identity, opt-in:
-  the proxy looks for a pre-installed identity in `com.apple.managed.vpn.shared`.
-
-Use the managed mode by starting the host CLI with:
-
-```bash
-just macos-l4-start --use-vpn-shared-identity
-```
-
-Current managed-identity assumptions:
-
-- the identity lookup is hardcoded to `com.aikido.endpoint.proxy.l4`
-- the access group is hardcoded to `com.apple.managed.vpn.shared`
-- the private key is assumed to be exportable, for example when allowed by the SCEP profile

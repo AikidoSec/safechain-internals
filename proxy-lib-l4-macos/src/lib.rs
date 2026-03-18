@@ -45,22 +45,24 @@ fn proxy_config() -> TransparentProxyConfig {
 }
 
 fn should_intercept_flow(meta: &TransparentProxyFlowMeta) -> bool {
-    tracing::trace!(
+    // we wish to intercept _only_ TCP traffic
+    // that has a remote endpoint (such that we can make a outbound/egress connection to it)
+    //
+    // (in future once we can support h3 we will also need to intercept (some) UDP traffic)
+    let should_intercept =
+        meta.protocol == TransparentProxyFlowProtocol::Tcp && meta.remote_endpoint.is_some();
+
+    tracing::debug!(
         protocol = ?meta.protocol,
         remote = ?meta.remote_endpoint,
+        should_intercept,
         local = ?meta.local_endpoint,
+        app_bundle_id = ?meta.source_app_bundle_identifier,
+        app_sign_id = ?meta.source_app_signing_identifier,
         "flow intercept decision: evaluating (rust callback entered)"
     );
 
-    if meta.protocol != TransparentProxyFlowProtocol::Tcp {
-        return false;
-    }
-
-    if meta.remote_endpoint.is_none() {
-        return false;
-    };
-
-    true
+    should_intercept
 }
 
 apple_ne::transparent_proxy_ffi! {

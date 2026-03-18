@@ -234,11 +234,26 @@ impl Firewall {
     }
 
     pub fn match_domain(&self, domain: &Domain) -> bool {
-        domain.eq(&HIJACK_DOMAIN)
-            || self
-                .block_rules
-                .iter()
-                .any(|rule| rule.match_domain(domain))
+        if domain.eq(&HIJACK_DOMAIN) {
+            // Hijack domain handled locally by the proxy.
+            //
+            // See the [`HIJACK_DOMAIN`] documentation for full details.
+            //
+            // Available endpoints:
+            //
+            // - `/ping`:  returns `200 OK` when intercepted by the proxy
+            //   (connectivity / health check)
+            // - `/data/root.ca.pem`:
+            //   download the proxy CA certificate
+            //
+            // If any of these endpoints respond successfully,
+            // traffic is flowing through the proxy and the MITM pipeline is active.
+            return true;
+        }
+
+        self.block_rules
+            .iter()
+            .any(|rule| rule.match_domain(domain))
     }
 
     pub fn into_evaluate_request_layer(self) -> self::layer::evaluate_req::EvaluateRequestLayer {

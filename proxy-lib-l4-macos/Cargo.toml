@@ -11,7 +11,6 @@ readme = "../docs/proxy.md"
 crate-type = ["staticlib"]
 
 [features]
-har = ["safechain-proxy-lib/har"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tokio = { version = "1.48", features = ["net", "io-std"] }
