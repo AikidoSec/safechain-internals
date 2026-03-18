@@ -12,6 +12,8 @@ Other proxy docs:
   and specifically how to pass a user config when connecting to the safechain proxy.
 - [./proxy/pac.md](./proxy/pac.md): learn more about Proxy Auto Configuration
   and how the safechain proxy project supports this flow.
+- [./proxy/transparent.md](./proxy/transparent.md): macOS transparent proxy packaging,
+  CLI usage, and developer build instructions.
 - [`./proxy/troubleshooting.md](./proxy/troubleshooting.md): proxy troubleshooting doc.
 
 ## Quick Start
