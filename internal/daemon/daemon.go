@@ -388,7 +388,7 @@ func (d *Daemon) heartbeat() error {
 		}
 
 		vscodeExceptions, vscodeOk := resp.Ecosystems["vscode"]
-		openVsxExceptions, openVsxOk := resp.Ecosystems["vscode"]
+		openVsxExceptions, openVsxOk := resp.Ecosystems["open_vsx"]
 		if vscodeOk && openVsxOk {
 			vscode.UninstallBlockedExtensions(d.ctx, vscodeExceptions.Exceptions.RejectedPackages, openVsxExceptions.Exceptions.RejectedPackages)
 		}
