@@ -92,6 +92,7 @@ macos-l7-xcodegen-build-debug: macos-l7-xcodegen-generate
         -configuration Debug \
         -derivedDataPath "{{xcode_l7_derived_data}}" \
         -allowProvisioningUpdates \
+        -allowProvisioningDeviceRegistration \
         build
 
 macos-l7-xcode-verify-signing: macos-l7-xcodegen-build-debug
@@ -144,6 +145,7 @@ macos-l4-xcodegen-build-debug-signed: macos-l4-build-rust macos-l4-xcodegen-gene
         -configuration Debug \
         -derivedDataPath "{{xcode_l4_derived_data}}" \
         -allowProvisioningUpdates \
+        -allowProvisioningDeviceRegistration \
         clean \
         build
 
