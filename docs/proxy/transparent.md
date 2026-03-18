@@ -6,7 +6,7 @@ This chapter covers the macOS L4 transparent proxy packaging in this repository.
 It is the developer-facing wrapper around the Rust transparent proxy extension and
 is also the shape intended for future daemon or MDM-driven activation flows.
 
-### perating Model
+### Operating Model
 
 The macOS transparent proxy consists of:
 
@@ -30,6 +30,7 @@ The current host CLI exposes three commands:
 - `--aikido-url URL`
 - `--agent-token TOKEN`
 - `--agent-device-id DEVICE_ID`
+- `--use-vpn-shared-identity`
 - `--reset-profile`
 
 The `agent token` and `agent device id` map to the Rust-side `agent_identity`
@@ -156,6 +157,12 @@ just macos-l4-start \
   --agent-device-id YOUR_DEVICE_ID
 ```
 
+Start the transparent proxy using the managed VPN shared identity:
+
+```bash
+just macos-l4-start --use-vpn-shared-identity
+```
+
 Stop the transparent proxy:
 
 ```bash
@@ -207,3 +214,24 @@ log show --last 30m --style compact --level debug \
 - The transparent proxy profile is persisted by `NETransparentProxyManager`.
 - The extension is expected to be restarted by the system according to the saved profile state;
   the host CLI is a controller, not a long-running supervisor.
+
+### CA Modes
+
+The macOS transparent proxy currently supports two CA sources:
+
+- Self-managed CA, default:
+  the proxy stores and reloads its own MITM CA using Apple Protected storage.
+- Managed VPN shared identity, opt-in:
+  the proxy looks for a pre-installed identity in `com.apple.managed.vpn.shared`.
+
+Use the managed mode by starting the host CLI with:
+
+```bash
+just macos-l4-start --use-vpn-shared-identity
+```
+
+Current managed-identity assumptions:
+
+- the identity lookup is hardcoded to `com.aikido.endpoint.proxy.l4`
+- the access group is hardcoded to `com.apple.managed.vpn.shared`
+- the private key is assumed to be exportable, for example when allowed by the SCEP profile

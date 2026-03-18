@@ -15,6 +15,7 @@ private struct StartOptions {
     var aikidoURL: String?
     var agentToken: String?
     var agentDeviceID: String?
+    var useVPNSharedIdentity = false
     var resetProfile = false
 }
 
@@ -32,15 +33,18 @@ private struct ProxyEngineConfigPayload: Encodable, Equatable {
     let agentIdentity: AgentIdentityPayload?
     let reportingEndpoint: String?
     let aikidoURL: String?
+    let useVPNSharedIdentity: Bool
 
     private enum CodingKeys: String, CodingKey {
         case agentIdentity = "agent_identity"
         case reportingEndpoint = "reporting_endpoint"
         case aikidoURL = "aikido_url"
+        case useVPNSharedIdentity = "use_vpn_shared_identity"
     }
 
     var isEmpty: Bool {
         agentIdentity == nil && reportingEndpoint == nil && aikidoURL == nil
+            && useVPNSharedIdentity == false
     }
 }
 
@@ -465,6 +469,8 @@ private final class TransparentProxyHostCLI {
                 options.agentToken = try consumeValue(flag: argument, arguments: arguments, index: &index)
             case "--agent-device-id":
                 options.agentDeviceID = try consumeValue(flag: argument, arguments: arguments, index: &index)
+            case "--use-vpn-shared-identity":
+                options.useVPNSharedIdentity = true
             case "--reset-profile":
                 options.resetProfile = true
             default:
@@ -529,7 +535,8 @@ private final class TransparentProxyHostCLI {
         let payload = ProxyEngineConfigPayload(
             agentIdentity: agentIdentity,
             reportingEndpoint: options.reportingEndpoint,
-            aikidoURL: options.aikidoURL
+            aikidoURL: options.aikidoURL,
+            useVPNSharedIdentity: options.useVPNSharedIdentity
         )
 
         guard !payload.isEmpty else {
@@ -562,6 +569,7 @@ private final class TransparentProxyHostCLI {
           --aikido-url URL           Override the Aikido app base URL used by the extension.
           --agent-token TOKEN        Agent token to forward to the extension config.
           --agent-device-id ID       Agent device identifier to forward to the extension config.
+          --use-vpn-shared-identity  Use the managed identity from com.apple.managed.vpn.shared.
           --reset-profile            Remove the saved Network Extension profile before starting.
           --help                     Show this help text.
 

@@ -19,9 +19,12 @@ safechain-proxy-lib = { workspace = true, features = ["pac"] }
 jemallocator = { workspace = true }
 tracing-oslog = { workspace = true }
 moka = { workspace = true }
+core-foundation = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 rustls-platform-verifier = { workspace = true }
+security-framework = { workspace = true }
+security-framework-sys = { workspace = true }
 
 [dependencies.rama]
 workspace = true

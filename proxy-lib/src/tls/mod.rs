@@ -35,6 +35,35 @@ pub struct RootCaKeyPair {
 }
 
 impl RootCaKeyPair {
+    pub fn try_from_boring(
+        certificate: X509,
+        private_key: PKey<Private>,
+    ) -> Result<Self, BoxError> {
+        let crt_pem = String::from_utf8(
+            certificate
+                .to_pem()
+                .context("encode CA certificate to PEM")?,
+        )
+        .context("CA certificate PEM is valid UTF-8")?
+        .try_into()
+        .context("CA certificate PEM is non-empty")?;
+        let key_pem = String::from_utf8(
+            private_key
+                .private_key_to_pem_pkcs8()
+                .context("encode CA private key to PKCS#8 PEM")?,
+        )
+        .context("CA private key PEM is valid UTF-8")?
+        .try_into()
+        .context("CA private key PEM is non-empty")?;
+
+        Ok(Self {
+            crt_pem,
+            key_pem,
+            crt_x509: certificate,
+            key_x509: private_key,
+        })
+    }
+
     pub fn certificate_pem(&self) -> &NonEmptyStr {
         &self.crt_pem
     }

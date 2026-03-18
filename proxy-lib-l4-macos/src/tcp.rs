@@ -67,18 +67,27 @@ pub(super) async fn try_new_service(
     let data_storage = storage::SyncCompactDataStorage::try_new(data_path.clone())
         .context("create compact data storage using (app) storage dir")
         .with_context_debug_field("path", || data_path.clone())?;
-    // Network Extension startup must stay non-interactive. The protected data
-    // backend can trigger LocalAuthentication prompts, which causes the tunnel
-    // to stall during startup and disconnect. Use the regular keychain store.
-    let secret_storage = storage::SyncSecrets::try_new(
-        crate::utils::env::project_name(),
-        storage::SecretStorageKind::Keyring,
-    )
-    .context("create keyring secrets storage for MITM CA")?;
+    let root_ca = match crate::tls::load_root_ca_key_pair(demo_config.use_vpn_shared_identity)
+        .context("load managed identity MITM CA Crt/Key pair")?
+    {
+        Some(root_ca) => root_ca,
+        None => {
+            let secret_storage = storage::SyncSecrets::try_new(
+                crate::utils::env::project_name(),
+                storage::SecretStorageKind::AppleProtected {
+                    access_group: None,
+                    cloud_sync: false,
+                },
+            )
+            .context("create Apple Protected secrets storage for MITM CA")?;
 
-    let root_ca =
-        safechain_proxy_lib::tls::load_or_create_root_ca_key_pair(&secret_storage, &data_storage)
-            .context("load/create MITM CA Crt/Key pair")?;
+            safechain_proxy_lib::tls::load_or_create_root_ca_key_pair(
+                &secret_storage,
+                &data_storage,
+            )
+            .context("load/create self-managed MITM CA Crt/Key pair")?
+        }
+    };
     let ca_crt = root_ca.certificate().clone();
     let ca_key = root_ca.private_key().clone();
 
@@ -216,6 +225,10 @@ where
     (
         MapResponseBodyLayer::new_boxed_streaming_body(),
         StreamCompressionLayer::new(),
+        HijackLayer::new(
+            DomainMatcher::exact(HIJACK_DOMAIN),
+            Arc::new(hijack::new_service(ca_crt_pem_bytes)),
+        ),
         firewall.clone().into_evaluate_response_layer(),
         firewall.into_evaluate_request_layer(),
         MapResponseBodyLayer::new_boxed_streaming_body(),
@@ -232,10 +245,6 @@ where
             ),
         ),
         DpiProxyCredentialExtractorLayer::new(),
-        HijackLayer::new(
-            DomainMatcher::exact(HIJACK_DOMAIN),
-            Arc::new(hijack::new_service(ca_crt_pem_bytes)),
-        ),
         ArcLayer::new(),
     )
 }

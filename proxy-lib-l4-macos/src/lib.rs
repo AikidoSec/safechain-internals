@@ -17,6 +17,7 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 mod config;
 mod tcp;
+mod tls;
 mod utils;
 
 fn init(config: Option<&apple_ne::ffi::tproxy::TransparentProxyInitConfig>) -> bool {

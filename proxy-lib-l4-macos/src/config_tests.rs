@@ -55,6 +55,14 @@ fn deserializes_valid_configs() {
                 ..ProxyConfig::default()
             },
         ),
+        (
+            "managed vpn identity enabled",
+            Some(br#"{"use_vpn_shared_identity":true}"# as &[u8]),
+            ProxyConfig {
+                use_vpn_shared_identity: true,
+                ..ProxyConfig::default()
+            },
+        ),
     ];
 
     for (name, input, expected) in cases {
