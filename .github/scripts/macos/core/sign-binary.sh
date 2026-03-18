@@ -24,7 +24,7 @@ set -euo pipefail
 
 # Configuration
 BINARY_PATH=$1
-ENTITLEMENTS_PATH="$(dirname "${BASH_SOURCE[0]}")/safechain-ultimate.entitlements"
+ENTITLEMENTS_PATH="$(dirname "${BASH_SOURCE[0]}")/endpoint-protection.entitlements"
 
 # Source shared utilities for logging and validation functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -76,7 +76,7 @@ sign_binary() {
     log_info "Signing binary with Developer ID Application certificate..."
     
     # Use the specific identity and keychain we created
-    if codesign --force --sign "$DEV_ID_SHA" --timestamp --options runtime \
+    if codesign --force --deep --sign "$DEV_ID_SHA" --timestamp --options runtime \
         --entitlements "$ENTITLEMENTS_PATH" \
         --keychain build.keychain "$BINARY_PATH"; then
         log_success "Binary signed successfully"

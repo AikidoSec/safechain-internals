@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -20,21 +21,22 @@ import (
 )
 
 const (
-	SafeChainUltimateLogName       = "SafeChainUltimate.log"
-	SafeChainUltimateErrLogName    = "SafeChainUltimate.err"
-	SafeChainUIBinaryName          = "SafeChainUltimateUI.exe"
+	EndpointProtectionLogName      = "EndpointProtection.log"
+	EndpointProtectionErrLogName   = "EndpointProtection.err"
+	SafeChainUILogName             = "EndpointProtectionUI.log"
+	SafeChainUIAppName             = "EndpointProtectionUI.exe"
 	SafeChainL7ProxyBinaryName     = "SafeChainL7Proxy.exe"
 	SafeChainL7ProxyLogName        = "SafeChainL7Proxy.log"
 	SafeChainL7ProxyErrLogName     = "SafeChainL7Proxy.err"
-	SafeChainSbomJSONName          = "SafeChainUltimateSBOM.json"
+	SafeChainSbomJSONName          = "EndpointProtectionSBOM.json"
 	SafeChainInstallScriptName     = "install-safe-chain.ps1"
 	SafeChainUninstallScriptName   = "uninstall-safe-chain.ps1"
 	registryInternetSettingsSuffix = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
 )
 
 func initConfig() error {
-	programDataDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "SafeChainUltimate")
-	config.BinaryDir = `C:\Program Files\AikidoSecurity\SafeChainUltimate\bin`
+	programDataDir := filepath.Join(os.Getenv("ProgramData"), "AikidoSecurity", "EndpointProtection")
+	config.BinaryDir = `C:\Program Files\AikidoSecurity\EndpointProtection\bin`
 	config.LogDir = filepath.Join(programDataDir, "logs")
 	config.RunDir = filepath.Join(programDataDir, "run")
 
@@ -125,7 +127,7 @@ func SetupLogging() (io.Writer, error) {
 		return os.Stdout, err
 	}
 
-	logPath := filepath.Join(config.LogDir, SafeChainUltimateLogName)
+	logPath := filepath.Join(config.LogDir, EndpointProtectionLogName)
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return os.Stdout, err
@@ -137,6 +139,15 @@ func SetupLogging() (io.Writer, error) {
 	}
 
 	return io.MultiWriter(os.Stdout, fileWriter), nil
+}
+
+func PrepareUILogFile(_ context.Context) error {
+	logPath := GetUILogPath()
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create UI log file %s: %w", logPath, err)
+	}
+	return f.Close()
 }
 
 func SetSystemPAC(ctx context.Context, pacURL string) error {
@@ -345,6 +356,23 @@ func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ..
 
 func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
 	return RunAsCurrentUser(ctx, binaryPath, args)
+}
+
+// StartUIProcessInAuditSessionOfCurrentUser starts the process as the current user and returns its PID.
+// The process is not waited on; the caller may kill it later using the PID.
+func StartUIProcessInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (int, error) {
+	if !IsWindowsService() {
+		cmd := exec.CommandContext(ctx, binaryPath, args...)
+		if err := cmd.Start(); err != nil {
+			return 0, err
+		}
+		return cmd.Process.Pid, nil
+	}
+	pid, err := runAsLoggedInUserNoWait(binaryPath, args)
+	if err != nil {
+		return 0, err
+	}
+	return int(pid), nil
 }
 
 func downloadAndRunSafeChainPowerShellScript(ctx context.Context, repoURL, version string, scriptName string, tempFilePattern string) error {

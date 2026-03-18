@@ -33,26 +33,35 @@ jobs:
       - name: Download agent artifact (amd64)
         uses: actions/download-artifact@v4
         with:
-          name: safechain-ultimate-darwin-amd64
+          name: endpoint-protection-darwin-amd64
           path: bin/amd64
 
       - name: Download agent artifact (arm64)
         uses: actions/download-artifact@v4
         with:
-          name: safechain-ultimate-darwin-arm64
+          name: endpoint-protection-darwin-arm64
           path: bin/arm64
 
-      - name: Download agent ui artifact (amd64)
+      - name: Download agent ui app bundle artifact (amd64)
         uses: actions/download-artifact@v4
         with:
-          name: safechain-ultimate-ui-darwin-amd64
-          path: bin/amd64
+          name: endpoint-protection-ui-darwin-amd64.app
+          path: bin/amd64-ui-app
 
-      - name: Download agent ui artifact (arm64)
+      - name: Download agent ui app bundle artifact (arm64)
         uses: actions/download-artifact@v4
         with:
-          name: safechain-ultimate-ui-darwin-arm64
-          path: bin/arm64
+          name: endpoint-protection-ui-darwin-arm64.app
+          path: bin/arm64-ui-app
+
+      - name: Restore .app bundle layout
+        run: |
+          mkdir -p "bin/amd64/endpoint-protection-ui-darwin-amd64.app"
+          mv bin/amd64-ui-app/* "bin/amd64/endpoint-protection-ui-darwin-amd64.app/"
+          rm -rf bin/amd64-ui-app
+          mkdir -p "bin/arm64/endpoint-protection-ui-darwin-arm64.app"
+          mv bin/arm64-ui-app/* "bin/arm64/endpoint-protection-ui-darwin-arm64.app/"
+          rm -rf bin/arm64-ui-app
 
       - name: Download proxy artifact (amd64)
         uses: actions/download-artifact@v4
@@ -69,21 +78,28 @@ jobs:
       - name: Create universal binaries
         run: |
           lipo -create \
-            bin/amd64/safechain-ultimate-darwin-amd64 \
-            bin/arm64/safechain-ultimate-darwin-arm64 \
-            -output bin/safechain-ultimate-darwin-universal
+            bin/amd64/endpoint-protection-darwin-amd64 \
+            bin/arm64/endpoint-protection-darwin-arm64 \
+            -output bin/endpoint-protection-darwin-universal
+
+          APP_BINARY_NAME="endpoint-protection-ui"
+          cp -R "bin/amd64/endpoint-protection-ui-darwin-amd64.app" "bin/endpoint-protection-ui-darwin-universal.app"
           lipo -create \
-            bin/amd64/safechain-ultimate-ui-darwin-amd64 \
-            bin/arm64/safechain-ultimate-ui-darwin-arm64 \
-            -output bin/safechain-ultimate-ui-darwin-universal
+            "bin/amd64/endpoint-protection-ui-darwin-amd64.app/Contents/MacOS/$APP_BINARY_NAME" \
+            "bin/arm64/endpoint-protection-ui-darwin-arm64.app/Contents/MacOS/$APP_BINARY_NAME" \
+            -output "bin/endpoint-protection-ui-darwin-universal.app/Contents/MacOS/$APP_BINARY_NAME"
+
           lipo -create \
             bin/amd64/safechain-l7-proxy-darwin-amd64 \
             bin/arm64/safechain-l7-proxy-darwin-arm64 \
             -output bin/safechain-l7-proxy-darwin-universal
+
           echo "Universal binaries created:"
-          ls -lh bin/safechain-*-universal
-          lipo -info bin/safechain-ultimate-darwin-universal
-          lipo -info bin/safechain-ultimate-ui-darwin-universal
+          ls -lh bin/endpoint-protection-darwin-universal
+          ls -lhR bin/endpoint-protection-ui-darwin-universal.app
+          ls -lh bin/safechain-l7-proxy-darwin-universal
+          lipo -info bin/endpoint-protection-darwin-universal
+          lipo -info "bin/endpoint-protection-ui-darwin-universal.app/Contents/MacOS/$APP_BINARY_NAME"
           lipo -info bin/safechain-l7-proxy-darwin-universal
 
       - name: Make scripts executable
@@ -100,13 +116,13 @@ jobs:
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-ultimate-darwin-universal
+        run: .github/scripts/macos/core/sign-binary.sh bin/endpoint-protection-darwin-universal
 
-      - name: Sign macOS agent ui binary
+      - name: Sign macOS agent ui app bundle
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-ultimate-ui-darwin-universal
+        run: .github/scripts/macos/core/sign-binary.sh bin/endpoint-protection-ui-darwin-universal.app
 
       - name: Sign macOS proxy binary
         env:
@@ -121,7 +137,7 @@ jobs:
 
       - name: Rename package
         run: |
-          mv dist/SafeChainUltimate-${{ inputs.version || 'dev' }}.pkg dist/SafeChainUltimate.pkg
+          mv dist/EndpointProtection-${{ inputs.version || 'dev' }}.pkg dist/EndpointProtection.pkg
 
       - name: Create and notarize macOS packages
         env:
@@ -133,10 +149,10 @@ jobs:
           KEYCHAIN_PATH: ${{ env.KEYCHAIN_PATH }}
           VERSION: ${{ inputs.version }}
           BUILD_NUMBER: ${{ github.run_number }}
-        run: .github/scripts/macos/packages/sign-and-notarize-package.sh dist/SafeChainUltimate.pkg
+        run: .github/scripts/macos/packages/sign-and-notarize-package.sh dist/EndpointProtection.pkg
 
       - name: Upload .pkg artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SafeChainUltimate.pkg
-          path: dist/SafeChainUltimate.pkg
+          name: EndpointProtection.pkg
+          path: dist/EndpointProtection.pkg

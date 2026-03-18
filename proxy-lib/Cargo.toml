@@ -1,7 +1,7 @@
 [package]
 name = "safechain-proxy-lib"
 description = "SafeChain Common Proxy Lib"
-version = { workspace = true }  # keep in sync with GH releases
+version = { workspace = true }
 edition = { workspace = true }
 publish = false
 rust-version = { workspace = true }
@@ -27,6 +27,7 @@ moka = { workspace = true }
 rand = { workspace = true }
 parking_lot = { workspace = true }
 humantime = { workspace = true }
+rustls-platform-verifier = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 linux-keyutils-keyring-store = { workspace = true }

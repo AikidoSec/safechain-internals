@@ -12,6 +12,8 @@ Other proxy docs:
   and specifically how to pass a user config when connecting to the safechain proxy.
 - [./proxy/pac.md](./proxy/pac.md): learn more about Proxy Auto Configuration
   and how the safechain proxy project supports this flow.
+- [./proxy/transparent.md](./proxy/transparent.md): macOS transparent proxy packaging,
+  CLI usage, and developer build instructions.
 - [`./proxy/troubleshooting.md](./proxy/troubleshooting.md): proxy troubleshooting doc.
 
 ## Quick Start
@@ -180,7 +182,7 @@ using `--features har`, which is for you done when running (locally) `just run-p
 > 1. download the root CA (pem) crt
 >
 > ```bash
-> curl -s http://127.0.0.1:8088/ca -o /tmp/safechain-proxy-ca-crt.pem
+> curl -s http://127.0.0.1:8088/ca -o /tmp/endpoint-protection-proxy-ca-crt.pem
 > # will store the PEM data of that (root) CA crt in a tmp location
 > ```
 >

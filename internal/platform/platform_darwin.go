@@ -20,13 +20,14 @@ import (
 )
 
 const (
-	SafeChainUltimateLogName     = "safechain-ultimate.log"
-	SafeChainUltimateErrLogName  = "safechain-ultimate.err"
-	SafeChainUIBinaryName        = "safechain-ultimate-ui"
+	EndpointProtectionLogName    = "endpoint-protection.log"
+	EndpointProtectionErrLogName = "endpoint-protection.err"
+	SafeChainUILogName           = "endpoint-protection-ui.log"
+	SafeChainUIAppName           = "endpoint-protection-ui.app"
 	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
 	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
 	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
-	SafeChainSbomJSONName        = "safechain-ultimate-sbom.json"
+	SafeChainSbomJSONName        = "endpoint-protection-sbom.json"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
 )
@@ -49,9 +50,9 @@ func initConfig() error {
 		}
 	}
 	safeChainHomeDir := filepath.Join(config.HomeDir, ".safe-chain")
-	config.BinaryDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/bin"
-	config.RunDir = "/Library/Application Support/AikidoSecurity/SafeChainUltimate/run"
-	config.LogDir = "/Library/Logs/AikidoSecurity/SafeChainUltimate"
+	config.BinaryDir = "/Library/Application Support/AikidoSecurity/EndpointProtection/bin"
+	config.RunDir = "/Library/Application Support/AikidoSecurity/EndpointProtection/run"
+	config.LogDir = "/Library/Logs/AikidoSecurity/EndpointProtection"
 	config.SafeChainBinaryPath = filepath.Join(safeChainHomeDir, "bin", "safe-chain")
 	return nil
 }
@@ -62,6 +63,24 @@ func PrepareShellEnvironment(_ context.Context) error {
 
 func SetupLogging() (io.Writer, error) {
 	return os.Stdout, nil
+}
+
+func PrepareUILogFile(ctx context.Context) error {
+	logPath := GetUILogPath()
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create UI log file %s: %w", logPath, err)
+	}
+	f.Close()
+
+	_, uid, _, gid, err := GetCurrentUser(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get current user for UI log chown: %w", err)
+	}
+	if err := os.Chown(logPath, uid, gid); err != nil {
+		return fmt.Errorf("failed to chown UI log file %s: %w", logPath, err)
+	}
+	return nil
 }
 
 /*
@@ -259,8 +278,8 @@ func UnsetSystemPAC(ctx context.Context, pacURL string) error {
 }
 
 func showCAInstallDialog(ctx context.Context) error {
-	script := `button returned of (display dialog "Aikido Endpoint needs to install a trusted CA certificate.\nmacOS will prompt you for administrator credentials." ` +
-		`with title "Aikido Endpoint Installation" buttons {"Cancel", "Install"} default button "Install" with icon caution)`
+	script := `button returned of (display dialog "Aikido Endpoint Protection needs to install a trusted CA certificate.\nmacOS will prompt you for administrator credentials." ` +
+		`with title "Aikido Endpoint Protection Installation" buttons {"Cancel", "Install"} default button "Install" with icon caution)`
 	out, err := RunInAuditSessionOfCurrentUser(ctx, "osascript", []string{"-e", script})
 	if err != nil {
 		return fmt.Errorf("CA certificate installation cancelled")
@@ -440,6 +459,65 @@ func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args
 	uidStr := fmt.Sprintf("%d", uid)
 	launchctlArgs := append([]string{"asuser", uidStr, binaryPath}, args...)
 	return utils.RunCommandWithEnv(ctx, []string{}, "launchctl", launchctlArgs...)
+}
+
+// appBinaryName extracts the process name that pgrep will match when searching for a running application.
+// macOS .app bundles run under the bundle name without the .app extension.
+func appBinaryName(binaryPath string) string {
+	base := filepath.Base(binaryPath)
+	if strings.HasSuffix(strings.ToLower(base), ".app") {
+		return strings.TrimSuffix(base, filepath.Ext(base))
+	}
+	return base
+}
+
+// StartUIProcessInAuditSessionOfCurrentUser launches the UI as the
+// logged-in console user and returns the real process PID.
+//
+// For .app bundles we must use "open -a" so macOS sets up the GUI session
+// (window server, tray, dock). Both "open" and "launchctl asuser" exit
+// immediately, so the PID is discovered afterwards via pgrep.
+func StartUIProcessInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (int, error) {
+	isApp := strings.HasSuffix(strings.ToLower(binaryPath), ".app")
+
+	name := binaryPath
+	cmdArgs := args
+	if isApp {
+		name = "open"
+		cmdArgs = []string{"-a", binaryPath}
+		if len(args) > 0 {
+			cmdArgs = append(cmdArgs, "--args")
+			cmdArgs = append(cmdArgs, args...)
+		}
+	}
+
+	if RunningAsRoot() {
+		_, uid, _, _, err := GetCurrentUser(ctx)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get console user: %v", err)
+		}
+		uidStr := fmt.Sprintf("%d", uid)
+		cmdArgs = append([]string{"asuser", uidStr, name}, cmdArgs...)
+		name = "launchctl"
+	}
+
+	cmd := exec.CommandContext(ctx, name, cmdArgs...)
+	if err := cmd.Run(); err != nil {
+		return 0, fmt.Errorf("failed to start UI: %v", err)
+	}
+
+	// "open" / "launchctl" exit immediately after dispatching.
+	// Find the real UI process PID by executable name.
+	binName := appBinaryName(binaryPath)
+	pidOut, err := exec.CommandContext(ctx, "pgrep", "-nf", binName).Output()
+	if err != nil {
+		return 0, fmt.Errorf("UI process started but PID could not be found: %v", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidOut)))
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse UI PID: %v", err)
+	}
+	return pid, nil
 }
 
 func RunningAsRoot() bool {

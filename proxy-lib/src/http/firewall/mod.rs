@@ -39,7 +39,7 @@ mod pac;
 
 use crate::{
     endpoint_protection::{PolicyEvaluator, RemoteEndpointConfig},
-    http::firewall::rule::npm::min_package_age::MinPackageAge,
+    http::{firewall::rule::npm::min_package_age::MinPackageAge, service::hijack::HIJACK_DOMAIN},
     storage::SyncCompactDataStorage,
     utils::{env::network_service_identifier, token::AgentIdentity},
 };
@@ -71,14 +71,14 @@ impl Firewall {
         guard: ShutdownGuard,
         client: impl Service<Request, Output = Response, Error = OpaqueError> + Clone,
         data: SyncCompactDataStorage,
-        reporting_endpoint: Option<rama::http::Uri>,
+        reporting_endpoint: Option<Uri>,
         agent_identity: Option<AgentIdentity>,
         aikido_url: Uri,
     ) -> Result<Self, BoxError> {
         let layered_client = (
             MapResponseBodyLayer::new_boxed_streaming_body(),
             DecompressionLayer::new(),
-            MapErrLayer::into_box_error(),
+            MapErrLayer::into_opaque_error(),
             TimeoutLayer::new(Duration::from_secs(60)), // NOTE: if you have slow servers this might need to be more
             RetryLayer::new(
                 ManagedPolicy::default().with_backoff(
@@ -234,6 +234,23 @@ impl Firewall {
     }
 
     pub fn match_domain(&self, domain: &Domain) -> bool {
+        if domain.eq(&HIJACK_DOMAIN) {
+            // Hijack domain handled locally by the proxy.
+            //
+            // See the [`HIJACK_DOMAIN`] documentation for full details.
+            //
+            // Available endpoints:
+            //
+            // - `/ping`:  returns `200 OK` when intercepted by the proxy
+            //   (connectivity / health check)
+            // - `/data/root.ca.pem`:
+            //   download the proxy CA certificate
+            //
+            // If any of these endpoints respond successfully,
+            // traffic is flowing through the proxy and the MITM pipeline is active.
+            return true;
+        }
+
         self.block_rules
             .iter()
             .any(|rule| rule.match_domain(domain))

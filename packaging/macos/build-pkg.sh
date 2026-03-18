@@ -2,7 +2,7 @@
 
 set -e
 
-# Build macOS .pkg installer for SafeChain Ultimate
+# Build macOS .pkg installer for Aikido Endpoint Protection
 # Usage: ./build-pkg.sh -v VERSION -a ARCH [-b BIN_DIR] [-o OUTPUT_DIR]
 
 VERSION=""
@@ -56,24 +56,25 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BIN_DIR="$(cd "$BIN_DIR" 2>/dev/null && pwd || echo "$PROJECT_DIR/$BIN_DIR")"
 OUTPUT_DIR="$(mkdir -p "$OUTPUT_DIR" && cd "$OUTPUT_DIR" && pwd)"
 
-echo "Building macOS .pkg installer for SafeChain Ultimate v$VERSION"
+echo "Building macOS .pkg installer for Aikido Endpoint Protection v$VERSION"
 echo "  Architecture: $ARCH"
 echo "  Binary directory: $BIN_DIR"
 echo "  Output directory: $OUTPUT_DIR"
 echo "  Project directory: $PROJECT_DIR"
 
 # Verify binaries exist
-AGENT_BIN="$BIN_DIR/safechain-ultimate-darwin-$ARCH"
-AGENT_UI_BIN="$BIN_DIR/safechain-ultimate-ui-darwin-$ARCH"
+AGENT_BIN="$BIN_DIR/endpoint-protection-darwin-$ARCH"
+AGENT_UI_APP="$BIN_DIR/endpoint-protection-ui-darwin-$ARCH.app"
 PROXY_BIN="$BIN_DIR/safechain-l7-proxy-darwin-$ARCH"
 
+
 if [ ! -f "$AGENT_BIN" ]; then
-    echo "Error: safechain-ultimate binary not found at $AGENT_BIN" >&2
+    echo "Error: endpoint-protection binary not found at $AGENT_BIN" >&2
     exit 1
 fi
 
-if [ ! -f "$AGENT_UI_BIN" ]; then
-    echo "Error: safechain-ultimate-ui binary not found at $AGENT_UI_BIN" >&2
+if [ ! -d "$AGENT_UI_APP" ]; then
+    echo "Error: endpoint-protection-ui app not found at $AGENT_UI_APP" >&2
     exit 1
 fi
 
@@ -91,9 +92,9 @@ echo "Using temporary build directory: $BUILD_DIR"
 # Create package directory structure
 PKG_ROOT="$BUILD_DIR/pkg_root"
 PKG_SCRIPTS="$BUILD_DIR/scripts"
-INSTALL_DIR="$PKG_ROOT/Library/Application Support/AikidoSecurity/SafeChainUltimate"
+INSTALL_DIR="$PKG_ROOT/Library/Application Support/AikidoSecurity/EndpointProtection"
 LAUNCHDAEMONS_DIR="$PKG_ROOT/Library/LaunchDaemons"
-LOGS_DIR="$PKG_ROOT/Library/Logs/AikidoSecurity/SafeChainUltimate"
+LOGS_DIR="$PKG_ROOT/Library/Logs/AikidoSecurity/EndpointProtection"
 
 mkdir -p "$INSTALL_DIR/bin"
 mkdir -p "$LAUNCHDAEMONS_DIR"
@@ -106,11 +107,10 @@ chmod 644 "$LOGS_DIR/.keep"
 
 # Copy binaries
 echo "Copying binaries..."
-cp "$AGENT_BIN" "$INSTALL_DIR/bin/safechain-ultimate"
-cp "$AGENT_UI_BIN" "$INSTALL_DIR/bin/safechain-ultimate-ui"
+cp "$AGENT_BIN" "$INSTALL_DIR/bin/endpoint-protection"
+cp -R "$AGENT_UI_APP" "$INSTALL_DIR/bin/endpoint-protection-ui.app"
 cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-l7-proxy"
-chmod 755 "$INSTALL_DIR/bin/safechain-ultimate"
-chmod 755 "$INSTALL_DIR/bin/safechain-ultimate-ui"
+chmod 755 "$INSTALL_DIR/bin/endpoint-protection"
 chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 
 # Copy scripts
@@ -121,8 +121,8 @@ chmod 755 "$INSTALL_DIR/scripts/uninstall"
 
 # Copy LaunchDaemon plist
 echo "Copying LaunchDaemon plist..."
-cp "$SCRIPT_DIR/com.aikidosecurity.safechainultimate.plist" "$LAUNCHDAEMONS_DIR/"
-chmod 644 "$LAUNCHDAEMONS_DIR/com.aikidosecurity.safechainultimate.plist"
+cp "$SCRIPT_DIR/com.aikidosecurity.endpointprotection.plist" "$LAUNCHDAEMONS_DIR/"
+chmod 644 "$LAUNCHDAEMONS_DIR/com.aikidosecurity.endpointprotection.plist"
 
 # Copy scripts and set permissions
 echo "Copying installer scripts..."
@@ -132,13 +132,24 @@ chmod 755 "$PKG_SCRIPTS/preinstall"
 chmod 755 "$PKG_SCRIPTS/postinstall"
 
 # Build the package
-OUTPUT_PKG="$OUTPUT_DIR/SafeChainUltimate.pkg"
-IDENTIFIER="com.aikidosecurity.safechainultimate"
+OUTPUT_PKG="$OUTPUT_DIR/EndpointProtection.pkg"
+IDENTIFIER="com.aikidosecurity.endpointprotection"
+
+COMPONENT_PLIST="$BUILD_DIR/component.plist"
+
+# Prevent macOS from relocating the UI app bundle out of INSTALL_DIR/bin.
+pkgbuild --analyze --root "$PKG_ROOT" "$COMPONENT_PLIST"
+if /usr/libexec/PlistBuddy -c "Print" "$COMPONENT_PLIST" >/dev/null 2>&1; then
+    /usr/libexec/PlistBuddy -c "Set :0:BundleHasStrictIdentifier false" "$COMPONENT_PLIST" >/dev/null 2>&1 || true
+    /usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$COMPONENT_PLIST" >/dev/null 2>&1 || true
+    /usr/libexec/PlistBuddy -c "Set :0:BundleIsVersionChecked false" "$COMPONENT_PLIST" >/dev/null 2>&1 || true
+fi
 
 echo "Building package..."
 pkgbuild \
     --root "$PKG_ROOT" \
     --scripts "$PKG_SCRIPTS" \
+    --component-plist "$COMPONENT_PLIST" \
     --identifier "$IDENTIFIER" \
     --version "$PKG_VERSION" \
     --install-location "/" \

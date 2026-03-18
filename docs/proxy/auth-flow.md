@@ -1,6 +1,6 @@
 # Proxy Auth Flow
 
-The safechain proxy does not require authentication.
+The `safechain` proxy does not require authentication.
 However, for both HTTP(S) and SOCKS5(H) proxy connect support,
 it is possible to use BASIC authentication using a username and password.
 

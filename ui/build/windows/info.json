@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "0.0.1"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "0.0.1",
+			"CompanyName": "Aikido Security",
+			"FileDescription": "endpoint-protection-ui",
+			"LegalCopyright": "(c) 2026, Aikido Security",
+			"ProductName": "Aikido Endpoint Protection",
+			"Comments": "Aikido Endpoint Protection"
+		}
+	}
+}

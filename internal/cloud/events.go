@@ -26,8 +26,8 @@ type PackageInstallRequest struct {
 
 // EcosystemPackages groups packages by ecosystem for an installation approval request.
 type EcosystemPackages struct {
-	Ecosystem string                 `json:"ecosystem"`
-	Packages []PackageInstallRequest `json:"packages"`
+	Ecosystem string                  `json:"ecosystem"`
+	Packages  []PackageInstallRequest `json:"packages"`
 }
 
 // RequestPackageInstallationEvent is the body sent to requestPackageInstallation.

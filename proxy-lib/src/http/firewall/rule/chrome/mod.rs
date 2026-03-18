@@ -2,13 +2,15 @@ use std::{fmt, str::FromStr};
 
 use rama::{
     Service,
-    error::{BoxError, ErrorContext as _},
+    error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
-    utils::str::arcstr::{ArcStr, arcstr},
-    utils::str::smol_str::StrExt,
+    utils::str::{
+        arcstr::{ArcStr, arcstr},
+        smol_str::StrExt,
+    },
 };
 
 use crate::{
@@ -42,7 +44,7 @@ impl RuleChrome {
         policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = BoxError>,
+        C: Service<Request, Output = Response, Error = OpaqueError>,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,

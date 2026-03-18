@@ -1,17 +1,17 @@
 #!/bin/bash
 
 # =============================================================================
-# SafeChain Ultimate - Local Installation Helper
+# Aikido Endpoint Protection - Local Installation Helper
 # =============================================================================
 # This script helps install the unsigned local PKG build
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-PKG_FILE="$PROJECT_DIR/dist/SafeChainUltimate-dev.pkg"
+PKG_FILE="$PROJECT_DIR/dist/EndpointProtection-dev.pkg"
 
 echo "========================================="
-echo "SafeChain Ultimate - Local Installation"
+echo "Aikido Endpoint Protection - Local Installation"
 echo "========================================="
 echo ""
 
@@ -34,9 +34,9 @@ if pkgutil --check-signature "$PKG_FILE" 2>&1 | grep -q "no signature"; then
 fi
 
 # Install using sudo installer (bypasses Gatekeeper)
-echo "Installing SafeChain Ultimate..."
+echo "Installing Aikido Endpoint Protection..."
 echo "This will:"
-echo "  - Install binaries to /Library/Application Support/AikidoSecurity/SafeChainUltimate/"
+echo "  - Install binaries to /Library/Application Support/AikidoSecurity/EndpointProtection/"
 echo "  - Install LaunchDaemon to /Library/LaunchDaemons/"
 echo "  - Start the agent service"
 echo ""
@@ -57,18 +57,18 @@ if [ $? -eq 0 ]; then
     echo "✓ Installation Complete!"
     echo "========================================="
     echo ""
-    echo "SafeChain Ultimate has been installed and started."
+    echo "Aikido Endpoint Protection has been installed and started."
     echo ""
     echo "Service management:"
-    echo "  Check status:  sudo launchctl list | grep safechainultimate"
-    echo "  Stop service:  sudo launchctl bootout system/com.aikidosecurity.safechainultimate"
-    echo "  Start service: sudo launchctl bootstrap system /Library/LaunchDaemons/com.aikidosecurity.safechainultimate.plist"
+    echo "  Check status:  sudo launchctl list | grep endpointprotection"
+    echo "  Stop service:  sudo launchctl bootout system/com.aikidosecurity.endpointprotection"
+    echo "  Start service: sudo launchctl bootstrap system /Library/LaunchDaemons/com.aikidosecurity.endpointprotection.plist"
     echo ""
     echo "View logs:"
-    echo "  tail -f /Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.log"
-    echo "  tail -f /Library/Logs/AikidoSecurity/SafeChainUltimate/safechain-ultimate.err"
+    echo "  tail -f /Library/Logs/AikidoSecurity/EndpointProtection/endpoint-protection.log"
+    echo "  tail -f /Library/Logs/AikidoSecurity/EndpointProtection/endpoint-protection.err"
     echo ""
-    echo "To uninstall, run: sudo /Library/Application Support/AikidoSecurity/SafeChainUltimate/scripts/uninstall"
+    echo "To uninstall, run: sudo /Library/Application Support/AikidoSecurity/EndpointProtection/scripts/uninstall"
     echo ""
 else
     echo ""
