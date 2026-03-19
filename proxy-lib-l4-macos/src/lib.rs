@@ -1,12 +1,17 @@
 #![cfg(target_vendor = "apple")]
 #![cfg(target_os = "macos")]
 
+use std::net::IpAddr;
+
 use rama::{
-    net::apple::networkextension::{
-        self as apple_ne,
-        tproxy::{
-            TransparentProxyConfig, TransparentProxyFlowMeta, TransparentProxyFlowProtocol,
-            TransparentProxyNetworkRule, TransparentProxyRuleProtocol,
+    net::{
+        address::{Host, HostWithPort},
+        apple::networkextension::{
+            self as apple_ne,
+            tproxy::{
+                TransparentProxyConfig, TransparentProxyFlowMeta, TransparentProxyFlowProtocol,
+                TransparentProxyNetworkRule, TransparentProxyRuleProtocol,
+            },
         },
     },
     telemetry::tracing,
@@ -57,8 +62,8 @@ fn should_intercept_flow(meta: &TransparentProxyFlowMeta) -> bool {
     // that has a remote endpoint (such that we can make a outbound/egress connection to it)
     //
     // (in future once we can support h3 we will also need to intercept (some) UDP traffic)
-    let should_intercept =
-        meta.protocol == TransparentProxyFlowProtocol::Tcp && meta.remote_endpoint.is_some();
+    let should_intercept = meta.protocol == TransparentProxyFlowProtocol::Tcp
+        && should_intercept_remote_endpoint(meta.remote_endpoint.as_ref());
 
     tracing::debug!(
         protocol = ?meta.protocol,
@@ -71,6 +76,19 @@ fn should_intercept_flow(meta: &TransparentProxyFlowMeta) -> bool {
     );
 
     should_intercept
+}
+
+#[inline(always)]
+fn should_intercept_remote_endpoint(remote_endpoint: Option<&HostWithPort>) -> bool {
+    let Some(target) = remote_endpoint else {
+        return false;
+    };
+
+    match &target.host {
+        Host::Name(_) => true,
+        Host::Address(IpAddr::V4(addr)) => !addr.is_loopback() && !addr.is_private(),
+        Host::Address(IpAddr::V6(addr)) => !addr.is_loopback() && !addr.is_unique_local(),
+    }
 }
 
 apple_ne::transparent_proxy_ffi! {
