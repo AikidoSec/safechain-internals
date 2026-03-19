@@ -5,7 +5,6 @@ package platform
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"unsafe"
 
@@ -91,12 +90,14 @@ func getLoggedInUserSIDs(ctx context.Context) ([]string, error) {
 }
 
 func buildCommandLineForWindowsProcess(binaryPath string, args []string) *uint16 {
-	cmdLine := binaryPath
-	if len(args) > 0 {
-		cmdLine = fmt.Sprintf(`"%s" %s`, binaryPath, strings.Join(args, " "))
-	} else {
-		cmdLine = fmt.Sprintf(`"%s"`, binaryPath)
+	all := append([]string{binaryPath}, args...)
+	parts := make([]string, len(all))
+	for i, a := range all {
+		// EscapeArg quotes and escapes each argument to prevent command-line
+		// injection
+		parts[i] = windows.EscapeArg(a)
 	}
+	cmdLine := strings.Join(parts, " ")
 	cmdLinePtr, err := windows.UTF16PtrFromString(cmdLine)
 	if err != nil {
 		return nil
@@ -185,10 +186,7 @@ func runProcessAsUser(duplicatedToken windows.Token, cmdLinePtr *uint16, envBloc
 		return "", fmt.Errorf("GetExitCodeProcess failed: %v", err)
 	}
 	if exitCode != 0 {
-		err := fmt.Errorf("process exited with code %d", exitCode)
-		log.Printf("\t- Command error: %v", err)
-		log.Printf("\t- Command output: %s", string(output))
-		return string(output), err
+		return string(output), fmt.Errorf("process exited with code %d: %s", exitCode, strings.TrimSpace(string(output)))
 	}
 
 	return string(output), nil
