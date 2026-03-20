@@ -9,6 +9,7 @@ import (
 
 	set_system_proxy "github.com/AikidoSec/safechain-internals/internal/setup/steps/01_set_system_proxy"
 	configure_maven "github.com/AikidoSec/safechain-internals/internal/setup/steps/02_configure_maven"
+	configure_certificate_trust "github.com/AikidoSec/safechain-internals/internal/setup/steps/03_configure_certificate_trust"
 )
 
 type Runner struct {
@@ -21,6 +22,7 @@ func NewRunner(uninstall bool) *Runner {
 		steps: []Step{
 			set_system_proxy.New(),
 			configure_maven.New(),
+			configure_certificate_trust.New(),
 		},
 		uninstall: uninstall,
 	}
