@@ -112,7 +112,7 @@ where
             .any(|ext| matches!(ext, ClientHelloExtension::EncryptedClientHello(_)))
         {
             tracing::debug!(
-                ?source_app_bundle_id,
+                source_app_bundle_id,
                 "ingress TLS handshake contains ECH, plain-text server name might be missing or invalid; SNI = {maybe_server_name:?}"
             )
         }
@@ -120,7 +120,7 @@ where
         if let Some(server_name) = maybe_server_name {
             if !self.firewall.match_domain(&server_name) {
                 tracing::debug!(
-                    ?source_app_bundle_id,
+                    source_app_bundle_id,
                     "serving via fallback IO due to no firewall rule being mached; SNI = {server_name}"
                 );
                 let server_name = server_name.clone();
@@ -134,7 +134,7 @@ where
 
             if self.cache.get(&server_name).is_some() {
                 tracing::debug!(
-                    ?source_app_bundle_id,
+                    source_app_bundle_id,
                     "serving via fallback IO due to exception in cache for SNI = {server_name}"
                 );
                 return self
@@ -146,7 +146,7 @@ where
             }
         } else {
             tracing::debug!(
-                ?source_app_bundle_id,
+                source_app_bundle_id,
                 "serving via fallback IO due to no SNI found",
             );
             return self
