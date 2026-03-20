@@ -14,7 +14,7 @@ crate-type = ["staticlib"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tokio = { version = "1.48", features = ["net", "io-std"] }
-safechain-proxy-lib = { workspace = true, features = ["pac"] }
+safechain-proxy-lib = { workspace = true, features = ["apple-networkextension"] }
 jemallocator = { workspace = true }
 tracing-oslog = { workspace = true }
 moka = { workspace = true }
@@ -27,4 +27,14 @@ security-framework-sys = { workspace = true }
 
 [dependencies.rama]
 workspace = true
-features = ["net-apple-networkextension", "tcp", "udp", "dns", "socks5", "ws", "http-full", "boring", "rustls"]
+features = [
+    "net-apple-networkextension",
+    "tcp",
+    "udp",
+    "dns",
+    "socks5",
+    "ws",
+    "http-full",
+    "boring",
+    "rustls",
+]

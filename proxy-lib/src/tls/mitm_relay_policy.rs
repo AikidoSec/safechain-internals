@@ -3,7 +3,7 @@ use std::time::Duration;
 use rama::{
     Layer, Service,
     error::{BoxError, ErrorContext as _, ErrorExt as _},
-    extensions::{self},
+    extensions,
     io::{BridgeIo, Io},
     net::{
         address::Domain,
@@ -15,9 +15,10 @@ use rama::{
         TlsStream,
         proxy::{TlsMitmRelayService, cert_issuer::BoringMitmCertIssuer},
     },
+    utils::str::smol_str::ToSmolStr,
 };
 
-use crate::http::firewall::Firewall;
+use crate::{http::firewall::Firewall, utils::net::get_app_source_bundle_id_from_ext};
 
 type Cache = moka::sync::Cache<Domain, ()>;
 
@@ -103,6 +104,7 @@ where
         }: InputWithClientHello<BridgeIo<Ingress, Egress>>,
     ) -> Result<Self::Output, Self::Error> {
         let maybe_server_name = client_hello.ext_server_name().cloned();
+        let source_app_bundle_id = get_app_source_bundle_id_from_ext(&bridge_io);
 
         if client_hello
             .extensions()
@@ -110,6 +112,7 @@ where
             .any(|ext| matches!(ext, ClientHelloExtension::EncryptedClientHello(_)))
         {
             tracing::debug!(
+                ?source_app_bundle_id,
                 "ingress TLS handshake contains ECH, plain-text server name might be missing or invalid; SNI = {maybe_server_name:?}"
             )
         }
@@ -117,6 +120,7 @@ where
         if let Some(server_name) = maybe_server_name {
             if !self.firewall.match_domain(&server_name) {
                 tracing::debug!(
+                    ?source_app_bundle_id,
                     "serving via fallback IO due to no firewall rule being mached; SNI = {server_name}"
                 );
                 let server_name = server_name.clone();
@@ -130,6 +134,7 @@ where
 
             if self.cache.get(&server_name).is_some() {
                 tracing::debug!(
+                    ?source_app_bundle_id,
                     "serving via fallback IO due to exception in cache for SNI = {server_name}"
                 );
                 return self
@@ -140,7 +145,10 @@ where
                     .context_field("sni", server_name);
             }
         } else {
-            tracing::debug!("serving via fallback IO due to no SNI found");
+            tracing::debug!(
+                ?source_app_bundle_id,
+                "serving via fallback IO due to no SNI found",
+            );
             return self
                 .fallback
                 .serve(bridge_io)
@@ -148,6 +156,7 @@ where
                 .context("serve via fallback IO (skip TLS due to no SNI found)");
         }
 
+        let source_app_bundle_id = source_app_bundle_id.map(|s| s.to_smolstr());
         if let Err(err) = self
             .tls_relay
             .serve(InputWithClientHello {
@@ -160,6 +169,7 @@ where
                 && let Some(sni) = err.sni().cloned()
             {
                 tracing::debug!(
+                    ?source_app_bundle_id,
                     "adding SNI ({sni}) exception for follow-up tls relay inputs due to Relay Cert Issue"
                 );
                 self.cache.insert(sni, ());
@@ -168,7 +178,8 @@ where
             let sni = err.sni().cloned();
             return Err(err
                 .context("serve via tls relay")
-                .context_debug_field("sni", sni));
+                .context_debug_field("sni", sni)
+                .context_debug_field("app", source_app_bundle_id));
         }
 
         Ok(())

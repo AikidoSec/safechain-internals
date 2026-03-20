@@ -11,6 +11,7 @@ readme = "../docs/proxy.md"
 har = []
 pac = []
 test-utils = []
+apple-networkextension = []
 
 [dependencies]
 arc-swap = { workspace = true }
