@@ -13,6 +13,7 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
 	"github.com/AikidoSec/safechain-internals/internal/device"
+	"github.com/AikidoSec/safechain-internals/internal/dockerca"
 	"github.com/AikidoSec/safechain-internals/internal/ingress"
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
@@ -227,6 +228,9 @@ func (d *Daemon) run(ctx context.Context) error {
 		return fmt.Errorf("failed to install setup: %v", err)
 	}
 
+	d.wg.Add(1)
+	go d.runDockerCALoop(ctx)
+
 	if err := d.registry.InstallAll(ctx); err != nil {
 		return fmt.Errorf("failed to install all scanners: %v", err)
 	}
@@ -261,6 +265,53 @@ func (d *Daemon) Uninstall(ctx context.Context, removeScanners bool) error {
 		return fmt.Errorf("failed to uninstall proxy CA: %v", err)
 	}
 	return nil
+}
+
+func (d *Daemon) runDockerCALoop(ctx context.Context) {
+	defer d.wg.Done()
+
+	// quietCtx suppresses verbose platform-layer command logging (RunCommandWithEnv)
+	// since these operations run on a polling loop and would otherwise spam the logs.
+	quietCtx := context.WithValue(ctx, "disable_logging", true)
+
+	pollTicker := time.NewTicker(30 * time.Second)
+	defer pollTicker.Stop()
+
+	dockerOnline := true
+	for {
+		var cycleErr error
+		if dockerOnline {
+			cycleErr = runDockerCACycle(quietCtx)
+		} else {
+			// Docker was running but went offline. Probe the daemon.
+			cycleErr = dockerca.ProbeDockerDaemon(quietCtx)
+		}
+		if ctx.Err() != nil {
+			return
+		}
+
+		switch {
+		case cycleErr != nil && dockerOnline:
+			log.Println("Docker CA: Docker daemon went offline")
+			dockerOnline = false
+		case cycleErr == nil && !dockerOnline:
+			log.Println("Docker CA: Docker daemon is back online")
+			dockerOnline = true
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-pollTicker.C:
+		}
+	}
+}
+
+func runDockerCACycle(ctx context.Context) error {
+	if err := dockerca.InstallCAOnRunningContainers(ctx); err != nil {
+		return err
+	}
+	return dockerca.WatchContainerStarts(ctx)
 }
 
 func (d *Daemon) printDaemonStatus() {
