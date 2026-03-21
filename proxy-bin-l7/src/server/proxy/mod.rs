@@ -3,34 +3,28 @@ use std::sync::Arc;
 use rama::{
     Layer,
     error::{BoxError, ErrorContext as _, ErrorExt as _},
-    extensions::ExtensionsMut,
     graceful::ShutdownGuard,
     http::{
-        Request, Response, StatusCode,
         layer::{
-            compression::CompressionLayer, header_config::extract_header_config,
-            map_response_body::MapResponseBodyLayer, proxy_auth::ProxyAuthLayer, trace::TraceLayer,
-            upgrade::UpgradeLayer,
+            compression::CompressionLayer,
+            header_config::HeaderConfigLayer,
+            map_response_body::MapResponseBodyLayer,
+            proxy_auth::ProxyAuthLayer,
+            trace::TraceLayer,
+            upgrade::{DefaultHttpProxyConnectReplyService, UpgradeLayer},
         },
         matcher::MethodMatcher,
         server::HttpServer,
-        service::web::response::IntoResponse,
-        utils::HeaderValueErr,
     },
     layer::ConsumeErrLayer,
-    net::{
-        address::SocketAddress, http::RequestContext, proxy::ProxyTarget,
-        stream::layer::http::BodyLimitLayer,
-    },
+    net::{address::SocketAddress, stream::layer::http::BodyLimitLayer},
     proxy::socks5::{self, Socks5Acceptor, server::Socks5PeekRouter},
     rt::Executor,
-    service::service_fn,
     tcp::server::TcpListener,
-    telemetry::tracing::{self},
-    tls::boring::server::TlsAcceptorLayer,
+    telemetry::tracing,
 };
 
-use safechain_proxy_lib::http::firewall::Firewall;
+use safechain_proxy_lib::{http::firewall::Firewall, tls::RootCaKeyPair};
 
 #[cfg(feature = "har")]
 use {
@@ -44,7 +38,6 @@ use {
 use crate::Args;
 
 mod client;
-mod forwarder;
 mod server;
 
 mod auth;
@@ -61,7 +54,7 @@ const MAX_BODY_SIZE: usize = 500 * 1024 * 1024; // 500 MB
 pub async fn run_proxy_server(
     args: Args,
     guard: ShutdownGuard,
-    tls_acceptor: TlsAcceptorLayer,
+    root_ca_key_pair: RootCaKeyPair,
     proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
     firewall: Firewall,
     #[cfg(feature = "har")] har_export_layer: HARExportLayer,
@@ -79,20 +72,20 @@ pub async fn run_proxy_server(
 
     let https_client = self::client::new_https_client(firewall.clone(), args.proxy.clone())?;
 
-    let http_proxy_mitm_server = self::server::new_mitm_server(
+    let http_proxy_mitm_server = self::server::new_app_mitm_server(
         guard.clone(),
         args.mitm_all,
+        root_ca_key_pair.clone(),
         args.proxy.clone(),
-        tls_acceptor.clone(),
         firewall.clone(),
         #[cfg(feature = "har")]
         har_export_layer.clone(),
     )?;
-    let socks5_proxy_mitm_server = self::server::new_mitm_server(
+    let socks5_proxy_mitm_server = self::server::new_app_mitm_server(
         guard.clone(),
         args.mitm_all,
+        root_ca_key_pair,
         args.proxy,
-        tls_acceptor,
         firewall,
         #[cfg(feature = "har")]
         har_export_layer.clone(),
@@ -123,10 +116,11 @@ pub async fn run_proxy_server(
             //
             // We make use use the void trailer parser to ensure we drop any ignored label.
             .with_labels::<((), self::auth::FirewallUserConfigParser)>(),
+        HeaderConfigLayer::<FirewallUserConfig>::optional(HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG),
         UpgradeLayer::new(
             exec.clone(),
             MethodMatcher::CONNECT,
-            service_fn(http_connect_accept),
+            DefaultHttpProxyConnectReplyService::new(),
             Arc::new(http_proxy_mitm_server),
         ),
         // =============================================
@@ -137,8 +131,13 @@ pub async fn run_proxy_server(
     )
         .into_layer(https_client);
 
-    let http_service = HttpServer::auto(exec).service(Arc::new(http_inner_svc));
+    let mut http_connect_proxy_server = HttpServer::auto(exec);
+    // allow HTTP Proxy Connect over H2 (rare, but legit)
+    http_connect_proxy_server
+        .h2_mut()
+        .set_enable_connect_protocol();
 
+    let http_service = http_connect_proxy_server.service(Arc::new(http_inner_svc));
     let tcp_inner_svc = socks5_proxy_router.with_fallback(http_service);
 
     tracing::info!(proxy.address = %proxy_addr, "local HTTP(S)/SOCKS5 proxy ready");
@@ -158,43 +157,4 @@ pub async fn run_proxy_server(
         .await;
 
     Ok(())
-}
-
-async fn http_connect_accept(mut req: Request) -> Result<(Response, Request), Response> {
-    match RequestContext::try_from(&req).map(|ctx| ctx.host_with_port()) {
-        Ok(authority) => {
-            tracing::info!(
-                server.address = %authority.host,
-                server.port = authority.port,
-                "accept CONNECT",
-            );
-            req.extensions_mut().insert(ProxyTarget(authority));
-        }
-        Err(err) => {
-            tracing::error!(uri = %req.uri(), "error extracting authority: {err:?}");
-            return Err(StatusCode::BAD_REQUEST.into_response());
-        }
-    }
-
-    // next to (proxy (basic) username labels) we also allow for secure
-    // targets that a custom proxy connect (http) request header is used to
-    // pass the config (html form encoded) as an alternative way as well
-    //
-    // See `docs/proxy/auth-flow.md` for more informtion.
-    match extract_header_config(&req, &HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG) {
-        Ok(cfg @ FirewallUserConfig { .. }) => {
-            tracing::debug!(
-                "aikido safechain cfg header ({HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG:?}) parsed: {cfg:?}",
-            );
-            req.extensions_mut().insert(cfg);
-        }
-        Err(HeaderValueErr::HeaderMissing(name)) => {
-            tracing::trace!("aikido safechain cfg header ({name}): ignore");
-        }
-        Err(HeaderValueErr::HeaderInvalid(name)) => {
-            tracing::debug!("aikido safechain cfg header ({name}) failed to parse: ignore");
-        }
-    }
-
-    Ok((StatusCode::OK.into_response(), req))
 }

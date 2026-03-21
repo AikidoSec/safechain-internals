@@ -1,132 +1,151 @@
 use std::{convert::Infallible, sync::Arc};
 
 use rama::{
-    Layer as _, Service,
+    Layer, Service,
     error::BoxError,
     extensions::ExtensionsMut,
     graceful::ShutdownGuard,
     http::{
-        Response, StatusCode,
+        Request, Response,
+        client::{ProxyConnector, proxy::layer::HttpProxyConnectorLayer},
         layer::{
-            compression::CompressionLayer, map_response_body::MapResponseBodyLayer,
+            compression::stream::StreamCompressionLayer,
+            decompression::DecompressionLayer,
+            map_response_body::MapResponseBodyLayer,
             trace::TraceLayer,
+            upgrade::{
+                HttpProxyConnectRelayServiceRequestMatcher, mitm::HttpUpgradeMitmRelayLayer,
+            },
         },
-        server::HttpServer,
-        service::web::response::IntoResponse,
+        matcher::DomainMatcher,
+        proxy::mitm::HttpMitmRelay,
+        ws::handshake::matcher::HttpWebSocketRelayServiceRequestMatcher,
     },
     io::Io,
-    layer::ConsumeErrLayer,
-    net::{address::ProxyAddress, proxy::ProxyTarget, tls::server::TlsPeekRouter},
+    layer::{AddInputExtensionLayer, ArcLayer, ConsumeErrLayer, HijackLayer},
+    net::{
+        address::ProxyAddress, http::server::HttpPeekRouter, proxy::IoForwardService,
+        tls::server::PeekTlsClientHelloService,
+    },
+    proxy::socks5::Socks5ProxyConnectorLayer,
     rt::Executor,
-    telemetry::tracing,
-    tls::boring::server::TlsAcceptorLayer,
+    tcp::proxy::IoToProxyBridgeIoLayer,
+    tls::boring::proxy::TlsMitmRelay,
 };
 
 #[cfg(feature = "har")]
 use ::{
-    rama::{
-        http::layer::har::extensions::RequestComment, layer::AddInputExtensionLayer,
-        utils::str::arcstr::arcstr,
-    },
+    rama::{http::layer::har::extensions::RequestComment, utils::str::arcstr::arcstr},
     safechain_proxy_lib::diagnostics::har::HARExportLayer,
 };
 
-use safechain_proxy_lib::http::{firewall::Firewall, service::connectivity::CONNECTIVITY_DOMAIN};
+use safechain_proxy_lib::{
+    http::{
+        firewall::Firewall,
+        service::hijack::{self, HIJACK_DOMAIN},
+    },
+    tcp::tcp_connector_service,
+    tls::{RootCaKeyPair, mitm_relay_policy::TlsMitmRelayPolicyLayer},
+};
 
-#[derive(Debug)]
-pub(super) struct MitmServer<S> {
-    inner: S,
-    mitm_all: bool,
-    firewall: Firewall,
-    forwarder: super::forwarder::TcpForwarder,
-}
-
-#[derive(Debug, Clone)]
-#[non_exhaustive]
-struct StaticHttpProxyError;
-
-impl From<StaticHttpProxyError> for Response {
-    fn from(_: StaticHttpProxyError) -> Self {
-        // ensures ingress clients are aware this is a proxy/middlebox issue
-        StatusCode::BAD_GATEWAY.into_response()
-    }
-}
-
-pub(super) fn new_mitm_server<S: Io + ExtensionsMut + Unpin>(
+pub(super) fn new_app_mitm_server<S: Io + ExtensionsMut + Unpin>(
     guard: ShutdownGuard,
     mitm_all: bool,
+    root_ca: RootCaKeyPair,
     upstream_proxy_address: Option<ProxyAddress>,
-    tls_acceptor: TlsAcceptorLayer,
     firewall: Firewall,
     #[cfg(feature = "har")] har_export_layer: HARExportLayer,
-) -> Result<MitmServer<impl Service<S, Output = (), Error = BoxError> + Clone>, BoxError> {
-    let https_svc = (
+) -> Result<impl Service<S, Output = (), Error = Infallible> + Clone, BoxError> {
+    let exec = Executor::graceful(guard);
+
+    let ca_crt_pem_bytes: &[u8] = root_ca
+        .certificate_pem()
+        .as_ref()
+        .as_bytes()
+        .to_vec()
+        .leak();
+
+    let (ca_crt, ca_key) = root_ca.into_pair();
+
+    let tls_mitm_relay_policy =
+        TlsMitmRelayPolicyLayer::new(firewall.clone()).with_mitm_all(mitm_all);
+    let tls_mitm_relay = TlsMitmRelay::new_cached_in_memory(ca_crt, ca_key);
+
+    let http_relay = HttpMitmRelay::new(exec.clone()).with_http_middleware(http_relay_middleware(
+        exec.clone(),
+        firewall,
+        ca_crt_pem_bytes,
+        #[cfg(feature = "har")]
+        har_export_layer,
+    ));
+
+    let maybe_http_service = HttpPeekRouter::new(http_relay).with_fallback(IoForwardService::new());
+
+    let transport_service = PeekTlsClientHelloService::new(
+        (tls_mitm_relay_policy, tls_mitm_relay).into_layer(maybe_http_service.clone()),
+    )
+    .with_fallback(maybe_http_service);
+
+    let transport_middleware = (
+        ConsumeErrLayer::trace_as_debug(),
+        upstream_proxy_address.map(AddInputExtensionLayer::new),
+        IoToProxyBridgeIoLayer::extension_proxy_target_with_connector(ProxyConnector::optional(
+            tcp_connector_service(exec),
+            Socks5ProxyConnectorLayer::required(),
+            HttpProxyConnectorLayer::required(),
+        )),
+    );
+
+    Ok(transport_middleware.into_layer(transport_service))
+}
+
+pub fn http_relay_middleware<S>(
+    exec: Executor,
+    firewall: Firewall,
+    ca_crt_pem_bytes: &'static [u8],
+    #[cfg(feature = "har")] har_export_layer: HARExportLayer,
+) -> impl Layer<S, Service: Service<Request, Output = Response, Error = BoxError> + Clone>
++ Send
++ Sync
++ 'static
++ Clone
+where
+    S: Service<Request, Output = Response, Error = BoxError>,
+{
+    (
+        ArcLayer::new(),
+        MapResponseBodyLayer::new_boxed_streaming_body(),
         TraceLayer::new_for_http(),
-        ConsumeErrLayer::trace_as_debug().with_response(StaticHttpProxyError),
+        StreamCompressionLayer::new(),
         #[cfg(feature = "har")]
         (
             AddInputExtensionLayer::new(RequestComment(arcstr!("http(s) MITM server"))),
             har_export_layer,
         ),
+        HijackLayer::new(
+            DomainMatcher::exact(HIJACK_DOMAIN),
+            Arc::new(hijack::new_service(ca_crt_pem_bytes)),
+        ),
+        firewall.clone().into_evaluate_response_layer(),
+        firewall.into_evaluate_request_layer(),
         MapResponseBodyLayer::new_boxed_streaming_body(),
-        CompressionLayer::new(),
+        DecompressionLayer::new(),
+        HttpUpgradeMitmRelayLayer::new(
+            exec,
+            (
+                HttpWebSocketRelayServiceRequestMatcher::new(
+                    // NOTE: change service of HttpWebSocketRelayServiceRequestMatcher with WS MitmRelay
+                    // if you ever want to inspect Websocket traffic :)
+                    ConsumeErrLayer::trace_as_debug().into_layer(IoForwardService::new()),
+                ),
+                // Entering an HTTP CONNECT would mean the client
+                // opens an HTTP CONNECT tunnel within a SOCKS5/HTTP tunnel...
+                // possible, but ... rare and weird
+                HttpProxyConnectRelayServiceRequestMatcher::new(
+                    ConsumeErrLayer::trace_as_debug().into_layer(IoForwardService::new()),
+                ),
+            ),
+        ),
+        ArcLayer::new(),
     )
-        .into_layer(super::client::new_https_client(
-            firewall.clone(),
-            upstream_proxy_address.clone(),
-        )?);
-
-    let exec = Executor::graceful(guard);
-
-    let http_server = HttpServer::auto(exec.clone()).service(Arc::new(https_svc));
-
-    let inner = TlsPeekRouter::new((tls_acceptor).into_layer(http_server.clone()))
-        .with_fallback(http_server);
-
-    let forwarder = super::forwarder::TcpForwarder::new(exec, upstream_proxy_address);
-
-    Ok(MitmServer {
-        inner,
-        mitm_all,
-        firewall,
-        forwarder,
-    })
-}
-
-impl<T, S> Service<S> for MitmServer<T>
-where
-    T: Service<S, Output = (), Error = BoxError>,
-    S: Unpin + Io + ExtensionsMut,
-{
-    type Output = T::Output;
-    type Error = Infallible;
-
-    async fn serve(&self, stream: S) -> Result<Self::Output, Self::Error> {
-        let maybe_proxy_target = stream.extensions().get().cloned();
-
-        let result = if !self.mitm_all
-            && !maybe_proxy_target
-                .as_ref()
-                .and_then(|ProxyTarget(target)| target.host.as_domain())
-                .map(|domain| CONNECTIVITY_DOMAIN.eq(domain) || self.firewall.match_domain(domain))
-                .unwrap_or_default()
-        {
-            tracing::debug!("transport-forward incoming stream: target = {maybe_proxy_target:?}",);
-            self.forwarder.serve(stream).await
-        } else {
-            tracing::debug!(
-                "MITM (all? {}) incoming stream: target = {maybe_proxy_target:?}",
-                self.mitm_all,
-            );
-            self.inner.serve(stream).await
-        };
-
-        if let Err(err) = result {
-            tracing::debug!(
-                "mitm server finished with error for target = {maybe_proxy_target:?}: {err}"
-            );
-        }
-
-        Ok(())
-    }
 }

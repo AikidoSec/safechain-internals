@@ -19,7 +19,11 @@ use rama::{
 };
 
 use clap::Parser;
-use safechain_proxy_lib::{http, storage, tls, utils as safechain_utils};
+use safechain_proxy_lib::{
+    http, storage,
+    tls::{self, RootCaKeyPair},
+    utils as safechain_utils,
+};
 use safechain_utils::token::AgentIdentity;
 
 pub mod client;
@@ -189,6 +193,9 @@ where
     )
     .context("prepare TLS acceptor")?;
 
+    let root_ca_key_pair = tls::load_or_create_root_ca_key_pair(&secret_storage, &data_storage)
+        .context("prepare proxy traffic CA crt/key pair")?;
+
     let (error_tx, error_rx) = tokio::sync::mpsc::channel::<BoxError>(1);
     let graceful = graceful::Shutdown::new(new_shutdown_signal(error_rx, base_shutdown_signal));
 
@@ -226,8 +233,8 @@ where
         let args = args.clone();
         let error_tx = error_tx.clone();
 
-        let tls_acceptor = tls_acceptor.clone();
-        let root_ca = root_ca.clone();
+        let tls_acceptor = tls_acceptor;
+        let root_ca = root_ca;
 
         let firewall = firewall.clone();
 
@@ -252,7 +259,7 @@ where
                 args,
                 guard,
                 error_tx,
-                tls_acceptor,
+                root_ca_key_pair,
                 proxy_addr_tx,
                 firewall,
                 #[cfg(feature = "har")]
@@ -309,7 +316,7 @@ async fn run_proxy_server(
     args: Args,
     guard: ShutdownGuard,
     error_tx: tokio::sync::mpsc::Sender<BoxError>,
-    tls_acceptor: TlsAcceptorLayer,
+    root_ca_key_pair: RootCaKeyPair,
     proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
     firewall: http::firewall::Firewall,
     #[cfg(feature = "har")] har_export_layer: safechain_proxy_lib::diagnostics::har::HARExportLayer,
@@ -318,7 +325,7 @@ async fn run_proxy_server(
     if let Err(err) = server::proxy::run_proxy_server(
         args,
         guard,
-        tls_acceptor,
+        root_ca_key_pair,
         proxy_addr_tx,
         firewall,
         #[cfg(feature = "har")]

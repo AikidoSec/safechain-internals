@@ -25,15 +25,13 @@ use rama::{
     layer::{ArcLayer, ConsumeErrLayer, HijackLayer},
     net::{
         apple::networkextension::{TcpFlow, tproxy::TransparentProxyServiceContext},
-        client::ConnectorService,
         http::server::HttpPeekRouter,
         proxy::IoForwardService,
-        socket::{SocketOptions, opts::TcpKeepAlive},
         tls::server::PeekTlsClientHelloService,
     },
     proxy::socks5::{proxy::mitm::Socks5MitmRelayService, server::Socks5PeekRouter},
     rt::Executor,
-    tcp::{client::service::TcpConnector, proxy::IoToProxyBridgeIoLayer},
+    tcp::proxy::IoToProxyBridgeIoLayer,
     telemetry::tracing,
     tls::boring::proxy::{TlsMitmRelay, cert_issuer::BoringMitmCertIssuer},
 };
@@ -45,15 +43,12 @@ use safechain_proxy_lib::{
         service::hijack::{self, HIJACK_DOMAIN},
     },
     storage,
+    tcp::tcp_connector_service,
     tls::mitm_relay_policy::TlsMitmRelayPolicyLayer,
     utils::token::AgentIdentity,
 };
 
 use crate::config::ProxyConfig;
-
-const TCP_KEEPALIVE_TIME: Duration = Duration::from_mins(2);
-const TCP_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
-const TCP_KEEPALIVE_RETRIES: u32 = 5;
 
 pub(super) async fn try_new_service(
     ctx: TransparentProxyServiceContext,
@@ -90,8 +85,6 @@ pub(super) async fn try_new_service(
             .context("load/create self-managed MITM CA Crt/Key pair")?
         }
     };
-    let ca_crt = root_ca.certificate().clone();
-    let ca_key = root_ca.private_key().clone();
 
     let ca_crt_pem_bytes: &[u8] = root_ca
         .certificate_pem()
@@ -99,6 +92,8 @@ pub(super) async fn try_new_service(
         .as_bytes()
         .to_vec()
         .leak();
+
+    let (ca_crt, ca_key) = root_ca.into_pair();
 
     let guard = ctx
         .executor
@@ -140,7 +135,7 @@ pub(super) async fn try_new_service(
 
 fn new_tcp_service_inner<Issuer, Ingress, Egress>(
     exec: Executor,
-    demo_config: ProxyConfig,
+    proxy_config: ProxyConfig,
     tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
     tls_mitm_relay: TlsMitmRelay<Issuer>,
     firewall: Firewall,
@@ -152,12 +147,12 @@ where
     Ingress: Io + Unpin + ExtensionsMut,
     Egress: Io + Unpin + ExtensionsMut,
 {
-    let peek_duration = Duration::from_secs_f64(demo_config.peek_duration_s.max(0.5));
+    let peek_duration = Duration::from_secs_f64(proxy_config.peek_duration_s.max(0.5));
 
     let http_mitm_svc =
         HttpMitmRelay::new(exec.clone()).with_http_middleware(http_relay_middleware(
             exec,
-            demo_config,
+            proxy_config,
             tls_mitm_relay_policy.clone(),
             tls_mitm_relay.clone(),
             firewall,
@@ -189,7 +184,7 @@ where
 
 fn http_relay_middleware<S, Issuer>(
     exec: Executor,
-    demo_config: ProxyConfig,
+    proxy_config: ProxyConfig,
     tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
     tls_mitm_relay: TlsMitmRelay<Issuer>,
     firewall: Firewall,
@@ -211,7 +206,7 @@ where
     } else {
         new_tcp_service_inner(
             exec.clone(),
-            demo_config,
+            proxy_config,
             tls_mitm_relay_policy,
             tls_mitm_relay,
             firewall.clone(),
@@ -246,20 +241,6 @@ where
         DpiProxyCredentialExtractorLayer::new(),
         ArcLayer::new(),
     )
-}
-
-fn tcp_connector_service(
-    exec: Executor,
-) -> impl ConnectorService<rama::tcp::client::Request, Connection: Io + Unpin> + Clone {
-    TcpConnector::new(exec).with_connector(Arc::new(SocketOptions {
-        keep_alive: Some(true),
-        tcp_keep_alive: Some(TcpKeepAlive {
-            time: Some(TCP_KEEPALIVE_TIME),
-            interval: Some(TCP_KEEPALIVE_INTERVAL),
-            retries: Some(TCP_KEEPALIVE_RETRIES),
-        }),
-        ..SocketOptions::default_tcp()
-    }))
 }
 
 async fn create_firewall(

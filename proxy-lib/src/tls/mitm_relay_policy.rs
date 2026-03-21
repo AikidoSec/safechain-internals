@@ -26,6 +26,7 @@ type Cache = moka::sync::Cache<Domain, ()>;
 pub struct TlsMitmRelayPolicyLayer {
     cache: Cache,
     firewall: Firewall,
+    mitm_all: bool,
     fallback: IoForwardService,
 }
 
@@ -38,7 +39,17 @@ impl TlsMitmRelayPolicyLayer {
         Self {
             cache,
             firewall,
+            mitm_all: false,
             fallback: IoForwardService::new(),
+        }
+    }
+
+    rama::utils::macros::generate_set_and_with! {
+        /// Configure the policy to MITM _all_ traffic,
+        /// even if not required by the firewall.
+        pub fn mitm_all(mut self, all: bool) -> Self {
+            self.mitm_all = all;
+            self
         }
     }
 }
@@ -50,12 +61,14 @@ impl<Issuer, Inner> Layer<TlsMitmRelayService<Issuer, Inner>> for TlsMitmRelayPo
         let Self {
             cache,
             firewall,
+            mitm_all,
             fallback,
         } = self;
 
         Self::Service {
             cache: cache.clone(),
             firewall: firewall.clone(),
+            mitm_all: *mitm_all,
             fallback: fallback.clone(),
             tls_relay,
         }
@@ -65,12 +78,14 @@ impl<Issuer, Inner> Layer<TlsMitmRelayService<Issuer, Inner>> for TlsMitmRelayPo
         let Self {
             cache,
             firewall,
+            mitm_all,
             fallback,
         } = self;
 
         Self::Service {
             cache,
             firewall,
+            mitm_all,
             fallback,
             tls_relay,
         }
@@ -81,6 +96,7 @@ impl<Issuer, Inner> Layer<TlsMitmRelayService<Issuer, Inner>> for TlsMitmRelayPo
 pub struct TlsMitmRelayPolicyService<Issuer, Inner> {
     cache: Cache,
     firewall: Firewall,
+    mitm_all: bool,
     fallback: IoForwardService,
     tls_relay: TlsMitmRelayService<Issuer, Inner>,
 }
@@ -118,7 +134,7 @@ where
         }
 
         if let Some(server_name) = maybe_server_name {
-            if !self.firewall.match_domain(&server_name) {
+            if !self.mitm_all && !self.firewall.match_domain(&server_name) {
                 tracing::debug!(
                     source_app_bundle_id,
                     "serving via fallback IO due to no firewall rule being mached; SNI = {server_name}"
@@ -144,7 +160,7 @@ where
                     .context("serve via fallback IO (skip TLS due to cached exception)")
                     .context_field("sni", server_name);
             }
-        } else {
+        } else if !self.mitm_all {
             tracing::debug!(
                 source_app_bundle_id,
                 "serving via fallback IO due to no SNI found",
@@ -157,6 +173,11 @@ where
         }
 
         let source_app_bundle_id = source_app_bundle_id.map(|s| s.to_smolstr());
+        tracing::debug!(
+            ?source_app_bundle_id,
+            mitm_all = self.mitm_all,
+            "tls-MITM traffic",
+        );
         if let Err(err) = self
             .tls_relay
             .serve(InputWithClientHello {

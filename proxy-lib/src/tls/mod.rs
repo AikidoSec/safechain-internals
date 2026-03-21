@@ -64,20 +64,29 @@ impl RootCaKeyPair {
         })
     }
 
+    #[inline(always)]
     pub fn certificate_pem(&self) -> &NonEmptyStr {
         &self.crt_pem
     }
 
+    #[inline(always)]
     pub fn private_key_pem(&self) -> &NonEmptyStr {
         &self.key_pem
     }
 
+    #[inline(always)]
     pub fn certificate(&self) -> &X509 {
         &self.crt_x509
     }
 
+    #[inline(always)]
     pub fn private_key(&self) -> &PKey<Private> {
         &self.key_x509
+    }
+
+    #[inline(always)]
+    pub fn into_pair(self) -> (X509, PKey<Private>) {
+        (self.crt_x509, self.key_x509)
     }
 }
 
