@@ -11,14 +11,14 @@ func TestKnownGlobalSkillsRoots(t *testing.T) {
 	homeDir := filepath.Join(string(filepath.Separator), "home", "alice")
 
 	got := knownGlobalSkillsRoots(homeDir)
-	want := []string{
-		filepath.Join(homeDir, ".codex", "skills"),
-		filepath.Join(homeDir, ".claude", "skills"),
-		filepath.Join(homeDir, ".cursor", "skills"),
-		filepath.Join(homeDir, ".windsurf", "skills"),
-		filepath.Join(homeDir, ".gemini", "skills"),
-		filepath.Join(homeDir, ".kiro", "skills"),
-		filepath.Join(homeDir, ".opencode", "skills"),
+	want := []globalSkillsDir{
+		{variant: "codex", path: filepath.Join(homeDir, ".codex", "skills")},
+		{variant: "claude", path: filepath.Join(homeDir, ".claude", "skills")},
+		{variant: "cursor", path: filepath.Join(homeDir, ".cursor", "skills")},
+		{variant: "windsurf", path: filepath.Join(homeDir, ".windsurf", "skills")},
+		{variant: "gemini", path: filepath.Join(homeDir, ".gemini", "skills")},
+		{variant: "kiro", path: filepath.Join(homeDir, ".kiro", "skills")},
+		{variant: "opencode", path: filepath.Join(homeDir, ".opencode", "skills")},
 	}
 
 	if !reflect.DeepEqual(got, want) {
@@ -35,27 +35,36 @@ func TestFindKnownLockFilesFindsExactLockFile(t *testing.T) {
 	}
 	lockPath := writeLockFile(t, skillsDir, `{"version": 1, "skills": {}}`)
 
-	found := findKnownLockFiles([]string{skillsDir})
+	found := findKnownLockFiles([]globalSkillsDir{{variant: "codex", path: skillsDir}})
 
 	if len(found) != 1 {
 		t.Fatalf("expected 1 lock file, got %d", len(found))
 	}
-	if found[0] != lockPath {
-		t.Errorf("expected %q, got %q", lockPath, found[0])
+	if found[0].path != lockPath {
+		t.Errorf("expected %q, got %q", lockPath, found[0].path)
+	}
+	if found[0].variant != "codex" {
+		t.Errorf("expected variant %q, got %q", "codex", found[0].variant)
 	}
 }
 
 func TestFindKnownLockFilesFindsMultiple(t *testing.T) {
 	root := t.TempDir()
 
-	var roots []string
-	for _, name := range []string{".codex", ".claude"} {
-		dir := filepath.Join(root, name, "skills")
+	var roots []globalSkillsDir
+	for _, tc := range []struct {
+		variant string
+		dirname string
+	}{
+		{variant: "codex", dirname: ".codex"},
+		{variant: "claude", dirname: ".claude"},
+	} {
+		dir := filepath.Join(root, tc.dirname, "skills")
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatal(err)
 		}
 		writeLockFile(t, dir, `{"version": 1, "skills": {}}`)
-		roots = append(roots, dir)
+		roots = append(roots, globalSkillsDir{variant: tc.variant, path: dir})
 	}
 
 	found := findKnownLockFiles(roots)
