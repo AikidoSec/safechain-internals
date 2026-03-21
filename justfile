@@ -75,8 +75,8 @@ proxy-har-toggle:
     curl -v -XPOST http://127.0.0.1:8088/har/toggle
 
 rust-update-deps:
-    cargo upgrades
     cargo update
+    cargo outdated
 
 rust-detect-unused-deps:
     @cargo install cargo-machete
