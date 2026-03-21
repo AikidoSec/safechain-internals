@@ -27,7 +27,7 @@ xcode_l4_installed_appex := xcode_l4_installed_app + "/Contents/PlugIns/AikidoEn
 rust-qa:
     cargo fmt
     @cargo install cargo-sort
-    cargo sort --grouped
+    cargo sort --grouped --workspace
     cargo doc --all-features --workspace --no-deps
     cargo check --all-features --workspace --all-targets
     cargo clippy --all-features --workspace --all-targets
