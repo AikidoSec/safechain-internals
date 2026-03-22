@@ -15,6 +15,7 @@ use rama::{
 
 const TCP_KEEPALIVE_TIME: Duration = Duration::from_mins(2);
 const TCP_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
+#[cfg(not(target_os = "windows"))]
 const TCP_KEEPALIVE_RETRIES: u32 = 5;
 
 #[inline(always)]
@@ -45,6 +46,7 @@ where
         tcp_keep_alive: Some(TcpKeepAlive {
             time: Some(TCP_KEEPALIVE_TIME),
             interval: Some(TCP_KEEPALIVE_INTERVAL),
+            #[cfg(not(target_os = "windows"))]
             retries: Some(TCP_KEEPALIVE_RETRIES),
         }),
         ..SocketOptions::default_tcp()
