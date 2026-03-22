@@ -38,7 +38,7 @@ use rama::{
     rt::Executor,
     service::service_fn,
     telemetry::tracing,
-    tls::boring::server::TlsAcceptorLayer,
+    tls::boring::server::{TlsAcceptorData, TlsAcceptorLayer},
 };
 use safechain_proxy_lib::utils::env::aikido_app_base_url;
 
@@ -121,25 +121,33 @@ static ASSERT_ENDPOINT_STATE: LazyLock<assert_endpoint::MockState> =
 fn new_mock_transport_server() -> impl Service<MockSocket, Output = (), Error = BoxError> {
     let http_server = HttpServer::auto(Executor::default()).service(new_mock_server());
 
-    let tls_acceptor_data = ServerConfig {
-        application_layer_protocol_negotiation: Some(vec![
-            ApplicationProtocol::HTTP_2,
-            ApplicationProtocol::HTTP_11,
-        ]),
-        ..ServerConfig::new(ServerAuth::CertIssuer(ServerCertIssuerData {
-            kind: ServerCertIssuerKind::SelfSigned(SelfSignedData {
-                organisation_name: Some("Mock (test) Tls Acceptor".to_owned()),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }))
-    }
-    .try_into()
-    .expect("create tls server config");
+    let tls_acceptor_data = new_tls_acceptor_data();
 
     TlsPeekRouter::new(TlsAcceptorLayer::new(tls_acceptor_data).into_layer(http_server.clone()))
         .with_fallback(http_server)
         .with_peek_timeout(PEEK_TIMEOUT)
+}
+
+fn new_tls_acceptor_data() -> TlsAcceptorData {
+    static DATA: LazyLock<TlsAcceptorData> = LazyLock::new(|| {
+        ServerConfig {
+            application_layer_protocol_negotiation: Some(vec![
+                ApplicationProtocol::HTTP_2,
+                ApplicationProtocol::HTTP_11,
+            ]),
+            ..ServerConfig::new(ServerAuth::CertIssuer(ServerCertIssuerData {
+                kind: ServerCertIssuerKind::SelfSigned(SelfSignedData {
+                    organisation_name: Some("Mock (test) Tls Acceptor".to_owned()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }))
+        }
+        .try_into()
+        .expect("create tls server config")
+    });
+
+    DATA.clone()
 }
 
 fn new_mock_server() -> impl Service<Request, Output = Response, Error = Infallible> + Clone {
