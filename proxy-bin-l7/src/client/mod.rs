@@ -25,7 +25,6 @@ mod mock_server;
 pub fn new_http_client_for_proxy(
     exec: Executor,
 ) -> Result<impl Service<Request, Output = Response, Error = OpaqueError> + Clone, BoxError> {
-    #[cfg(test)]
     let connector = self::mock_server::new_mock_tcp_connector(exec.clone());
     safechain_proxy_lib::http::client::new_http_client_for_proxy_with_connector(exec, connector)
 }
