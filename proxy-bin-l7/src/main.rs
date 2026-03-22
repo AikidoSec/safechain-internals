@@ -166,8 +166,6 @@ async fn run_with_args<F>(base_shutdown_signal: F, args: Args) -> Result<(), Box
 where
     F: Future<Output: Send + 'static> + Send + 'static,
 {
-    crate::client::init_global_dns();
-
     tokio::fs::create_dir_all(&args.data)
         .await
         .context("create data directory")

@@ -32,16 +32,11 @@ pub fn new_http_client_for_proxy(
 
 #[cfg(test)]
 pub use self::{
+    mock_server::new_mock_dns_resolver as new_dns_resolver,
     mock_server::new_mock_tcp_connector as new_tcp_connector_service_for_internal,
     mock_server::new_mock_tcp_connector as new_tcp_connector_service_for_proxy,
     new_http_client_for_proxy as new_http_client_for_internal,
 };
-
-#[cfg(test)]
-pub fn init_global_dns() {
-    let _ =
-        rama::dns::client::try_init_global_dns_resolver(self::mock_server::new_mock_dns_resolver());
-}
 
 #[cfg(not(test))]
 pub use safechain_proxy_lib::{
@@ -50,8 +45,6 @@ pub use safechain_proxy_lib::{
 };
 
 #[cfg(not(test))]
-pub fn init_global_dns() {
-    // force default init
-    use rama::dns::client::resolver::DnsResolver as _;
-    let _ = rama::dns::client::GlobalDnsResolver::new().into_box_dns_resolver();
+pub fn new_dns_resolver() -> impl rama::dns::client::resolver::DnsResolver {
+    rama::dns::client::GlobalDnsResolver::new()
 }

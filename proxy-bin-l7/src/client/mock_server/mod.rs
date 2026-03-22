@@ -1,6 +1,6 @@
 use std::{
     convert::Infallible,
-    net::{IpAddr, SocketAddr},
+    net::IpAddr,
     sync::{Arc, LazyLock},
 };
 
@@ -23,8 +23,9 @@ use rama::{
     io::Io,
     layer::ArcLayer,
     net::{
-        address::{Domain, SocketAddress},
+        address::Domain,
         client::ConnectorService,
+        test_utils::client::MockConnectorService,
         tls::{
             ApplicationProtocol,
             server::{SelfSignedData, ServerAuth, ServerConfig, TlsPeekRouter},
@@ -33,11 +34,6 @@ use rama::{
     },
     rt::Executor,
     service::service_fn,
-    tcp::{
-        TcpStream,
-        client::{TcpStreamConnector, service::TcpConnector},
-        server::TcpListener,
-    },
     telemetry::tracing,
     tls::boring::server::TlsAcceptorLayer,
 };
@@ -51,15 +47,10 @@ mod malware_list;
 mod npm_registry;
 mod vscode_marketplace;
 
-fn mock_server_addr() -> SocketAddress {
-    static MOCK_SERVER_ADDR: LazyLock<SocketAddress> = LazyLock::new(spawn_mock_server);
-    *MOCK_SERVER_ADDR
-}
-
 #[inline(always)]
-pub(super) fn new_mock_dns_resolver() -> impl DnsResolver {
+pub fn new_mock_dns_resolver() -> impl DnsResolver {
     MockDnsResolver {
-        ip: mock_server_addr().ip_addr,
+        ip: IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
         empty: EmptyDnsResolver::new(),
     }
 }
@@ -113,43 +104,19 @@ where
         ExtensionsMut + TryRefIntoTransportContext<Error: Send + Sync + 'static> + Send + 'static,
     BoxError: From<Input::Error>,
 {
-    let socket_addr = mock_server_addr();
-    TcpConnector::new(exec)
-        .with_connector(MockTcpConnectorService(socket_addr))
-        .with_dns(socket_addr.ip_addr)
-}
-
-#[derive(Debug, Clone)]
-struct MockTcpConnectorService(SocketAddress);
-
-impl TcpStreamConnector for MockTcpConnectorService {
-    type Error = std::io::Error;
-
-    async fn connect(&self, addr: SocketAddr) -> Result<TcpStream, Self::Error> {
-        let overwrite = self.0.into();
-        tracing::info!(
-            "MockTcpConnectorService: connect to hardcoded addr {overwrite} instead of requested {addr}"
-        );
-        let stream = ().connect(overwrite).await?;
-        tracing::info!(
-            "MockTcpConnectorService: stream established for hardcoded addr {overwrite}"
-        );
-        Ok(stream)
-    }
+    // Use an in-memory duplex stream pair instead of binding a real TCP socket.
+    // This keeps the mock transport deterministic and avoids sandbox/socket flakiness.
+    let mut connector =
+        MockConnectorService::new(new_mock_transport_server).with_max_buffer_size(64 * 1024);
+    connector.set_executor(exec);
+    connector
 }
 
 static ASSERT_ENDPOINT_STATE: LazyLock<assert_endpoint::MockState> =
     LazyLock::new(assert_endpoint::MockState::new);
 
-fn spawn_mock_server() -> SocketAddress {
-    let std_tcp_listener =
-        std::net::TcpListener::bind("127.0.0.1:0").expect("to bind mock tcp server");
-    let tcp_listener =
-        TcpListener::try_from_std_tcp_listener(std_tcp_listener, Executor::default())
-            .expect("convert std listener into rama-compatible listener");
-
-    let addr = tcp_listener.local_addr().expect("to get local address");
-
+fn new_mock_transport_server()
+-> impl Service<rama::net::test_utils::client::MockSocket, Output = (), Error = BoxError> {
     let http_server = HttpServer::auto(Executor::default()).service(new_mock_server());
 
     let tls_acceptor_data = ServerConfig {
@@ -165,24 +132,9 @@ fn spawn_mock_server() -> SocketAddress {
     .try_into()
     .expect("create tls server config");
 
-    let https_server = TlsPeekRouter::new(
-        TlsAcceptorLayer::new(tls_acceptor_data).into_layer(http_server.clone()),
-    )
-    .with_fallback(http_server)
-    .with_peek_timeout(PEEK_TIMEOUT);
-
-    std::thread::spawn(move || {
-        let tokio_rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("build tokio runtime for separate std thread to be used for mock server");
-        tokio_rt.block_on(async move {
-            tracing::info!("mock server is listening @ {addr}...");
-            tcp_listener.serve(https_server).await
-        });
-    });
-
-    addr.into()
+    TlsPeekRouter::new(TlsAcceptorLayer::new(tls_acceptor_data).into_layer(http_server.clone()))
+        .with_fallback(http_server)
+        .with_peek_timeout(PEEK_TIMEOUT)
 }
 
 fn new_mock_server() -> impl Service<Request, Output = Response, Error = Infallible> + Clone {
