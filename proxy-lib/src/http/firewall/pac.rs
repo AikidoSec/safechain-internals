@@ -6,7 +6,7 @@ use rama::{
     utils::str::smol_str::ToSmolStr,
 };
 
-use crate::http::service::connectivity::CONNECTIVITY_DOMAIN;
+use crate::http::service::hijack::HIJACK_DOMAIN;
 
 #[derive(Debug)]
 pub struct PacScriptGenerator {
@@ -47,7 +47,7 @@ impl PacScriptGenerator {
             r#"; DIRECT";
     var ds = [""#,
         );
-        out.push_str(CONNECTIVITY_DOMAIN.as_str());
+        out.push_str(HIJACK_DOMAIN.as_str());
         out.push('"');
 
         Self {
