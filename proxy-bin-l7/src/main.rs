@@ -232,10 +232,6 @@ where
     graceful.spawn_task_fn({
         let args = args.clone();
         let error_tx = error_tx.clone();
-
-        let tls_acceptor = tls_acceptor;
-        let root_ca = root_ca;
-
         let firewall = firewall.clone();
 
         |guard| {

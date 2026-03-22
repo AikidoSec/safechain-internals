@@ -24,7 +24,7 @@ xcode_l4_installed_app := "/Applications/" + xcode_l4_app_name
 xcode_l4_installed_app_exe := xcode_l4_installed_app + "/Contents/MacOS/AikidoEndpointL4ProxyHost"
 xcode_l4_installed_appex := xcode_l4_installed_app + "/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
 
-rust-qq:
+rust-quick-qa:
     cargo fmt
     @cargo install cargo-sort
     cargo sort --grouped --workspace
@@ -32,7 +32,7 @@ rust-qq:
     cargo check --all-features --workspace --all-targets
     cargo clippy --all-features --workspace --all-targets
 
-rust-qa: rust-qq
+rust-qa: rust-quick-qa
     @cargo install cargo-nextest --locked
     cargo nextest run --all-features --workspace
     just rust-fuzz-check
