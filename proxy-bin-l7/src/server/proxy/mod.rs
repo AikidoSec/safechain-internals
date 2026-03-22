@@ -24,23 +24,15 @@ use rama::{
     telemetry::tracing,
 };
 
-use safechain_proxy_lib::{http::firewall::Firewall, tls::RootCaKeyPair};
+use safechain_proxy_lib::{client::new_web_client, http::firewall::Firewall, tls::RootCaKeyPair};
 
 #[cfg(feature = "har")]
-use {
-    rama::{
-        http::layer::har::extensions::RequestComment, layer::AddInputExtensionLayer,
-        utils::str::arcstr::arcstr,
-    },
-    safechain_proxy_lib::diagnostics::har::HARExportLayer,
-};
+use safechain_proxy_lib::diagnostics::har::HARExportLayer;
 
 use crate::Args;
 
-mod client;
-mod server;
-
 mod auth;
+mod server;
 
 pub use self::auth::{FirewallUserConfig, HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG};
 
@@ -70,7 +62,18 @@ pub async fn run_proxy_server(
         .local_addr()
         .context("fetch local addr of bound TCP port for proxy")?;
 
-    let https_client = self::client::new_https_client(firewall.clone(), args.proxy.clone())?;
+    let https_client = self::server::http_relay_middleware(
+        exec.clone(),
+        firewall.clone(),
+        root_ca_key_pair
+            .certificate_pem()
+            .as_bytes()
+            .to_vec()
+            .leak(),
+        #[cfg(feature = "har")]
+        har_export_layer.clone(),
+    )
+    .into_layer(new_web_client().context("create inner web client for plain-text web traffic")?);
 
     let http_proxy_mitm_server = self::server::new_app_mitm_server(
         guard.clone(),
@@ -88,7 +91,7 @@ pub async fn run_proxy_server(
         args.proxy,
         firewall,
         #[cfg(feature = "har")]
-        har_export_layer.clone(),
+        har_export_layer,
     )?;
 
     let socks5_proxy_router = Socks5PeekRouter::new(
@@ -103,11 +106,6 @@ pub async fn run_proxy_server(
     let http_inner_svc = (
         TraceLayer::new_for_http(),
         ConsumeErrLayer::trace_as_debug(),
-        #[cfg(feature = "har")]
-        (
-            AddInputExtensionLayer::new(RequestComment(arcstr!("http(s) proxy connect"))),
-            har_export_layer,
-        ),
         ProxyAuthLayer::new(self::auth::ZeroAuthority::new())
             .with_allow_anonymous(true)
             // The use of proxy authentication is a common practice for

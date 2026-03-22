@@ -22,7 +22,7 @@ use rama::{
         ws::handshake::matcher::HttpWebSocketRelayServiceRequestMatcher,
     },
     io::Io,
-    layer::{AddInputExtensionLayer, ArcLayer, ConsumeErrLayer, HijackLayer},
+    layer::{AddInputExtensionLayer, ArcLayer, ConsumeErrLayer, HijackLayer, MapErrLayer},
     net::{
         address::ProxyAddress, http::server::HttpPeekRouter, proxy::IoForwardService,
         tls::server::PeekTlsClientHelloService,
@@ -110,7 +110,8 @@ pub fn http_relay_middleware<S>(
 + 'static
 + Clone
 where
-    S: Service<Request, Output = Response, Error = BoxError>,
+    S: Service<Request, Output = Response>,
+    BoxError: From<S::Error>,
 {
     (
         ArcLayer::new(),
@@ -146,6 +147,7 @@ where
                 ),
             ),
         ),
+        MapErrLayer::into_box_error(),
         ArcLayer::new(),
     )
 }
