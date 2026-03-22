@@ -37,13 +37,13 @@ use rama::{
 };
 
 use safechain_proxy_lib::{
-    client,
     http::{
+        client::new_http_client_for_internal,
         firewall::Firewall,
         service::hijack::{self, HIJACK_DOMAIN},
     },
     storage,
-    tcp::tcp_connector_service,
+    tcp::new_tcp_connector_service_for_proxy,
     tls::mitm_relay_policy::TlsMitmRelayPolicyLayer,
     utils::token::AgentIdentity,
 };
@@ -126,9 +126,9 @@ pub(super) async fn try_new_service(
 
     Ok((
         ConsumeErrLayer::trace_as_debug(),
-        IoToProxyBridgeIoLayer::extension_proxy_target_with_connector(tcp_connector_service(
-            executor,
-        )),
+        IoToProxyBridgeIoLayer::extension_proxy_target_with_connector(
+            new_tcp_connector_service_for_proxy(executor),
+        ),
     )
         .into_layer(mitm_svc))
 }
@@ -262,13 +262,16 @@ async fn create_firewall(
         .with_context_debug_field("path", || data_path.clone())?;
     tracing::info!(path = ?data_path, "(app) data directory ready to be used");
 
+    let https_client = new_http_client_for_internal(Executor::graceful(guard.clone()))
+        .context("create firewall's inner http(s) client")?;
+
     // ensure to not wait for firewall creation in case shutdown was initiated,
     // this can happen for example in case remote lists need to be fetched and the
     // something on the network on either side is not working
     tokio::select! {
         result = Firewall::try_new(
             guard.clone(),
-            client::new_web_client()?,
+            https_client,
             data_storage,
             reporting_endpoint,
             agent_identity,

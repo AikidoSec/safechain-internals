@@ -1,2 +1,4 @@
 mod connector;
-pub use self::connector::tcp_connector_service;
+pub use self::connector::{
+    new_tcp_connector_service_for_internal, new_tcp_connector_service_for_proxy,
+};

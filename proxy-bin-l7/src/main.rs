@@ -14,6 +14,7 @@ use rama::{
         address::{ProxyAddress, SocketAddress},
         tls::ApplicationProtocol,
     },
+    rt::Executor,
     telemetry::tracing::{self, Instrument as _},
     tls::boring::server::TlsAcceptorLayer,
 };
@@ -165,6 +166,8 @@ async fn run_with_args<F>(base_shutdown_signal: F, args: Args) -> Result<(), Box
 where
     F: Future<Output: Send + 'static> + Send + 'static,
 {
+    crate::client::init_global_dns();
+
     tokio::fs::create_dir_all(&args.data)
         .await
         .context("create data directory")
@@ -209,7 +212,7 @@ where
     let firewall = tokio::select! {
         result = http::firewall::Firewall::try_new(
             graceful.guard(),
-            client::new_web_client()?,
+            client::new_http_client_for_internal(Executor::graceful(graceful.guard()))?,
             data_storage,
             args.reporting_endpoint.clone(),
             agent_identity,

@@ -24,12 +24,12 @@ use rama::{
     telemetry::tracing,
 };
 
-use safechain_proxy_lib::{client::new_web_client, http::firewall::Firewall, tls::RootCaKeyPair};
+use safechain_proxy_lib::{http::firewall::Firewall, tls::RootCaKeyPair};
 
 #[cfg(feature = "har")]
 use safechain_proxy_lib::diagnostics::har::HARExportLayer;
 
-use crate::Args;
+use crate::{Args, client::new_http_client_for_proxy, utils::PEEK_TIMEOUT};
 
 mod auth;
 mod server;
@@ -73,7 +73,10 @@ pub async fn run_proxy_server(
         #[cfg(feature = "har")]
         har_export_layer.clone(),
     )
-    .into_layer(new_web_client().context("create inner web client for plain-text web traffic")?);
+    .into_layer(
+        new_http_client_for_proxy(exec.clone())
+            .context("create inner web client for plain-text web traffic")?,
+    );
 
     let http_proxy_mitm_server = self::server::new_app_mitm_server(
         guard.clone(),
@@ -101,7 +104,8 @@ pub async fn run_proxy_server(
             .with_connector(socks5::server::LazyConnector::new(Arc::new(
                 socks5_proxy_mitm_server,
             ))),
-    );
+    )
+    .with_peek_timeout(PEEK_TIMEOUT);
 
     let http_inner_svc = (
         TraceLayer::new_for_http(),

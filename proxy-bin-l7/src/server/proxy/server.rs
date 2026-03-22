@@ -33,6 +33,8 @@ use rama::{
     tls::boring::proxy::TlsMitmRelay,
 };
 
+use crate::{client::new_tcp_connector_service_for_proxy, utils::PEEK_TIMEOUT};
+
 #[cfg(feature = "har")]
 use ::{
     rama::{http::layer::har::extensions::RequestComment, utils::str::arcstr::arcstr},
@@ -44,7 +46,6 @@ use safechain_proxy_lib::{
         firewall::Firewall,
         service::hijack::{self, HIJACK_DOMAIN},
     },
-    tcp::tcp_connector_service,
     tls::{RootCaKeyPair, mitm_relay_policy::TlsMitmRelayPolicyLayer},
 };
 
@@ -79,7 +80,9 @@ pub(super) fn new_app_mitm_server<S: Io + ExtensionsMut + Unpin>(
         har_export_layer,
     ));
 
-    let maybe_http_service = HttpPeekRouter::new(http_relay).with_fallback(IoForwardService::new());
+    let maybe_http_service = HttpPeekRouter::new(http_relay)
+        .with_fallback(IoForwardService::new())
+        .with_peek_timeout(PEEK_TIMEOUT);
 
     let transport_service = PeekTlsClientHelloService::new(
         (tls_mitm_relay_policy, tls_mitm_relay).into_layer(maybe_http_service.clone()),
@@ -90,7 +93,7 @@ pub(super) fn new_app_mitm_server<S: Io + ExtensionsMut + Unpin>(
         ConsumeErrLayer::trace_as_debug(),
         upstream_proxy_address.map(AddInputExtensionLayer::new),
         IoToProxyBridgeIoLayer::extension_proxy_target_with_connector(ProxyConnector::optional(
-            tcp_connector_service(exec),
+            new_tcp_connector_service_for_proxy(exec),
             Socks5ProxyConnectorLayer::required(),
             HttpProxyConnectorLayer::required(),
         )),
