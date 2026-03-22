@@ -4,7 +4,10 @@ use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
-    http::{Request, Response, Uri},
+    http::{
+        Request, Response, Uri,
+        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
+    },
     net::{address::Domain, uri::util::percent_encoding},
     telemetry::tracing,
     utils::{
@@ -159,6 +162,11 @@ impl Rule for RulePyPI {
         self.target_domains.is_match(domain)
     }
 
+    #[inline(always)]
+    fn match_ws_domain<'a>(&self, _: super::WebSocketHandshakeInfo<'a>) -> bool {
+        false
+    }
+
     #[cfg(feature = "pac")]
     #[inline(always)]
     fn collect_pac_domains(&self, generator: &mut PacScriptGenerator) {
@@ -224,6 +232,14 @@ impl Rule for RulePyPI {
         }
 
         Ok(RequestAction::Allow(req))
+    }
+
+    async fn evaluate_ws_relay_msg(
+        &self,
+        _: WebSocketRelayDirection,
+        data: WebSocketRelayOutput,
+    ) -> Result<WebSocketRelayOutput, BoxError> {
+        Ok(data)
     }
 }
 

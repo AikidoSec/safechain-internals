@@ -4,7 +4,10 @@ use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
-    http::{Request, Response, Uri},
+    http::{
+        Request, Response, Uri,
+        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
+    },
     net::address::Domain,
     telemetry::tracing,
     utils::str::{
@@ -79,6 +82,11 @@ impl Rule for RuleOpenVsx {
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
+    }
+
+    #[inline(always)]
+    fn match_ws_domain<'a>(&self, _: super::WebSocketHandshakeInfo<'a>) -> bool {
+        false
     }
 
     #[cfg(feature = "pac")]
@@ -165,6 +173,14 @@ impl Rule for RuleOpenVsx {
 
     async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         Ok(resp)
+    }
+
+    async fn evaluate_ws_relay_msg(
+        &self,
+        _: WebSocketRelayDirection,
+        data: WebSocketRelayOutput,
+    ) -> Result<WebSocketRelayOutput, BoxError> {
+        Ok(data)
     }
 }
 

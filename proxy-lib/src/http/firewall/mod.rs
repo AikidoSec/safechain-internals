@@ -14,6 +14,7 @@ use rama::{
             retry::{ManagedPolicy, RetryLayer},
             timeout::TimeoutLayer,
         },
+        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayInput, WebSocketRelayOutput},
     },
     layer::MapErrLayer,
     net::address::Domain,
@@ -256,12 +257,24 @@ impl Firewall {
             .any(|rule| rule.match_domain(domain))
     }
 
+    pub fn match_ws_domain<'a>(&self, info: self::rule::WebSocketHandshakeInfo<'a>) -> bool {
+        self.block_rules
+            .iter()
+            .any(|rule| rule.match_ws_domain(info))
+    }
+
     pub fn into_evaluate_request_layer(self) -> self::layer::evaluate_req::EvaluateRequestLayer {
         self::layer::evaluate_req::EvaluateRequestLayer(self)
     }
 
     pub fn into_evaluate_response_layer(self) -> self::layer::evaluate_resp::EvaluateResponseLayer {
         self::layer::evaluate_resp::EvaluateResponseLayer(self)
+    }
+
+    pub fn into_evaluate_ws_relay_msg_service(
+        self,
+    ) -> self::layer::evaluate_ws_relay_msg::EvaluateWsRelayMsgService {
+        self::layer::evaluate_ws_relay_msg::EvaluateWsRelayMsgService(self)
     }
 
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
@@ -289,6 +302,29 @@ impl Firewall {
         }
 
         Ok(mod_resp)
+    }
+
+    async fn evaluate_ws_relay_msg(
+        &self,
+        input: WebSocketRelayInput,
+    ) -> Result<WebSocketRelayOutput, BoxError> {
+        let dir = input.direction;
+        let mut output = input.into();
+
+        match dir {
+            WebSocketRelayDirection::Ingress => {
+                for rule in self.block_rules.iter() {
+                    output = rule.evaluate_ws_relay_msg(dir, output).await?;
+                }
+            }
+            WebSocketRelayDirection::Egress => {
+                for rule in self.block_rules.iter().rev() {
+                    output = rule.evaluate_ws_relay_msg(dir, output).await?;
+                }
+            }
+        }
+
+        Ok(output)
     }
 
     #[cfg(feature = "pac")]

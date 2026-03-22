@@ -41,6 +41,7 @@ use safechain_proxy_lib::{
         client::new_http_client_for_internal,
         firewall::Firewall,
         service::hijack::{self, HIJACK_DOMAIN},
+        ws_relay::WebSockeMitmRelayService,
     },
     storage,
     tcp::new_tcp_connector_service_for_proxy,
@@ -223,17 +224,17 @@ where
             Arc::new(hijack::new_service(ca_crt_pem_bytes)),
         ),
         firewall.clone().into_evaluate_response_layer(),
-        firewall.into_evaluate_request_layer(),
+        firewall.clone().into_evaluate_request_layer(),
         MapResponseBodyLayer::new_boxed_streaming_body(),
         DecompressionLayer::new(),
         HttpUpgradeMitmRelayLayer::new(
             exec,
             (
                 HttpWebSocketRelayServiceRequestMatcher::new(
-                    // NOTE: change service of HttpWebSocketRelayServiceRequestMatcher with WS MitmRelay
-                    // if you ever want to inspect Websocket traffic :)
-                    ConsumeErrLayer::trace_as_debug().into_layer(IoForwardService::new()),
-                ),
+                    ConsumeErrLayer::trace_as_debug()
+                        .into_layer(WebSockeMitmRelayService::new(firewall)),
+                )
+                .with_store_handshake_request_header(true),
                 HttpProxyConnectRelayServiceRequestMatcher::new(http_conn_upgrade_svc),
             ),
         ),
