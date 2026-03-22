@@ -150,7 +150,7 @@ async fn test_report_blocked_events_does_not_dedupe_different_versions_within_30
     }
 
     let mut captured: Vec<BlockedEvent> = Vec::new();
-    for _ in 0..60 {
+    for i in 0..60 {
         let resp = capture_client
             .get("http://assert-test.internal/blocked-events/take")
             .send()
@@ -164,7 +164,7 @@ async fn test_report_blocked_events_does_not_dedupe_different_versions_within_30
             break;
         }
 
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(10 + 10 * i)).await;
     }
 
     assert_eq!(
