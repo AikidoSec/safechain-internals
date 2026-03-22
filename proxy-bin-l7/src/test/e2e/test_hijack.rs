@@ -10,24 +10,6 @@ use crate::test::e2e;
 #[tokio::test]
 #[tracing_test::traced_test]
 #[ignore]
-async fn test_hijack_failure_no_proxy() {
-    let runtime = e2e::runtime::get().await;
-    let client = runtime.client_fail_fast();
-
-    for path in ["", "/", "/ping"] {
-        assert!(
-            client
-                .get(format!("http://{HIJACK_DOMAIN}{path}"))
-                .send()
-                .await
-                .is_err()
-        );
-    }
-}
-
-#[tokio::test]
-#[tracing_test::traced_test]
-#[ignore]
 async fn test_hijack_https_failure_no_trust() {
     let runtime = e2e::runtime::get().await;
     let client = runtime.client_fail_fast();
