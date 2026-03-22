@@ -132,7 +132,7 @@ pub trait Rule: Sized + Send + Sync + 'static {
     /// leaves the rule out of WebSocket processing for that handshake.
     ///
     /// [`Firewall`]: super::Firewall
-    fn match_ws_domain<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool;
+    fn match_ws_handshake<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool;
 
     #[cfg(feature = "pac")]
     /// Contributes domains to the Proxy Auto-Configuration (PAC) script generation.
@@ -236,7 +236,7 @@ trait DynRuleInner {
 
     fn dyn_match_domain(&self, domain: &Domain) -> bool;
 
-    fn dyn_match_ws_domain<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool;
+    fn dyn_match_ws_handshake<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool;
 
     fn dyn_evaluate_ws_relay_msg(
         &self,
@@ -290,8 +290,8 @@ impl<R: Rule> DynRuleInner for R {
 
     #[inline(always)]
     /// see [`Rule::match_domain`] for more information.
-    fn dyn_match_ws_domain<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool {
-        self.match_ws_domain(info)
+    fn dyn_match_ws_handshake<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool {
+        self.match_ws_handshake(info)
     }
 
     #[cfg(feature = "pac")]
@@ -354,8 +354,8 @@ impl Rule for DynRule {
     }
 
     #[inline(always)]
-    fn match_ws_domain<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool {
-        self.inner.dyn_match_ws_domain(info)
+    fn match_ws_handshake<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool {
+        self.inner.dyn_match_ws_handshake(info)
     }
 
     #[inline(always)]

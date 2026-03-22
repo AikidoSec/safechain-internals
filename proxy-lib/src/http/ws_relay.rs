@@ -64,7 +64,7 @@ where
         let source_app_bundle_id =
             get_app_source_bundle_id_from_ext(&bridge_io).map(ToOwned::to_owned);
 
-        if !self.mitm_all && !self.firewall.match_ws_domain(ws_handshake_info) {
+        if !self.mitm_all && !self.firewall.match_ws_handshake(ws_handshake_info) {
             tracing::debug!(
                 source_app_bundle_id,
                 ?proxy_target,

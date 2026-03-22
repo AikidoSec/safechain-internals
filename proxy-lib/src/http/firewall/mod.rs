@@ -257,10 +257,10 @@ impl Firewall {
             .any(|rule| rule.match_domain(domain))
     }
 
-    pub fn match_ws_domain<'a>(&self, info: self::rule::WebSocketHandshakeInfo<'a>) -> bool {
+    pub fn match_ws_handshake<'a>(&self, info: self::rule::WebSocketHandshakeInfo<'a>) -> bool {
         self.block_rules
             .iter()
-            .any(|rule| rule.match_ws_domain(info))
+            .any(|rule| rule.match_ws_handshake(info))
     }
 
     pub fn into_evaluate_request_layer(self) -> self::layer::evaluate_req::EvaluateRequestLayer {

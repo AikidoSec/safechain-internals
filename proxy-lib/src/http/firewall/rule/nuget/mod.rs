@@ -82,7 +82,7 @@ impl Rule for RuleNuget {
     }
 
     #[inline(always)]
-    fn match_ws_domain<'a>(&self, _: super::WebSocketHandshakeInfo<'a>) -> bool {
+    fn match_ws_handshake<'a>(&self, _: super::WebSocketHandshakeInfo<'a>) -> bool {
         false
     }
 
