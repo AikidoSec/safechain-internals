@@ -1,11 +1,11 @@
 use rama::extensions::ExtensionsRef;
 
-#[cfg(not(feature = "apple-networkextension"))]
+#[cfg(not(all(feature = "apple-networkextension", target_os = "macos")))]
 pub fn get_app_source_bundle_id_from_ext(_: &impl ExtensionsRef) -> Option<&str> {
     None
 }
 
-#[cfg(feature = "apple-networkextension")]
+#[cfg(all(feature = "apple-networkextension", target_os = "macos"))]
 pub fn get_app_source_bundle_id_from_ext(input: &impl ExtensionsRef) -> Option<&str> {
     use std::sync::Arc;
 

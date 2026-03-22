@@ -1,4 +1,3 @@
-#![cfg(target_vendor = "apple")]
 #![cfg(target_os = "macos")]
 
 use std::net::IpAddr;
