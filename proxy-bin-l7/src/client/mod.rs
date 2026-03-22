@@ -32,7 +32,6 @@ pub fn new_http_client_for_proxy(
 
 #[cfg(test)]
 pub use self::{
-    mock_server::new_mock_dns_resolver as new_dns_resolver,
     mock_server::new_mock_tcp_connector as new_tcp_connector_service_for_internal,
     mock_server::new_mock_tcp_connector as new_tcp_connector_service_for_proxy,
     new_http_client_for_proxy as new_http_client_for_internal,
@@ -43,8 +42,3 @@ pub use safechain_proxy_lib::{
     http::client::{new_http_client_for_internal, new_http_client_for_proxy},
     tcp::{new_tcp_connector_service_for_internal, new_tcp_connector_service_for_proxy},
 };
-
-#[cfg(not(test))]
-pub fn new_dns_resolver() -> impl rama::dns::client::resolver::DnsResolver {
-    rama::dns::client::GlobalDnsResolver::new()
-}

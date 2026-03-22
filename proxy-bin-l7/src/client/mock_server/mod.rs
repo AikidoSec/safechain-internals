@@ -1,16 +1,11 @@
 use std::{
     convert::Infallible,
-    net::IpAddr,
     sync::{Arc, LazyLock},
 };
 
 use rama::{
     Layer, Service,
     cli::service::echo::EchoServiceBuilder,
-    dns::client::{
-        EmptyDnsResolver,
-        resolver::{DnsAddressResolver, DnsResolver, DnsTxtResolver},
-    },
     error::BoxError,
     extensions::ExtensionsMut,
     http::{
@@ -49,54 +44,6 @@ mod endpoint_protection_callbacks;
 mod malware_list;
 mod npm_registry;
 mod vscode_marketplace;
-
-#[inline(always)]
-pub fn new_mock_dns_resolver() -> impl DnsResolver {
-    MockDnsResolver {
-        ip: IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-        empty: EmptyDnsResolver::new(),
-    }
-}
-
-#[derive(Debug, Clone)]
-struct MockDnsResolver {
-    ip: IpAddr,
-    empty: EmptyDnsResolver,
-}
-
-impl DnsAddressResolver for MockDnsResolver {
-    type Error = <IpAddr as DnsAddressResolver>::Error;
-
-    #[inline(always)]
-    fn lookup_ipv4(
-        &self,
-        domain: Domain,
-    ) -> impl rama::stream::Stream<Item = Result<std::net::Ipv4Addr, Self::Error>> + Send + '_ {
-        self.ip.lookup_ipv4(domain)
-    }
-
-    #[inline(always)]
-    fn lookup_ipv6(
-        &self,
-        domain: Domain,
-    ) -> impl rama::stream::Stream<Item = Result<std::net::Ipv6Addr, Self::Error>> + Send + '_ {
-        self.ip.lookup_ipv6(domain)
-    }
-}
-
-impl DnsTxtResolver for MockDnsResolver {
-    type Error = <EmptyDnsResolver as DnsTxtResolver>::Error;
-
-    #[inline(always)]
-    fn lookup_txt(
-        &self,
-        domain: Domain,
-    ) -> impl rama::stream::Stream<Item = Result<rama::bytes::Bytes, Self::Error>> + Send + '_ {
-        self.empty.lookup_txt(domain)
-    }
-}
-
-impl DnsResolver for MockDnsResolver {}
 
 /// Create a TCP [`ConnectorService`] accessing the mock server, spawned once.
 pub fn new_mock_tcp_connector<Input>(
@@ -146,7 +93,6 @@ fn new_tls_acceptor_data() -> TlsAcceptorData {
         .try_into()
         .expect("create tls server config")
     });
-
     DATA.clone()
 }
 
