@@ -3,6 +3,7 @@ use rama::{
     rt::Executor,
     telemetry::tracing,
 };
+use std::collections::HashMap;
 
 use safechain_proxy_lib::http::firewall::events::BlockedEvent;
 
@@ -149,7 +150,7 @@ async fn test_report_blocked_events_does_not_dedupe_different_versions_within_30
         assert_eq!(StatusCode::FORBIDDEN, resp.status());
     }
 
-    let mut captured: Vec<BlockedEvent> = Vec::new();
+    let mut captured: HashMap<String, BlockedEvent> = HashMap::new();
     for i in 0..60 {
         let resp = capture_client
             .get("http://assert-test.internal/blocked-events/take")
@@ -158,7 +159,20 @@ async fn test_report_blocked_events_does_not_dedupe_different_versions_within_30
             .unwrap();
 
         assert_eq!(StatusCode::OK, resp.status());
-        captured = resp.try_into_json().await.unwrap();
+        let batch: Vec<BlockedEvent> = resp.try_into_json().await.unwrap();
+
+        // `/take` clears the mock server buffer on every poll, so accumulate
+        // unique events across iterations instead of only inspecting the latest batch.
+        for event in batch {
+            let key = format!(
+                "{}|{}|{:?}|{:?}",
+                event.artifact.product,
+                event.artifact.identifier,
+                event.artifact.version,
+                event.block_reason,
+            );
+            captured.entry(key).or_insert(event);
+        }
 
         if captured.len() >= 2 {
             break;
