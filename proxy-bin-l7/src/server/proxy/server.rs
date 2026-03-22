@@ -45,7 +45,7 @@ use safechain_proxy_lib::{
     http::{
         firewall::Firewall,
         service::hijack::{self, HIJACK_DOMAIN},
-        ws_relay::WebSockeMitmRelayService,
+        ws_relay::WebSocketMitmRelayService,
     },
     tls::{RootCaKeyPair, mitm_relay_policy::TlsMitmRelayPolicyLayer},
 };
@@ -141,7 +141,7 @@ where
                     // NOTE: change service of HttpWebSocketRelayServiceRequestMatcher with WS MitmRelay
                     // if you ever want to inspect Websocket traffic :)
                     ConsumeErrLayer::trace_as_debug()
-                        .into_layer(WebSockeMitmRelayService::new(firewall)),
+                        .into_layer(WebSocketMitmRelayService::new(firewall)),
                 )
                 .with_store_handshake_request_header(true),
                 // Entering an HTTP CONNECT would mean the client

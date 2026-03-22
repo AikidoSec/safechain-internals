@@ -41,7 +41,7 @@ use safechain_proxy_lib::{
         client::new_http_client_for_internal,
         firewall::Firewall,
         service::hijack::{self, HIJACK_DOMAIN},
-        ws_relay::WebSockeMitmRelayService,
+        ws_relay::WebSocketMitmRelayService,
     },
     storage,
     tcp::new_tcp_connector_service_for_proxy,
@@ -232,7 +232,7 @@ where
             (
                 HttpWebSocketRelayServiceRequestMatcher::new(
                     ConsumeErrLayer::trace_as_debug()
-                        .into_layer(WebSockeMitmRelayService::new(firewall)),
+                        .into_layer(WebSocketMitmRelayService::new(firewall)),
                 )
                 .with_store_handshake_request_header(true),
                 HttpProxyConnectRelayServiceRequestMatcher::new(http_conn_upgrade_svc),

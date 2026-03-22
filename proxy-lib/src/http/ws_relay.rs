@@ -16,12 +16,12 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct WebSockeMitmRelayService {
+pub struct WebSocketMitmRelayService {
     firewall: Firewall,
     mitm_all: bool,
 }
 
-impl WebSockeMitmRelayService {
+impl WebSocketMitmRelayService {
     pub fn new(firewall: Firewall) -> Self {
         Self {
             firewall,
@@ -39,7 +39,7 @@ impl WebSockeMitmRelayService {
     }
 }
 
-impl<Ingress, Egress> Service<BridgeIo<Ingress, Egress>> for WebSockeMitmRelayService
+impl<Ingress, Egress> Service<BridgeIo<Ingress, Egress>> for WebSocketMitmRelayService
 where
     Ingress: Io + Unpin + extensions::ExtensionsMut,
     Egress: Io + Unpin + extensions::ExtensionsMut,
