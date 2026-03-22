@@ -2,7 +2,7 @@ use std::{convert::Infallible, sync::Arc};
 
 use rama::{
     Layer, Service,
-    error::BoxError,
+    error::{BoxError, ErrorContext as _},
     extensions::ExtensionsMut,
     graceful::ShutdownGuard,
     http::{
@@ -60,10 +60,9 @@ pub(super) fn new_app_mitm_server<S: Io + ExtensionsMut + Unpin>(
     let exec = Executor::graceful(guard);
 
     let ca_crt_pem_bytes: &[u8] = root_ca
-        .certificate_pem()
-        .as_ref()
-        .as_bytes()
-        .to_vec()
+        .certificate()
+        .to_pem()
+        .context("root ca cert as pem")?
         .leak();
 
     let (ca_crt, ca_key) = root_ca.into_pair();

@@ -66,9 +66,9 @@ pub async fn run_proxy_server(
         exec.clone(),
         firewall.clone(),
         root_ca_key_pair
-            .certificate_pem()
-            .as_bytes()
-            .to_vec()
+            .certificate()
+            .to_pem()
+            .context("root ca cert as pem")?
             .leak(),
         #[cfg(feature = "har")]
         har_export_layer.clone(),

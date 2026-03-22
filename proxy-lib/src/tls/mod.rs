@@ -28,50 +28,16 @@ mod root;
 
 #[derive(Clone)]
 pub struct RootCaKeyPair {
-    crt_pem: NonEmptyStr,
-    key_pem: NonEmptyStr,
     crt_x509: X509,
     key_x509: PKey<Private>,
 }
 
 impl RootCaKeyPair {
-    pub fn try_from_boring(
-        certificate: X509,
-        private_key: PKey<Private>,
-    ) -> Result<Self, BoxError> {
-        let crt_pem = String::from_utf8(
-            certificate
-                .to_pem()
-                .context("encode CA certificate to PEM")?,
-        )
-        .context("CA certificate PEM is valid UTF-8")?
-        .try_into()
-        .context("CA certificate PEM is non-empty")?;
-        let key_pem = String::from_utf8(
-            private_key
-                .private_key_to_pem_pkcs8()
-                .context("encode CA private key to PKCS#8 PEM")?,
-        )
-        .context("CA private key PEM is valid UTF-8")?
-        .try_into()
-        .context("CA private key PEM is non-empty")?;
-
-        Ok(Self {
-            crt_pem,
-            key_pem,
+    pub fn new(certificate: X509, private_key: PKey<Private>) -> Self {
+        Self {
             crt_x509: certificate,
             key_x509: private_key,
-        })
-    }
-
-    #[inline(always)]
-    pub fn certificate_pem(&self) -> &NonEmptyStr {
-        &self.crt_pem
-    }
-
-    #[inline(always)]
-    pub fn private_key_pem(&self) -> &NonEmptyStr {
-        &self.key_pem
+        }
     }
 
     #[inline(always)]
@@ -79,9 +45,31 @@ impl RootCaKeyPair {
         &self.crt_x509
     }
 
+    pub fn certificate_as_pem_non_empty_str(&self) -> Result<NonEmptyStr, BoxError> {
+        String::from_utf8(
+            self.crt_x509
+                .to_pem()
+                .context("encode CA certificate to PEM")?,
+        )
+        .context("CA certificate PEM is valid UTF-8")?
+        .try_into()
+        .context("CA certificate PEM is non-empty")
+    }
+
     #[inline(always)]
     pub fn private_key(&self) -> &PKey<Private> {
         &self.key_x509
+    }
+
+    pub fn private_key_as_pem_non_empty_str(&self) -> Result<NonEmptyStr, BoxError> {
+        String::from_utf8(
+            self.key_x509
+                .private_key_to_pem_pkcs8()
+                .context("encode CA private key to PKCS#8 PEM")?,
+        )
+        .context("CA private key PEM is valid UTF-8")?
+        .try_into()
+        .context("CA private key PEM is non-empty")
     }
 
     #[inline(always)]
@@ -101,13 +89,11 @@ impl RootCA {
 }
 
 pub fn new_tls_acceptor_layer(
-    secrets: &SyncSecrets,
-    data_storage: &SyncCompactDataStorage,
+    root_ca_key_pair: &RootCaKeyPair,
     application_layer_protocol_negotiation: Option<Vec<ApplicationProtocol>>,
 ) -> Result<(TlsAcceptorLayer, RootCA), BoxError> {
-    let root_ca_key_pair = load_or_create_root_ca_key_pair(secrets, data_storage)?;
-    let crt = root_ca_key_pair.certificate_pem().clone();
-    let key = root_ca_key_pair.private_key_pem().clone();
+    let crt = root_ca_key_pair.certificate_as_pem_non_empty_str()?;
+    let key = root_ca_key_pair.private_key_as_pem_non_empty_str()?;
 
     let root_ca = RootCA(Arc::new(SecretBox::new(Box::new(crt.as_ref().to_owned()))));
 

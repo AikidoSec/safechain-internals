@@ -184,18 +184,17 @@ where
         storage::SyncSecrets::try_new(self::utils::env::project_name(), args.secrets.clone())
             .context("create secrets storage")?;
 
+    let root_ca_key_pair = tls::load_or_create_root_ca_key_pair(&secret_storage, &data_storage)
+        .context("prepare proxy traffic CA crt/key pair")?;
+
     let (tls_acceptor, root_ca) = tls::new_tls_acceptor_layer(
-        &secret_storage,
-        &data_storage,
+        &root_ca_key_pair,
         Some(vec![
             ApplicationProtocol::HTTP_2,
             ApplicationProtocol::HTTP_11,
         ]),
     )
     .context("prepare TLS acceptor")?;
-
-    let root_ca_key_pair = tls::load_or_create_root_ca_key_pair(&secret_storage, &data_storage)
-        .context("prepare proxy traffic CA crt/key pair")?;
 
     let (error_tx, error_rx) = tokio::sync::mpsc::channel::<BoxError>(1);
     let graceful = graceful::Shutdown::new(new_shutdown_signal(error_rx, base_shutdown_signal));

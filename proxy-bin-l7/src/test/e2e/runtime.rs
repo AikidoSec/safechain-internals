@@ -129,6 +129,7 @@ impl Runtime {
     }
 
     #[inline(always)]
+    #[expect(unused)]
     pub async fn client_with_http_proxy_and_user_config_header(
         &self,
         cfg: FirewallUserConfig,
@@ -174,6 +175,7 @@ impl Runtime {
     }
 
     #[inline(always)]
+    #[expect(unused)]
     pub async fn client_with_socks5_proxy_and_username(
         &self,
         username: &str,

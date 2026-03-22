@@ -25,10 +25,13 @@ use rama::{
     net::{
         address::Domain,
         client::ConnectorService,
-        test_utils::client::MockConnectorService,
+        test_utils::client::{MockConnectorService, MockSocket},
         tls::{
             ApplicationProtocol,
-            server::{SelfSignedData, ServerAuth, ServerConfig, TlsPeekRouter},
+            server::{
+                SelfSignedData, ServerAuth, ServerCertIssuerData, ServerCertIssuerKind,
+                ServerConfig, TlsPeekRouter,
+            },
         },
         transport::TryRefIntoTransportContext,
     },
@@ -115,8 +118,7 @@ where
 static ASSERT_ENDPOINT_STATE: LazyLock<assert_endpoint::MockState> =
     LazyLock::new(assert_endpoint::MockState::new);
 
-fn new_mock_transport_server()
--> impl Service<rama::net::test_utils::client::MockSocket, Output = (), Error = BoxError> {
+fn new_mock_transport_server() -> impl Service<MockSocket, Output = (), Error = BoxError> {
     let http_server = HttpServer::auto(Executor::default()).service(new_mock_server());
 
     let tls_acceptor_data = ServerConfig {
@@ -124,8 +126,11 @@ fn new_mock_transport_server()
             ApplicationProtocol::HTTP_2,
             ApplicationProtocol::HTTP_11,
         ]),
-        ..ServerConfig::new(ServerAuth::SelfSigned(SelfSignedData {
-            organisation_name: Some("Mock (test) Tls Acceptor".to_owned()),
+        ..ServerConfig::new(ServerAuth::CertIssuer(ServerCertIssuerData {
+            kind: ServerCertIssuerKind::SelfSigned(SelfSignedData {
+                organisation_name: Some("Mock (test) Tls Acceptor".to_owned()),
+                ..Default::default()
+            }),
             ..Default::default()
         }))
     }

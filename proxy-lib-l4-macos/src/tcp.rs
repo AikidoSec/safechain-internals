@@ -87,10 +87,9 @@ pub(super) async fn try_new_service(
     };
 
     let ca_crt_pem_bytes: &[u8] = root_ca
-        .certificate_pem()
-        .as_ref()
-        .as_bytes()
-        .to_vec()
+        .certificate()
+        .to_pem()
+        .context("convert cert to pem")?
         .leak();
 
     let (ca_crt, ca_key) = root_ca.into_pair();

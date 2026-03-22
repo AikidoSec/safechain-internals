@@ -64,7 +64,7 @@ async fn test_hijack_http() {
         let payload = resp.try_into_string().await.unwrap();
 
         assert!(payload.contains("<!doctype html>"));
-        assert!(payload.contains(safechain_proxy_lib::utils::env::project_name()));
+        assert!(payload.contains("Aikido"));
     }
 }
 
@@ -90,7 +90,7 @@ async fn test_hijack_http_over_sock5() {
         let payload = resp.try_into_string().await.unwrap();
 
         assert!(payload.contains("<!doctype html>"));
-        assert!(payload.contains(safechain_proxy_lib::utils::env::project_name()));
+        assert!(payload.contains("Aikido"));
     }
 }
 
@@ -118,7 +118,7 @@ async fn test_hijack_http_with_username_labels() {
         let payload = resp.try_into_string().await.unwrap();
 
         assert!(payload.contains("<!doctype html>"));
-        assert!(payload.contains(safechain_proxy_lib::utils::env::project_name()));
+        assert!(payload.contains("Aikido"));
     }
 }
 
@@ -144,7 +144,7 @@ async fn test_hijack_https() {
         let payload = resp.try_into_string().await.unwrap();
 
         assert!(payload.contains("<!doctype html>"));
-        assert!(payload.contains(safechain_proxy_lib::utils::env::project_name()));
+        assert!(payload.contains("Aikido"));
     }
 }
 
@@ -170,6 +170,6 @@ async fn test_hijack_https_over_socks5() {
         let payload = resp.try_into_string().await.unwrap();
 
         assert!(payload.contains("<!doctype html>"));
-        assert!(payload.contains(safechain_proxy_lib::utils::env::project_name()));
+        assert!(payload.contains("Aikido"));
     }
 }
