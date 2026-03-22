@@ -242,12 +242,12 @@ fn create_client_inner(
     (
         // timeout needs to be high enough for this e2e test setup
         // ... windows machines in CI... can be ... slow
-        TimeoutLayer::new(Duration::from_secs(180)),
+        TimeoutLayer::new(Duration::from_mins(5)),
         RetryLayer::new(
             ManagedPolicy::default().with_backoff(
                 ExponentialBackoff::new(
                     Duration::from_millis(100),
-                    Duration::from_secs(180),
+                    Duration::from_mins(5),
                     0.01,
                     HasherRng::default,
                 )
@@ -272,11 +272,11 @@ pub(super) async fn get() -> Runtime {
     // make timeouts large enough... windows CI tests... zzz
     let (meta_addr, proxy_addr) = tokio::try_join!(
         tokio::time::timeout(
-            Duration::from_secs(180),
+            Duration::from_mins(5),
             read_file_or_wait(app.data_dir.join("meta.addr.txt"))
         ),
         tokio::time::timeout(
-            Duration::from_secs(180),
+            Duration::from_mins(5),
             read_file_or_wait(app.data_dir.join("proxy.addr.txt"))
         ),
     )
@@ -301,11 +301,11 @@ pub(super) async fn spawn_with_args(extra_args: &[&str]) -> Runtime {
 
     let (meta_addr, proxy_addr) = tokio::try_join!(
         tokio::time::timeout(
-            Duration::from_secs(180),
+            Duration::from_mins(5),
             read_file_or_wait(app.data_dir.join("meta.addr.txt"))
         ),
         tokio::time::timeout(
-            Duration::from_secs(180),
+            Duration::from_mins(5),
             read_file_or_wait(app.data_dir.join("proxy.addr.txt"))
         ),
     )
@@ -335,11 +335,11 @@ pub(super) async fn spawn_with_agent_identity(
 
     let (meta_addr, proxy_addr) = tokio::try_join!(
         tokio::time::timeout(
-            Duration::from_secs(180),
+            Duration::from_mins(5),
             read_file_or_wait(app.data_dir.join("meta.addr.txt"))
         ),
         tokio::time::timeout(
-            Duration::from_secs(180),
+            Duration::from_mins(5),
             read_file_or_wait(app.data_dir.join("proxy.addr.txt"))
         ),
     )
