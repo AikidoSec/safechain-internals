@@ -5,6 +5,7 @@ package certconfig
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,8 +29,15 @@ func originalNodeExtraCACertsPath() string {
 
 func (c *windowsNodeTrustConfigurator) Install(ctx context.Context) error {
 	// Save the current value before overwriting so Uninstall can restore it.
-	existing, _ := runNodeExtraCACertsLookup(ctx)
-	_ = os.WriteFile(originalNodeExtraCACertsPath(), []byte(strings.TrimSpace(existing)), 0o600)
+	existing, err := runNodeExtraCACertsLookup(ctx)
+	if err != nil {
+		log.Printf("Warning: failed to read existing NODE_EXTRA_CA_CERTS before update: %v", err)
+		return fmt.Errorf("read existing NODE_EXTRA_CA_CERTS: %w", err)
+	}
+	if err := os.WriteFile(originalNodeExtraCACertsPath(), []byte(strings.TrimSpace(existing)), 0o600); err != nil {
+		log.Printf("Warning: failed to persist existing NODE_EXTRA_CA_CERTS before update: %v", err)
+		return fmt.Errorf("persist existing NODE_EXTRA_CA_CERTS: %w", err)
+	}
 
 	return runPowerShellAsCurrentUser(
 		ctx,
