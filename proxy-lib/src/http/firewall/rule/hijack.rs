@@ -39,7 +39,7 @@ impl RuleHijack {
 impl Rule for RuleHijack {
     #[inline(always)]
     fn product_name(&self) -> &'static str {
-        "ProxyHijackSvc"
+        "ProxyHijackService"
     }
 
     #[inline(always)]
