@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
 
 type windowsNodeTrustConfigurator struct {

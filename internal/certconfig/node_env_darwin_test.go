@@ -10,13 +10,34 @@ import (
 	"testing"
 )
 
+func TestExtractMarkedCertValue(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   string
+	}{
+		{"clean output", "AIKIDO_CERT=/path/to/ca.pem\n", "/path/to/ca.pem"},
+		{"empty value", "AIKIDO_CERT=\n", ""},
+		{"marker absent", "some random output\n", ""},
+		{"marker buried in noise", "Welcome to zsh!\nAIKIDO_CERT=/corp/ca.pem\nsome trailing line", "/corp/ca.pem"},
+		{"interactive startup noise before", "compinit output\n[oh-my-zsh]\nAIKIDO_CERT=/ca.pem\n", "/ca.pem"},
+		{"whitespace trimmed", "AIKIDO_CERT=  /ca.pem  \n", "/ca.pem"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractMarkedCertValue(tt.output)
+			if got != tt.want {
+				t.Fatalf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestNodeExtraCACertsShellLookups verifies that each shell command in
-// nodeCACertsShellLookups correctly reads NODE_EXTRA_CA_CERTS when it is set
-// in the shell's login startup file, and returns empty when it is not set.
-//
-// These are integration tests — they spawn real shells and require zsh, bash,
-// or fish to be available on the machine. Each sub-test is skipped individually
-// if the shell is not found.
+// nodeCACertsShellLookups correctly reads NODE_EXTRA_CA_CERTS from the
+// shell's startup file (both login and interactive variants), and returns
+// empty when nothing is set. Tests are skipped if the shell is not installed.
 func TestNodeExtraCACertsShellLookups(t *testing.T) {
 	const certPath = "/tmp/test-corporate-ca.pem"
 
@@ -25,16 +46,31 @@ func TestNodeExtraCACertsShellLookups(t *testing.T) {
 		configFile string // relative to HOME
 		content    string
 	}{
+		// Login non-interactive: zsh reads ~/.zprofile
 		{
 			shell:      "zsh",
 			configFile: ".zprofile",
 			content:    "export NODE_EXTRA_CA_CERTS=" + certPath + "\n",
 		},
+		// Interactive non-login: zsh reads ~/.zshrc
+		{
+			shell:      "zsh",
+			configFile: ".zshrc",
+			content:    "export NODE_EXTRA_CA_CERTS=" + certPath + "\n",
+		},
+		// Login non-interactive: bash reads ~/.bash_profile
 		{
 			shell:      "bash",
 			configFile: ".bash_profile",
 			content:    "export NODE_EXTRA_CA_CERTS=" + certPath + "\n",
 		},
+		// Interactive non-login: bash reads ~/.bashrc
+		{
+			shell:      "bash",
+			configFile: ".bashrc",
+			content:    "export NODE_EXTRA_CA_CERTS=" + certPath + "\n",
+		},
+		// fish --login reads ~/.config/fish/config.fish
 		{
 			shell:      "fish",
 			configFile: filepath.Join(".config", "fish", "config.fish"),
@@ -43,7 +79,7 @@ func TestNodeExtraCACertsShellLookups(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.shell, func(t *testing.T) {
+		t.Run(tt.shell+"/"+tt.configFile, func(t *testing.T) {
 			if _, err := exec.LookPath(tt.shell); err != nil {
 				t.Skipf("%s not available: %v", tt.shell, err)
 			}

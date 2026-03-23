@@ -74,6 +74,6 @@ func darwinShellTargets(bundlePath string) []darwinShellTarget {
 }
 
 var shellManagedBlockFormat = managedBlockFormat{
-	startMarker: "# aikido-cert-config-start",
-	endMarker:   "# aikido-cert-config-end",
+	startMarker: "# aikido-endpoint-cert-config-start",
+	endMarker:   "# aikido-endpoint-cert-config-end",
 }
