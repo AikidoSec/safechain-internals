@@ -175,20 +175,7 @@ impl Rule for RulePyPI {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        // Pass through for now - response modification can be added in future PR
-        Ok(resp)
-    }
-
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
-        if !crate::http::try_get_domain_for_req(&req)
-            .map(|domain| self.match_domain(&domain))
-            .unwrap_or_default()
-        {
-            tracing::trace!("PyPI rule did not match incoming request: passthrough");
-            return Ok(RequestAction::Allow(req));
-        }
-
         let Some(package_info) = Self::extract_package_info(&req) else {
             tracing::trace!("PyPI url: path not recognized: passthrough");
             return Ok(RequestAction::Allow(req));
@@ -234,6 +221,13 @@ impl Rule for RulePyPI {
         Ok(RequestAction::Allow(req))
     }
 
+    #[inline(always)]
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
+        // Pass through for now - response modification can be added in future PR
+        Ok(resp)
+    }
+
+    #[inline(always)]
     async fn evaluate_ws_relay_msg(
         &self,
         _: WebSocketRelayDirection,

@@ -223,16 +223,14 @@ where
             DomainMatcher::exact(HIJACK_DOMAIN),
             Arc::new(hijack::new_service(ca_crt_pem_bytes)),
         ),
-        firewall.clone().into_evaluate_response_layer(),
-        firewall.clone().into_evaluate_request_layer(),
+        firewall,
         MapResponseBodyLayer::new_boxed_streaming_body(),
         DecompressionLayer::new(),
         HttpUpgradeMitmRelayLayer::new(
             exec,
             (
                 HttpWebSocketRelayServiceRequestMatcher::new(
-                    ConsumeErrLayer::trace_as_debug()
-                        .into_layer(WebSocketMitmRelayService::new(firewall)),
+                    ConsumeErrLayer::trace_as_debug().into_layer(WebSocketMitmRelayService::new()),
                 )
                 .with_store_handshake_request_header(true),
                 HttpProxyConnectRelayServiceRequestMatcher::new(http_conn_upgrade_svc),
