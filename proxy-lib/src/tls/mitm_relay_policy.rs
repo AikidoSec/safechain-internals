@@ -137,6 +137,7 @@ where
         if let Some(server_name) = maybe_server_name {
             match self.firewall.match_http_rules(&server_name) {
                 Some(http_rules) => {
+                    // insert the http rules so that they can be used after tls handshake for ws & for our fw layer
                     bridge_io.extensions_mut().insert(http_rules);
                 }
                 None if self.mitm_all => (),
