@@ -223,7 +223,6 @@ impl Rule for RulePyPI {
 
     #[inline(always)]
     async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        // Pass through for now - response modification can be added in future PR
         Ok(resp)
     }
 
