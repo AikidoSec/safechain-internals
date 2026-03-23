@@ -1,7 +1,9 @@
 use rama::{
     http::{BodyExtractExt as _, StatusCode, service::client::HttpClientExt as _},
+    rt::Executor,
     telemetry::tracing,
 };
+use std::collections::HashMap;
 
 use safechain_proxy_lib::http::firewall::events::BlockedEvent;
 
@@ -10,7 +12,7 @@ use crate::test::e2e;
 #[tokio::test]
 #[tracing_test::traced_test]
 async fn test_report_blocked_events_posts_json_to_endpoint() {
-    let capture_client = crate::client::new_web_client().unwrap();
+    let capture_client = crate::client::new_http_client_for_internal(Executor::default()).unwrap();
 
     let resp = capture_client
         .get("http://assert-test.internal/blocked-events/clear")
@@ -73,7 +75,7 @@ async fn test_report_blocked_events_posts_json_to_endpoint() {
 #[tokio::test]
 #[tracing_test::traced_test]
 async fn test_report_blocked_events_dedupes_same_artifact_within_30s() {
-    let capture_client = crate::client::new_web_client().unwrap();
+    let capture_client = crate::client::new_http_client_for_internal(Executor::default()).unwrap();
 
     let resp = capture_client
         .get("http://assert-test.internal/blocked-events/clear")
@@ -124,7 +126,7 @@ async fn test_report_blocked_events_dedupes_same_artifact_within_30s() {
 #[tokio::test]
 #[tracing_test::traced_test]
 async fn test_report_blocked_events_does_not_dedupe_different_versions_within_30s() {
-    let capture_client = crate::client::new_web_client().unwrap();
+    let capture_client = crate::client::new_http_client_for_internal(Executor::default()).unwrap();
 
     let resp = capture_client
         .get("http://assert-test.internal/blocked-events/clear")
@@ -148,8 +150,8 @@ async fn test_report_blocked_events_does_not_dedupe_different_versions_within_30
         assert_eq!(StatusCode::FORBIDDEN, resp.status());
     }
 
-    let mut captured: Vec<BlockedEvent> = Vec::new();
-    for _ in 0..60 {
+    let mut captured: HashMap<String, BlockedEvent> = HashMap::new();
+    for i in 0..60 {
         let resp = capture_client
             .get("http://assert-test.internal/blocked-events/take")
             .send()
@@ -157,13 +159,26 @@ async fn test_report_blocked_events_does_not_dedupe_different_versions_within_30
             .unwrap();
 
         assert_eq!(StatusCode::OK, resp.status());
-        captured = resp.try_into_json().await.unwrap();
+        let batch: Vec<BlockedEvent> = resp.try_into_json().await.unwrap();
+
+        // `/take` clears the mock server buffer on every poll, so accumulate
+        // unique events across iterations instead of only inspecting the latest batch.
+        for event in batch {
+            let key = format!(
+                "{}|{}|{:?}|{:?}",
+                event.artifact.product,
+                event.artifact.identifier,
+                event.artifact.version,
+                event.block_reason,
+            );
+            captured.entry(key).or_insert(event);
+        }
 
         if captured.len() >= 2 {
             break;
         }
 
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(10 + 10 * i)).await;
     }
 
     assert_eq!(

@@ -131,9 +131,11 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
         storage::SyncSecrets::try_new(self::utils::env::project_name(), args.secrets.clone())
             .context("create secrets storage")?;
 
+    let root_ca_key_pair = tls::load_or_create_root_ca_key_pair(&secret_storage, &data_storage)
+        .context("prepare proxy traffic CA crt/key pair")?;
+
     let (_tls_acceptor, _root_ca) = tls::new_tls_acceptor_layer(
-        &secret_storage,
-        &data_storage,
+        &root_ca_key_pair,
         Some(vec![
             ApplicationProtocol::HTTP_2,
             ApplicationProtocol::HTTP_11,

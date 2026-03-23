@@ -73,9 +73,7 @@ pub(crate) fn load_root_ca_key_pair(
         .context("parse managed identity certificate as X509")?;
     let private_key = export_private_key(&key).context("export managed identity private key")?;
 
-    RootCaKeyPair::try_from_boring(certificate, private_key)
-        .context("convert managed identity into RootCaKeyPair")
-        .map(Some)
+    Ok(Some(RootCaKeyPair::new(certificate, private_key)))
 }
 
 fn export_private_key(key: &SecKey) -> Result<PKey<Private>, BoxError> {

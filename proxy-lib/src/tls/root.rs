@@ -176,32 +176,11 @@ pub(super) fn new_root_tls_crt_key_pair(
                 .context_hex_field("computed_fingerprint", crt_fp)
                 .context_hex_field("expected_fingerprint", key_data.crt_fingerprint().to_vec()));
         }
-        let crt = String::from_utf8(
-            crt_x509
-                .to_pem()
-                .context("generate PEM CA crt byte slice")?,
-        )
-        .context("PEM CA crt byte slice as String")?
-        .try_into()
-        .context("PEM CA crt string as NonEmpty variant")?;
 
         let key_x509 = PKey::private_key_from_der(key_data.key())
             .context("parse (secret) private key from DER")?;
-        let key = String::from_utf8(
-            key_x509
-                .private_key_to_pem_pkcs8()
-                .context("generate PEM CA key byte slice")?,
-        )
-        .context("PEM CA key byte slice as String")?
-        .try_into()
-        .context("PEM CA key string as NonEmpty variant")?;
 
-        return Ok(RootCaKeyPair {
-            crt_pem: crt,
-            key_pem: key,
-            crt_x509,
-            key_x509,
-        });
+        return Ok(RootCaKeyPair::new(crt_x509, key_x509));
     }
 
     tracing::debug!("no CA key was present in secret storage, generate + store pair now...");
@@ -230,21 +209,7 @@ pub(super) fn new_root_tls_crt_key_pair(
 
     tracing::trace!("key + crt data blobs ready for storage in secret storage backend...");
 
-    let pair = RootCaKeyPair {
-        crt_pem: String::from_utf8(crt.to_pem().context("generate PEM CA crt byte slice")?)
-            .context("PEM CA crt byte slice as String")?
-            .try_into()
-            .context("PEM CA crt string as NonEmpty variant")?,
-        key_pem: String::from_utf8(
-            key.private_key_to_pem_pkcs8()
-                .context("generate PEM CA key byte slice")?,
-        )
-        .context("PEM CA key byte slice as String")?
-        .try_into()
-        .context("PEM CA key string as NonEmpty variant")?,
-        crt_x509: crt,
-        key_x509: key,
-    };
+    let pair = RootCaKeyPair::new(crt, key);
 
     tracing::trace!(
         "CA PEM pair ready for consumption, once and only once they are also stored..."
