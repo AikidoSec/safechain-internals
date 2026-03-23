@@ -43,6 +43,8 @@ where
     type Error = BoxError;
 
     async fn serve(&self, req: Request) -> Result<Self::Output, Self::Error> {
+        // If the request already had a TLS handshake we just take the rules that have been matched
+        // if not the case (e.g. insecure http traffic), we match here with match_http_rules (same function being used during tls handshake)
         let maybe_http_rules = match req.extensions().get().cloned() {
             Some(rules) => Some(rules),
             None => try_get_domain_for_req(&req)
