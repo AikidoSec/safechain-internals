@@ -30,6 +30,9 @@ pub fn new_http_client_for_proxy(
 }
 
 #[cfg(test)]
+pub(crate) use self::mock_server::malware_list::entries_by_uri as mock_malware_entries_by_uri;
+
+#[cfg(test)]
 pub use self::{
     mock_server::new_mock_tcp_connector as new_tcp_connector_service_for_internal,
     mock_server::new_mock_tcp_connector as new_tcp_connector_service_for_proxy,

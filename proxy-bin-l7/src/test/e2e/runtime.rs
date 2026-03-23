@@ -36,6 +36,8 @@ use rama::{
     },
     utils::{backoff::ExponentialBackoff, rng::HasherRng, str::NonEmptyStr},
 };
+use safechain_proxy_lib::{storage::SyncCompactDataStorage, utils::uri::uri_to_filename};
+use serde::Serialize;
 
 use crate::{
     Args,
@@ -405,6 +407,7 @@ fn spawn_safechain_proxy_app_with_args_and_identity(
 ) -> PathBuf {
     let data_dir = crate::test::tmp_dir::try_new("safechain_proxy_app_e2e").unwrap();
     eprintln!("safechain_proxy_app_e2e all data stored under: {data_dir:?}");
+    seed_mock_malware_list_cache(&data_dir);
 
     if let Some((token, device_id)) = identity {
         let config_path = data_dir.join("config.json");
@@ -454,4 +457,22 @@ fn spawn_safechain_proxy_app_with_args_and_identity(
     wait_server_ready.wait();
 
     data_dir
+}
+
+#[derive(Serialize)]
+struct CachedMalwareTrie {
+    pub e_tag: Option<rama::utils::str::arcstr::ArcStr>,
+    pub list: Vec<safechain_proxy_lib::package::malware_list::ListDataEntry>,
+}
+
+fn seed_mock_malware_list_cache(data_dir: &std::path::Path) {
+    let storage = SyncCompactDataStorage::try_new(data_dir.to_path_buf())
+        .expect("create compact data storage for test cache seeding");
+
+    for (uri, list) in crate::client::mock_malware_entries_by_uri() {
+        let key = uri_to_filename(&uri);
+        storage
+            .store(&key, &CachedMalwareTrie { e_tag: None, list })
+            .expect("seed malware list cache");
+    }
 }
