@@ -10,10 +10,8 @@ use rama::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    storage::{SyncCompactDataStorage, SyncSecrets},
-    tls::RootCaKeyPair,
-};
+use super::RootCaKeyPair;
+use crate::storage::{SyncCompactDataStorage, SyncSecrets};
 
 #[derive(Serialize, Deserialize)]
 enum DataProxyRootCAKey {
@@ -141,7 +139,7 @@ fn load_crt_from_secret_storage(
     Ok(Some(DataProxyRootCACrt::V1 { crt: crt_der }))
 }
 
-pub(in crate::tls) fn new_root_tls_crt_key_pair(
+pub(super) fn new_root_tls_crt_key_pair(
     secrets: &SyncSecrets,
     data_storage: &SyncCompactDataStorage,
 ) -> Result<RootCaKeyPair, BoxError> {

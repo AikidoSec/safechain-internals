@@ -81,24 +81,21 @@ fn new_mock_transport_server() -> impl Service<MockSocket, Output = (), Error = 
 }
 
 fn new_tls_acceptor_data() -> TlsAcceptorData {
-    static DATA: LazyLock<TlsAcceptorData> = LazyLock::new(|| {
-        ServerConfig {
-            application_layer_protocol_negotiation: Some(vec![
-                ApplicationProtocol::HTTP_2,
-                ApplicationProtocol::HTTP_11,
-            ]),
-            ..ServerConfig::new(ServerAuth::CertIssuer(ServerCertIssuerData {
-                kind: ServerCertIssuerKind::SelfSigned(SelfSignedData {
-                    organisation_name: Some("Mock (test) Tls Acceptor".to_owned()),
-                    ..Default::default()
-                }),
+    ServerConfig {
+        application_layer_protocol_negotiation: Some(vec![
+            ApplicationProtocol::HTTP_2,
+            ApplicationProtocol::HTTP_11,
+        ]),
+        ..ServerConfig::new(ServerAuth::CertIssuer(ServerCertIssuerData {
+            kind: ServerCertIssuerKind::SelfSigned(SelfSignedData {
+                organisation_name: Some("Mock (test) Tls Acceptor".to_owned()),
                 ..Default::default()
-            }))
-        }
-        .try_into()
-        .expect("create tls server config")
-    });
-    DATA.clone()
+            }),
+            ..Default::default()
+        }))
+    }
+    .try_into()
+    .expect("create tls server config")
 }
 
 fn new_mock_server() -> impl Service<Request, Output = Response, Error = Infallible> + Clone {
