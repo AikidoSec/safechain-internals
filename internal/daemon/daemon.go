@@ -76,7 +76,7 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 	if cfg.GetProxyMode() == config.ProxyModeL4 {
 		proxyManager = proxy.NewL4()
 	} else {
-		proxyManager = proxy.New()
+		proxyManager = proxy.NewL7()
 	}
 
 	d := &Daemon{
@@ -201,7 +201,7 @@ func (d *Daemon) startProxy(ctx context.Context) error {
 		if d.config.GetProxyMode() == config.ProxyModeL4 {
 			err = proxy.InstallL4ProxyCA(ctx)
 		} else {
-			err = proxy.InstallProxyCA(ctx)
+			err = proxy.InstallL7ProxyCA(ctx)
 		}
 		if err != nil {
 			return fmt.Errorf("failed to install proxy CA: %v", err)
@@ -250,10 +250,10 @@ func (d *Daemon) run(ctx context.Context) error {
 		if err := setup.Install(ctx); err != nil {
 			return fmt.Errorf("failed to install setup: %v", err)
 		}
-
-		d.wg.Add(1)
-		go d.runDockerCALoop(ctx)
 	}
+
+	d.wg.Add(1)
+	go d.runDockerCALoop(ctx)
 
 	if err := d.registry.InstallAll(ctx); err != nil {
 		return fmt.Errorf("failed to install all scanners: %v", err)

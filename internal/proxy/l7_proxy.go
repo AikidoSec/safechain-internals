@@ -20,7 +20,7 @@ const (
 	ProxyReadyInterval = 1 * time.Second
 )
 
-type Proxy struct {
+type L7Proxy struct {
 	cmd      *exec.Cmd
 	ctx      context.Context
 	cancel   context.CancelFunc
@@ -28,11 +28,11 @@ type Proxy struct {
 	procErr  error
 }
 
-func New() *Proxy {
-	return &Proxy{}
+func NewL7() *L7Proxy {
+	return &L7Proxy{}
 }
 
-func (p *Proxy) WaitForProxyToBeReady() error {
+func (p *L7Proxy) WaitForProxyToBeReady() error {
 	if p.procDone == nil {
 		return fmt.Errorf("procDone channel is nil")
 	}
@@ -56,7 +56,7 @@ func (p *Proxy) WaitForProxyToBeReady() error {
 	}
 }
 
-func (p *Proxy) Version() (string, error) {
+func (p *L7Proxy) Version() (string, error) {
 	cmd := exec.Command(filepath.Join(platform.GetConfig().BinaryDir, platform.SafeChainL7ProxyBinaryName), "--version")
 	output, err := cmd.Output()
 	if err != nil {
@@ -73,7 +73,7 @@ func (p *Proxy) Version() (string, error) {
 	return parts[len(parts)-1], nil
 }
 
-func (p *Proxy) Start(ctx context.Context, opts StartOptions) error {
+func (p *L7Proxy) Start(ctx context.Context, opts StartOptions) error {
 	config := platform.GetConfig()
 	p.ctx, p.cancel = context.WithCancel(ctx)
 	p.cmd = exec.CommandContext(p.ctx,
@@ -118,11 +118,11 @@ func (p *Proxy) Start(ctx context.Context, opts StartOptions) error {
 	return nil
 }
 
-func (p *Proxy) IsRunning() bool {
+func (p *L7Proxy) IsRunning() bool {
 	return IsProxyRunning()
 }
 
-func (p *Proxy) Stop() error {
+func (p *L7Proxy) Stop() error {
 	log.Println("Stopping SafeChain Proxy...")
 	if p.cancel != nil {
 		p.cancel()
