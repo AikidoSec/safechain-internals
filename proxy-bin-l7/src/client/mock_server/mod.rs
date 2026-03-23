@@ -31,6 +31,7 @@ use rama::{
         transport::TryRefIntoTransportContext,
     },
     rt::Executor,
+    service::BoxService,
     service::service_fn,
     telemetry::tracing,
     tls::boring::server::{TlsAcceptorData, TlsAcceptorLayer},
@@ -66,34 +67,35 @@ static ASSERT_ENDPOINT_STATE: LazyLock<assert_endpoint::MockState> =
     LazyLock::new(assert_endpoint::MockState::new);
 
 fn new_mock_transport_server() -> impl Service<MockSocket, Output = (), Error = BoxError> {
-    let http_server = HttpServer::auto(Executor::default()).service(new_mock_server());
+    static SERVER: LazyLock<BoxService<MockSocket, (), BoxError>> = LazyLock::new(|| {
+        let http_server = HttpServer::auto(Executor::default()).service(new_mock_server());
+        let tls_acceptor_data = new_tls_acceptor_data();
 
-    let tls_acceptor_data = new_tls_acceptor_data();
+        TlsPeekRouter::new(TlsAcceptorLayer::new(tls_acceptor_data).into_layer(http_server.clone()))
+            .with_fallback(http_server)
+            .with_peek_timeout(PEEK_TIMEOUT)
+            .boxed()
+    });
 
-    TlsPeekRouter::new(TlsAcceptorLayer::new(tls_acceptor_data).into_layer(http_server.clone()))
-        .with_fallback(http_server)
-        .with_peek_timeout(PEEK_TIMEOUT)
+    SERVER.clone()
 }
 
 fn new_tls_acceptor_data() -> TlsAcceptorData {
-    static DATA: LazyLock<TlsAcceptorData> = LazyLock::new(|| {
-        ServerConfig {
-            application_layer_protocol_negotiation: Some(vec![
-                ApplicationProtocol::HTTP_2,
-                ApplicationProtocol::HTTP_11,
-            ]),
-            ..ServerConfig::new(ServerAuth::CertIssuer(ServerCertIssuerData {
-                kind: ServerCertIssuerKind::SelfSigned(SelfSignedData {
-                    organisation_name: Some("Mock (test) Tls Acceptor".to_owned()),
-                    ..Default::default()
-                }),
+    ServerConfig {
+        application_layer_protocol_negotiation: Some(vec![
+            ApplicationProtocol::HTTP_2,
+            ApplicationProtocol::HTTP_11,
+        ]),
+        ..ServerConfig::new(ServerAuth::CertIssuer(ServerCertIssuerData {
+            kind: ServerCertIssuerKind::SelfSigned(SelfSignedData {
+                organisation_name: Some("Mock (test) Tls Acceptor".to_owned()),
                 ..Default::default()
-            }))
-        }
-        .try_into()
-        .expect("create tls server config")
-    });
-    DATA.clone()
+            }),
+            ..Default::default()
+        }))
+    }
+    .try_into()
+    .expect("create tls server config")
 }
 
 fn new_mock_server() -> impl Service<Request, Output = Response, Error = Infallible> + Clone {
