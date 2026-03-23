@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
 func TestWriteManagedBlockReplacesExistingBlock(t *testing.T) {
@@ -95,8 +97,8 @@ func TestRemoveManagedBlockRemovesOnlyManagedSection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := removeManagedBlock(path, 0o644, format); err != nil {
-		t.Fatalf("removeManagedBlock failed: %v", err)
+	if err := utils.RemoveManagedBlock(path, 0o644, format.startMarker, format.endMarker); err != nil {
+		t.Fatalf("RemoveManagedBlock failed: %v", err)
 	}
 
 	gotBytes, err := os.ReadFile(path)

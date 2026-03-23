@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
 type darwinNodeTrustConfigurator struct {
@@ -49,7 +50,7 @@ func (c *darwinNodeTrustConfigurator) Install(_ context.Context) error {
 
 func (c *darwinNodeTrustConfigurator) Uninstall(_ context.Context) error {
 	for _, target := range c.targets {
-		if err := removeManagedBlock(target.path, 0o644, shellManagedBlockFormat); err != nil {
+		if err := utils.RemoveManagedBlock(target.path, 0o644, shellManagedBlockFormat.startMarker, shellManagedBlockFormat.endMarker); err != nil {
 			return err
 		}
 	}

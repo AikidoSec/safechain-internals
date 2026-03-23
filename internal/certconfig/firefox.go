@@ -5,14 +5,14 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
 var firefoxManagedBlockFormat = managedBlockFormat{
-	startMarker: "// aikido-cert-config-start",
-	endMarker:   "// aikido-cert-config-end",
+	startMarker: "// aikido-endpoint-cert-config-start",
+	endMarker:   "// aikido-endpoint-cert-config-end",
 }
 
 type firefoxConfigurator struct{}
@@ -39,7 +39,7 @@ func (c *firefoxConfigurator) Install(_ context.Context) error {
 func (c *firefoxConfigurator) Uninstall(_ context.Context) error {
 	for _, profile := range firefoxProfiles() {
 		path := filepath.Join(profile, "user.js")
-		if err := removeManagedBlock(path, 0o644, firefoxManagedBlockFormat); err != nil {
+		if err := utils.RemoveManagedBlock(path, 0o644, firefoxManagedBlockFormat.startMarker, firefoxManagedBlockFormat.endMarker); err != nil {
 			return err
 		}
 	}
@@ -66,13 +66,9 @@ func firefoxProfiles() []string {
 		if !entry.IsDir() {
 			continue
 		}
-		// Firefox profile dirs always follow the "{salt}.{name}" naming convention,
-		// so any directory containing a dot is a profile directory.
-		if strings.Contains(entry.Name(), ".") {
-			profilePath := filepath.Join(profilesRoot, entry.Name())
-			if isFirefoxProfileDir(profilePath) {
-				profiles = append(profiles, profilePath)
-			}
+		profilePath := filepath.Join(profilesRoot, entry.Name())
+		if isFirefoxProfileDir(profilePath) {
+			profiles = append(profiles, profilePath)
 		}
 	}
 	return profiles

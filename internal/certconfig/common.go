@@ -13,7 +13,7 @@ type managedBlockFormat struct {
 	endMarker   string
 }
 
-func block(body string, format managedBlockFormat, newline string) string {
+func buildManagedBlock(body string, format managedBlockFormat, newline string) string {
 	return format.startMarker + newline + body + newline + format.endMarker + newline
 }
 
@@ -52,25 +52,5 @@ func writeManagedBlock(path string, body string, perm os.FileMode, format manage
 		body = strings.ReplaceAll(body, "\n", newline)
 	}
 
-	return os.WriteFile(path, []byte(stripped+block(body, format, newline)), perm)
-}
-
-func removeManagedBlock(path string, perm os.FileMode, format managedBlockFormat) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("failed to read %s: %w", path, err)
-	}
-
-	content, removed, err := utils.RemoveMarkedBlock(string(data), format.startMarker, format.endMarker)
-	if err != nil {
-		return fmt.Errorf("failed to remove managed block in %s: %w", path, err)
-	}
-	if !removed {
-		return nil
-	}
-
-	return os.WriteFile(path, []byte(content), perm)
+	return os.WriteFile(path, []byte(stripped+buildManagedBlock(body, format, newline)), perm)
 }
