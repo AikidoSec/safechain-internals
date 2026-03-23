@@ -128,8 +128,7 @@ pub trait Rule: Sized + Send + Sync + 'static {
     /// it wants to observe or rewrite the WebSocket message stream.
     ///
     /// Returning `true` means the connection should be relayed through the WebSocket
-    /// MITM path so [`Rule::evaluate_ws_relay_msg`] can inspect frames. Returning `false`
-    /// leaves the rule out of WebSocket processing for that handshake.
+    /// MITM path so [`Rule::evaluate_ws_relay_msg`] can inspect frames.
     ///
     /// [`Firewall`]: super::Firewall
     fn match_ws_handshake<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool;
