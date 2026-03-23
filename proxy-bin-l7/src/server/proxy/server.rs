@@ -130,8 +130,7 @@ where
             DomainMatcher::exact(HIJACK_DOMAIN),
             Arc::new(hijack::new_service(ca_crt_pem_bytes)),
         ),
-        firewall.clone().into_evaluate_response_layer(),
-        firewall.clone().into_evaluate_request_layer(),
+        firewall,
         MapResponseBodyLayer::new_boxed_streaming_body(),
         DecompressionLayer::new(),
         HttpUpgradeMitmRelayLayer::new(
@@ -140,8 +139,7 @@ where
                 HttpWebSocketRelayServiceRequestMatcher::new(
                     // NOTE: change service of HttpWebSocketRelayServiceRequestMatcher with WS MitmRelay
                     // if you ever want to inspect Websocket traffic :)
-                    ConsumeErrLayer::trace_as_debug()
-                        .into_layer(WebSocketMitmRelayService::new(firewall)),
+                    ConsumeErrLayer::trace_as_debug().into_layer(WebSocketMitmRelayService::new()),
                 )
                 .with_store_handshake_request_header(true),
                 // Entering an HTTP CONNECT would mean the client
