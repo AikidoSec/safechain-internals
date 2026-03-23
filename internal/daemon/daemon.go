@@ -196,11 +196,15 @@ func (d *Daemon) startProxy(ctx context.Context) error {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
-	if d.config.GetProxyMode() == config.ProxyModeL7 {
-		if !proxy.ProxyCAInstalled() {
-			if err := proxy.InstallProxyCA(ctx); err != nil {
-				return fmt.Errorf("failed to install proxy CA: %v", err)
-			}
+	if !proxy.ProxyCAInstalled() {
+		var err error
+		if d.config.GetProxyMode() == config.ProxyModeL4 {
+			err = proxy.InstallL4ProxyCA(ctx)
+		} else {
+			err = proxy.InstallProxyCA(ctx)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to install proxy CA: %v", err)
 		}
 	}
 	return nil
@@ -217,7 +221,7 @@ func (d *Daemon) run(ctx context.Context) error {
 
 	log.Printf("Daemon is running in %s proxy mode...", d.config.GetProxyMode())
 
-	if d.config.GetProxyMode() == config.ProxyModeL7 && !proxy.ProxyCAInstalled() {
+	if !proxy.ProxyCAInstalled() {
 		log.Println("First time we setup the proxy, uninstall previous setups...")
 		if err := d.Uninstall(ctx, false); err != nil {
 			log.Printf("Error uninstalling previous setup (might not exist): %v", err)
@@ -281,10 +285,8 @@ func (d *Daemon) Uninstall(ctx context.Context, removeScanners bool) error {
 		}
 	}
 
-	if d.config.GetProxyMode() == config.ProxyModeL7 {
-		if err := proxy.UninstallProxyCA(ctx); err != nil {
-			return fmt.Errorf("failed to uninstall proxy CA: %v", err)
-		}
+	if err := proxy.UninstallProxyCA(ctx); err != nil {
+		return fmt.Errorf("failed to uninstall proxy CA: %v", err)
 	}
 	return nil
 }

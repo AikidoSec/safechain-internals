@@ -101,10 +101,7 @@ INSTALL_DIR="$PKG_ROOT/Library/Application Support/AikidoSecurity/EndpointProtec
 LAUNCHDAEMONS_DIR="$PKG_ROOT/Library/LaunchDaemons"
 LOGS_DIR="$PKG_ROOT/Library/Logs/AikidoSecurity/EndpointProtection"
 
-APPLICATIONS_DIR="$PKG_ROOT/Applications"
-
 mkdir -p "$INSTALL_DIR/bin"
-mkdir -p "$APPLICATIONS_DIR"
 mkdir -p "$LAUNCHDAEMONS_DIR"
 mkdir -p "$LOGS_DIR"
 mkdir -p "$PKG_SCRIPTS"
@@ -122,7 +119,7 @@ chmod 755 "$INSTALL_DIR/bin/endpoint-protection"
 chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 
 echo "Copying L4 proxy app bundle..."
-ditto "$L4_PROXY_APP" "$APPLICATIONS_DIR/AikidoEndpointL4ProxyHost.app"
+ditto "$L4_PROXY_APP" "$INSTALL_DIR/bin/AikidoEndpointL4ProxyHost.app"
 
 # Copy scripts
 echo "Copying scripts..."
@@ -148,12 +145,16 @@ IDENTIFIER="com.aikidosecurity.endpointprotection"
 
 COMPONENT_PLIST="$BUILD_DIR/component.plist"
 
-# Prevent macOS from relocating the UI app bundle out of INSTALL_DIR/bin.
 pkgbuild --analyze --root "$PKG_ROOT" "$COMPONENT_PLIST"
 if /usr/libexec/PlistBuddy -c "Print" "$COMPONENT_PLIST" >/dev/null 2>&1; then
-    /usr/libexec/PlistBuddy -c "Set :0:BundleHasStrictIdentifier false" "$COMPONENT_PLIST" >/dev/null 2>&1 || true
-    /usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$COMPONENT_PLIST" >/dev/null 2>&1 || true
-    /usr/libexec/PlistBuddy -c "Set :0:BundleIsVersionChecked false" "$COMPONENT_PLIST" >/dev/null 2>&1 || true
+    IDX=0
+    while /usr/libexec/PlistBuddy -c "Print :${IDX}" "$COMPONENT_PLIST" >/dev/null 2>&1; do
+        /usr/libexec/PlistBuddy -c "Set :${IDX}:BundleHasStrictIdentifier false" "$COMPONENT_PLIST" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c "Set :${IDX}:BundleIsRelocatable false" "$COMPONENT_PLIST" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c "Set :${IDX}:BundleIsVersionChecked false" "$COMPONENT_PLIST" 2>/dev/null || true
+        IDX=$((IDX + 1))
+    done
+    echo "Configured $IDX bundle entries in component plist (all non-relocatable)"
 fi
 
 echo "Building package..."

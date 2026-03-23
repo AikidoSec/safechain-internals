@@ -37,18 +37,28 @@ func ProxyCAInstalled() bool {
 	return true
 }
 
+const l4HijackCAURL = "http://mitm.ramaproxy.org/data/root.ca.pem"
+
 func DownloadCACertFromProxy() error {
 	metaUrl, _, _, err := GetMetaUrls()
 	if err != nil {
 		return fmt.Errorf("failed to get meta url: %v", err)
 	}
 
-	caCertPath := filepath.Join(platform.GetRunDir(), "endpoint-protection-proxy-ca-crt.pem")
-	if err := utils.DownloadBinary(context.Background(), metaUrl+"/ca", caCertPath); err != nil {
+	if err := utils.DownloadBinary(context.Background(), metaUrl+"/ca", GetCaCertPath()); err != nil {
 		return fmt.Errorf("failed to download ca cert: %v", err)
 	}
 
-	log.Println("Downloaded CA cert from proxy:", caCertPath)
+	log.Println("Downloaded CA cert from proxy:", GetCaCertPath())
+	return nil
+}
+
+func DownloadCACertFromL4Proxy(ctx context.Context) error {
+	if err := utils.DownloadBinary(ctx, l4HijackCAURL, GetCaCertPath()); err != nil {
+		return fmt.Errorf("failed to download CA cert from L4 proxy: %v", err)
+	}
+
+	log.Println("Downloaded CA cert from L4 proxy:", GetCaCertPath())
 	return nil
 }
 
@@ -56,11 +66,7 @@ func GetCaCertPath() string {
 	return filepath.Join(platform.GetRunDir(), "endpoint-protection-proxy-ca-crt.pem")
 }
 
-func InstallProxyCA(ctx context.Context) error {
-	log.Println("Installing proxy CA...")
-	if err := DownloadCACertFromProxy(); err != nil {
-		return err
-	}
+func installDownloadedProxyCA(ctx context.Context) error {
 	if err := platform.InstallProxyCA(ctx, GetCaCertPath()); err != nil {
 		return fmt.Errorf("failed to install ca cert: %v", err)
 	}
@@ -70,6 +76,22 @@ func InstallProxyCA(ctx context.Context) error {
 
 	log.Println("Installed CA cert successfully")
 	return nil
+}
+
+func InstallProxyCA(ctx context.Context) error {
+	log.Println("Installing proxy CA...")
+	if err := DownloadCACertFromProxy(); err != nil {
+		return err
+	}
+	return installDownloadedProxyCA(ctx)
+}
+
+func InstallL4ProxyCA(ctx context.Context) error {
+	log.Println("Installing L4 proxy CA...")
+	if err := DownloadCACertFromL4Proxy(ctx); err != nil {
+		return err
+	}
+	return installDownloadedProxyCA(ctx)
 }
 
 func UninstallProxyCA(ctx context.Context) error {
