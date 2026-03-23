@@ -34,7 +34,7 @@ rust-quick-qa:
 
 rust-qa: rust-quick-qa
     @cargo install cargo-nextest --locked
-    cargo nextest run --all-features --workspace
+    cargo nextest run -P ci --all-features --workspace
     just rust-fuzz-check
 
 rust-fuzz-check:
@@ -48,7 +48,7 @@ rust-fuzz *ARGS:
         cargo +nightly fuzz run --fuzz-dir ./proxy-fuzz -j 8 parse_pragmatic_semver_version -- -max_total_time=60
 
 rust-qa-full: rust-qa rust-fuzz
-    cargo nextest run --workspace --all-features --run-ignored=only
+    cargo nextest run -P ci --workspace --all-features --run-ignored=only
 
 run-l4-proxy *ARGS:
     mkdir -p .aikido/safechain-l4-proxy
