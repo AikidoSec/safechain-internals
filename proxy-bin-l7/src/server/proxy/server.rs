@@ -45,6 +45,7 @@ use safechain_proxy_lib::{
     http::{
         firewall::Firewall,
         service::hijack::{self, HIJACK_DOMAIN},
+        ws_relay::WebSocketMitmRelayService,
     },
     tls::{RootCaKeyPair, mitm_relay_policy::TlsMitmRelayPolicyLayer},
 };
@@ -130,7 +131,7 @@ where
             Arc::new(hijack::new_service(ca_crt_pem_bytes)),
         ),
         firewall.clone().into_evaluate_response_layer(),
-        firewall.into_evaluate_request_layer(),
+        firewall.clone().into_evaluate_request_layer(),
         MapResponseBodyLayer::new_boxed_streaming_body(),
         DecompressionLayer::new(),
         HttpUpgradeMitmRelayLayer::new(
@@ -139,8 +140,10 @@ where
                 HttpWebSocketRelayServiceRequestMatcher::new(
                     // NOTE: change service of HttpWebSocketRelayServiceRequestMatcher with WS MitmRelay
                     // if you ever want to inspect Websocket traffic :)
-                    ConsumeErrLayer::trace_as_debug().into_layer(IoForwardService::new()),
-                ),
+                    ConsumeErrLayer::trace_as_debug()
+                        .into_layer(WebSocketMitmRelayService::new(firewall)),
+                )
+                .with_store_handshake_request_header(true),
                 // Entering an HTTP CONNECT would mean the client
                 // opens an HTTP CONNECT tunnel within a SOCKS5/HTTP tunnel...
                 // possible, but ... rare and weird
