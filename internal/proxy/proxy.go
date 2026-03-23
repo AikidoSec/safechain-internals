@@ -73,7 +73,7 @@ func (p *Proxy) Version() (string, error) {
 	return parts[len(parts)-1], nil
 }
 
-func (p *Proxy) Start(ctx context.Context, proxyIngressAddr string, baseURL string) error {
+func (p *Proxy) Start(ctx context.Context, opts StartOptions) error {
 	config := platform.GetConfig()
 	p.ctx, p.cancel = context.WithCancel(ctx)
 	p.cmd = exec.CommandContext(p.ctx,
@@ -83,8 +83,8 @@ func (p *Proxy) Start(ctx context.Context, proxyIngressAddr string, baseURL stri
 		"--data", platform.GetRunDir(),
 		"--output", filepath.Join(config.LogDir, platform.SafeChainL7ProxyLogName),
 		"--secrets", "keyring",
-		"--reporting-endpoint", fmt.Sprintf("http://%s", proxyIngressAddr),
-		"--aikido-url", baseURL,
+		"--reporting-endpoint", fmt.Sprintf("http://%s", opts.IngressAddr),
+		"--aikido-url", opts.BaseURL,
 	)
 
 	stderrLogPath := filepath.Join(config.LogDir, platform.SafeChainL7ProxyErrLogName)
@@ -118,7 +118,7 @@ func (p *Proxy) Start(ctx context.Context, proxyIngressAddr string, baseURL stri
 	return nil
 }
 
-func (p *Proxy) IsProxyRunning() bool {
+func (p *Proxy) IsRunning() bool {
 	return IsProxyRunning()
 }
 

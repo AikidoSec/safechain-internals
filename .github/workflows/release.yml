@@ -58,6 +58,12 @@ jobs:
           mv artifacts/safechain-l7-proxy-linux-amd64/safechain-l7-proxy-linux-amd64 .
           mv artifacts/safechain-l7-proxy-linux-arm64/safechain-l7-proxy-linux-arm64 .
 
+          mv artifacts/safechain-l4-proxy-darwin-amd64/safechain-l4-proxy-darwin-amd64 .
+          mv artifacts/safechain-l4-proxy-darwin-arm64/safechain-l4-proxy-darwin-arm64 .
+
+          mv artifacts/safechain-l4-proxy-linux-amd64/safechain-l4-proxy-linux-amd64 .
+          mv artifacts/safechain-l4-proxy-linux-arm64/safechain-l4-proxy-linux-arm64 .
+
           mv artifacts/EndpointProtection.msi/EndpointProtection.msi ./EndpointProtection.msi
 
           mv artifacts/EndpointProtection.pkg/EndpointProtection.pkg ./EndpointProtection.pkg
@@ -72,6 +78,10 @@ jobs:
             safechain-l7-proxy-darwin-arm64
             safechain-l7-proxy-linux-amd64
             safechain-l7-proxy-linux-arm64
+            safechain-l4-proxy-darwin-amd64
+            safechain-l4-proxy-darwin-arm64
+            safechain-l4-proxy-linux-amd64
+            safechain-l4-proxy-linux-arm64
             EndpointProtection.msi
             EndpointProtection.pkg
 

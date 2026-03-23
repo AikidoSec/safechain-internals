@@ -66,7 +66,7 @@ echo "  Project directory: $PROJECT_DIR"
 AGENT_BIN="$BIN_DIR/endpoint-protection-darwin-$ARCH"
 AGENT_UI_APP="$BIN_DIR/endpoint-protection-ui-darwin-$ARCH.app"
 PROXY_BIN="$BIN_DIR/safechain-l7-proxy-darwin-$ARCH"
-
+L4_PROXY_APP="$BIN_DIR/AikidoEndpointL4ProxyHost.app"
 
 if [ ! -f "$AGENT_BIN" ]; then
     echo "Error: endpoint-protection binary not found at $AGENT_BIN" >&2
@@ -83,6 +83,11 @@ if [ ! -f "$PROXY_BIN" ]; then
     exit 1
 fi
 
+if [ ! -d "$L4_PROXY_APP" ]; then
+    echo "Error: L4 proxy app not found at $L4_PROXY_APP" >&2
+    exit 1
+fi
+
 # Create temporary build directory
 BUILD_DIR="$(mktemp -d)"
 trap "rm -rf '$BUILD_DIR'" EXIT
@@ -96,7 +101,10 @@ INSTALL_DIR="$PKG_ROOT/Library/Application Support/AikidoSecurity/EndpointProtec
 LAUNCHDAEMONS_DIR="$PKG_ROOT/Library/LaunchDaemons"
 LOGS_DIR="$PKG_ROOT/Library/Logs/AikidoSecurity/EndpointProtection"
 
+APPLICATIONS_DIR="$PKG_ROOT/Applications"
+
 mkdir -p "$INSTALL_DIR/bin"
+mkdir -p "$APPLICATIONS_DIR"
 mkdir -p "$LAUNCHDAEMONS_DIR"
 mkdir -p "$LOGS_DIR"
 mkdir -p "$PKG_SCRIPTS"
@@ -112,6 +120,9 @@ cp -R "$AGENT_UI_APP" "$INSTALL_DIR/bin/endpoint-protection-ui.app"
 cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-l7-proxy"
 chmod 755 "$INSTALL_DIR/bin/endpoint-protection"
 chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
+
+echo "Copying L4 proxy app bundle..."
+ditto "$L4_PROXY_APP" "$APPLICATIONS_DIR/AikidoEndpointL4ProxyHost.app"
 
 # Copy scripts
 echo "Copying scripts..."

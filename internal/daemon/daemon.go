@@ -36,7 +36,7 @@ type Daemon struct {
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 	stopOnce    sync.Once
-	proxy       *proxy.Proxy
+	proxy       proxy.ProxyManager
 	registry    *scannermanager.Registry
 	sbomManager *sbom.Registry
 
@@ -56,34 +56,44 @@ type Daemon struct {
 func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 	uiMgr := NewUIManager()
 
-	d := &Daemon{
-		versionInfo: version.Info,
-		ctx:         ctx,
-		cancel:      cancel,
-		proxy:       proxy.New(),
-		registry:    scannermanager.NewRegistry(),
-		sbomManager: newSBOMRegistry(),
-		logRotator:  utils.NewLogRotator(),
-		logReaper:   utils.NewLogReaper(),
-		uiManager:   uiMgr,
-	}
-
 	if err := platform.Init(); err != nil {
 		return nil, fmt.Errorf("failed to initialize platform: %v", err)
 	}
 
 	cloud.Init()
 
-	d.deviceInfo = device.NewDeviceInfo()
-	if d.deviceInfo == nil {
+	deviceInfo := device.NewDeviceInfo()
+	if deviceInfo == nil {
 		return nil, fmt.Errorf("failed to create device info")
 	}
 
-	d.config = config.NewConfigInfo(d.deviceInfo.ID)
-	if d.config == nil {
+	cfg := config.NewConfigInfo(deviceInfo.ID)
+	if cfg == nil {
 		return nil, fmt.Errorf("failed to create config")
 	}
-	d.ingress = ingress.New(d.config, uiMgr.Client)
+
+	var proxyManager proxy.ProxyManager
+	if cfg.GetProxyMode() == config.ProxyModeL4 {
+		proxyManager = proxy.NewL4()
+	} else {
+		proxyManager = proxy.New()
+	}
+
+	d := &Daemon{
+		versionInfo: version.Info,
+		ctx:         ctx,
+		cancel:      cancel,
+		deviceInfo:  deviceInfo,
+		config:      cfg,
+		proxy:       proxyManager,
+		registry:    scannermanager.NewRegistry(),
+		sbomManager: newSBOMRegistry(),
+		logRotator:  utils.NewLogRotator(),
+		logReaper:   utils.NewLogReaper(),
+		uiManager:   uiMgr,
+		ingress:     ingress.New(cfg, uiMgr.Client),
+	}
+
 	d.initLogging(ctx)
 	return d, nil
 }
@@ -136,8 +146,10 @@ func (d *Daemon) Stop(ctx context.Context) error {
 
 		d.uiManager.Kill()
 
-		if err := setup.Teardown(ctx); err != nil {
-			log.Printf("Error teardown setup: %v", err)
+		if d.config.GetProxyMode() == config.ProxyModeL7 {
+			if err := setup.Teardown(ctx); err != nil {
+				log.Printf("Error teardown setup: %v", err)
+			}
 		}
 
 		if err := d.proxy.Stop(); err != nil {
@@ -167,19 +179,28 @@ func (d *Daemon) Stop(ctx context.Context) error {
 	return err
 }
 
-func (d *Daemon) startProxyAndInstallCA(ctx context.Context) error {
+func (d *Daemon) startProxy(ctx context.Context) error {
 	ingressAddr := d.ingress.Addr()
 	if ingressAddr == "" {
 		return fmt.Errorf("ingress server failed to start")
 	}
 
-	if err := d.proxy.Start(ctx, ingressAddr, d.config.GetBaseURL()); err != nil {
+	opts := proxy.StartOptions{
+		IngressAddr: ingressAddr,
+		BaseURL:     d.config.GetBaseURL(),
+		Token:       d.config.Token,
+		DeviceID:    d.config.DeviceID,
+	}
+
+	if err := d.proxy.Start(ctx, opts); err != nil {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
-	if !proxy.ProxyCAInstalled() {
-		if err := proxy.InstallProxyCA(ctx); err != nil {
-			return fmt.Errorf("failed to install proxy CA: %v", err)
+	if d.config.GetProxyMode() == config.ProxyModeL7 {
+		if !proxy.ProxyCAInstalled() {
+			if err := proxy.InstallProxyCA(ctx); err != nil {
+				return fmt.Errorf("failed to install proxy CA: %v", err)
+			}
 		}
 	}
 	return nil
@@ -194,41 +215,41 @@ func (d *Daemon) run(ctx context.Context) error {
 	ticker := time.NewTicker(constants.DaemonHeartbeatInterval)
 	defer ticker.Stop()
 
-	log.Println("Daemon is running...")
+	log.Printf("Daemon is running in %s proxy mode...", d.config.GetProxyMode())
 
-	if !proxy.ProxyCAInstalled() {
+	if d.config.GetProxyMode() == config.ProxyModeL7 && !proxy.ProxyCAInstalled() {
 		log.Println("First time we setup the proxy, uninstall previous setups...")
 		if err := d.Uninstall(ctx, false); err != nil {
 			log.Printf("Error uninstalling previous setup (might not exist): %v", err)
 		}
 	}
 
-	// Start ingress server first (proxy needs its address for callbacks)
 	go func() {
 		if err := d.ingress.Start(ctx); err != nil {
 			log.Printf("Ingress server error: %v", err)
 		}
 	}()
 
-	// Wait briefly for ingress server to bind
 	time.Sleep(100 * time.Millisecond)
-	// Launch UI with ingress address so it can communicate with the daemon
+
 	go func() {
 		if err := d.uiManager.Launch(ctx, d.ingress.Addr()); err != nil {
 			log.Printf("Failed to launch UI: %v", err)
 		}
 	}()
 
-	if err := d.startProxyAndInstallCA(ctx); err != nil {
-		return fmt.Errorf("failed to start proxy and install CA: %v", err)
+	if err := d.startProxy(ctx); err != nil {
+		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
-	if err := setup.Install(ctx); err != nil {
-		return fmt.Errorf("failed to install setup: %v", err)
-	}
+	if d.config.GetProxyMode() == config.ProxyModeL7 {
+		if err := setup.Install(ctx); err != nil {
+			return fmt.Errorf("failed to install setup: %v", err)
+		}
 
-	d.wg.Add(1)
-	go d.runDockerCALoop(ctx)
+		d.wg.Add(1)
+		go d.runDockerCALoop(ctx)
+	}
 
 	if err := d.registry.InstallAll(ctx); err != nil {
 		return fmt.Errorf("failed to install all scanners: %v", err)
@@ -260,8 +281,10 @@ func (d *Daemon) Uninstall(ctx context.Context, removeScanners bool) error {
 		}
 	}
 
-	if err := proxy.UninstallProxyCA(ctx); err != nil {
-		return fmt.Errorf("failed to uninstall proxy CA: %v", err)
+	if d.config.GetProxyMode() == config.ProxyModeL7 {
+		if err := proxy.UninstallProxyCA(ctx); err != nil {
+			return fmt.Errorf("failed to uninstall proxy CA: %v", err)
+		}
 	}
 	return nil
 }
@@ -315,9 +338,9 @@ func runDockerCACycle(ctx context.Context) error {
 
 func (d *Daemon) printDaemonStatus() {
 	log.Println("Daemon status:")
-	if d.proxy.IsProxyRunning() {
+	if d.proxy.IsRunning() {
 		proxyVersion, _ := d.proxy.Version()
-		log.Printf("\t- Proxy: %s", proxyVersion)
+		log.Printf("\t- Proxy (%s): %s", d.config.GetProxyMode(), proxyVersion)
 	} else {
 		log.Println("\t- Proxy: not running!")
 	}
@@ -334,7 +357,7 @@ func (d *Daemon) printDaemonStatus() {
 }
 
 func (d *Daemon) handleProxy() (shouldRetry bool, err error) {
-	if d.proxy.IsProxyRunning() {
+	if d.proxy.IsRunning() {
 		return true, nil
 	}
 
@@ -352,12 +375,12 @@ func (d *Daemon) handleProxy() (shouldRetry bool, err error) {
 	d.proxyLastRetryTime = time.Now()
 	log.Printf("Proxy is not running, starting it... (attempt %d/%d)", d.proxyRetryCount, constants.ProxyStartMaxRetries)
 
-	if err := d.startProxyAndInstallCA(d.ctx); err != nil {
-		log.Printf("Failed to start proxy and install CA: %v", err)
+	if err := d.startProxy(d.ctx); err != nil {
+		log.Printf("Failed to start proxy: %v", err)
 		return true, nil
 	}
 
-	if d.proxy.IsProxyRunning() {
+	if d.proxy.IsRunning() {
 		log.Println("Proxy started successfully")
 		d.proxyRetryCount = 0
 		d.proxyLastRetryTime = time.Time{}
@@ -402,7 +425,7 @@ func (d *Daemon) heartbeat() error {
 		log.Printf("Failed to start proxy: %v", err)
 	}
 
-	d.uiManager.NotifyProxyStatusIfChanged(proxy.IsProxyRunning())
+	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.IsRunning())
 
 	d.runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() error {
 		d.printDaemonStatus()
