@@ -11,7 +11,7 @@ use rama::{
     Layer as _, Service,
     error::BoxError,
     http::{
-        BodyExtractExt as _, HeaderMap, HeaderValue, Request, Response,
+        BodyExtractExt as _, HeaderMap, Request, Response,
         client::{
             EasyHttpWebClient, ProxyConnectorLayer,
             proxy::layer::{HttpProxyConnectorLayer, SetProxyAuthHttpHeaderLayer},
@@ -37,10 +37,7 @@ use rama::{
     utils::{backoff::ExponentialBackoff, rng::HasherRng, str::NonEmptyStr},
 };
 
-use crate::{
-    Args,
-    server::proxy::{FirewallUserConfig, HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG},
-};
+use crate::Args;
 
 #[derive(Clone)]
 pub(super) struct Runtime {
@@ -126,20 +123,6 @@ impl Runtime {
             SetProxyAuthHttpHeaderLayer::new(),
         )
             .into_layer(web_client)
-    }
-
-    #[inline(always)]
-    #[expect(unused)]
-    pub async fn client_with_http_proxy_and_user_config_header(
-        &self,
-        cfg: FirewallUserConfig,
-    ) -> impl Service<Request, Output = Response, Error = BoxError> {
-        let mut headers = HeaderMap::new();
-        let cfg_header_value_str = serde_html_form::to_string(cfg).unwrap();
-        let cfg_header_value = HeaderValue::from_str(&cfg_header_value_str).unwrap();
-        headers.insert(HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG, cfg_header_value);
-        let web_client = self.client_with_ca_trust_inner(Some(headers)).await;
-        AddInputExtensionLayer::new(self.http_proxy_addr()).into_layer(web_client)
     }
 
     #[inline(always)]

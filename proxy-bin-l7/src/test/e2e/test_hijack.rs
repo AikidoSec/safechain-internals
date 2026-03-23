@@ -78,11 +78,9 @@ async fn test_hijack_http_over_sock5() {
 
 #[tokio::test]
 #[tracing_test::traced_test]
-async fn test_hijack_http_with_username_labels() {
+async fn test_hijack_http_with_username() {
     let runtime = e2e::runtime::get().await;
-    let client = runtime
-        .client_with_http_proxy_and_username("test-foo-min_pkg_age-1h_30m")
-        .await;
+    let client = runtime.client_with_http_proxy_and_username("test").await;
 
     for path in ["", "/", "/ping"] {
         let resp = client

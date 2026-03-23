@@ -7,7 +7,6 @@ use rama::{
     http::{
         layer::{
             compression::CompressionLayer,
-            header_config::HeaderConfigLayer,
             map_response_body::MapResponseBodyLayer,
             proxy_auth::ProxyAuthLayer,
             trace::TraceLayer,
@@ -33,8 +32,6 @@ use crate::{Args, client::new_http_client_for_proxy, utils::PEEK_TIMEOUT};
 
 mod auth;
 mod server;
-
-pub use self::auth::{FirewallUserConfig, HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG};
 
 /// Maximum allowed body size for proxied requests and responses.
 /// Protects against memory exhaustion from excessively large payloads.
@@ -110,15 +107,7 @@ pub async fn run_proxy_server(
     let http_inner_svc = (
         TraceLayer::new_for_http(),
         ConsumeErrLayer::trace_as_debug(),
-        ProxyAuthLayer::new(self::auth::ZeroAuthority::new())
-            .with_allow_anonymous(true)
-            // The use of proxy authentication is a common practice for
-            // proxy users to pass configs via a concept called username labels.
-            // See `docs/proxy/auth-flow.md` for more informtion.
-            //
-            // We make use use the void trailer parser to ensure we drop any ignored label.
-            .with_labels::<((), self::auth::FirewallUserConfigParser)>(),
-        HeaderConfigLayer::<FirewallUserConfig>::optional(HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG),
+        ProxyAuthLayer::new(self::auth::ZeroAuthority::new()).with_allow_anonymous(true),
         UpgradeLayer::new(
             exec.clone(),
             MethodMatcher::CONNECT,
