@@ -32,9 +32,6 @@ jobs:
         with:
           toolchain: stable
           components: clippy, rustfmt
-      - uses: taiki-e/install-action@90558ad1e179036f31467972b00dec6cb80701fa
-        with:
-          tool: nextest
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
         with:
           env-vars: "RUST_TOOLCHAIN=stable"
