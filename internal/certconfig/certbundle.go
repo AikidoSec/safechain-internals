@@ -1,7 +1,6 @@
 package certconfig
 
 import (
-	"context"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -20,38 +19,26 @@ func combinedCaBundlePath() string {
 	return filepath.Join(platform.GetRunDir(), combinedBundleName)
 }
 
-func ensureCombinedCABundle(ctx context.Context, extraPaths ...string) (string, error) {
-	// The SafeChain CA is the non-negotiable source — fail explicitly if it can't be read.
+// ensureCombinedCABundle writes the combined CA bundle containing the SafeChain CA
+// and, if non-empty, the user's pre-existing originalCACertsPath. The SafeChain CA
+// is mandatory — the call fails if it can't be read. The original is silently skipped
+// on error (missing file, invalid PEM, etc.).
+func ensureCombinedCABundle(originalCACertsPath string) (string, error) {
 	safeChainCACertPath := proxy.GetCaCertPath()
 	safeChainPayload, err := readAndValidatePEMBundle(safeChainCACertPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read SafeChain CA: %w", err)
 	}
 
-	// If the user already has NODE_EXTRA_CA_CERTS set (e.g. a corporate CA),
-	// include it too so we don't break their existing trust.
-	seen := map[string]struct{}{safeChainCACertPath: {}}
 	parts := []string{safeChainPayload}
 
-	additionalSources := append([]string{nodeExtraCACertsFromCurrentUser(ctx)}, extraPaths...)
-	for _, source := range additionalSources {
-		if source == "" {
-			continue
+	if originalCACertsPath != "" {
+		expanded := utils.ExpandHomePath(strings.TrimSpace(originalCACertsPath), platform.GetConfig().HomeDir)
+		if expanded != "" && expanded != safeChainCACertPath && expanded != combinedCaBundlePath() {
+			if payload, err := readAndValidatePEMBundle(expanded); err == nil {
+				parts = append(parts, payload)
+			}
 		}
-		source = utils.ExpandHomePath(strings.TrimSpace(source), platform.GetConfig().HomeDir)
-		if source == "" {
-			continue
-		}
-		if _, ok := seen[source]; ok {
-			continue
-		}
-		seen[source] = struct{}{}
-
-		payload, err := readAndValidatePEMBundle(source)
-		if err != nil {
-			continue
-		}
-		parts = append(parts, payload)
 	}
 
 	bundlePath := combinedCaBundlePath()
@@ -123,12 +110,4 @@ func readAndValidatePEMBundle(path string) (string, error) {
 	}
 
 	return strings.Join(blocks, "\n"), nil
-}
-
-func nodeExtraCACertsFromCurrentUser(ctx context.Context) string {
-	output, err := runNodeExtraCACertsLookup(ctx)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(output)
 }

@@ -5,12 +5,8 @@ package certconfig
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
-	"path/filepath"
 	"strings"
-
-	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
 
 type windowsNodeTrustConfigurator struct {
@@ -23,22 +19,7 @@ func newNodeTrustConfigurator(bundlePath string) nodeTrustConfigurator {
 	}
 }
 
-func originalNodeExtraCACertsPath() string {
-	return filepath.Join(platform.GetRunDir(), "endpoint-protection-node-original-extra-ca-certs.txt")
-}
-
 func (c *windowsNodeTrustConfigurator) Install(ctx context.Context) error {
-	// Save the current value before overwriting so Uninstall can restore it.
-	existing, err := runNodeExtraCACertsLookup(ctx)
-	if err != nil {
-		log.Printf("Warning: failed to read existing NODE_EXTRA_CA_CERTS before update: %v", err)
-		return fmt.Errorf("read existing NODE_EXTRA_CA_CERTS: %w", err)
-	}
-	if err := os.WriteFile(originalNodeExtraCACertsPath(), []byte(strings.TrimSpace(existing)), 0o600); err != nil {
-		log.Printf("Warning: failed to persist existing NODE_EXTRA_CA_CERTS before update: %v", err)
-		return fmt.Errorf("persist existing NODE_EXTRA_CA_CERTS: %w", err)
-	}
-
 	return runPowerShellAsCurrentUser(
 		ctx,
 		fmt.Sprintf(
@@ -53,7 +34,7 @@ func (c *windowsNodeTrustConfigurator) Uninstall(ctx context.Context) error {
 	if data, err := os.ReadFile(originalNodeExtraCACertsPath()); err == nil {
 		original = strings.TrimSpace(string(data))
 	}
-	_ = os.Remove(originalNodeExtraCACertsPath())
+	// Saved file deletion is handled by nodeConfigurator.Uninstall.
 
 	var script string
 	if original != "" {
