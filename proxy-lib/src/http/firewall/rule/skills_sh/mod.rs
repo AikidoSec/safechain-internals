@@ -115,18 +115,7 @@ impl Rule for RuleSkillsSh {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        Ok(resp)
-    }
-
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
-        if !crate::http::try_get_domain_for_req(&req)
-            .map(|domain| self.match_domain(&domain))
-            .unwrap_or_default()
-        {
-            return Ok(RequestAction::Allow(req));
-        }
-
         let path = req.uri().path();
 
         let Some(repo_name) = Self::parse_repo_from_path(path) else {
@@ -165,6 +154,12 @@ impl Rule for RuleSkillsSh {
         }
     }
 
+    #[inline(always)]
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
+        Ok(resp)
+    }
+
+    #[inline(always)]
     async fn evaluate_ws_relay_msg(
         &self,
         _: WebSocketRelayDirection,

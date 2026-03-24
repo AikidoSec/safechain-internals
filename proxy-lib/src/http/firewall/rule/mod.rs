@@ -46,6 +46,7 @@ pub(crate) fn block_reason_for(decision: PackagePolicyDecision) -> BlockReason {
 pub use super::pac::PacScriptGenerator;
 
 pub mod chrome;
+pub mod hijack;
 pub mod maven;
 pub mod npm;
 pub mod nuget;
@@ -84,6 +85,8 @@ pub enum RequestAction {
 pub struct WebSocketHandshakeInfo<'a> {
     /// Target domain selected for the WebSocket's parent connection.
     pub domain: Option<&'a Domain>,
+    /// App source bundle id from which the traffic originated
+    pub app_source_bundle_id: Option<&'a str>,
     /// Parsed HTTP request metadata for the upgrade handshake.
     pub req_headers: Option<&'a request::Parts>,
 }

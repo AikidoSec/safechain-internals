@@ -105,10 +105,6 @@ impl Rule for RuleMaven {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        Ok(resp)
-    }
-
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
         let domain = match crate::http::try_get_domain_for_req(&req) {
             Some(domain) => domain,
@@ -117,10 +113,6 @@ impl Rule for RuleMaven {
                 return Ok(RequestAction::Allow(req));
             }
         };
-
-        if !self.match_domain(&domain) {
-            return Ok(RequestAction::Allow(req));
-        }
 
         let domain_str = domain.as_str();
         let path = req.uri().path().trim_start_matches('/');
@@ -172,6 +164,12 @@ impl Rule for RuleMaven {
         Ok(RequestAction::Allow(req))
     }
 
+    #[inline(always)]
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
+        Ok(resp)
+    }
+
+    #[inline(always)]
     async fn evaluate_ws_relay_msg(
         &self,
         _: WebSocketRelayDirection,

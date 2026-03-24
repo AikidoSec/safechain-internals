@@ -3,7 +3,7 @@ use std::time::Duration;
 use rama::{
     Layer, Service,
     error::{BoxError, ErrorContext as _, ErrorExt as _},
-    extensions,
+    extensions::{self, ExtensionsMut},
     io::{BridgeIo, Io},
     net::{
         address::Domain,
@@ -115,12 +115,13 @@ where
     async fn serve(
         &self,
         InputWithClientHello {
-            input: bridge_io,
+            input: mut bridge_io,
             client_hello,
         }: InputWithClientHello<BridgeIo<Ingress, Egress>>,
     ) -> Result<Self::Output, Self::Error> {
         let maybe_server_name = client_hello.ext_server_name().cloned();
-        let source_app_bundle_id = get_app_source_bundle_id_from_ext(&bridge_io);
+        let source_app_bundle_id =
+            get_app_source_bundle_id_from_ext(&bridge_io).map(|s| s.to_smolstr());
 
         if client_hello
             .extensions()
@@ -128,29 +129,38 @@ where
             .any(|ext| matches!(ext, ClientHelloExtension::EncryptedClientHello(_)))
         {
             tracing::debug!(
-                source_app_bundle_id,
+                ?source_app_bundle_id,
                 "ingress TLS handshake contains ECH, plain-text server name might be missing or invalid; SNI = {maybe_server_name:?}"
             )
         }
 
         if let Some(server_name) = maybe_server_name {
-            if !self.mitm_all && !self.firewall.match_domain(&server_name) {
-                tracing::debug!(
-                    source_app_bundle_id,
-                    "serving via fallback IO due to no firewall rule being mached; SNI = {server_name}"
-                );
-                let server_name = server_name.clone();
-                return self
-                    .fallback
-                    .serve(bridge_io)
-                    .await
-                    .context("serve via fallback IO (skip TLS due to present in exclusion list)")
-                    .context_field("sni", server_name);
+            match self.firewall.match_http_rules(&server_name) {
+                Some(http_rules) => {
+                    // insert the http rules so that they can be used after tls handshake for ws & for our fw layer
+                    bridge_io.extensions_mut().insert(http_rules);
+                }
+                None if self.mitm_all => (),
+                None => {
+                    tracing::debug!(
+                        ?source_app_bundle_id,
+                        "serving via fallback IO due to no firewall rule being mached; SNI = {server_name}"
+                    );
+                    let server_name = server_name.clone();
+                    return self
+                        .fallback
+                        .serve(bridge_io)
+                        .await
+                        .context(
+                            "serve via fallback IO (skip TLS due to present in exclusion list)",
+                        )
+                        .context_field("sni", server_name);
+                }
             }
 
             if self.cache.get(&server_name).is_some() {
                 tracing::debug!(
-                    source_app_bundle_id,
+                    ?source_app_bundle_id,
                     "serving via fallback IO due to exception in cache for SNI = {server_name}"
                 );
                 return self
@@ -162,7 +172,7 @@ where
             }
         } else if !self.mitm_all {
             tracing::debug!(
-                source_app_bundle_id,
+                ?source_app_bundle_id,
                 "serving via fallback IO due to no SNI found",
             );
             return self
@@ -172,7 +182,6 @@ where
                 .context("serve via fallback IO (skip TLS due to no SNI found)");
         }
 
-        let source_app_bundle_id = source_app_bundle_id.map(|s| s.to_smolstr());
         tracing::debug!(
             ?source_app_bundle_id,
             mitm_all = self.mitm_all,
