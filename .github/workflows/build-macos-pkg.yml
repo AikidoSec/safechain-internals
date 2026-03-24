@@ -261,6 +261,24 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: .github/scripts/macos/core/sign-binary.sh bin/safechain-l4-proxy-darwin-universal
 
+      - name: Embed Developer ID provisioning profiles in L4 app bundle
+        env:
+          L4_HOST_PROVISION_PROFILE_B64: ${{ secrets.L4_HOST_PROVISION_PROFILE_B64 }}
+          L4_EXT_PROVISION_PROFILE_B64: ${{ secrets.L4_EXT_PROVISION_PROFILE_B64 }}
+        run: |
+          APP="bin/AikidoEndpointL4ProxyHost.app"
+          APPEX="$APP/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
+
+          echo "Embedding Developer ID provisioning profile in host app..."
+          echo "$L4_HOST_PROVISION_PROFILE_B64" | base64 -d > "$APP/Contents/embedded.provisionprofile"
+
+          echo "Embedding Developer ID provisioning profile in extension..."
+          echo "$L4_EXT_PROVISION_PROFILE_B64" | base64 -d > "$APPEX/Contents/embedded.provisionprofile"
+
+          echo "Verifying profiles exist..."
+          ls -la "$APP/Contents/embedded.provisionprofile"
+          ls -la "$APPEX/Contents/embedded.provisionprofile"
+
       - name: Sign macOS L4 proxy app bundle
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
