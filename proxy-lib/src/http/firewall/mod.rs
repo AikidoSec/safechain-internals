@@ -82,7 +82,7 @@ impl Firewall {
             MapResponseBodyLayer::new_boxed_streaming_body(),
             DecompressionLayer::new(),
             MapErrLayer::into_opaque_error(),
-            TimeoutLayer::new(Duration::from_secs(60)), // NOTE: if you have slow servers this might need to be more
+            TimeoutLayer::new(Duration::from_secs(60)),
             RetryLayer::new(
                 ManagedPolicy::default().with_backoff(
                     ExponentialBackoff::new(
