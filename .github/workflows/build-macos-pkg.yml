@@ -265,7 +265,35 @@ jobs:
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: .github/scripts/macos/core/sign-binary.sh bin/AikidoEndpointL4ProxyHost.app
+        run: |
+          APPEX="bin/AikidoEndpointL4ProxyHost.app/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
+          APP="bin/AikidoEndpointL4ProxyHost.app"
+
+          echo "Signing L4 extension..."
+          codesign --force --sign "$DEV_ID_SHA" --timestamp --options runtime \
+            --preserve-metadata=entitlements \
+            --keychain build.keychain "$APPEX"
+
+          echo "Signing L4 host app..."
+          codesign --force --sign "$DEV_ID_SHA" --timestamp --options runtime \
+            --preserve-metadata=entitlements \
+            --keychain build.keychain "$APP"
+
+          echo "Verifying signatures..."
+          codesign --verify --strict --verbose=2 "$APPEX"
+          codesign --verify --strict --verbose=2 "$APP"
+
+          echo "Verifying entitlements include networkextension..."
+          codesign -d --entitlements :- "$APPEX" | grep -q "networkextension"
+          codesign -d --entitlements :- "$APP" | grep -q "networkextension"
+
+          echo "Verifying team identifier..."
+          TEAM=$(codesign -dvv "$APP" 2>&1 | awk -F= '/TeamIdentifier/ {print $2}')
+          if [ "$TEAM" != "$APPLE_TEAM_ID" ]; then
+            echo "ERROR: Team mismatch: $TEAM != $APPLE_TEAM_ID"
+            exit 1
+          fi
+          echo "L4 proxy app bundle signed successfully"
 
       - name: Build distribution .pkg installer
         run: |
