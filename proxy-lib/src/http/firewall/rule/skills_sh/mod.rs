@@ -2,7 +2,7 @@ use std::fmt;
 
 use rama::{
     Service,
-    error::{BoxError, ErrorContext as _},
+    error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
@@ -62,7 +62,7 @@ impl RuleSkillsSh {
         policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = BoxError>,
+        C: Service<Request, Output = Response, Error = OpaqueError>,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
@@ -90,11 +90,6 @@ impl fmt::Debug for RuleSkillsSh {
 
 impl Rule for RuleSkillsSh {
     #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        "Skills.sh"
-    }
-
-    #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
     }
@@ -107,18 +102,7 @@ impl Rule for RuleSkillsSh {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        Ok(resp)
-    }
-
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
-        if !crate::http::try_get_domain_for_req(&req)
-            .map(|domain| self.match_domain(&domain))
-            .unwrap_or_default()
-        {
-            return Ok(RequestAction::Allow(req));
-        }
-
         let path = req.uri().path();
 
         let Some(repo_name) = Self::parse_repo_from_path(path) else {

@@ -2,8 +2,12 @@ use std::{pin::Pin, sync::Arc};
 
 use rama::{
     error::BoxError,
-    http::{Request, Response},
+    http::{
+        Request, Response, request,
+        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
+    },
     net::address::Domain,
+    telemetry::tracing,
 };
 
 use super::events::{Artifact, BlockReason, BlockedEventInfo};
@@ -43,6 +47,7 @@ pub(crate) fn block_reason_for(decision: PackagePolicyDecision) -> BlockReason {
 pub use super::pac::PacScriptGenerator;
 
 pub mod chrome;
+pub mod hijack;
 pub mod maven;
 pub mod npm;
 pub mod nuget;
@@ -77,6 +82,16 @@ pub enum RequestAction {
 //
 // For now all implementations are in Rust, to keep it easy.
 
+#[derive(Debug, Clone, Copy)]
+pub struct WebSocketHandshakeInfo<'a> {
+    /// Target domain selected for the WebSocket's parent connection.
+    pub domain: Option<&'a Domain>,
+    /// App source bundle id from which the traffic originated
+    pub app_source_bundle_id: Option<&'a str>,
+    /// Parsed HTTP request metadata for the upgrade handshake.
+    pub req_headers: Option<&'a request::Parts>,
+}
+
 /// A trait defining how the [`Firewall`] inspects, modifies, or blocks HTTP traffic.
 ///
 /// A [`Rule`] serves two primary purposes:
@@ -97,11 +112,6 @@ pub enum RequestAction {
 ///
 /// [`Firewall`]: super::Firewall
 pub trait Rule: Sized + Send + Sync + 'static {
-    /// Returns a unique identifier or product name for this [`Rule`].
-    ///
-    /// This is currently used as an opaque identifier for logging and internal tracking.
-    fn product_name(&self) -> &'static str;
-
     /// Determines if this [`Rule`] should trigger MITM inspection for a given [`Domain`].
     ///
     /// The [`Firewall`] aggregates the results of all rules to decide whether to
@@ -109,6 +119,30 @@ pub trait Rule: Sized + Send + Sync + 'static {
     ///
     /// [`Firewall`]: super::Firewall
     fn match_domain(&self, domain: &Domain) -> bool;
+
+    /// Determines if this [`Rule`] should inspect a WebSocket upgrade for a given handshake.
+    ///
+    /// The default implementation matches no WS handshake. Implement this method
+    /// only in case you want to intercept some or all WS traffic
+    /// for the matched (http(s)) domains.
+    ///
+    /// This hook is evaluated before the proxy enters WebSocket MITM relay mode.
+    /// A rule can use the target domain and upgrade request headers to decide whether
+    /// it wants to observe or rewrite the WebSocket message stream.
+    ///
+    /// Returning `true` means the connection should be relayed through the WebSocket
+    /// MITM path so [`Rule::evaluate_ws_relay_msg`] can inspect frames.
+    ///
+    /// [`Firewall`]: super::Firewall
+    fn match_ws_handshake<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool {
+        tracing::debug!(
+            app_source_bundle_id = ?info.app_source_bundle_id,
+            domain = ?info.domain,
+            path = info.req_headers.as_ref().map(|p| p.uri.path()),
+            "WS handshake not matched (default impl)",
+        );
+        false
+    }
 
     #[cfg(feature = "pac")]
     /// Contributes domains to the Proxy Auto-Configuration (PAC) script generation.
@@ -131,6 +165,10 @@ pub trait Rule: Sized + Send + Sync + 'static {
     /// Returns a [`RequestAction`] indicating if the request should be forwarded,
     /// modified, or blocked with a custom response.
     ///
+    /// The default implementation evaluates to allow _any_ request.
+    /// Implements this if you wish custom behaviour, such as HTTP request
+    /// inspection, modification or the ability to return a block response early.
+    ///
     /// ### Errors
     ///
     /// Return an error only for unrecoverable failures where the underlying TCP connection
@@ -147,9 +185,15 @@ pub trait Rule: Sized + Send + Sync + 'static {
     fn evaluate_request(
         &self,
         req: Request,
-    ) -> impl Future<Output = Result<RequestAction, BoxError>> + Send + '_;
+    ) -> impl Future<Output = Result<RequestAction, BoxError>> + Send + '_ {
+        std::future::ready(Ok(RequestAction::Allow(req)))
+    }
 
     /// Evaluates the [`Response`] received from the server before it reaches the client.
+    ///
+    /// The default implementation evaluates to allow _any_ response.
+    /// Implements this if you wish custom behaviour, such as HTTP response
+    /// inspection, modification or total replacement.
     ///
     /// This allows the rule to:
     /// - Pass the response through untouched.
@@ -169,7 +213,22 @@ pub trait Rule: Sized + Send + Sync + 'static {
     fn evaluate_response(
         &self,
         resp: Response,
-    ) -> impl Future<Output = Result<Response, BoxError>> + Send + '_;
+    ) -> impl Future<Output = Result<Response, BoxError>> + Send + '_ {
+        std::future::ready(Ok(resp))
+    }
+
+    /// Evaluates WebSocket relay message(s), in either direction.
+    ///
+    /// The default implementation evaluates to allow _any_ msg.
+    /// Implements this if you wish custom behaviour, such as WS message
+    /// inspection, modification, or dropping of messages.
+    fn evaluate_ws_relay_msg(
+        &self,
+        _: WebSocketRelayDirection,
+        data: WebSocketRelayOutput,
+    ) -> impl Future<Output = Result<WebSocketRelayOutput, BoxError>> + Send + '_ {
+        std::future::ready(Ok(data))
+    }
 
     /// Converts this [`Rule`] into a [`DynRule`] trait object.
     ///
@@ -191,8 +250,6 @@ pub trait Rule: Sized + Send + Sync + 'static {
 /// and widely published at <https://blog.rust-lang.org/inside-rust/2023/05/03/stabilizing-async-fn-in-trait.html>.
 #[allow(clippy::type_complexity)]
 trait DynRuleInner {
-    fn dyn_product_name(&self) -> &'static str;
-
     fn dyn_evaluate_request(
         &self,
         req: Request,
@@ -205,17 +262,20 @@ trait DynRuleInner {
 
     fn dyn_match_domain(&self, domain: &Domain) -> bool;
 
+    fn dyn_match_ws_handshake<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool;
+
+    fn dyn_evaluate_ws_relay_msg(
+        &self,
+        dir: WebSocketRelayDirection,
+        data: WebSocketRelayOutput,
+    ) -> Pin<Box<dyn Future<Output = Result<WebSocketRelayOutput, BoxError>> + Send + '_>>;
+
     #[cfg(feature = "pac")]
     fn dyn_collect_pac_domains(&self, generator: &mut PacScriptGenerator);
 }
 
+#[warn(clippy::missing_trait_methods)]
 impl<R: Rule> DynRuleInner for R {
-    #[inline(always)]
-    /// see [`Rule::product_name`] for more information.
-    fn dyn_product_name(&self) -> &'static str {
-        self.product_name()
-    }
-
     #[inline(always)]
     /// see [`Rule::evaluate_request`] for more information.
     fn dyn_evaluate_request(
@@ -235,9 +295,24 @@ impl<R: Rule> DynRuleInner for R {
     }
 
     #[inline(always)]
+    fn dyn_evaluate_ws_relay_msg(
+        &self,
+        dir: WebSocketRelayDirection,
+        data: WebSocketRelayOutput,
+    ) -> Pin<Box<dyn Future<Output = Result<WebSocketRelayOutput, BoxError>> + Send + '_>> {
+        Box::pin(self.evaluate_ws_relay_msg(dir, data))
+    }
+
+    #[inline(always)]
     /// see [`Rule::match_domain`] for more information.
     fn dyn_match_domain(&self, domain: &Domain) -> bool {
         self.match_domain(domain)
+    }
+
+    #[inline(always)]
+    /// see [`Rule::match_domain`] for more information.
+    fn dyn_match_ws_handshake<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool {
+        self.match_ws_handshake(info)
     }
 
     #[cfg(feature = "pac")]
@@ -272,12 +347,8 @@ impl std::fmt::Debug for DynRule {
     }
 }
 
+#[warn(clippy::missing_trait_methods)]
 impl Rule for DynRule {
-    #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        self.inner.dyn_product_name()
-    }
-
     #[inline(always)]
     fn evaluate_request(
         &self,
@@ -297,6 +368,20 @@ impl Rule for DynRule {
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.inner.dyn_match_domain(domain)
+    }
+
+    #[inline(always)]
+    fn match_ws_handshake<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool {
+        self.inner.dyn_match_ws_handshake(info)
+    }
+
+    #[inline(always)]
+    fn evaluate_ws_relay_msg(
+        &self,
+        dir: WebSocketRelayDirection,
+        data: WebSocketRelayOutput,
+    ) -> impl Future<Output = Result<WebSocketRelayOutput, BoxError>> + Send + '_ {
+        self.inner.dyn_evaluate_ws_relay_msg(dir, data)
     }
 
     #[cfg(feature = "pac")]

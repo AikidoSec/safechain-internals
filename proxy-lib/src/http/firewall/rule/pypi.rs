@@ -2,7 +2,7 @@ use std::{borrow::Cow, fmt, str::FromStr};
 
 use rama::{
     Service,
-    error::{BoxError, ErrorContext as _},
+    error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::{address::Domain, uri::util::percent_encoding},
@@ -62,7 +62,7 @@ impl RulePyPI {
         policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = BoxError>,
+        C: Service<Request, Output = Response, Error = OpaqueError>,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
@@ -150,11 +150,6 @@ impl fmt::Debug for RulePyPI {
 
 impl Rule for RulePyPI {
     #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        "PyPI"
-    }
-
-    #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
     }
@@ -167,20 +162,7 @@ impl Rule for RulePyPI {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        // Pass through for now - response modification can be added in future PR
-        Ok(resp)
-    }
-
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
-        if !crate::http::try_get_domain_for_req(&req)
-            .map(|domain| self.match_domain(&domain))
-            .unwrap_or_default()
-        {
-            tracing::trace!("PyPI rule did not match incoming request: passthrough");
-            return Ok(RequestAction::Allow(req));
-        }
-
         let Some(package_info) = Self::extract_package_info(&req) else {
             tracing::trace!("PyPI url: path not recognized: passthrough");
             return Ok(RequestAction::Allow(req));

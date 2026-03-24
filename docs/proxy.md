@@ -12,6 +12,8 @@ Other proxy docs:
   and specifically how to pass a user config when connecting to the safechain proxy.
 - [./proxy/pac.md](./proxy/pac.md): learn more about Proxy Auto Configuration
   and how the safechain proxy project supports this flow.
+- [./proxy/transparent.md](./proxy/transparent.md): macOS transparent proxy packaging,
+  CLI usage, and developer build instructions.
 - [`./proxy/troubleshooting.md](./proxy/troubleshooting.md): proxy troubleshooting doc.
 
 ## Quick Start
@@ -75,13 +77,6 @@ npm config set https-proxy http://127.0.0.1:3128
 npm install
 ```
 
-You can also use username labels to configure
-the proxy connection behavior, e.g.:
-
-```bash
-npm config set proxy http://-min_package_age-48h:@127.0.0.1:3128
-```
-
 To revert:
 ```bash
 npm config delete proxy
@@ -115,21 +110,6 @@ bun install
 ```bash
 curl -x http://127.0.0.1:3128 https://example.com
 ```
-
-For the HTTP(S) proxy we also support username labels, example:
-
-```bash
-curl \
-    -x http://127.0.0.1:3128 \
-    --proxy-user 'system-min_pkg_age-48h:' \  # no password is required
-    https://example.com
-```
-
-The username labels allow one to configure the firewall behaviour,
-such as in the example above where the minimum package is 48 hours,
-instead of whatever the global default is.
-
-Read more about this in [./proxy/auth-flow.md](./proxy/auth-flow.md).
 
 ### Environment Variables (any tool)
 

@@ -2,7 +2,7 @@ use std::fmt;
 
 use rama::{
     Service,
-    error::{BoxError, ErrorContext as _},
+    error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
@@ -42,7 +42,7 @@ impl RuleOpenVsx {
         policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = BoxError>,
+        C: Service<Request, Output = Response, Error = OpaqueError>,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
@@ -72,11 +72,6 @@ impl fmt::Debug for RuleOpenVsx {
 
 impl Rule for RuleOpenVsx {
     #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        "Open VSX Extensions"
-    }
-
-    #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
     }
@@ -90,14 +85,6 @@ impl Rule for RuleOpenVsx {
     }
 
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
-        if !crate::http::try_get_domain_for_req(&req)
-            .map(|domain| self.match_domain(&domain))
-            .unwrap_or_default()
-        {
-            tracing::trace!("Open VSX rule did not match incoming request: passthrough");
-            return Ok(RequestAction::Allow(req));
-        }
-
         let path = req.uri().path();
 
         if !Self::is_extension_install_asset_path(path) {
@@ -161,10 +148,6 @@ impl Rule for RuleOpenVsx {
         );
 
         Ok(RequestAction::Allow(req))
-    }
-
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        Ok(resp)
     }
 }
 

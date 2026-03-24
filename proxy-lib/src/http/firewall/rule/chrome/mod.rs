@@ -2,13 +2,15 @@ use std::{fmt, str::FromStr};
 
 use rama::{
     Service,
-    error::{BoxError, ErrorContext as _},
+    error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
-    utils::str::arcstr::{ArcStr, arcstr},
-    utils::str::smol_str::StrExt,
+    utils::str::{
+        arcstr::{ArcStr, arcstr},
+        smol_str::StrExt,
+    },
 };
 
 use crate::{
@@ -42,7 +44,7 @@ impl RuleChrome {
         policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = BoxError>,
+        C: Service<Request, Output = Response, Error = OpaqueError>,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
@@ -76,13 +78,13 @@ impl fmt::Debug for RuleChrome {
 
 impl Rule for RuleChrome {
     #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        "Chrome Plugin"
+    fn match_domain(&self, domain: &Domain) -> bool {
+        self.target_domains.is_match(domain)
     }
 
     #[inline(always)]
-    fn match_domain(&self, domain: &Domain) -> bool {
-        self.target_domains.is_match(domain)
+    fn match_ws_handshake<'a>(&self, _: super::WebSocketHandshakeInfo<'a>) -> bool {
+        false
     }
 
     #[cfg(feature = "pac")]
@@ -93,19 +95,7 @@ impl Rule for RuleChrome {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        Ok(resp)
-    }
-
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
-        if !crate::http::try_get_domain_for_req(&req)
-            .map(|domain| self.match_domain(&domain))
-            .unwrap_or_default()
-        {
-            tracing::trace!("Chrome rule did not match incoming request: passthrough");
-            return Ok(RequestAction::Allow(req));
-        }
-
         let Some((extension_id, version)) = Self::parse_crx_download_url(&req) else {
             return Ok(RequestAction::Allow(req));
         };

@@ -66,7 +66,7 @@ echo "  Project directory: $PROJECT_DIR"
 AGENT_BIN="$BIN_DIR/endpoint-protection-darwin-$ARCH"
 AGENT_UI_APP="$BIN_DIR/endpoint-protection-ui-darwin-$ARCH.app"
 PROXY_BIN="$BIN_DIR/safechain-l7-proxy-darwin-$ARCH"
-
+L4_PROXY_APP="$BIN_DIR/AikidoEndpointL4ProxyHost.app"
 
 if [ ! -f "$AGENT_BIN" ]; then
     echo "Error: endpoint-protection binary not found at $AGENT_BIN" >&2
@@ -80,6 +80,11 @@ fi
 
 if [ ! -f "$PROXY_BIN" ]; then
     echo "Error: safechain-l7-proxy binary not found at $PROXY_BIN" >&2
+    exit 1
+fi
+
+if [ ! -d "$L4_PROXY_APP" ]; then
+    echo "Error: L4 proxy app not found at $L4_PROXY_APP" >&2
     exit 1
 fi
 
@@ -113,6 +118,11 @@ cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-l7-proxy"
 chmod 755 "$INSTALL_DIR/bin/endpoint-protection"
 chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 
+echo "Copying L4 proxy app bundle..."
+ditto "$L4_PROXY_APP" "$INSTALL_DIR/bin/AikidoEndpointL4ProxyHost.app"
+chmod 755 "$INSTALL_DIR/bin/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost"
+chmod 755 "$INSTALL_DIR/bin/AikidoEndpointL4ProxyHost.app/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex/Contents/MacOS/AikidoEndpointL4ProxyExtension"
+
 # Copy scripts
 echo "Copying scripts..."
 mkdir -p "$INSTALL_DIR/scripts"
@@ -137,12 +147,16 @@ IDENTIFIER="com.aikidosecurity.endpointprotection"
 
 COMPONENT_PLIST="$BUILD_DIR/component.plist"
 
-# Prevent macOS from relocating the UI app bundle out of INSTALL_DIR/bin.
 pkgbuild --analyze --root "$PKG_ROOT" "$COMPONENT_PLIST"
 if /usr/libexec/PlistBuddy -c "Print" "$COMPONENT_PLIST" >/dev/null 2>&1; then
-    /usr/libexec/PlistBuddy -c "Set :0:BundleHasStrictIdentifier false" "$COMPONENT_PLIST" >/dev/null 2>&1 || true
-    /usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$COMPONENT_PLIST" >/dev/null 2>&1 || true
-    /usr/libexec/PlistBuddy -c "Set :0:BundleIsVersionChecked false" "$COMPONENT_PLIST" >/dev/null 2>&1 || true
+    IDX=0
+    while /usr/libexec/PlistBuddy -c "Print :${IDX}" "$COMPONENT_PLIST" >/dev/null 2>&1; do
+        /usr/libexec/PlistBuddy -c "Set :${IDX}:BundleHasStrictIdentifier false" "$COMPONENT_PLIST" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c "Set :${IDX}:BundleIsRelocatable false" "$COMPONENT_PLIST" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c "Set :${IDX}:BundleIsVersionChecked false" "$COMPONENT_PLIST" 2>/dev/null || true
+        IDX=$((IDX + 1))
+    done
+    echo "Configured $IDX bundle entries in component plist (all non-relocatable)"
 fi
 
 echo "Building package..."
