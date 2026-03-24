@@ -276,6 +276,7 @@ jobs:
           echo "$L4_EXT_PROVISION_PROFILE_B64" | base64 -d > "$APPEX/Contents/embedded.provisionprofile"
 
           echo "Verifying profiles exist..."
+          
           ls -la "$APP/Contents/embedded.provisionprofile"
           ls -la "$APPEX/Contents/embedded.provisionprofile"
 
