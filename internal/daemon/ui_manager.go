@@ -153,7 +153,6 @@ func (m *UIManager) Token() string {
 
 // NotifyBlocked ensures the UI is running, then sends a block notification.
 func (m *UIManager) NotifyBlocked(ev any) {
-	m.EnsureRunning()
 	m.Client.NotifyBlocked(ev)
 }
 
@@ -161,7 +160,6 @@ func (m *UIManager) NotifyBlocked(ev any) {
 // the running state has changed (or on the very first call).
 func (m *UIManager) NotifyProxyStatusIfChanged(running bool) {
 	if !m.proxyStatusInitialized || m.lastProxyStatus != running {
-		m.EnsureRunning()
 		if err := m.Client.NotifyProxyStatus(running); err != nil {
 			log.Printf("Failed to send proxy-status to UI: %v", err)
 			return
