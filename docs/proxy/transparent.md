@@ -244,7 +244,7 @@ log stream --style compact --level debug \
 Show recent logs from the last 5 minutes:
 
 ```bash
-log show --last 5m --style compact --level debug \
+log show --last 5m --style compact --debug \
 --predicate 'subsystem == "com.aikido.endpoint.proxy.l4"
   OR process == "AikidoEndpointL4ProxyExtension"
   OR process == "AikidoEndpointL4ProxyHost"'
@@ -254,10 +254,11 @@ Export recent logs to a file for sharing or later analysis:
 
 ```bash
 mkdir -p .aikido/logs
-log show --last 30m --style compact --level debug \
+log show --last 30m --style compact --debug \
 --predicate 'subsystem == "com.aikido.endpoint.proxy.l4"
   OR process == "AikidoEndpointL4ProxyExtension"
-  OR process == "AikidoEndpointL4ProxyHost"'
+  OR process == "AikidoEndpointL4ProxyHost"' \
+ > ".aikido/logs/aikido_l4_proxy_${ts}.log" 2>&1
 ```
 
 ### Notes For Developers
