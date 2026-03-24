@@ -14,7 +14,6 @@ use rama::{
             retry::{ManagedPolicy, RetryLayer},
             timeout::TimeoutLayer,
         },
-        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayInput, WebSocketRelayOutput},
     },
     layer::MapErrLayer,
     net::address::Domain,
@@ -35,24 +34,27 @@ pub mod layer;
 pub mod notifier;
 pub mod rule;
 
+mod matched_rules;
+pub use self::matched_rules::{FirewallHttpRules, FirewallWebSocketRules};
+
 #[cfg(feature = "pac")]
 mod pac;
 
 use crate::{
     endpoint_protection::{PolicyEvaluator, RemoteEndpointConfig},
-    http::{firewall::rule::npm::min_package_age::MinPackageAge, service::hijack::HIJACK_DOMAIN},
+    http::firewall::rule::{DynRule, npm::min_package_age::MinPackageAge},
     storage::SyncCompactDataStorage,
     utils::{env::network_service_identifier, token::AgentIdentity},
 };
 
-use self::rule::{RequestAction, Rule};
+use self::rule::Rule;
 
 #[derive(Debug, Clone)]
 pub struct Firewall {
     // NOTE: if we ever want to update these rules on the fly,
     // e.g. removing/adding them, we can ArcSwap these and have
     // a background task update these when needed..
-    block_rules: Arc<Vec<self::rule::DynRule>>,
+    block_rules: Arc<[self::rule::DynRule]>,
     notifier: Option<self::notifier::EventNotifier>,
 }
 
@@ -80,7 +82,7 @@ impl Firewall {
             MapResponseBodyLayer::new_boxed_streaming_body(),
             DecompressionLayer::new(),
             MapErrLayer::into_opaque_error(),
-            TimeoutLayer::new(Duration::from_secs(60)), // NOTE: if you have slow servers this might need to be more
+            TimeoutLayer::new(Duration::from_secs(60)),
             RetryLayer::new(
                 ManagedPolicy::default().with_backoff(
                     ExponentialBackoff::new(
@@ -147,7 +149,7 @@ impl Firewall {
         let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
 
         Ok(Self {
-            block_rules: Arc::new(vec![
+            block_rules: Arc::from([
                 self::rule::vscode::RuleVSCode::try_new(
                     guard.clone(),
                     layered_client.clone(),
@@ -221,6 +223,7 @@ impl Firewall {
                 .await
                 .context("create block rule: skills.sh")?
                 .into_dyn(),
+                self::rule::hijack::RuleHijack::new().into_dyn(),
             ]),
             notifier,
         })
@@ -234,97 +237,19 @@ impl Firewall {
         }
     }
 
-    pub fn match_domain(&self, domain: &Domain) -> bool {
-        if domain.eq(&HIJACK_DOMAIN) {
-            // Hijack domain handled locally by the proxy.
-            //
-            // See the [`HIJACK_DOMAIN`] documentation for full details.
-            //
-            // Available endpoints:
-            //
-            // - `/ping`:  returns `200 OK` when intercepted by the proxy
-            //   (connectivity / health check)
-            // - `/data/root.ca.pem`:
-            //   download the proxy CA certificate
-            //
-            // If any of these endpoints respond successfully,
-            // traffic is flowing through the proxy and the MITM pipeline is active.
-            return true;
-        }
-
-        self.block_rules
+    pub fn match_http_rules(&self, domain: &Domain) -> Option<FirewallHttpRules> {
+        let matched_rules: Arc<[DynRule]> = self
+            .block_rules
             .iter()
-            .any(|rule| rule.match_domain(domain))
-    }
+            .filter(|rule| rule.match_domain(domain))
+            .cloned()
+            .collect();
 
-    pub fn match_ws_handshake<'a>(&self, info: self::rule::WebSocketHandshakeInfo<'a>) -> bool {
-        self.block_rules
-            .iter()
-            .any(|rule| rule.match_ws_handshake(info))
-    }
-
-    pub fn into_evaluate_request_layer(self) -> self::layer::evaluate_req::EvaluateRequestLayer {
-        self::layer::evaluate_req::EvaluateRequestLayer(self)
-    }
-
-    pub fn into_evaluate_response_layer(self) -> self::layer::evaluate_resp::EvaluateResponseLayer {
-        self::layer::evaluate_resp::EvaluateResponseLayer(self)
-    }
-
-    pub fn into_evaluate_ws_relay_msg_service(
-        self,
-    ) -> self::layer::evaluate_ws_relay_msg::EvaluateWsRelayMsgService {
-        self::layer::evaluate_ws_relay_msg::EvaluateWsRelayMsgService(self)
-    }
-
-    async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
-        let mut mod_req = req;
-
-        for rule in self.block_rules.iter() {
-            match rule.evaluate_request(mod_req).await? {
-                RequestAction::Allow(new_mod_req) => mod_req = new_mod_req,
-                RequestAction::Block(blocked) => {
-                    self.record_blocked_event(blocked.info.clone()).await;
-                    return Ok(RequestAction::Block(blocked));
-                }
-            }
+        if matched_rules.is_empty() {
+            None
+        } else {
+            Some(FirewallHttpRules(matched_rules))
         }
-
-        Ok(RequestAction::Allow(mod_req))
-    }
-
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        let mut mod_resp = resp;
-
-        // Iterate rules in reverse order for symmetry with request evaluation
-        for rule in self.block_rules.iter().rev() {
-            mod_resp = rule.evaluate_response(mod_resp).await?;
-        }
-
-        Ok(mod_resp)
-    }
-
-    async fn evaluate_ws_relay_msg(
-        &self,
-        input: WebSocketRelayInput,
-    ) -> Result<WebSocketRelayOutput, BoxError> {
-        let dir = input.direction;
-        let mut output = input.into();
-
-        match dir {
-            WebSocketRelayDirection::Ingress => {
-                for rule in self.block_rules.iter() {
-                    output = rule.evaluate_ws_relay_msg(dir, output).await?;
-                }
-            }
-            WebSocketRelayDirection::Egress => {
-                for rule in self.block_rules.iter().rev() {
-                    output = rule.evaluate_ws_relay_msg(dir, output).await?;
-                }
-            }
-        }
-
-        Ok(output)
     }
 
     #[cfg(feature = "pac")]

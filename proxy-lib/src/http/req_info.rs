@@ -7,13 +7,16 @@ use rama::{
 };
 
 pub fn try_get_domain_for_req<Body>(req: &Request<Body>) -> Option<Cow<'_, Domain>> {
-    match req.extensions().get() {
-        Some(ProxyTarget(target)) => target.host.as_domain().map(Cow::Borrowed),
-        None => RequestContext::try_from(req)
+    if let Some(ProxyTarget(target)) = req.extensions().get()
+        && let Some(domain) = target.host.as_domain()
+    {
+        Some(Cow::Borrowed(domain))
+    } else {
+        RequestContext::try_from(req)
             .ok()
             .map(|ctx| ctx.host_with_port())
             .and_then(|v| v.host.into_domain())
-            .map(Cow::Owned),
+            .map(Cow::Owned)
     }
 }
 

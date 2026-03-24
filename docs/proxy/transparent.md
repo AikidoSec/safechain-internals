@@ -244,7 +244,7 @@ log stream --style compact --level debug \
 Show recent logs from the last 5 minutes:
 
 ```bash
-log show --last 5m --style compact --level debug \
+log show --last 5m --style compact --debug --info \
 --predicate 'subsystem == "com.aikido.endpoint.proxy.l4"
   OR process == "AikidoEndpointL4ProxyExtension"
   OR process == "AikidoEndpointL4ProxyHost"'
@@ -254,11 +254,36 @@ Export recent logs to a file for sharing or later analysis:
 
 ```bash
 mkdir -p .aikido/logs
-log show --last 30m --style compact --level debug \
+log show --last 30m --style compact --debug --info \
 --predicate 'subsystem == "com.aikido.endpoint.proxy.l4"
   OR process == "AikidoEndpointL4ProxyExtension"
-  OR process == "AikidoEndpointL4ProxyHost"'
+  OR process == "AikidoEndpointL4ProxyHost"' \
+ > ".aikido/logs/aikido_l4_proxy_${ts}.log" 2>&1
 ```
+
+>[!IMPORTANT]
+> In order for `--debug` evens to persist you need to enable
+> these via:
+>
+> ```bash
+> sudo log config --mode "level:debug,persist:debug" \
+>    --subsystem com.aikido.endpoint.proxy.l4
+> ```
+>
+> Once you should see `DEBUG PERSIST_DEBUG` when running this command:
+>
+> ```bash
+> sudo log config --status --subsystem com.aikido.endpoint.proxy.l4
+> ```
+>
+> Do not do this on production systems, and where you do disable it again once no longer needed,
+> using the command:
+>
+> ```bash
+> sudo log config --mode "level:default,persist:default" \
+>    --subsystem com.aikido.endpoint.proxy.l4
+> ```
+>
 
 ### Notes For Developers
 

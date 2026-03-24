@@ -7,26 +7,24 @@ use rama::{
     },
     io::{BridgeIo, Io},
     net::proxy::{IoForwardService, ProxyTarget},
+    service::MirrorService,
     telemetry::tracing,
+    utils::str::smol_str::ToSmolStr,
 };
 
 use crate::{
-    http::firewall::{Firewall, rule::WebSocketHandshakeInfo},
+    http::firewall::{FirewallHttpRules, rule::WebSocketHandshakeInfo},
     utils::net::get_app_source_bundle_id_from_ext,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct WebSocketMitmRelayService {
-    firewall: Firewall,
     mitm_all: bool,
 }
 
 impl WebSocketMitmRelayService {
-    pub fn new(firewall: Firewall) -> Self {
-        Self {
-            firewall,
-            mitm_all: false,
-        }
+    pub fn new() -> Self {
+        Self { mitm_all: false }
     }
 
     rama::utils::macros::generate_set_and_with! {
@@ -52,37 +50,56 @@ where
         bridge_io: BridgeIo<Ingress, Egress>,
     ) -> Result<Self::Output, Self::Error> {
         let proxy_target = bridge_io.extensions().get::<ProxyTarget>().cloned();
-        let ws_handshake_info = WebSocketHandshakeInfo {
-            domain: proxy_target
-                .as_ref()
-                .and_then(|target| target.0.host.as_domain()),
-            req_headers: bridge_io
-                .extensions()
-                .get::<HttpWebSocketRelayHandshakeRequest>()
-                .map(|req| req.0.as_ref()),
-        };
         let source_app_bundle_id =
-            get_app_source_bundle_id_from_ext(&bridge_io).map(ToOwned::to_owned);
+            get_app_source_bundle_id_from_ext(&bridge_io).map(|s| s.to_smolstr());
 
-        if !self.mitm_all && !self.firewall.match_ws_handshake(ws_handshake_info) {
+        if let Some(http_rules) = bridge_io.extensions().get::<FirewallHttpRules>()
+            && let Some(ws_rules) = http_rules.match_ws_rules(WebSocketHandshakeInfo {
+                domain: proxy_target
+                    .as_ref()
+                    .and_then(|target| target.0.host.as_domain()),
+                app_source_bundle_id: get_app_source_bundle_id_from_ext(&bridge_io),
+                req_headers: bridge_io
+                    .extensions()
+                    .get::<HttpWebSocketRelayHandshakeRequest>()
+                    .map(|req| req.0.as_ref()),
+            })
+        {
             tracing::debug!(
-                source_app_bundle_id,
+                ?source_app_bundle_id,
+                ?proxy_target,
+                "relay WS traffic (matched ws rules)"
+            );
+            WebSocketRelayService::new(ws_rules)
+                .serve(bridge_io)
+                .await
+                .context("relay WS traffic (MITM) (matched ws rules)")
+                .context_debug_field("source_app_bundle_id", source_app_bundle_id)
+                .context_debug_field("proxy_target", proxy_target)
+        } else if self.mitm_all {
+            tracing::debug!(
+                ?source_app_bundle_id,
+                ?proxy_target,
+                "relay WS traffic (mitm_all)"
+            );
+            WebSocketRelayService::new(MirrorService::new())
+                .serve(bridge_io)
+                .await
+                .context("relay WS traffic (MITM) (mitm all)")
+                .context_debug_field("source_app_bundle_id", source_app_bundle_id)
+                .context_debug_field("proxy_target", proxy_target)
+        } else {
+            tracing::debug!(
+                ?source_app_bundle_id,
                 ?proxy_target,
                 "WS traffic is not to be relayed... IO forwarding instead..."
             );
-            return IoForwardService::new()
+            IoForwardService::new()
                 .serve(bridge_io)
                 .await
                 .context("Io-forward WS traffic (no MITM)")
                 .context_debug_field("source_app_bundle_id", source_app_bundle_id)
-                .context_debug_field("proxy_target", proxy_target);
+                .context_debug_field("proxy_target", proxy_target)
         }
-
-        WebSocketRelayService::new(self.firewall.clone().into_evaluate_ws_relay_msg_service())
-            .serve(bridge_io)
-            .await
-            .context("relay WS traffic (MITM)")
-            .context_debug_field("source_app_bundle_id", source_app_bundle_id)
-            .context_debug_field("proxy_target", proxy_target)
     }
 }
