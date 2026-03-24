@@ -259,11 +259,11 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: .github/scripts/macos/core/sign-binary.sh bin/safechain-l4-proxy-darwin-universal
 
-      - name: Verify L4 proxy app bundle signature
-        run: |
-          echo "Verifying L4 proxy app bundle signature..."
-          codesign --verify --strict --verbose=2 bin/AikidoEndpointL4ProxyHost.app
-          echo "L4 proxy app bundle signature verified"
+      - name: Sign macOS L4 proxy app bundle
+        env:
+          DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: .github/scripts/macos/core/sign-binary.sh bin/AikidoEndpointL4ProxyHost.app
 
       - name: Build distribution .pkg installer
         run: |
