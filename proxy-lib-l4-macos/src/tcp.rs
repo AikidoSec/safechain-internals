@@ -9,7 +9,7 @@ use rama::{
     http::{
         Request, Response, Uri,
         layer::{
-            compression::stream::StreamCompressionLayer,
+            compression::{MirrorDecompressed, stream::StreamCompressionLayer},
             decompression::DecompressionLayer,
             dpi_proxy_credential::DpiProxyCredentialExtractorLayer,
             map_response_body::MapResponseBodyLayer,
@@ -218,7 +218,7 @@ where
 
     (
         MapResponseBodyLayer::new_boxed_streaming_body(),
-        StreamCompressionLayer::new(),
+        StreamCompressionLayer::new().with_compress_predicate(MirrorDecompressed::new()),
         HijackLayer::new(
             DomainMatcher::exact(HIJACK_DOMAIN),
             Arc::new(hijack::new_service(ca_crt_pem_bytes)),

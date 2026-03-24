@@ -10,7 +10,10 @@ use rama::{
     extensions::ExtensionsMut,
     http::{
         Request, Response,
-        layer::{map_response_body::MapResponseBodyLayer, trace::TraceLayer},
+        layer::{
+            compression::CompressionLayer, map_response_body::MapResponseBodyLayer,
+            trace::TraceLayer,
+        },
         matcher::HttpMatcher,
         server::HttpServer,
         service::web::{WebService, response::IntoResponse},
@@ -31,8 +34,7 @@ use rama::{
         transport::TryRefIntoTransportContext,
     },
     rt::Executor,
-    service::BoxService,
-    service::service_fn,
+    service::{BoxService, service_fn},
     telemetry::tracing,
     tls::boring::server::{TlsAcceptorData, TlsAcceptorLayer},
 };
@@ -139,6 +141,7 @@ fn new_mock_server() -> impl Service<Request, Output = Response, Error = Infalli
     (
         ArcLayer::new(),
         MapResponseBodyLayer::new_boxed_streaming_body(),
+        CompressionLayer::new(),
         TraceLayer::new_for_http(),
     )
         .into_layer(mock_server)
