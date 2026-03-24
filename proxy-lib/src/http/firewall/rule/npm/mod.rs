@@ -4,10 +4,7 @@ use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
-    http::{
-        Request, Response, Uri,
-        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
-    },
+    http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
     utils::str::arcstr::{ArcStr, arcstr},
@@ -90,18 +87,8 @@ impl fmt::Debug for RuleNpm {
 
 impl Rule for RuleNpm {
     #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        "Npm"
-    }
-
-    #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
-    }
-
-    #[inline(always)]
-    fn match_ws_handshake<'a>(&self, _: super::WebSocketHandshakeInfo<'a>) -> bool {
-        false
     }
 
     #[cfg(feature = "pac")]
@@ -130,15 +117,6 @@ impl Rule for RuleNpm {
             Some(min_package_age) => min_package_age.remove_new_packages(resp).await,
             None => Ok(resp),
         }
-    }
-
-    #[inline(always)]
-    async fn evaluate_ws_relay_msg(
-        &self,
-        _: WebSocketRelayDirection,
-        data: WebSocketRelayOutput,
-    ) -> Result<WebSocketRelayOutput, BoxError> {
-        Ok(data)
     }
 }
 

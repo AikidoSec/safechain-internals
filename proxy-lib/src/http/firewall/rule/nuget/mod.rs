@@ -72,11 +72,6 @@ impl fmt::Debug for RuleNuget {
 
 impl Rule for RuleNuget {
     #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        "Nuget"
-    }
-
-    #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
     }
