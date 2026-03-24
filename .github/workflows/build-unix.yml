@@ -140,3 +140,78 @@ jobs:
           name: safechain-l7-proxy-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             safechain-l7-proxy-${{ matrix.os }}-${{ matrix.arch }}
+
+  build-unix-l4-proxy:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            target: aarch64-apple-darwin
+            runner: macos-14
+            os: darwin
+            rust_cache_prefix: ""
+          - arch: amd64
+            target: x86_64-apple-darwin
+            runner: macos-14
+            os: darwin
+            rust_cache_prefix: ""
+          - arch: amd64
+            target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+            os: linux
+            rust_cache_prefix: "musl-zig-0.15.1-build-0.21.3"
+          - arch: arm64
+            target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+            os: linux
+            rust_cache_prefix: "musl-zig-0.15.1-build-0.21.3"
+
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Install Zig
+        if: contains(matrix.target, 'unknown-linux-musl')
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
+        with:
+          version: 0.15.1
+
+      - name: Install cargo-zigbuild
+        if: contains(matrix.target, 'unknown-linux-musl')
+        run: cargo install --version 0.21.3 cargo-zigbuild --locked
+
+      - name: Rust Cache
+        if: contains(matrix.target, 'unknown-linux-musl')
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
+        with:
+          env-vars: "RUST_TOOLCHAIN=stable"
+          prefix-key: matrix.rust_cache_prefix
+
+      - name: Build proxy binary for linux musl
+        if: ${{ contains(matrix.target, 'unknown-linux-musl') }}
+        run: cargo zigbuild --release -p safechain-l4-proxy --target "${{ matrix.target }}"
+        env:
+          AWS_LC_SYS_CMAKE_BUILDER: "0"
+
+      - name: Build proxy binary for ${{ matrix.os }}/${{ matrix.arch }}
+        if: ${{ !(contains(matrix.target, 'unknown-linux-musl')) }}
+        run: cargo build --release -p safechain-l4-proxy --target ${{ matrix.target }}
+
+      - name: Prepare artifacts
+        run: |
+          mv target/${{ matrix.target }}/release/safechain-l4-proxy safechain-l4-proxy-${{ matrix.os }}-${{ matrix.arch }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: safechain-l4-proxy-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            safechain-l4-proxy-${{ matrix.os }}-${{ matrix.arch }}
