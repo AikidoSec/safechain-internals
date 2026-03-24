@@ -4,10 +4,7 @@ use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
-    http::{
-        Request, Response, Uri,
-        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
-    },
+    http::{Request, Response, Uri},
     net::{address::Domain, uri::util::percent_encoding},
     telemetry::tracing,
     utils::{
@@ -153,18 +150,8 @@ impl fmt::Debug for RulePyPI {
 
 impl Rule for RulePyPI {
     #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        "PyPI"
-    }
-
-    #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
-    }
-
-    #[inline(always)]
-    fn match_ws_handshake<'a>(&self, _: super::WebSocketHandshakeInfo<'a>) -> bool {
-        false
     }
 
     #[cfg(feature = "pac")]
@@ -219,20 +206,6 @@ impl Rule for RulePyPI {
         }
 
         Ok(RequestAction::Allow(req))
-    }
-
-    #[inline(always)]
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        Ok(resp)
-    }
-
-    #[inline(always)]
-    async fn evaluate_ws_relay_msg(
-        &self,
-        _: WebSocketRelayDirection,
-        data: WebSocketRelayOutput,
-    ) -> Result<WebSocketRelayOutput, BoxError> {
-        Ok(data)
     }
 }
 
