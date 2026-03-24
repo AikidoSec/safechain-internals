@@ -5,7 +5,6 @@ package certconfig
 import (
 	"context"
 	"os/exec"
-	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
@@ -33,8 +32,6 @@ var nodeCACertsShellLookups = []shellLookup{
 	{"fish", []string{"--login", "-c", "set -q NODE_EXTRA_CA_CERTS; and printf 'AIKIDO_CERT=%s\n' $NODE_EXTRA_CA_CERTS"}},
 }
 
-const aikidoCertMarker = "AIKIDO_CERT="
-
 func runNodeExtraCACertsLookup(ctx context.Context) (string, error) {
 	for _, lookup := range nodeCACertsShellLookups {
 		shellPath, err := exec.LookPath(lookup.name)
@@ -49,16 +46,4 @@ func runNodeExtraCACertsLookup(ctx context.Context) (string, error) {
 		}
 	}
 	return "", nil
-}
-
-// extractMarkedCertValue scans output for a line starting with aikidoCertMarker
-// and returns the value after it. This tolerates arbitrary text before or after
-// the marker line, which interactive shells may produce.
-func extractMarkedCertValue(output string) string {
-	for line := range strings.SplitSeq(output, "\n") {
-		if strings.HasPrefix(line, aikidoCertMarker) {
-			return strings.TrimSpace(line[len(aikidoCertMarker):])
-		}
-	}
-	return ""
 }
