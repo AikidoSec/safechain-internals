@@ -436,6 +436,8 @@ func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 	)
 }
 
+const STILL_ACTIVE = 259
+
 // IsProcessAlive reports whether a process with the given PID is still running.
 func IsProcessAlive(pid int) bool {
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
@@ -447,5 +449,5 @@ func IsProcessAlive(pid int) bool {
 	if err := windows.GetExitCodeProcess(h, &exitCode); err != nil {
 		return false
 	}
-	return exitCode == 259 // STILL_ACTIVE
+	return exitCode == STILL_ACTIVE
 }
