@@ -81,6 +81,9 @@ jobs:
           mkdir -p ~/private_keys
           echo "$APPLE_API_KEY_BASE64" | base64 -d > ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
 
+      - name: Shorten hostname for Apple device registration
+        run: sudo scutil --set ComputerName "aikido-ci-runner"
+
       - name: Build L4 proxy macOS app
         env:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
