@@ -78,17 +78,24 @@ jobs:
           L4_HOST_PROFILE: ${{ secrets.L4_PROXY_HOST_PROVISIONING_PROFILE }}
           L4_EXT_PROFILE: ${{ secrets.L4_PROXY_EXTENSION_PROVISIONING_PROFILE }}
         run: |
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          echo "$L4_HOST_PROFILE" | base64 -d > ~/Library/MobileDevice/Provisioning\ Profiles/l4_host.provisionprofile
-          echo "$L4_EXT_PROFILE" | base64 -d > ~/Library/MobileDevice/Provisioning\ Profiles/l4_extension.provisionprofile
-          HOST_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/l4_host.provisionprofile)")
-          EXT_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/l4_extension.provisionprofile)")
-          mv ~/Library/MobileDevice/Provisioning\ Profiles/l4_host.provisionprofile ~/Library/MobileDevice/Provisioning\ Profiles/"$HOST_UUID".provisionprofile
-          mv ~/Library/MobileDevice/Provisioning\ Profiles/l4_extension.provisionprofile ~/Library/MobileDevice/Provisioning\ Profiles/"$EXT_UUID".provisionprofile
-          echo "L4_HOST_PROFILE_UUID=$HOST_UUID" >> "$GITHUB_ENV"
-          echo "L4_EXT_PROFILE_UUID=$EXT_UUID" >> "$GITHUB_ENV"
-          echo "Installed host profile: $HOST_UUID"
-          echo "Installed extension profile: $EXT_UUID"
+          PROFILES_DIR=~/Library/MobileDevice/Provisioning\ Profiles
+          mkdir -p "$PROFILES_DIR"
+
+          echo "$L4_HOST_PROFILE" | base64 -d > /tmp/l4_host.provisionprofile
+          echo "$L4_EXT_PROFILE" | base64 -d > /tmp/l4_extension.provisionprofile
+
+          HOST_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(security cms -D -i /tmp/l4_host.provisionprofile)")
+          HOST_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" /dev/stdin <<< "$(security cms -D -i /tmp/l4_host.provisionprofile)")
+          cp /tmp/l4_host.provisionprofile "$PROFILES_DIR/$HOST_UUID.provisionprofile"
+
+          EXT_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(security cms -D -i /tmp/l4_extension.provisionprofile)")
+          EXT_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" /dev/stdin <<< "$(security cms -D -i /tmp/l4_extension.provisionprofile)")
+          cp /tmp/l4_extension.provisionprofile "$PROFILES_DIR/$EXT_UUID.provisionprofile"
+
+          echo "L4_HOST_PROFILE_NAME=$HOST_NAME" >> "$GITHUB_ENV"
+          echo "L4_EXT_PROFILE_NAME=$EXT_NAME" >> "$GITHUB_ENV"
+          echo "Installed host profile: $HOST_NAME ($HOST_UUID)"
+          echo "Installed extension profile: $EXT_NAME ($EXT_UUID)"
 
       - name: Build L4 proxy macOS app
         run: |
@@ -102,6 +109,8 @@ jobs:
             CODE_SIGN_IDENTITY="Developer ID Application" \
             CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
             OTHER_CODE_SIGN_FLAGS="--timestamp" \
+            L4_HOST_PROFILE_SPECIFIER="$L4_HOST_PROFILE_NAME" \
+            L4_EXT_PROFILE_SPECIFIER="$L4_EXT_PROFILE_NAME" \
             clean build
 
       - name: Prepare L4 proxy app artifact
