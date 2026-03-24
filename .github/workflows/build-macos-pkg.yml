@@ -269,16 +269,29 @@ jobs:
           APP="bin/AikidoEndpointL4ProxyHost.app"
           APPEX="$APP/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
 
+          if [ -z "$L4_HOST_PROVISION_PROFILE_B64" ] || [ -z "$L4_EXT_PROVISION_PROFILE_B64" ]; then
+            echo "ERROR: L4_HOST_PROVISION_PROFILE_B64 or L4_EXT_PROVISION_PROFILE_B64 secret is empty"
+            exit 1
+          fi
+
           echo "Embedding Developer ID provisioning profile in host app..."
-          echo "$L4_HOST_PROVISION_PROFILE_B64" | base64 -d > "$APP/Contents/embedded.provisionprofile"
+          printf '%s' "$L4_HOST_PROVISION_PROFILE_B64" | base64 -d > "$APP/Contents/embedded.provisionprofile"
 
           echo "Embedding Developer ID provisioning profile in extension..."
-          echo "$L4_EXT_PROVISION_PROFILE_B64" | base64 -d > "$APPEX/Contents/embedded.provisionprofile"
+          printf '%s' "$L4_EXT_PROVISION_PROFILE_B64" | base64 -d > "$APPEX/Contents/embedded.provisionprofile"
 
-          echo "Verifying profiles exist..."
-          
-          ls -la "$APP/Contents/embedded.provisionprofile"
-          ls -la "$APPEX/Contents/embedded.provisionprofile"
+          echo "Verifying profiles are valid Developer ID profiles..."
+          for PROFILE in "$APP/Contents/embedded.provisionprofile" "$APPEX/Contents/embedded.provisionprofile"; do
+            ls -la "$PROFILE"
+            PROFILE_INFO=$(security cms -D -i "$PROFILE")
+            echo "$PROFILE_INFO" | grep -q "ProvisionsAllDevices" || {
+              echo "ERROR: Profile $PROFILE is NOT a Developer ID profile (missing ProvisionsAllDevices)"
+              echo "$PROFILE_INFO" | grep -E "Name|ProfileDistributionType"
+              exit 1
+            }
+            echo "$PROFILE_INFO" | grep -E "Name|ProvisionsAllDevices"
+          done
+          echo "Developer ID provisioning profiles embedded and verified successfully"
 
       - name: Sign macOS L4 proxy app bundle
         env:
