@@ -25,35 +25,31 @@ use rama::{
     layer::{ArcLayer, ConsumeErrLayer, HijackLayer},
     net::{
         apple::networkextension::{TcpFlow, tproxy::TransparentProxyServiceContext},
-        client::ConnectorService,
         http::server::HttpPeekRouter,
         proxy::IoForwardService,
-        socket::{SocketOptions, opts::TcpKeepAlive},
         tls::server::PeekTlsClientHelloService,
     },
     proxy::socks5::{proxy::mitm::Socks5MitmRelayService, server::Socks5PeekRouter},
     rt::Executor,
-    tcp::{client::service::TcpConnector, proxy::IoToProxyBridgeIoLayer},
+    tcp::proxy::IoToProxyBridgeIoLayer,
     telemetry::tracing,
     tls::boring::proxy::{TlsMitmRelay, cert_issuer::BoringMitmCertIssuer},
 };
 
 use safechain_proxy_lib::{
-    client,
     http::{
+        client::new_http_client_for_internal,
         firewall::Firewall,
         service::hijack::{self, HIJACK_DOMAIN},
+        ws_relay::WebSocketMitmRelayService,
     },
     storage,
+    tcp::new_tcp_connector_service_for_proxy,
     tls::mitm_relay_policy::TlsMitmRelayPolicyLayer,
     utils::token::AgentIdentity,
 };
 
 use crate::config::ProxyConfig;
-
-const TCP_KEEPALIVE_TIME: Duration = Duration::from_mins(2);
-const TCP_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
-const TCP_KEEPALIVE_RETRIES: u32 = 5;
 
 pub(super) async fn try_new_service(
     ctx: TransparentProxyServiceContext,
@@ -90,15 +86,14 @@ pub(super) async fn try_new_service(
             .context("load/create self-managed MITM CA Crt/Key pair")?
         }
     };
-    let ca_crt = root_ca.certificate().clone();
-    let ca_key = root_ca.private_key().clone();
 
     let ca_crt_pem_bytes: &[u8] = root_ca
-        .certificate_pem()
-        .as_ref()
-        .as_bytes()
-        .to_vec()
+        .certificate()
+        .to_pem()
+        .context("convert cert to pem")?
         .leak();
+
+    let (ca_crt, ca_key) = root_ca.into_pair();
 
     let guard = ctx
         .executor
@@ -131,16 +126,16 @@ pub(super) async fn try_new_service(
 
     Ok((
         ConsumeErrLayer::trace_as_debug(),
-        IoToProxyBridgeIoLayer::extension_proxy_target_with_connector(tcp_connector_service(
-            executor,
-        )),
+        IoToProxyBridgeIoLayer::extension_proxy_target_with_connector(
+            new_tcp_connector_service_for_proxy(executor),
+        ),
     )
         .into_layer(mitm_svc))
 }
 
 fn new_tcp_service_inner<Issuer, Ingress, Egress>(
     exec: Executor,
-    demo_config: ProxyConfig,
+    proxy_config: ProxyConfig,
     tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
     tls_mitm_relay: TlsMitmRelay<Issuer>,
     firewall: Firewall,
@@ -152,12 +147,12 @@ where
     Ingress: Io + Unpin + ExtensionsMut,
     Egress: Io + Unpin + ExtensionsMut,
 {
-    let peek_duration = Duration::from_secs_f64(demo_config.peek_duration_s.max(0.5));
+    let peek_duration = Duration::from_secs_f64(proxy_config.peek_duration_s.max(0.5));
 
     let http_mitm_svc =
         HttpMitmRelay::new(exec.clone()).with_http_middleware(http_relay_middleware(
             exec,
-            demo_config,
+            proxy_config,
             tls_mitm_relay_policy.clone(),
             tls_mitm_relay.clone(),
             firewall,
@@ -189,7 +184,7 @@ where
 
 fn http_relay_middleware<S, Issuer>(
     exec: Executor,
-    demo_config: ProxyConfig,
+    proxy_config: ProxyConfig,
     tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
     tls_mitm_relay: TlsMitmRelay<Issuer>,
     firewall: Firewall,
@@ -211,7 +206,7 @@ where
     } else {
         new_tcp_service_inner(
             exec.clone(),
-            demo_config,
+            proxy_config,
             tls_mitm_relay_policy,
             tls_mitm_relay,
             firewall.clone(),
@@ -229,37 +224,23 @@ where
             Arc::new(hijack::new_service(ca_crt_pem_bytes)),
         ),
         firewall.clone().into_evaluate_response_layer(),
-        firewall.into_evaluate_request_layer(),
+        firewall.clone().into_evaluate_request_layer(),
         MapResponseBodyLayer::new_boxed_streaming_body(),
         DecompressionLayer::new(),
         HttpUpgradeMitmRelayLayer::new(
             exec,
             (
                 HttpWebSocketRelayServiceRequestMatcher::new(
-                    // NOTE: change service of HttpWebSocketRelayServiceRequestMatcher with WS MitmRelay
-                    // if you ever want to inspect Websocket traffic :)
-                    ConsumeErrLayer::trace_as_debug().into_layer(IoForwardService::new()),
-                ),
+                    ConsumeErrLayer::trace_as_debug()
+                        .into_layer(WebSocketMitmRelayService::new(firewall)),
+                )
+                .with_store_handshake_request_header(true),
                 HttpProxyConnectRelayServiceRequestMatcher::new(http_conn_upgrade_svc),
             ),
         ),
         DpiProxyCredentialExtractorLayer::new(),
         ArcLayer::new(),
     )
-}
-
-fn tcp_connector_service(
-    exec: Executor,
-) -> impl ConnectorService<rama::tcp::client::Request, Connection: Io + Unpin> + Clone {
-    TcpConnector::new(exec).with_connector(Arc::new(SocketOptions {
-        keep_alive: Some(true),
-        tcp_keep_alive: Some(TcpKeepAlive {
-            time: Some(TCP_KEEPALIVE_TIME),
-            interval: Some(TCP_KEEPALIVE_INTERVAL),
-            retries: Some(TCP_KEEPALIVE_RETRIES),
-        }),
-        ..SocketOptions::default_tcp()
-    }))
 }
 
 async fn create_firewall(
@@ -281,13 +262,16 @@ async fn create_firewall(
         .with_context_debug_field("path", || data_path.clone())?;
     tracing::info!(path = ?data_path, "(app) data directory ready to be used");
 
+    let https_client = new_http_client_for_internal(Executor::graceful(guard.clone()))
+        .context("create firewall's inner http(s) client")?;
+
     // ensure to not wait for firewall creation in case shutdown was initiated,
     // this can happen for example in case remote lists need to be fetched and the
     // something on the network on either side is not working
     tokio::select! {
         result = Firewall::try_new(
             guard.clone(),
-            client::new_web_client()?,
+            https_client,
             data_storage,
             reporting_endpoint,
             agent_identity,
