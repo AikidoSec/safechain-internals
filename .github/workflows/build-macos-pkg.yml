@@ -291,6 +291,7 @@ jobs:
             }
             echo "$PROFILE_INFO" | grep -E "Name|ProvisionsAllDevices"
           done
+          
           echo "Developer ID provisioning profiles embedded and verified successfully"
 
       - name: Sign macOS L4 proxy app bundle
