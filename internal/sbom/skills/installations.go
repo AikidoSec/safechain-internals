@@ -2,90 +2,81 @@ package skills
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
-	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/sbom"
 )
 
-const lockFileName = "skills-lock.json"
-
-type globalSkillsDir struct {
-	variant string
-	path    string
+type skillsEntry struct {
+	Name   string   `json:"name"`
+	Path   string   `json:"path"`
+	Scope  string   `json:"scope"`
+	Agents []string `json:"agents"`
 }
 
-// globalSkillsDirs are the known user-level install directories used by agents
-// supported by skills.sh. Each path is relative to the user's home directory.
-var globalSkillsDirs = []globalSkillsDir{
-	{variant: "codex", path: filepath.Join(".codex", "skills")},
-	{variant: "claude", path: filepath.Join(".claude", "skills")},
-	{variant: "cursor", path: filepath.Join(".cursor", "skills")},
-	{variant: "windsurf", path: filepath.Join(".windsurf", "skills")},
-	{variant: "gemini", path: filepath.Join(".gemini", "skills")},
-	{variant: "kiro", path: filepath.Join(".kiro", "skills")},
-	{variant: "opencode", path: filepath.Join(".opencode", "skills")},
-}
-
-func findInstallations(_ context.Context) ([]sbom.InstalledVersion, error) {
+func findInstallations(ctx context.Context) ([]sbom.InstalledVersion, error) {
 	homeDir := platform.GetConfig().HomeDir
-	searchRoots := knownGlobalSkillsRoots(homeDir)
+	binaries := findBinaries(homeDir)
 
-	lockFiles := findKnownLockFiles(searchRoots)
-	sort.Slice(lockFiles, func(i, j int) bool {
-		return lockFiles[i].path < lockFiles[j].path
-	})
-
-	var installations []sbom.InstalledVersion
-	for _, lockFile := range lockFiles {
-		log.Printf("Found %s for %s at: %s", lockFileName, lockFile.variant, lockFile.path)
-		installations = append(installations, sbom.InstalledVersion{
+	for _, binary := range binaries {
+		entries, err := listGlobalSkills(ctx, binary)
+		if err != nil {
+			log.Printf("Skipping skills at %s: %v", binary, err)
+			continue
+		}
+		if len(entries) == 0 {
+			continue
+		}
+		skillsDir := skillsDirFromEntries(entries, homeDir)
+		log.Printf("Found %d global skills at: %s", len(entries), skillsDir)
+		return []sbom.InstalledVersion{{
 			Ecosystem: "skills_sh",
-			Variant:   lockFile.variant,
-			Path:      lockFile.path,
-			DataPath:  lockFile.path,
-		})
+			Path:      skillsDir,
+			DataPath:  binary,
+		}}, nil
 	}
-	return installations, nil
+	return nil, nil
 }
 
-// knownGlobalSkillsRoots returns the list of global skills directories to check for installations.
-func knownGlobalSkillsRoots(homeDir string) []globalSkillsDir {
-	roots := make([]globalSkillsDir, 0, len(globalSkillsDirs))
-	for _, dir := range globalSkillsDirs {
-		roots = append(roots, globalSkillsDir{
-			variant: dir.variant,
-			path:    filepath.Join(homeDir, dir.path),
-		})
-	}
-	return roots
-}
-
-// findKnownLockFiles checks the provided list of global skills directories for the presence of lock files.
-func findKnownLockFiles(roots []globalSkillsDir) []globalSkillsDir {
-	seen := make(map[string]bool)
-	var found []globalSkillsDir
-	for _, root := range roots {
-		lockPath := filepath.Join(root.path, lockFileName)
-		if _, err := os.Stat(lockPath); err == nil {
-			resolved, err := filepath.EvalSymlinks(lockPath)
-			if err != nil {
-				resolved = lockPath
-			}
-			key := root.variant + "\x00" + strings.ToLower(resolved)
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			found = append(found, globalSkillsDir{
-				variant: root.variant,
-				path:    lockPath,
-			})
+// skillsDirFromEntries derives the global skills root directory from CLI output.
+// The CLI reports individual skill paths like ~/.agents/skills/<name>, so the
+// parent of the first entry's path is the skills directory.
+// Falls back to the conventional ~/.agents/skills if no entries have a path.
+func skillsDirFromEntries(entries []skillsEntry, homeDir string) string {
+	for _, e := range entries {
+		if e.Path != "" {
+			return filepath.Dir(e.Path)
 		}
 	}
-	return found
+	return filepath.Join(homeDir, ".agents", "skills")
+}
+
+func listGlobalSkills(ctx context.Context, binary string) ([]skillsEntry, error) {
+	args := []string{"ls", "-g", "--json"}
+	if strings.HasPrefix(filepath.Base(binary), "npx") {
+		// Invoked via npx: prepend --prefer-offline and the package name.
+		args = append([]string{"--prefer-offline", "skills"}, args...)
+	}
+	output, err := runSkills(ctx, binary, args...)
+	if err != nil {
+		return nil, fmt.Errorf("skills ls -g --json: %w", err)
+	}
+	return parseSkillsLsOutput(output)
+}
+
+func parseSkillsLsOutput(output string) ([]skillsEntry, error) {
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return nil, nil
+	}
+	var entries []skillsEntry
+	if err := json.Unmarshal([]byte(output), &entries); err != nil {
+		return nil, fmt.Errorf("failed to parse skills ls output: %w", err)
+	}
+	return entries, nil
 }

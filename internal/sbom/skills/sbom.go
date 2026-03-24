@@ -2,23 +2,10 @@ package skills
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/AikidoSec/safechain-internals/internal/sbom"
 )
-
-type lockFile struct {
-	Version int                    `json:"version"`
-	Skills  map[string]skillEntry  `json:"skills"`
-}
-
-type skillEntry struct {
-	Source       string `json:"source"`
-	SourceType   string `json:"sourceType"`
-	ComputedHash string `json:"computedHash"`
-}
 
 type SkillsSh struct{}
 
@@ -34,28 +21,21 @@ func (s *SkillsSh) Installations(ctx context.Context) ([]sbom.InstalledVersion, 
 	return findInstallations(ctx)
 }
 
-func (s *SkillsSh) SBOM(_ context.Context, installation sbom.InstalledVersion) ([]sbom.Package, error) {
-	data, err := os.ReadFile(installation.DataPath)
+func (s *SkillsSh) SBOM(ctx context.Context, installation sbom.InstalledVersion) ([]sbom.Package, error) {
+	entries, err := listGlobalSkills(ctx, installation.DataPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read %s: %w", installation.DataPath, err)
+		return nil, fmt.Errorf("failed to list global skills: %w", err)
 	}
+	return packagesFromEntries(entries), nil
+}
 
-	var lock lockFile
-	if err := json.Unmarshal(data, &lock); err != nil {
-		return nil, fmt.Errorf("failed to parse %s: %w", installation.DataPath, err)
-	}
-
-	var packages []sbom.Package
-	for skillName, entry := range lock.Skills {
-		if entry.Source == "" || skillName == "" {
-			continue
-		}
+func packagesFromEntries(entries []skillsEntry) []sbom.Package {
+	packages := make([]sbom.Package, 0, len(entries))
+	for _, entry := range entries {
 		packages = append(packages, sbom.Package{
-			Id:      entry.Source + "/" + skillName,
-			Name:    skillName,
-			Version: entry.ComputedHash,
+			Id:   entry.Name,
+			Name: entry.Name,
 		})
 	}
-
-	return packages, nil
+	return packages
 }
