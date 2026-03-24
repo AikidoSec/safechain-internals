@@ -20,7 +20,7 @@ xcode_l4_derived_data := ".aikido/xcode/safechain-l4-proxy-wrapper"
 xcode_l4_app_name := "AikidoEndpointL4ProxyHost.app"
 xcode_l4_app := xcode_l4_derived_data + "/Build/Products/Debug/" + xcode_l4_app_name
 xcode_l4_app_exe := xcode_l4_app + "/Contents/MacOS/AikidoEndpointL4ProxyHost"
-xcode_l4_installed_app := "/Applications/" + xcode_l4_app_name
+xcode_l4_installed_app := "/Library/Application Support/AikidoSecurity/EndpointProtection/bin/" + xcode_l4_app_name
 xcode_l4_installed_app_exe := xcode_l4_installed_app + "/Contents/MacOS/AikidoEndpointL4ProxyHost"
 xcode_l4_installed_appex := xcode_l4_installed_app + "/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
 

@@ -288,7 +288,7 @@ log show --last 30m --style compact --debug --info \
 ### Notes For Developers
 
 - The host executable lives inside the installed app bundle at:
-  `/Applications/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost`
+  `/Library/Application Support/AikidoSecurity/EndpointProtection/bin/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost`
 - `status` reports the current Network Extension state and the saved JSON config, if any.
 - The transparent proxy profile is persisted by `NETransparentProxyManager`.
 - The extension is expected to be restarted by the system according to the saved profile state;

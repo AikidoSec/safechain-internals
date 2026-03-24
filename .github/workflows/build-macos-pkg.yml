@@ -23,8 +23,102 @@ jobs:
     with:
       version: ${{ inputs.version || 'dev' }}
 
+  build-l4-proxy-macos-app:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561
+        with:
+          toolchain: stable
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
+        with:
+          env-vars: "RUST_TOOLCHAIN=stable"
+
+      - name: Build L4 proxy Rust static library (x86_64)
+        run: cargo build --release -p safechain-lib-l4-proxy-macos --target x86_64-apple-darwin
+
+      - name: Build L4 proxy Rust static library (aarch64)
+        run: cargo build --release -p safechain-lib-l4-proxy-macos --target aarch64-apple-darwin
+
+      - name: Create universal L4 proxy static library
+        run: |
+          mkdir -p target/universal
+          lipo -create \
+            target/x86_64-apple-darwin/release/libsafechain_lib_l4_proxy_macos.a \
+            target/aarch64-apple-darwin/release/libsafechain_lib_l4_proxy_macos.a \
+            -output target/universal/libsafechain_lib_l4_proxy_macos.a
+          lipo -info target/universal/libsafechain_lib_l4_proxy_macos.a
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate L4 proxy Xcode project
+        run: |
+          cd packaging/macos/xcode/l4-proxy
+          xcodegen generate
+
+      - name: Make scripts executable
+        run: chmod +x .github/scripts/macos/**/*.sh
+
+      - name: Import macOS certificate
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_INSTALLER_CERTIFICATE_P12: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_P12 }}
+        run: .github/scripts/macos/core/import-certificate.sh
+
+      - name: Install App Store Connect API key
+        env:
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+        run: |
+          mkdir -p ~/private_keys
+          echo "$APPLE_API_KEY_BASE64" | base64 -d > ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
+
+      - name: Shorten hostname for Apple device registration
+        run: sudo scutil --set ComputerName "aikido-ci-runner"
+
+      - name: Build L4 proxy macOS app
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_KEY_ISSUER_ID: ${{ secrets.APPLE_API_KEY_ISSUER_ID }}
+        run: |
+          cd packaging/macos/xcode/l4-proxy
+          xcodebuild \
+            -project AikidoEndpointL4Proxy.xcodeproj \
+            -scheme AikidoEndpointL4ProxyHost \
+            -configuration Release \
+            -derivedDataPath "${{ github.workspace }}/l4-derived-data" \
+            -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
+            -authenticationKeyPath ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8 \
+            -authenticationKeyID "$APPLE_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPLE_API_KEY_ISSUER_ID" \
+            ARCHS="x86_64 arm64" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+            OTHER_CODE_SIGN_FLAGS="--timestamp" \
+            clean build
+
+      - name: Prepare L4 proxy app artifact
+        run: |
+          ditto "${{ github.workspace }}/l4-derived-data/Build/Products/Release/AikidoEndpointL4ProxyHost.app" \
+            AikidoEndpointL4ProxyHost.app
+
+      - name: Upload L4 proxy app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AikidoEndpointL4ProxyHost.app
+          path: AikidoEndpointL4ProxyHost.app
+
   build-pkg:
-    needs: build-unix
+    needs: [build-unix, build-l4-proxy-macos-app]
     runs-on: macos-latest
     steps:
       - name: Checkout code
@@ -75,6 +169,30 @@ jobs:
           name: safechain-l7-proxy-darwin-arm64
           path: bin/arm64
 
+      - name: Download l4-proxy artifact (amd64)
+        uses: actions/download-artifact@v4
+        with:
+          name: safechain-l4-proxy-darwin-amd64
+          path: bin/amd64
+
+      - name: Download l4-proxy artifact (arm64)
+        uses: actions/download-artifact@v4
+        with:
+          name: safechain-l4-proxy-darwin-arm64
+          path: bin/arm64
+
+      - name: Download L4 proxy macOS app artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AikidoEndpointL4ProxyHost.app
+          path: bin/l4-app-download
+
+      - name: Restore L4 proxy app bundle layout
+        run: |
+          mkdir -p "bin/AikidoEndpointL4ProxyHost.app"
+          mv bin/l4-app-download/* "bin/AikidoEndpointL4ProxyHost.app/"
+          rm -rf bin/l4-app-download
+
       - name: Create universal binaries
         run: |
           lipo -create \
@@ -94,13 +212,20 @@ jobs:
             bin/arm64/safechain-l7-proxy-darwin-arm64 \
             -output bin/safechain-l7-proxy-darwin-universal
 
+          lipo -create \
+            bin/amd64/safechain-l4-proxy-darwin-amd64 \
+            bin/arm64/safechain-l4-proxy-darwin-arm64 \
+            -output bin/safechain-l4-proxy-darwin-universal
+
           echo "Universal binaries created:"
           ls -lh bin/endpoint-protection-darwin-universal
           ls -lhR bin/endpoint-protection-ui-darwin-universal.app
           ls -lh bin/safechain-l7-proxy-darwin-universal
+          ls -lh bin/safechain-l4-proxy-darwin-universal
           lipo -info bin/endpoint-protection-darwin-universal
           lipo -info "bin/endpoint-protection-ui-darwin-universal.app/Contents/MacOS/$APP_BINARY_NAME"
           lipo -info bin/safechain-l7-proxy-darwin-universal
+          lipo -info bin/safechain-l4-proxy-darwin-universal
 
       - name: Make scripts executable
         run: chmod +x .github/scripts/macos/**/*.sh
@@ -124,11 +249,51 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: .github/scripts/macos/core/sign-binary.sh bin/endpoint-protection-ui-darwin-universal.app
 
-      - name: Sign macOS proxy binary
+      - name: Sign macOS l7-proxy binary
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: .github/scripts/macos/core/sign-binary.sh bin/safechain-l7-proxy-darwin-universal
+
+      - name: Sign macOS l4-proxy binary
+        env:
+          DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: .github/scripts/macos/core/sign-binary.sh bin/safechain-l4-proxy-darwin-universal
+
+      - name: Sign macOS L4 proxy app bundle
+        env:
+          DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          APPEX="bin/AikidoEndpointL4ProxyHost.app/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
+          APP="bin/AikidoEndpointL4ProxyHost.app"
+
+          echo "Signing L4 extension..."
+          codesign --force --sign "$DEV_ID_SHA" --timestamp --options runtime \
+            --preserve-metadata=entitlements \
+            --keychain build.keychain "$APPEX"
+
+          echo "Signing L4 host app..."
+          codesign --force --sign "$DEV_ID_SHA" --timestamp --options runtime \
+            --preserve-metadata=entitlements \
+            --keychain build.keychain "$APP"
+
+          echo "Verifying signatures..."
+          codesign --verify --strict --verbose=2 "$APPEX"
+          codesign --verify --strict --verbose=2 "$APP"
+
+          echo "Verifying entitlements include networkextension..."
+          codesign -d --entitlements :- "$APPEX" | grep -q "networkextension"
+          codesign -d --entitlements :- "$APP" | grep -q "networkextension"
+
+          echo "Verifying team identifier..."
+          TEAM=$(codesign -dvv "$APP" 2>&1 | awk -F= '/TeamIdentifier/ {print $2}')
+          if [ "$TEAM" != "$APPLE_TEAM_ID" ]; then
+            echo "ERROR: Team mismatch: $TEAM != $APPLE_TEAM_ID"
+            exit 1
+          fi
+          echo "L4 proxy app bundle signed successfully"
 
       - name: Build distribution .pkg installer
         run: |
