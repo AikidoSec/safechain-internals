@@ -436,6 +436,9 @@ func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 	)
 }
 
+// STILL_ACTIVE is the value returned by GetExitCodeProcess when the
+// process has not yet terminated. It is defined by the Windows API as 259.
+// https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getexitcodeprocess
 const STILL_ACTIVE = 259
 
 // IsProcessAlive reports whether a process with the given PID is still running.
