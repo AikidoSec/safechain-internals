@@ -650,3 +650,8 @@ func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 	}
 	return nil
 }
+
+// IsProcessAlive reports whether a process with the given PID is still running.
+func IsProcessAlive(pid int) bool {
+	return unix.Kill(pid, 0) == nil
+}

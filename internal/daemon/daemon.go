@@ -91,7 +91,7 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 		logRotator:  utils.NewLogRotator(),
 		logReaper:   utils.NewLogReaper(),
 		uiManager:   uiMgr,
-		ingress:     ingress.New(cfg, uiMgr.Client),
+		ingress:     ingress.New(cfg, uiMgr),
 	}
 
 	d.initLogging(ctx)
@@ -426,6 +426,9 @@ func (d *Daemon) heartbeat() error {
 	if err != nil {
 		log.Printf("Failed to start proxy: %v", err)
 	}
+
+	// Ensure the UI is running, if not, relaunch it
+	d.uiManager.EnsureRunning()
 
 	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.IsRunning())
 
