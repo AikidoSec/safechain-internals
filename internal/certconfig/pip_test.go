@@ -10,37 +10,41 @@ import (
 
 func TestEnsureOriginalPipCertFirstInstall(t *testing.T) {
 	savedPath := filepath.Join(t.TempDir(), "original.txt")
-	lookup := func(_ context.Context) (string, error) {
-		return "/corporate/pip-ca.pem", nil
+	lookup := func(_ context.Context) (pipCertSetting, error) {
+		return pipCertSetting{EnvVar: pipCertEnvVar, Path: "/corporate/pip-ca.pem"}, nil
 	}
 
 	got, err := ensureOriginalPipCertAt(context.Background(), savedPath, lookup)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != "/corporate/pip-ca.pem" {
-		t.Fatalf("got %q, want /corporate/pip-ca.pem", got)
+	if got.EnvVar != pipCertEnvVar || got.Path != "/corporate/pip-ca.pem" {
+		t.Fatalf("got %+v, want env=%q path=%q", got, pipCertEnvVar, "/corporate/pip-ca.pem")
 	}
 
 	data, err := os.ReadFile(savedPath)
 	if err != nil {
 		t.Fatalf("saved file not written: %v", err)
 	}
-	if string(data) != "/corporate/pip-ca.pem" {
-		t.Fatalf("saved file contains %q, want /corporate/pip-ca.pem", string(data))
+	parsed, err := parseSavedPipCertSetting(data)
+	if err != nil {
+		t.Fatalf("failed to parse saved state: %v", err)
+	}
+	if parsed.EnvVar != pipCertEnvVar || parsed.Path != "/corporate/pip-ca.pem" {
+		t.Fatalf("saved file contains %+v, want env=%q path=%q", parsed, pipCertEnvVar, "/corporate/pip-ca.pem")
 	}
 }
 
 func TestEnsureOriginalPipCertFirstInstallNothingSet(t *testing.T) {
 	savedPath := filepath.Join(t.TempDir(), "original.txt")
-	lookup := func(_ context.Context) (string, error) { return "", nil }
+	lookup := func(_ context.Context) (pipCertSetting, error) { return pipCertSetting{}, nil }
 
 	got, err := ensureOriginalPipCertAt(context.Background(), savedPath, lookup)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != "" {
-		t.Fatalf("got %q, want empty string", got)
+	if got != (pipCertSetting{}) {
+		t.Fatalf("got %+v, want empty setting", got)
 	}
 	if _, err := os.Stat(savedPath); err != nil {
 		t.Fatalf("saved file not written for empty value: %v", err)
@@ -54,17 +58,17 @@ func TestEnsureOriginalPipCertReinstallSkipsLookup(t *testing.T) {
 	}
 
 	lookupCalled := false
-	lookup := func(_ context.Context) (string, error) {
+	lookup := func(_ context.Context) (pipCertSetting, error) {
 		lookupCalled = true
-		return "/new-value/pip-ca.pem", nil
+		return pipCertSetting{EnvVar: pipCertEnvVar, Path: "/new-value/pip-ca.pem"}, nil
 	}
 
 	got, err := ensureOriginalPipCertAt(context.Background(), savedPath, lookup)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != "/saved/pip-ca.pem" {
-		t.Fatalf("got %q, want /saved/pip-ca.pem", got)
+	if got.EnvVar != pipCertEnvVar || got.Path != "/saved/pip-ca.pem" {
+		t.Fatalf("got %+v, want env=%q path=%q", got, pipCertEnvVar, "/saved/pip-ca.pem")
 	}
 	if lookupCalled {
 		t.Fatal("lookup should not be called when saved file exists")
@@ -73,13 +77,23 @@ func TestEnsureOriginalPipCertReinstallSkipsLookup(t *testing.T) {
 
 func TestEnsureOriginalPipCertLookupError(t *testing.T) {
 	savedPath := filepath.Join(t.TempDir(), "original.txt")
-	lookup := func(_ context.Context) (string, error) {
-		return "", errors.New("shell not found")
+	lookup := func(_ context.Context) (pipCertSetting, error) {
+		return pipCertSetting{}, errors.New("shell not found")
 	}
 
 	_, err := ensureOriginalPipCertAt(context.Background(), savedPath, lookup)
 	if err == nil {
 		t.Fatal("expected error when lookup fails")
+	}
+}
+
+func TestParseSavedPipCertSettingLegacyFormat(t *testing.T) {
+	got, err := parseSavedPipCertSetting([]byte("/legacy/pip-ca.pem\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.EnvVar != pipCertEnvVar || got.Path != "/legacy/pip-ca.pem" {
+		t.Fatalf("got %+v, want env=%q path=%q", got, pipCertEnvVar, "/legacy/pip-ca.pem")
 	}
 }
 

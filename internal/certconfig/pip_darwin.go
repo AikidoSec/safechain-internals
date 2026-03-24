@@ -12,6 +12,11 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
+var pipShellManagedBlockFormat = managedBlockFormat{
+	startMarker: "# aikido-endpoint-pip-cert-config-start",
+	endMarker:   "# aikido-endpoint-pip-cert-config-end",
+}
+
 type darwinPipTrustConfigurator struct {
 	targets []darwinShellTarget
 }
@@ -48,7 +53,7 @@ func (c *darwinPipTrustConfigurator) Install(_ context.Context) error {
 				return fmt.Errorf("failed to create config dir for %s: %w", target.path, err)
 			}
 		}
-		if err := writeManagedBlock(target.path, target.body, 0o644, shellManagedBlockFormat); err != nil {
+		if err := writeManagedBlock(target.path, target.body, 0o644, pipShellManagedBlockFormat); err != nil {
 			return err
 		}
 	}
@@ -57,7 +62,7 @@ func (c *darwinPipTrustConfigurator) Install(_ context.Context) error {
 
 func (c *darwinPipTrustConfigurator) Uninstall(_ context.Context) error {
 	for _, target := range c.targets {
-		if err := utils.RemoveManagedBlock(target.path, 0o644, shellManagedBlockFormat.startMarker, shellManagedBlockFormat.endMarker); err != nil {
+		if err := utils.RemoveManagedBlock(target.path, 0o644, pipShellManagedBlockFormat.startMarker, pipShellManagedBlockFormat.endMarker); err != nil {
 			return err
 		}
 	}

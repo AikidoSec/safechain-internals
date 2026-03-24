@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AikidoSec/safechain-internals/internal/certconfig"
 	"github.com/AikidoSec/safechain-internals/internal/cloud"
 	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
@@ -150,6 +151,10 @@ func (d *Daemon) Stop(ctx context.Context) error {
 			if err := setup.Teardown(ctx); err != nil {
 				log.Printf("Error teardown setup: %v", err)
 			}
+		} else {
+			if err := certconfig.Teardown(ctx); err != nil {
+				log.Printf("Error teardown certificate trust: %v", err)
+			}
 		}
 
 		if err := d.proxy.Stop(); err != nil {
@@ -249,6 +254,10 @@ func (d *Daemon) run(ctx context.Context) error {
 	if d.config.GetProxyMode() == config.ProxyModeL7 {
 		if err := setup.Install(ctx); err != nil {
 			return fmt.Errorf("failed to install setup: %v", err)
+		}
+	} else {
+		if err := certconfig.Install(ctx); err != nil {
+			return fmt.Errorf("failed to configure certificate trust: %v", err)
 		}
 	}
 

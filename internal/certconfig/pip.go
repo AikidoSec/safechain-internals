@@ -2,6 +2,7 @@ package certconfig
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,6 +21,11 @@ type pipConfigurator struct {
 	trust pipTrustConfigurator
 }
 
+type pipCertSetting struct {
+	EnvVar string `json:"env_var"`
+	Path   string `json:"path"`
+}
+
 func newPipConfigurator() Configurator {
 	return &pipConfigurator{
 		trust: newPipTrustConfigurator(pipCombinedCaBundlePath()),
@@ -34,27 +40,31 @@ func originalPipCertPath() string {
 	return filepath.Join(platform.GetRunDir(), "endpoint-protection-pip-original-cert-path.txt")
 }
 
-func ensureOriginalPipCert(ctx context.Context) (string, error) {
+func ensureOriginalPipCert(ctx context.Context) (pipCertSetting, error) {
 	return ensureOriginalPipCertAt(ctx, originalPipCertPath(), runPipCertLookup)
 }
 
 func ensureOriginalPipCertAt(
 	ctx context.Context,
 	savedPath string,
-	lookup func(context.Context) (string, error),
-) (string, error) {
+	lookup func(context.Context) (pipCertSetting, error),
+) (pipCertSetting, error) {
 	if data, err := os.ReadFile(savedPath); err == nil {
-		return strings.TrimSpace(string(data)), nil
+		return parseSavedPipCertSetting(data)
 	}
 
 	original, err := lookup(ctx)
 	if err != nil {
-		return "", fmt.Errorf("read existing pip certificate configuration: %w", err)
+		return pipCertSetting{}, fmt.Errorf("read existing pip certificate configuration: %w", err)
 	}
-	original = strings.TrimSpace(original)
+	original.Path = strings.TrimSpace(original.Path)
 
-	if err := os.WriteFile(savedPath, []byte(original), 0o600); err != nil {
-		return "", fmt.Errorf("persist existing pip certificate configuration: %w", err)
+	data, err := json.Marshal(original)
+	if err != nil {
+		return pipCertSetting{}, fmt.Errorf("marshal existing pip certificate configuration: %w", err)
+	}
+	if err := os.WriteFile(savedPath, data, 0o600); err != nil {
+		return pipCertSetting{}, fmt.Errorf("persist existing pip certificate configuration: %w", err)
 	}
 	return original, nil
 }
@@ -64,7 +74,7 @@ func (c *pipConfigurator) Install(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	baseCACertBundle, err := resolvePipBaseCACertBundle(ctx, original)
+	baseCACertBundle, err := resolvePipBaseCACertBundle(ctx, original.Path)
 	if err != nil {
 		return err
 	}
@@ -80,6 +90,20 @@ func (c *pipConfigurator) Uninstall(ctx context.Context) error {
 	}
 	_ = os.Remove(originalPipCertPath())
 	return removePipCombinedCABundle()
+}
+
+func parseSavedPipCertSetting(data []byte) (pipCertSetting, error) {
+	var setting pipCertSetting
+	if err := json.Unmarshal(data, &setting); err == nil {
+		setting.Path = strings.TrimSpace(setting.Path)
+		return setting, nil
+	}
+
+	// Backward compatibility with the earlier plain-text format.
+	return pipCertSetting{
+		EnvVar: pipCertEnvVar,
+		Path:   strings.TrimSpace(string(data)),
+	}, nil
 }
 
 func resolvePipBaseCACertBundle(ctx context.Context, original string) (string, error) {

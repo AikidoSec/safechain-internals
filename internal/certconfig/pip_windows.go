@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 )
 
 type windowsPipTrustConfigurator struct {
@@ -30,19 +29,40 @@ func (c *windowsPipTrustConfigurator) Install(ctx context.Context) error {
 }
 
 func (c *windowsPipTrustConfigurator) Uninstall(ctx context.Context) error {
-	original := ""
+	original := pipCertSetting{}
 	if data, err := os.ReadFile(originalPipCertPath()); err == nil {
-		original = strings.TrimSpace(string(data))
+		parsed, parseErr := parseSavedPipCertSetting(data)
+		if parseErr == nil {
+			original = parsed
+		}
 	}
 
-	var script string
-	if original != "" {
-		script = fmt.Sprintf(
-			"[Environment]::SetEnvironmentVariable('PIP_CERT', '%s', 'User')",
-			escapePowerShellSingleQuoted(original),
-		)
-	} else {
-		script = "[Environment]::SetEnvironmentVariable('PIP_CERT', $null, 'User')"
-	}
+	script := restoreWindowsPipEnvScript(original)
 	return runPowerShellAsCurrentUser(ctx, script)
+}
+
+func restoreWindowsPipEnvScript(original pipCertSetting) string {
+	path := escapePowerShellSingleQuoted(original.Path)
+
+	switch original.EnvVar {
+	case requestsCABundleEnvVar:
+		return fmt.Sprintf(
+			"[Environment]::SetEnvironmentVariable('PIP_CERT', $null, 'User'); [Environment]::SetEnvironmentVariable('REQUESTS_CA_BUNDLE', '%s', 'User')",
+			path,
+		)
+	case sslCertFileEnvVar:
+		return fmt.Sprintf(
+			"[Environment]::SetEnvironmentVariable('PIP_CERT', $null, 'User'); [Environment]::SetEnvironmentVariable('SSL_CERT_FILE', '%s', 'User')",
+			path,
+		)
+	case pipCertEnvVar:
+		if original.Path != "" {
+			return fmt.Sprintf(
+				"[Environment]::SetEnvironmentVariable('PIP_CERT', '%s', 'User')",
+				path,
+			)
+		}
+	}
+
+	return "[Environment]::SetEnvironmentVariable('PIP_CERT', $null, 'User')"
 }

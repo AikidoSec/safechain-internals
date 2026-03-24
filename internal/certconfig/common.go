@@ -18,6 +18,12 @@ type managedBlockFormat struct {
 
 const aikidoCertMarker = "AIKIDO_CERT="
 
+const (
+	pipCertEnvVar          = "PIP_CERT"
+	requestsCABundleEnvVar = "REQUESTS_CA_BUNDLE"
+	sslCertFileEnvVar      = "SSL_CERT_FILE"
+)
+
 func buildManagedBlock(body string, format managedBlockFormat, newline string) string {
 	return format.startMarker + newline + body + newline + format.endMarker + newline
 }
@@ -91,4 +97,36 @@ func findCertifiCABundle(ctx context.Context) string {
 		}
 	}
 	return ""
+}
+
+func extractMarkedPipCertSetting(output string) pipCertSetting {
+	return parsePipCertSettingString(extractMarkedCertValue(output))
+}
+
+func parsePipCertSettingString(value string) pipCertSetting {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return pipCertSetting{}
+	}
+
+	envVar, path, ok := strings.Cut(trimmed, ":")
+	if !ok {
+		return pipCertSetting{
+			EnvVar: pipCertEnvVar,
+			Path:   trimmed,
+		}
+	}
+
+	switch envVar {
+	case pipCertEnvVar, requestsCABundleEnvVar, sslCertFileEnvVar:
+		return pipCertSetting{
+			EnvVar: envVar,
+			Path:   strings.TrimSpace(path),
+		}
+	default:
+		return pipCertSetting{
+			EnvVar: pipCertEnvVar,
+			Path:   trimmed,
+		}
+	}
 }
