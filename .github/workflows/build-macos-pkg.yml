@@ -243,8 +243,8 @@ jobs:
 
       - name: Embed L4 proxy provisioning profiles
         env:
-          L4_HOST_PROVISIONING_PROFILE_BASE64: ${{ secrets.L4_HOST_PROVISIONING_PROFILE_BASE64 }}
-          L4_EXTENSION_PROVISIONING_PROFILE_BASE64: ${{ secrets.L4_EXTENSION_PROVISIONING_PROFILE_BASE64 }}
+          L4_HOST_PROVISIONING_PROFILE_BASE64: ${{ secrets.L4_HOST_PROVISION_PROFILE_B64 }}
+          L4_EXTENSION_PROVISIONING_PROFILE_BASE64: ${{ secrets.L4_EXT_PROVISION_PROFILE_B64 }}
         run: |
           echo "$L4_HOST_PROVISIONING_PROFILE_BASE64" | base64 -d > "bin/AikidoEndpointL4ProxyHost.app/Contents/embedded.provisionprofile"
           echo "$L4_EXTENSION_PROVISIONING_PROFILE_BASE64" | base64 -d > "bin/AikidoEndpointL4ProxyHost.app/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex/Contents/embedded.provisionprofile"
