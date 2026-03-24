@@ -153,8 +153,8 @@ macos-l4-xcodegen-build-debug-signed: macos-l4-build-rust macos-l4-xcodegen-gene
 macos-l4-install-signed: macos-l4-xcodegen-build-debug-signed
     pkill -f "{{l4_host_bundle_id}}" || true
     sleep 1
-    rm -rf "{{xcode_l4_installed_app}}"
-    ditto "{{xcode_l4_app}}" "{{xcode_l4_installed_app}}"
+    sudo rm -rf "{{xcode_l4_installed_app}}"
+    sudo ditto "{{xcode_l4_app}}" "{{xcode_l4_installed_app}}"
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "{{xcode_l4_installed_app}}"
     pluginkit -a "{{xcode_l4_installed_appex}}" || true
 
