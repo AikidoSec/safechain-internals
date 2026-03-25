@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AikidoSec/safechain-internals/internal/certconfig"
 	"github.com/AikidoSec/safechain-internals/internal/cloud"
 	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
@@ -147,14 +146,8 @@ func (d *Daemon) Stop(ctx context.Context) error {
 
 		d.uiManager.Kill()
 
-		if d.config.GetProxyMode() == config.ProxyModeL7 {
-			if err := setup.Teardown(ctx); err != nil {
-				log.Printf("Error teardown setup: %v", err)
-			}
-		} else {
-			if err := certconfig.Teardown(ctx); err != nil {
-				log.Printf("Error teardown certificate trust: %v", err)
-			}
+		if err := setup.Teardown(ctx, d.config.GetProxyMode()); err != nil {
+			log.Printf("Error teardown setup: %v", err)
 		}
 
 		if err := d.proxy.Stop(); err != nil {
@@ -251,14 +244,8 @@ func (d *Daemon) run(ctx context.Context) error {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
-	if d.config.GetProxyMode() == config.ProxyModeL7 {
-		if err := setup.Install(ctx); err != nil {
-			return fmt.Errorf("failed to install setup: %v", err)
-		}
-	} else {
-		if err := certconfig.Install(ctx); err != nil {
-			return fmt.Errorf("failed to configure certificate trust: %v", err)
-		}
+	if err := setup.Install(ctx, d.config.GetProxyMode()); err != nil {
+		return fmt.Errorf("failed to install setup: %v", err)
 	}
 
 	d.wg.Add(1)
