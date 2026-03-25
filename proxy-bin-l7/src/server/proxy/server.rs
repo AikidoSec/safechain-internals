@@ -9,7 +9,7 @@ use rama::{
         Request, Response,
         client::{ProxyConnector, proxy::layer::HttpProxyConnectorLayer},
         layer::{
-            compression::stream::StreamCompressionLayer,
+            compression::{MirrorDecompressed, stream::StreamCompressionLayer},
             decompression::DecompressionLayer,
             map_response_body::MapResponseBodyLayer,
             trace::TraceLayer,
@@ -120,7 +120,7 @@ where
         ArcLayer::new(),
         MapResponseBodyLayer::new_boxed_streaming_body(),
         TraceLayer::new_for_http(),
-        StreamCompressionLayer::new(),
+        StreamCompressionLayer::new().with_compress_predicate(MirrorDecompressed::new()),
         #[cfg(feature = "har")]
         (
             AddInputExtensionLayer::new(RequestComment(arcstr!("http(s) MITM server"))),
