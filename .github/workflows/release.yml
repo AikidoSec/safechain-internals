@@ -58,12 +58,18 @@ jobs:
           mv artifacts/safechain-l7-proxy-linux-amd64/safechain-l7-proxy-linux-amd64 .
           mv artifacts/safechain-l7-proxy-linux-arm64/safechain-l7-proxy-linux-arm64 .
 
+          mv artifacts/safechain-l4-proxy-darwin-amd64/safechain-l4-proxy-darwin-amd64 .
+          mv artifacts/safechain-l4-proxy-darwin-arm64/safechain-l4-proxy-darwin-arm64 .
+
+          mv artifacts/safechain-l4-proxy-linux-amd64/safechain-l4-proxy-linux-amd64 .
+          mv artifacts/safechain-l4-proxy-linux-arm64/safechain-l4-proxy-linux-arm64 .
+
           mv artifacts/EndpointProtection.msi/EndpointProtection.msi ./EndpointProtection.msi
 
           mv artifacts/EndpointProtection.pkg/EndpointProtection.pkg ./EndpointProtection.pkg
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           files: |
             endpoint-protection-darwin-amd64
@@ -72,6 +78,10 @@ jobs:
             safechain-l7-proxy-darwin-arm64
             safechain-l7-proxy-linux-amd64
             safechain-l7-proxy-linux-arm64
+            safechain-l4-proxy-darwin-amd64
+            safechain-l4-proxy-darwin-arm64
+            safechain-l4-proxy-linux-amd64
+            safechain-l4-proxy-linux-arm64
             EndpointProtection.msi
             EndpointProtection.pkg
 

@@ -14,8 +14,9 @@ If you get a "port already in use" error:
 2. Check your client is configured with the correct port
 3. Ensure firewall settings allow connections to the proxy
 
-To verify that the proxy is correctly configured via system settings, a PAC file, or a client specific configuration,
-try accessing the pseudo domain `proxy.safechain.internal`.
+To verify that the proxy is correctly configured via system settings,
+a PAC file, or a client specific configuration,
+try accessing the hijack domain `mitm.ramaproxy.org`.
 
 - If you can reach it over the `http://` scheme, the proxy is correctly configured and running.
 - If you can also reach it over the `https://` scheme, the proxy root CA is trusted.

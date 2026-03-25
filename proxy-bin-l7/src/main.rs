@@ -12,15 +12,19 @@ use rama::{
     http::Uri,
     net::{
         address::{ProxyAddress, SocketAddress},
-        socket::Interface,
         tls::ApplicationProtocol,
     },
+    rt::Executor,
     telemetry::tracing::{self, Instrument as _},
     tls::boring::server::TlsAcceptorLayer,
 };
 
 use clap::Parser;
-use safechain_proxy_lib::{http, storage, tls, utils as safechain_utils};
+use safechain_proxy_lib::{
+    http, storage,
+    tls::{self, RootCaKeyPair},
+    utils as safechain_utils,
+};
 use safechain_utils::token::AgentIdentity;
 
 pub mod client;
@@ -45,17 +49,12 @@ pub mod test;
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// network interface to bind the proxy to
-    #[arg(
-        long,
-        short = 'b',
-        value_name = "INTERFACE",
-        default_value = "127.0.0.1:0"
-    )]
-    pub bind: Interface,
+    #[arg(long, short = 'b', default_value = "127.0.0.1:0")]
+    pub bind: SocketAddress,
 
     /// network interface to bind the meta http(s) service to
-    #[arg(long = "meta", value_name = "INTERFACE", default_value = "127.0.0.1:0")]
-    pub meta_bind: Interface,
+    #[arg(long = "meta", default_value = "127.0.0.1:0")]
+    pub meta_bind: SocketAddress,
 
     /// secrets storage to use (e.g. for root CA)
     #[cfg_attr(
@@ -185,9 +184,11 @@ where
         storage::SyncSecrets::try_new(self::utils::env::project_name(), args.secrets.clone())
             .context("create secrets storage")?;
 
+    let root_ca_key_pair = tls::load_or_create_root_ca_key_pair(&secret_storage, &data_storage)
+        .context("prepare proxy traffic CA crt/key pair")?;
+
     let (tls_acceptor, root_ca) = tls::new_tls_acceptor_layer(
-        &secret_storage,
-        &data_storage,
+        &root_ca_key_pair,
         Some(vec![
             ApplicationProtocol::HTTP_2,
             ApplicationProtocol::HTTP_11,
@@ -208,7 +209,7 @@ where
     let firewall = tokio::select! {
         result = http::firewall::Firewall::try_new(
             graceful.guard(),
-            client::new_web_client()?,
+            client::new_http_client_for_internal(Executor::graceful(graceful.guard()))?,
             data_storage,
             args.reporting_endpoint.clone(),
             agent_identity,
@@ -231,10 +232,6 @@ where
     graceful.spawn_task_fn({
         let args = args.clone();
         let error_tx = error_tx.clone();
-
-        let tls_acceptor = tls_acceptor.clone();
-        let root_ca = root_ca.clone();
-
         let firewall = firewall.clone();
 
         |guard| {
@@ -258,7 +255,7 @@ where
                 args,
                 guard,
                 error_tx,
-                tls_acceptor,
+                root_ca_key_pair,
                 proxy_addr_tx,
                 firewall,
                 #[cfg(feature = "har")]
@@ -315,7 +312,7 @@ async fn run_proxy_server(
     args: Args,
     guard: ShutdownGuard,
     error_tx: tokio::sync::mpsc::Sender<BoxError>,
-    tls_acceptor: TlsAcceptorLayer,
+    root_ca_key_pair: RootCaKeyPair,
     proxy_addr_tx: tokio::sync::oneshot::Sender<SocketAddress>,
     firewall: http::firewall::Firewall,
     #[cfg(feature = "har")] har_export_layer: safechain_proxy_lib::diagnostics::har::HARExportLayer,
@@ -324,7 +321,7 @@ async fn run_proxy_server(
     if let Err(err) = server::proxy::run_proxy_server(
         args,
         guard,
-        tls_acceptor,
+        root_ca_key_pair,
         proxy_addr_tx,
         firewall,
         #[cfg(feature = "har")]

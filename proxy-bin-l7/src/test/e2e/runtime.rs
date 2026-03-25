@@ -11,7 +11,7 @@ use rama::{
     Layer as _, Service,
     error::BoxError,
     http::{
-        BodyExtractExt as _, HeaderMap, HeaderValue, Request, Response,
+        BodyExtractExt as _, HeaderMap, Request, Response,
         client::{
             EasyHttpWebClient, ProxyConnectorLayer,
             proxy::layer::{HttpProxyConnectorLayer, SetProxyAuthHttpHeaderLayer},
@@ -37,10 +37,7 @@ use rama::{
     utils::{backoff::ExponentialBackoff, rng::HasherRng, str::NonEmptyStr},
 };
 
-use crate::{
-    Args,
-    server::proxy::{FirewallUserConfig, HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG},
-};
+use crate::Args;
 
 #[derive(Clone)]
 pub(super) struct Runtime {
@@ -129,19 +126,6 @@ impl Runtime {
     }
 
     #[inline(always)]
-    pub async fn client_with_http_proxy_and_user_config_header(
-        &self,
-        cfg: FirewallUserConfig,
-    ) -> impl Service<Request, Output = Response, Error = BoxError> {
-        let mut headers = HeaderMap::new();
-        let cfg_header_value_str = serde_html_form::to_string(cfg).unwrap();
-        let cfg_header_value = HeaderValue::from_str(&cfg_header_value_str).unwrap();
-        headers.insert(HEADER_NAME_X_AIKIDO_SAFE_CHAIN_CONFIG, cfg_header_value);
-        let web_client = self.client_with_ca_trust_inner(Some(headers)).await;
-        AddInputExtensionLayer::new(self.http_proxy_addr()).into_layer(web_client)
-    }
-
-    #[inline(always)]
     pub async fn client_with_http_proxy_and_username(
         &self,
         username: &str,
@@ -174,6 +158,7 @@ impl Runtime {
     }
 
     #[inline(always)]
+    #[expect(unused)]
     pub async fn client_with_socks5_proxy_and_username(
         &self,
         username: &str,
@@ -240,12 +225,12 @@ fn create_client_inner(
     (
         // timeout needs to be high enough for this e2e test setup
         // ... windows machines in CI... can be ... slow
-        TimeoutLayer::new(Duration::from_secs(180)),
+        TimeoutLayer::new(Duration::from_mins(5)),
         RetryLayer::new(
             ManagedPolicy::default().with_backoff(
                 ExponentialBackoff::new(
                     Duration::from_millis(100),
-                    Duration::from_secs(180),
+                    Duration::from_mins(5),
                     0.01,
                     HasherRng::default,
                 )
@@ -270,11 +255,11 @@ pub(super) async fn get() -> Runtime {
     // make timeouts large enough... windows CI tests... zzz
     let (meta_addr, proxy_addr) = tokio::try_join!(
         tokio::time::timeout(
-            Duration::from_secs(180),
+            Duration::from_mins(5),
             read_file_or_wait(app.data_dir.join("meta.addr.txt"))
         ),
         tokio::time::timeout(
-            Duration::from_secs(180),
+            Duration::from_mins(5),
             read_file_or_wait(app.data_dir.join("proxy.addr.txt"))
         ),
     )
@@ -299,11 +284,11 @@ pub(super) async fn spawn_with_args(extra_args: &[&str]) -> Runtime {
 
     let (meta_addr, proxy_addr) = tokio::try_join!(
         tokio::time::timeout(
-            Duration::from_secs(180),
+            Duration::from_mins(5),
             read_file_or_wait(app.data_dir.join("meta.addr.txt"))
         ),
         tokio::time::timeout(
-            Duration::from_secs(180),
+            Duration::from_mins(5),
             read_file_or_wait(app.data_dir.join("proxy.addr.txt"))
         ),
     )
@@ -333,11 +318,11 @@ pub(super) async fn spawn_with_agent_identity(
 
     let (meta_addr, proxy_addr) = tokio::try_join!(
         tokio::time::timeout(
-            Duration::from_secs(180),
+            Duration::from_mins(5),
             read_file_or_wait(app.data_dir.join("meta.addr.txt"))
         ),
         tokio::time::timeout(
-            Duration::from_secs(180),
+            Duration::from_mins(5),
             read_file_or_wait(app.data_dir.join("proxy.addr.txt"))
         ),
     )

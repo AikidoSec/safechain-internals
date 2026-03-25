@@ -1,4 +1,4 @@
-.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-darwin-universal build-windows-amd64 build-proxy build-l7-proxy-universal build-pkg build-pkg-sign-local install-pkg uninstall-pkg clean test run help
+.PHONY: build build-release build-darwin-amd64 build-darwin-arm64 build-darwin-universal build-windows-amd64 build-proxy build-l7-proxy-universal build-l4-proxy build-l4-proxy-universal build-l4-proxy-macos build-pkg build-pkg-sign-local install-pkg uninstall-pkg clean test run help
 
 BINARY_NAME=endpoint-protection
 BINARY_NAME_UI=endpoint-protection-ui
@@ -140,6 +140,66 @@ build-l7-proxy-universal:
 		-output $(BIN_DIR)/safechain-l7-proxy-darwin-universal
 	@echo "Universal proxy built:"
 	@lipo -info $(BIN_DIR)/safechain-l7-proxy-darwin-universal
+
+build-l4-proxy:
+	@echo "Building safechain-l4-proxy..."
+	@cargo build --release --bin safechain-l4-proxy
+	@mkdir -p $(BIN_DIR)
+	@cp target/release/safechain-l4-proxy $(BIN_DIR)/safechain-l4-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)
+	@echo "Proxy built: $(BIN_DIR)/safechain-l4-proxy-$(DETECTED_OS)-$(DETECTED_ARCH)"
+
+build-l4-proxy-universal:
+	@echo "Building safechain-l4-proxy for x86_64-apple-darwin..."
+	@rustup target add x86_64-apple-darwin 2>/dev/null || true
+	@cargo build --release --bin safechain-l4-proxy --target x86_64-apple-darwin
+	@echo "Building safechain-l4-proxy for aarch64-apple-darwin..."
+	@rustup target add aarch64-apple-darwin 2>/dev/null || true
+	@cargo build --release --bin safechain-l4-proxy --target aarch64-apple-darwin
+	@mkdir -p $(BIN_DIR)
+	@lipo -create \
+		target/x86_64-apple-darwin/release/safechain-l4-proxy \
+		target/aarch64-apple-darwin/release/safechain-l4-proxy \
+		-output $(BIN_DIR)/safechain-l4-proxy-darwin-universal
+	@echo "Universal proxy built:"
+	@lipo -info $(BIN_DIR)/safechain-l4-proxy-darwin-universal
+
+L4_DERIVED_DATA=.aikido/xcode/safechain-l4-proxy-release
+L4_APP_NAME=AikidoEndpointL4ProxyHost.app
+
+build-l4-proxy-macos:
+ifeq ($(DETECTED_OS),darwin)
+	@echo "Building safechain-lib-l4-proxy-macos for x86_64-apple-darwin..."
+	@rustup target add x86_64-apple-darwin 2>/dev/null || true
+	@cargo build --release -p safechain-lib-l4-proxy-macos --target x86_64-apple-darwin
+	@echo "Building safechain-lib-l4-proxy-macos for aarch64-apple-darwin..."
+	@rustup target add aarch64-apple-darwin 2>/dev/null || true
+	@cargo build --release -p safechain-lib-l4-proxy-macos --target aarch64-apple-darwin
+	@mkdir -p target/universal
+	@lipo -create \
+		target/x86_64-apple-darwin/release/libsafechain_lib_l4_proxy_macos.a \
+		target/aarch64-apple-darwin/release/libsafechain_lib_l4_proxy_macos.a \
+		-output target/universal/libsafechain_lib_l4_proxy_macos.a
+	@echo "Universal static lib built:"
+	@lipo -info target/universal/libsafechain_lib_l4_proxy_macos.a
+	@echo "Generating Xcode project..."
+	@cd packaging/macos/xcode/l4-proxy && xcodegen generate
+	@echo "Building macOS L4 proxy app..."
+	@cd packaging/macos/xcode/l4-proxy && xcodebuild \
+		-project AikidoEndpointL4Proxy.xcodeproj \
+		-scheme AikidoEndpointL4ProxyHost \
+		-configuration Release \
+		-derivedDataPath "$(CURDIR)/$(L4_DERIVED_DATA)" \
+		-allowProvisioningUpdates \
+		-allowProvisioningDeviceRegistration \
+		clean build
+	@mkdir -p $(BIN_DIR)
+	@rm -rf $(BIN_DIR)/$(L4_APP_NAME)
+	@ditto "$(L4_DERIVED_DATA)/Build/Products/Release/$(L4_APP_NAME)" "$(BIN_DIR)/$(L4_APP_NAME)"
+	@echo "macOS L4 proxy app built: $(BIN_DIR)/$(L4_APP_NAME)"
+else
+	@echo "Error: build-l4-proxy-macos is only supported on macOS"
+	@exit 1
+endif
 
 build-pkg:
 ifeq ($(DETECTED_OS),darwin)

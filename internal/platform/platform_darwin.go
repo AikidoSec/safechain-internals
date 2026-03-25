@@ -27,6 +27,7 @@ const (
 	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
 	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
 	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
+	SafeChainL4ProxyHostPath     = "/Library/Application Support/AikidoSecurity/EndpointProtection/bin/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost"
 	SafeChainSbomJSONName        = "endpoint-protection-sbom.json"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
@@ -442,6 +443,52 @@ func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ..
 	return RunAsCurrentUserWithEnv(ctx, env, binaryPath, args)
 }
 
+// CommandAsCurrentUserWithPathEnv builds a long-lived command that should run
+// as the current console user with a PATH that includes the binary's location.
+func CommandAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ...string) (*exec.Cmd, error) {
+	if !filepath.IsAbs(binaryPath) {
+		return nil, fmt.Errorf("binaryPath must be absolute, got %q", binaryPath)
+	}
+
+	binDir := filepath.Dir(binaryPath)
+	pathEnv := binDir
+
+	resolved, err := filepath.EvalSymlinks(binaryPath)
+	if err == nil {
+		resolvedDir := filepath.Dir(resolved)
+		if resolvedDir != binDir {
+			pathEnv = binDir + string(os.PathListSeparator) + resolvedDir
+		}
+	}
+
+	pathEnv = pathEnv + string(os.PathListSeparator) + os.Getenv("PATH")
+	env := []string{"PATH=" + pathEnv}
+
+	if !RunningAsRoot() {
+		// Use exec.CommandContext to avoid shell interpretation of arguments,
+		// preventing injection when passing user-controlled values through sudo.
+		cmd := exec.CommandContext(ctx, binaryPath, args...)
+		cmd.Env = append(os.Environ(), env...)
+		return cmd, nil
+	}
+
+	username, _, _, _, err := GetCurrentUser(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get console user: %v", err)
+	}
+
+	suArgs := []string{"-u", username}
+	if len(env) > 0 {
+		suArgs = append(suArgs, "env")
+		suArgs = append(suArgs, env...)
+	}
+	suArgs = append(suArgs, binaryPath)
+	suArgs = append(suArgs, args...)
+	// Use exec.CommandContext to avoid shell interpretation of arguments,
+	// preventing injection when passing user-controlled values through sudo.
+	return exec.CommandContext(ctx, "sudo", suArgs...), nil
+}
+
 func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
 	return RunAsCurrentUserWithEnv(ctx, []string{}, binaryPath, args)
 }
@@ -602,4 +649,9 @@ func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 		return fmt.Errorf("failed to run uninstall script: %w", err)
 	}
 	return nil
+}
+
+// IsProcessAlive reports whether a process with the given PID is still running.
+func IsProcessAlive(pid int) bool {
+	return unix.Kill(pid, 0) == nil
 }

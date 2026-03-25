@@ -1,0 +1,145 @@
+package proxy
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/AikidoSec/safechain-internals/internal/platform"
+)
+
+const (
+	ProxyBind          = "127.0.0.1:7654"
+	ProxyMeta          = "127.0.0.1:7655" // This hosts the proxy's CA and is also useful for health checks
+	ProxyReadyTimeout  = 60 * time.Second
+	ProxyReadyInterval = 1 * time.Second
+)
+
+type L7Proxy struct {
+	cmd      *exec.Cmd
+	ctx      context.Context
+	cancel   context.CancelFunc
+	procDone chan struct{}
+	procErr  error
+}
+
+func NewL7() *L7Proxy {
+	return &L7Proxy{}
+}
+
+func (p *L7Proxy) WaitForProxyToBeReady() error {
+	if p.procDone == nil {
+		return fmt.Errorf("procDone channel is nil")
+	}
+
+	timeout := time.After(ProxyReadyTimeout)
+	ticker := time.NewTicker(ProxyReadyInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("timeout waiting for proxy to be ready after %s", ProxyReadyTimeout.String())
+		case <-p.procDone:
+			return fmt.Errorf("proxy process exited unexpectedly: %v", p.procErr)
+		case <-ticker.C:
+			err := LoadProxyConfig()
+			if err == nil {
+				return nil
+			}
+		}
+	}
+}
+
+func (p *L7Proxy) Version() (string, error) {
+	cmd := exec.Command(filepath.Join(platform.GetConfig().BinaryDir, platform.SafeChainL7ProxyBinaryName), "--version")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get proxy version: %v", err)
+	}
+	trimmed := strings.TrimSpace(string(output))
+	if trimmed == "" {
+		return "", fmt.Errorf("proxy version output is empty")
+	}
+	parts := strings.Split(trimmed, " ")
+	if len(parts) == 0 {
+		return "", fmt.Errorf("failed to parse proxy version from output: %q", trimmed)
+	}
+	return parts[len(parts)-1], nil
+}
+
+func (p *L7Proxy) Start(ctx context.Context, opts StartOptions) error {
+	config := platform.GetConfig()
+	p.ctx, p.cancel = context.WithCancel(ctx)
+	p.cmd = exec.CommandContext(p.ctx,
+		filepath.Join(config.BinaryDir, platform.SafeChainL7ProxyBinaryName),
+		"--bind", ProxyBind,
+		"--meta", ProxyMeta,
+		"--data", platform.GetRunDir(),
+		"--output", filepath.Join(config.LogDir, platform.SafeChainL7ProxyLogName),
+		"--secrets", "keyring",
+		"--reporting-endpoint", fmt.Sprintf("http://%s", opts.IngressAddr),
+		"--aikido-url", opts.BaseURL,
+	)
+
+	stderrLogPath := filepath.Join(config.LogDir, platform.SafeChainL7ProxyErrLogName)
+	stderrFile, err := os.OpenFile(stderrLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open stderr log file: %v", err)
+	}
+	p.cmd.Stdout = stderrFile
+	p.cmd.Stderr = stderrFile
+
+	log.Println("Starting SafeChain Proxy with command:", p.cmd.String())
+
+	if err := p.cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start proxy: %v", err)
+	}
+
+	p.procDone = make(chan struct{})
+	go func() {
+		p.procErr = p.cmd.Wait()
+		close(p.procDone)
+	}()
+
+	log.Println("Waiting for proxy to be ready...")
+	if err := p.WaitForProxyToBeReady(); err != nil {
+		return fmt.Errorf("failed to wait for proxy to be ready: %v", err)
+	}
+
+	log.Println("Proxy URL:", ProxyHttpUrl)
+	log.Println("Meta URL:", MetaHttpUrl)
+	log.Println("SafeChain Proxy started successfully!")
+	return nil
+}
+
+func (p *L7Proxy) IsRunning() bool {
+	return IsProxyRunning()
+}
+
+func (p *L7Proxy) Stop() error {
+	log.Println("Stopping SafeChain Proxy...")
+	if p.cancel != nil {
+		p.cancel()
+	}
+	if p.procDone != nil {
+		select {
+		case <-p.procDone:
+		case <-time.After(10 * time.Second):
+			log.Println("Timeout waiting for proxy process to exit, killing...")
+			if p.cmd != nil && p.cmd.Process != nil {
+				if err := p.cmd.Process.Kill(); err != nil {
+					log.Printf("Failed to kill proxy process: %v", err)
+				}
+			}
+		}
+	}
+
+	log.Println("SafeChain Proxy stopped successfully!")
+	return nil
+}

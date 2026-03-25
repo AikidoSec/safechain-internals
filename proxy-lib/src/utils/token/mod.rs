@@ -3,7 +3,7 @@ use std::{io::Read, path::Path};
 use rama::{telemetry::tracing, utils::str::NonEmptyStr};
 use serde::Deserialize;
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, PartialEq)]
 pub struct AgentIdentity {
     pub token: NonEmptyStr,
     pub device_id: NonEmptyStr,

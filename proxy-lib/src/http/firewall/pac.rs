@@ -6,8 +6,6 @@ use rama::{
     utils::str::smol_str::ToSmolStr,
 };
 
-use crate::http::service::connectivity::CONNECTIVITY_DOMAIN;
-
 #[derive(Debug)]
 pub struct PacScriptGenerator {
     buffer: String,
@@ -45,10 +43,8 @@ impl PacScriptGenerator {
         let _ = write!(&mut out, "{proxy_addr}");
         out.push_str(
             r#"; DIRECT";
-    var ds = [""#,
+    var ds = ["#,
         );
-        out.push_str(CONNECTIVITY_DOMAIN.as_str());
-        out.push('"');
 
         Self {
             buffer: out,
@@ -64,9 +60,17 @@ impl PacScriptGenerator {
         self.domains
             .sort_unstable_by_key(|b| std::cmp::Reverse(b.len()));
 
-        for d in self.domains.iter() {
+        let mut domain_iter = self.domains.iter();
+
+        if let Some(first_domain) = domain_iter.next() {
+            self.buffer.push('"');
+            self.buffer.push_str(first_domain);
+            self.buffer.push('"');
+        }
+
+        for other_domain in domain_iter {
             self.buffer.push_str(r##",""##);
-            self.buffer.push_str(d);
+            self.buffer.push_str(other_domain);
             self.buffer.push('"');
         }
 
