@@ -58,11 +58,13 @@ func (m *UIManager) Launch(ctx context.Context, ingressAddr string) error {
 
 	log.Printf("Launching UI with args: --daemon_url %s --token *** --ui_url %s --log_file %s", daemonURL, uiURL, platform.GetUILogPath())
 	pid, err := platform.StartUIProcessInAuditSessionOfCurrentUser(ctx, binaryPath, args)
+	if pid > 0 {
+		m.process.setPID(pid)
+		log.Printf("UI process PID: %d", pid)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to launch UI: %v", err)
 	}
-	log.Printf("UI process PID: %d", pid)
-	m.process.setPID(pid)
 	log.Println("UI tray application launched")
 	return nil
 }
