@@ -228,7 +228,7 @@ where
                     ?source_app_bundle_id,
                     %sni,
                     %err,
-                    "adding SNI exception for follow-up tls relay inputs due to Relay Cert Issue"
+                    "adding SNI exception for follow-up tls relay inputs due to Handshake Relay Issue"
                 );
                 self.cache.insert(
                     CacheKey {
