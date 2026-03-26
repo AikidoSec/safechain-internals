@@ -4,10 +4,7 @@ use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
-    http::{
-        Request, Response, Uri,
-        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
-    },
+    http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
     utils::str::{
@@ -81,11 +78,6 @@ impl fmt::Debug for RuleChrome {
 
 impl Rule for RuleChrome {
     #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        "Chrome Plugin"
-    }
-
-    #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
     }
@@ -103,19 +95,7 @@ impl Rule for RuleChrome {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        Ok(resp)
-    }
-
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
-        if !crate::http::try_get_domain_for_req(&req)
-            .map(|domain| self.match_domain(&domain))
-            .unwrap_or_default()
-        {
-            tracing::trace!("Chrome rule did not match incoming request: passthrough");
-            return Ok(RequestAction::Allow(req));
-        }
-
         let Some((extension_id, version)) = Self::parse_crx_download_url(&req) else {
             return Ok(RequestAction::Allow(req));
         };
@@ -162,14 +142,6 @@ impl Rule for RuleChrome {
         }
 
         Ok(RequestAction::Allow(req))
-    }
-
-    async fn evaluate_ws_relay_msg(
-        &self,
-        _: WebSocketRelayDirection,
-        data: WebSocketRelayOutput,
-    ) -> Result<WebSocketRelayOutput, BoxError> {
-        Ok(data)
     }
 }
 

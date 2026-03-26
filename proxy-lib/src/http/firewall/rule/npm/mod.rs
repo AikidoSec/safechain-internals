@@ -4,10 +4,7 @@ use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
-    http::{
-        Request, Response, Uri,
-        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
-    },
+    http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
     utils::str::arcstr::{ArcStr, arcstr},
@@ -90,18 +87,8 @@ impl fmt::Debug for RuleNpm {
 
 impl Rule for RuleNpm {
     #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        "Npm"
-    }
-
-    #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
-    }
-
-    #[inline(always)]
-    fn match_ws_handshake<'a>(&self, _: super::WebSocketHandshakeInfo<'a>) -> bool {
-        false
     }
 
     #[cfg(feature = "pac")]
@@ -112,22 +99,7 @@ impl Rule for RuleNpm {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        match &self.maybe_min_package_age {
-            Some(min_package_age) => min_package_age.remove_new_packages(resp).await,
-            None => Ok(resp),
-        }
-    }
-
     async fn evaluate_request(&self, mut req: Request) -> Result<RequestAction, BoxError> {
-        if !crate::http::try_get_domain_for_req(&req)
-            .map(|domain| self.match_domain(&domain))
-            .unwrap_or_default()
-        {
-            tracing::trace!("Npm rule did not match incoming request: passthrough");
-            return Ok(RequestAction::Allow(req));
-        }
-
         if self.is_tarball_download(&req) {
             return self.evaluate_tarball_request(req).await;
         }
@@ -139,12 +111,12 @@ impl Rule for RuleNpm {
         Ok(RequestAction::Allow(req))
     }
 
-    async fn evaluate_ws_relay_msg(
-        &self,
-        _: WebSocketRelayDirection,
-        data: WebSocketRelayOutput,
-    ) -> Result<WebSocketRelayOutput, BoxError> {
-        Ok(data)
+    #[inline(always)]
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
+        match &self.maybe_min_package_age {
+            Some(min_package_age) => min_package_age.remove_new_packages(resp).await,
+            None => Ok(resp),
+        }
     }
 }
 

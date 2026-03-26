@@ -7,7 +7,7 @@ options:
 packages:
   RamaAppleNetworkExtension:
     url: https://github.com/plabayo/rama.git
-    revision: 4e1041cc212ea5e4de27a64da4246b7ec731370b
+    revision: edd51d9fe72a620a53ea19f648e49b1d7c77b256
 
 targets:
   AikidoEndpointL4ProxyHost:
@@ -29,7 +29,7 @@ targets:
           fi
           APP="$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
           if [ -d "$APP" ]; then
-            /usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --preserve-metadata=entitlements --timestamp=none "$APP"
+            /usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --preserve-metadata=entitlements --timestamp "$APP"
           fi
     settings:
       base:
@@ -44,6 +44,7 @@ targets:
         CODE_SIGN_IDENTITY: "Apple Development"
         DEVELOPMENT_TEAM: "7VPF8GD6J4"
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
+        ENABLE_HARDENED_RUNTIME: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   AikidoEndpointL4ProxyExtension:
@@ -67,9 +68,12 @@ targets:
         CODE_SIGN_IDENTITY: "Apple Development"
         DEVELOPMENT_TEAM: "7VPF8GD6J4"
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
+        ENABLE_HARDENED_RUNTIME: YES
         ENABLE_DEBUG_DYLIB: NO
         OTHER_LDFLAGS:
           - "$(SRCROOT)/../../../../target/universal/libsafechain_lib_l4_proxy_macos.a"
           - "-framework"
           - "NetworkExtension"
+          - "-framework"
+          - "SystemConfiguration"
           - "-lz"

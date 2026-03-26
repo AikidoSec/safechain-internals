@@ -20,7 +20,7 @@ xcode_l4_derived_data := ".aikido/xcode/safechain-l4-proxy-wrapper"
 xcode_l4_app_name := "AikidoEndpointL4ProxyHost.app"
 xcode_l4_app := xcode_l4_derived_data + "/Build/Products/Debug/" + xcode_l4_app_name
 xcode_l4_app_exe := xcode_l4_app + "/Contents/MacOS/AikidoEndpointL4ProxyHost"
-xcode_l4_installed_app := "/Applications/" + xcode_l4_app_name
+xcode_l4_installed_app := "/Library/Application Support/AikidoSecurity/EndpointProtection/bin/" + xcode_l4_app_name
 xcode_l4_installed_app_exe := xcode_l4_installed_app + "/Contents/MacOS/AikidoEndpointL4ProxyHost"
 xcode_l4_installed_appex := xcode_l4_installed_app + "/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
 
@@ -153,8 +153,8 @@ macos-l4-xcodegen-build-debug-signed: macos-l4-build-rust macos-l4-xcodegen-gene
 macos-l4-install-signed: macos-l4-xcodegen-build-debug-signed
     pkill -f "{{l4_host_bundle_id}}" || true
     sleep 1
-    rm -rf "{{xcode_l4_installed_app}}"
-    ditto "{{xcode_l4_app}}" "{{xcode_l4_installed_app}}"
+    sudo rm -rf "{{xcode_l4_installed_app}}"
+    sudo ditto "{{xcode_l4_app}}" "{{xcode_l4_installed_app}}"
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "{{xcode_l4_installed_app}}"
     pluginkit -a "{{xcode_l4_installed_appex}}" || true
 

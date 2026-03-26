@@ -81,9 +81,14 @@ jobs:
         with:
           env-vars: "RUST_TOOLCHAIN=stable"
           prefix-key: "musl-zig-0.15.1-build-0.21.3"
-      - name: musl build check
+      - name: musl build check (l7-proxy)
         run: |
           cargo zigbuild -p safechain-l7-proxy --target ${{ matrix.target }} --all-features
+        env:
+          AWS_LC_SYS_CMAKE_BUILDER: "0"
+      - name: musl build check (l4-proxy)
+        run: |
+          cargo zigbuild -p safechain-l4-proxy --target ${{ matrix.target }} --all-features
         env:
           AWS_LC_SYS_CMAKE_BUILDER: "0"
 

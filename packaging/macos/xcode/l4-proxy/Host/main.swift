@@ -2,12 +2,19 @@ import Darwin
 import Foundation
 import NetworkExtension
 import OSLog
+import Security
 
 private enum HostCommand {
     case start(StartOptions)
-    case stop
+    case stop(StopOptions)
     case status
+    case cleanSecrets
     case help
+}
+
+private struct StopOptions {
+    var removeProfile = false
+    var cleanSecrets = false
 }
 
 private struct StartOptions {
@@ -76,11 +83,14 @@ private final class TransparentProxyHostCLI {
             case .start(let options):
                 try start(options: options)
                 return EXIT_SUCCESS
-            case .stop:
-                try stop()
+            case .stop(let options):
+                try stop(options: options)
                 return EXIT_SUCCESS
             case .status:
                 try status()
+                return EXIT_SUCCESS
+            case .cleanSecrets:
+                cleanSecrets()
                 return EXIT_SUCCESS
             case .help:
                 print(Self.usage())
@@ -138,21 +148,33 @@ private final class TransparentProxyHostCLI {
         }
     }
 
-    private func stop() throws {
-        guard let manager = selectManager(from: try loadManagers()) else {
+    private func stop(options: StopOptions) throws {
+        let managers = try loadManagers()
+        guard let manager = selectManager(from: managers) else {
             print("status: not-installed")
             return
         }
 
-        if manager.connection.status == .disconnected || manager.connection.status == .invalid {
-            print("status: \(statusString(manager.connection.status))")
-            return
+        if manager.connection.status != .disconnected && manager.connection.status != .invalid {
+            log("stopping transparent proxy tunnel")
+            manager.connection.stopVPNTunnel()
+            waitUntilDisconnected(manager: manager, attempts: 40)
         }
 
-        log("stopping transparent proxy tunnel")
-        manager.connection.stopVPNTunnel()
-        let status = waitUntilDisconnected(manager: manager, attempts: 40)
-        print("status: \(statusString(status))")
+        if options.cleanSecrets {
+            cleanSecrets()
+        }
+
+        if options.removeProfile {
+            let managersToRemove = matchingManagers(from: managers)
+            if !managersToRemove.isEmpty {
+                log("removing \(managersToRemove.count) saved transparent proxy manager(s)")
+                try removeManagersFromPreferences(managersToRemove)
+            }
+            print("status: removed")
+        } else {
+            print("status: \(statusString(manager.connection.status))")
+        }
     }
 
     private func status() throws {
@@ -246,6 +268,12 @@ private final class TransparentProxyHostCLI {
 
         if proto.serverAddress != managerServerAddress {
             proto.serverAddress = managerServerAddress
+            changed = true
+        }
+
+        if proto.disconnectOnSleep {
+            // ensure the tunnel remains active across system sleep/wake cycles
+            proto.disconnectOnSleep = false
             changed = true
         }
 
@@ -410,6 +438,39 @@ private final class TransparentProxyHostCLI {
         }
     }
 
+    private static let secretAccount = "safechain-lib-l4-proxy-macos"
+    private static let secretServiceKeys = [
+        "tls-root-ca-key",
+        "tls-root-ca-crt-meta",
+    ]
+    private static let secretChunkPrefix = "tls-root-ca-crt-chunk"
+    private static let maxChunks = 16
+
+    private func cleanSecrets() {
+        var allKeys = Self.secretServiceKeys
+        for i in 0..<Self.maxChunks {
+            allKeys.append("\(Self.secretChunkPrefix)-\(i)")
+        }
+
+        for key in allKeys {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: key,
+                kSecAttrAccount as String: Self.secretAccount,
+                kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
+                kSecUseDataProtectionKeychain as String: true,
+            ]
+            let status = SecItemDelete(query as CFDictionary)
+            if status == errSecSuccess {
+                log("deleted keychain secret: \(key)")
+            } else if status != errSecItemNotFound {
+                log("failed to delete keychain secret \(key): OSStatus \(status)")
+            }
+        }
+
+        print("secrets: cleaned")
+    }
+
     private func log(_ message: String) {
         logger.info("\(message, privacy: .public)")
     }
@@ -438,15 +499,18 @@ private final class TransparentProxyHostCLI {
             }
             return .start(try parseStartOptions(arguments: startArguments))
         case "stop":
-            guard arguments.count == 1 else {
-                throw CLIError.usage("`stop` does not accept additional arguments")
-            }
-            return .stop
+            let stopArguments = Array(arguments.dropFirst())
+            return .stop(try parseStopOptions(arguments: stopArguments))
         case "status":
             guard arguments.count == 1 else {
                 throw CLIError.usage("`status` does not accept additional arguments")
             }
             return .status
+        case "clean-secrets":
+            guard arguments.count == 1 else {
+                throw CLIError.usage("`clean-secrets` does not accept additional arguments")
+            }
+            return .cleanSecrets
         default:
             throw CLIError.usage("unknown command: \(first)")
         }
@@ -488,6 +552,21 @@ private final class TransparentProxyHostCLI {
             )
         }
 
+        return options
+    }
+
+    private static func parseStopOptions(arguments: [String]) throws -> StopOptions {
+        var options = StopOptions()
+        for argument in arguments {
+            switch argument {
+            case "--remove-profile":
+                options.removeProfile = true
+            case "--clean-secrets":
+                options.cleanSecrets = true
+            default:
+                throw CLIError.usage("unknown `stop` argument: \(argument)")
+            }
+        }
         return options
     }
 
@@ -556,13 +635,19 @@ private final class TransparentProxyHostCLI {
         """
         Usage:
           AikidoEndpointL4ProxyHost start [options]
-          AikidoEndpointL4ProxyHost stop
+          AikidoEndpointL4ProxyHost stop [options]
           AikidoEndpointL4ProxyHost status
+          AikidoEndpointL4ProxyHost clean-secrets
 
         Commands:
-          start    Install or update the transparent proxy profile and request that it starts.
-          stop     Request that the transparent proxy tunnel stops.
-          status   Show the current Network Extension status and saved engine config.
+          start          Install or update the transparent proxy profile and request that it starts.
+          stop           Request that the transparent proxy tunnel stops.
+          status         Show the current Network Extension status and saved engine config.
+          clean-secrets  Delete proxy CA secrets from the keychain.
+
+        Stop options:
+          --remove-profile             Remove the saved Network Extension profile after stopping.
+          --clean-secrets              Delete proxy CA secrets from the keychain.
 
         Start options:
           --reporting-endpoint URL   POST blocked-event reports to this absolute URL.

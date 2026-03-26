@@ -12,25 +12,31 @@ import (
 	"sync"
 
 	"github.com/AikidoSec/safechain-internals/internal/config"
-	"github.com/AikidoSec/safechain-internals/internal/uiclient"
 )
 
 const (
 	DefaultBind = "127.0.0.1:0" // Use port 0 to let the OS assign a free port
 )
 
+// UIProvider abstracts the UI capabilities needed by the ingress server:
+// authenticating inbound requests and forwarding block notifications.
+type UIProvider interface {
+	Token() string
+	NotifyBlocked(ev any)
+}
+
 type Server struct {
 	addr     string
 	listener net.Listener
 	server   *http.Server
 	config   *config.ConfigInfo
-	ui       *uiclient.Client
+	ui       UIProvider
 
 	eventStore *eventStore
 	mu         sync.RWMutex
 }
 
-func New(cfg *config.ConfigInfo, ui *uiclient.Client) *Server {
+func New(cfg *config.ConfigInfo, ui UIProvider) *Server {
 	return &Server{
 		config:     cfg,
 		ui:         ui,

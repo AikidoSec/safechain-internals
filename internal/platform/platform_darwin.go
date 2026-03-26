@@ -27,6 +27,7 @@ const (
 	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
 	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
 	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
+	SafeChainL4ProxyHostPath     = "/Library/Application Support/AikidoSecurity/EndpointProtection/bin/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost"
 	SafeChainSbomJSONName        = "endpoint-protection-sbom.json"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
@@ -286,6 +287,26 @@ func showCAInstallDialog(ctx context.Context) error {
 	}
 	if strings.TrimSpace(string(out)) != "Install" {
 		return fmt.Errorf("CA certificate installation cancelled")
+	}
+	return nil
+}
+
+func ShowErrorDialog(ctx context.Context, message string) error {
+	script := `
+on run argv
+	button returned of (display dialog (item 1 of argv) ¬
+		with title "Aikido Endpoint Protection" ¬
+		buttons {"OK"} default button "OK" with icon stop)
+end run
+`
+
+	_, err := RunInAuditSessionOfCurrentUser(
+		ctx,
+		"osascript",
+		[]string{"-e", script, "--", message},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to show error dialog: %w", err)
 	}
 	return nil
 }
@@ -648,4 +669,9 @@ func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 		return fmt.Errorf("failed to run uninstall script: %w", err)
 	}
 	return nil
+}
+
+// IsProcessAlive reports whether a process with the given PID is still running.
+func IsProcessAlive(pid int) bool {
+	return unix.Kill(pid, 0) == nil
 }

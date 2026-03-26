@@ -9,7 +9,7 @@ use rama::{
     http::{
         Request, Response, Uri,
         layer::{
-            compression::stream::StreamCompressionLayer,
+            compression::{MirrorDecompressed, stream::StreamCompressionLayer},
             decompression::DecompressionLayer,
             dpi_proxy_credential::DpiProxyCredentialExtractorLayer,
             map_response_body::MapResponseBodyLayer,
@@ -218,21 +218,19 @@ where
 
     (
         MapResponseBodyLayer::new_boxed_streaming_body(),
-        StreamCompressionLayer::new(),
+        StreamCompressionLayer::new().with_compress_predicate(MirrorDecompressed::new()),
         HijackLayer::new(
             DomainMatcher::exact(HIJACK_DOMAIN),
             Arc::new(hijack::new_service(ca_crt_pem_bytes)),
         ),
-        firewall.clone().into_evaluate_response_layer(),
-        firewall.clone().into_evaluate_request_layer(),
+        firewall,
         MapResponseBodyLayer::new_boxed_streaming_body(),
         DecompressionLayer::new(),
         HttpUpgradeMitmRelayLayer::new(
             exec,
             (
                 HttpWebSocketRelayServiceRequestMatcher::new(
-                    ConsumeErrLayer::trace_as_debug()
-                        .into_layer(WebSocketMitmRelayService::new(firewall)),
+                    ConsumeErrLayer::trace_as_debug().into_layer(WebSocketMitmRelayService::new()),
                 )
                 .with_store_handshake_request_header(true),
                 HttpProxyConnectRelayServiceRequestMatcher::new(http_conn_upgrade_svc),
