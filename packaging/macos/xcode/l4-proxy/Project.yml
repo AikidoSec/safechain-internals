@@ -27,7 +27,7 @@ targets:
           if [ "${CODE_SIGNING_ALLOWED:-YES}" != "YES" ]; then
             exit 0
           fi
-          APP="$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
+          APP="$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME/Contents/Library/SystemExtensions/AikidoEndpointL4ProxyExtension.systemextension"
           if [ -d "$APP" ]; then
             /usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --preserve-metadata=entitlements --timestamp "$APP"
           fi
@@ -50,7 +50,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   AikidoEndpointL4ProxyExtension:
-    type: app-extension
+    type: system-extension
     platform: macOS
     sources:
       - path: Extension

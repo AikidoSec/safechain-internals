@@ -288,13 +288,13 @@ jobs:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          APPEX="bin/AikidoEndpointL4ProxyHost.app/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
+          SYSEXT="bin/AikidoEndpointL4ProxyHost.app/Contents/Library/SystemExtensions/AikidoEndpointL4ProxyExtension.systemextension"
           APP="bin/AikidoEndpointL4ProxyHost.app"
 
-          echo "Signing L4 extension..."
+          echo "Signing L4 system extension..."
           codesign --force --sign "$DEV_ID_SHA" --timestamp --options runtime \
             --preserve-metadata=entitlements \
-            --keychain build.keychain "$APPEX"
+            --keychain build.keychain "$SYSEXT"
 
           echo "Signing L4 host app..."
           codesign --force --sign "$DEV_ID_SHA" --timestamp --options runtime \
@@ -302,11 +302,11 @@ jobs:
             --keychain build.keychain "$APP"
 
           echo "Verifying signatures..."
-          codesign --verify --strict --verbose=2 "$APPEX"
+          codesign --verify --strict --verbose=2 "$SYSEXT"
           codesign --verify --strict --verbose=2 "$APP"
 
           echo "Verifying entitlements include networkextension..."
-          codesign -d --entitlements :- "$APPEX" | grep -q "networkextension"
+          codesign -d --entitlements :- "$SYSEXT" | grep -q "networkextension"
           codesign -d --entitlements :- "$APP" | grep -q "networkextension"
 
           echo "Verifying team identifier..."

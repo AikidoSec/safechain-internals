@@ -16,7 +16,7 @@ mkdir -p "$RUN_DIR"
 chmod 755 "$LOGS_DIR"
 
 L4_APP="$INSTALL_DIR/bin/AikidoEndpointL4ProxyHost.app"
-L4_APPEX="$L4_APP/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
+L4_SYSEXT="$L4_APP/Contents/Library/SystemExtensions/AikidoEndpointL4ProxyExtension.systemextension"
 
 # Set proper permissions on binaries
 echo "Setting permissions on binaries..."
@@ -31,10 +31,9 @@ chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 
 # Register L4 proxy extension
 if [ -d "$L4_APP" ]; then
-    echo "Registering L4 proxy app and extension..."
+    echo "Registering L4 proxy app..."
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$L4_APP"
-    pluginkit -a "$L4_APPEX" || true
-    echo "L4 proxy extension registered"
+    echo "L4 proxy app registered (system extension activation is handled by the host app)"
 else
     echo "Warning: L4 proxy app not found at $L4_APP"
 fi
