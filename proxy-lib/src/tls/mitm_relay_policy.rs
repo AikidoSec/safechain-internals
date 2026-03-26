@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use moka::Equivalent;
 use rama::{
     Layer, Service,
     error::{BoxError, ErrorContext as _, ErrorExt as _},
@@ -15,12 +16,30 @@ use rama::{
         TlsStream,
         proxy::{TlsMitmRelayService, cert_issuer::BoringMitmCertIssuer},
     },
-    utils::str::smol_str::ToSmolStr,
+    utils::str::smol_str::{SmolStr, ToSmolStr},
 };
 
 use crate::{http::firewall::Firewall, utils::net::get_app_source_bundle_id_from_ext};
 
-type Cache = moka::sync::Cache<Domain, ()>;
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct CacheKey {
+    sni: Domain,
+    app: Option<SmolStr>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct CacheKeyRef<'a> {
+    sni: &'a Domain,
+    app: Option<&'a str>,
+}
+
+impl<'a> Equivalent<CacheKey> for CacheKeyRef<'a> {
+    fn equivalent(&self, key: &CacheKey) -> bool {
+        self.sni == &key.sni && self.app == key.app.as_deref()
+    }
+}
+
+type Cache = moka::sync::Cache<CacheKey, ()>;
 
 #[derive(Debug, Clone)]
 pub struct TlsMitmRelayPolicyLayer {
@@ -158,7 +177,14 @@ where
                 }
             }
 
-            if self.cache.get(&server_name).is_some() {
+            if self
+                .cache
+                .get(&CacheKeyRef {
+                    sni: &server_name,
+                    app: source_app_bundle_id.as_deref(),
+                })
+                .is_some()
+            {
                 tracing::debug!(
                     ?source_app_bundle_id,
                     "serving via fallback IO due to exception in cache for SNI = {server_name}"
@@ -195,14 +221,22 @@ where
             })
             .await
         {
-            if err.is_relay_cert_issue()
+            if err.is_handshake_relay_issue()
                 && let Some(sni) = err.sni().cloned()
             {
                 tracing::debug!(
                     ?source_app_bundle_id,
-                    "adding SNI ({sni}) exception for follow-up tls relay inputs due to Relay Cert Issue"
+                    %sni,
+                    %err,
+                    "adding SNI exception for follow-up tls relay inputs due to Handshake Relay Issue"
                 );
-                self.cache.insert(sni, ());
+                self.cache.insert(
+                    CacheKey {
+                        sni,
+                        app: source_app_bundle_id.clone(),
+                    },
+                    (),
+                );
             }
 
             let sni = err.sni().cloned();
