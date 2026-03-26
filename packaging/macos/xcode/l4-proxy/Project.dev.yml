@@ -68,4 +68,6 @@ targets:
           - "$(SRCROOT)/../../../../target/universal/libsafechain_lib_l4_proxy_macos.a"
           - "-framework"
           - "NetworkExtension"
+          - "-framework"
+          - "SystemConfiguration"
           - "-lz"

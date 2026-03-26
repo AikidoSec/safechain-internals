@@ -143,7 +143,7 @@ Step 5 is executed every time the proxy (app extension) starts.
 
 Current managed identity assumptions:
 
-- the identity lookup is hardcoded to `com.aikido.endpoint.proxy.l4`
+- the identity lookup is mode dependent (dev vs dist)
 - the access group is hardcoded to `com.apple.managed.vpn.shared`
 - the private key is assumed to be exportable (for example, allowed by the SCEP profile)
 

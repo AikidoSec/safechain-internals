@@ -35,7 +35,7 @@ fn setup_tracing() -> Result<TraceContext, BoxError> {
         .with_span_list(true)
         .with_writer(std::io::stderr);
 
-    let oslog_layer = OsLogger::new("com.aikido.endpoint.proxy.l4", "proxy");
+    let oslog_layer = OsLogger::new("com.aikido.endpoint.proxy.l4", "extension-rust");
 
     subscriber::registry()
         .with(filter::LevelFilter::DEBUG)
