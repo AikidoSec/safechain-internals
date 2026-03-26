@@ -233,15 +233,15 @@ where
                     %err,
                     "adding SNI exception for follow-up tls relay inputs due to Handshake Relay Issue"
                 );
-                
+
                 self.firewall
-                .record_tls_termination_failed(TlsTerminationFailedEvent {
-                    ts_ms: rama::utils::time::now_unix_ms(),
-                    sni: sni.to_string(),
-                    app: source_app_bundle_id.as_deref().map(String::from),
-                    error: err.to_string(),
-                });
-                
+                    .record_tls_termination_failed(TlsTerminationFailedEvent {
+                        ts_ms: rama::utils::time::now_unix_ms(),
+                        sni: sni.to_string(),
+                        app: source_app_bundle_id.as_deref().map(String::from),
+                        error: err.to_string(),
+                    });
+
                 self.cache.insert(
                     CacheKey {
                         sni,
