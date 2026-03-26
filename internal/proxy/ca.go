@@ -37,7 +37,7 @@ func ProxyCAInstalled() bool {
 	return true
 }
 
-const l4HijackCAURL = "http://mitm.ramaproxy.org/data/root.ca.pem2"
+const l4HijackCAURL = "http://mitm.ramaproxy.org/data/root.ca.pem"
 
 func DownloadCACertFromL7Proxy() error {
 	metaUrl, _, _, err := GetMetaUrls()
