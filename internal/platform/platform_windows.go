@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 	"golang.org/x/sys/windows"
@@ -437,9 +438,21 @@ func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 }
 
 func ShowErrorDialog(_ context.Context, message string) error {
-	// TODO: implement
+	titlePtr, _ := windows.UTF16PtrFromString("Aikido Endpoint Protection")
+	msgPtr, _ := windows.UTF16PtrFromString(message)
+	const MB_OK = 0x00000000
+	const MB_ICONERROR = 0x00000010
+	ret, _, err := procMessageBoxW.Call(0, uintptr(unsafe.Pointer(msgPtr)), uintptr(unsafe.Pointer(titlePtr)), MB_OK|MB_ICONERROR)
+	if ret == 0 {
+		return fmt.Errorf("failed to show error dialog: %v", err)
+	}
 	return nil
 }
+
+var (
+	user32          = windows.NewLazySystemDLL("user32.dll")
+	procMessageBoxW = user32.NewProc("MessageBoxW")
+)
 
 // STILL_ACTIVE is the value returned by GetExitCodeProcess when the
 // process has not yet terminated. It is defined by the Windows API as 259.
