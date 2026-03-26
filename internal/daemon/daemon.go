@@ -243,11 +243,13 @@ func (d *Daemon) run(ctx context.Context) error {
 	}()
 
 	if err := d.startProxy(ctx); err != nil {
+		platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to start proxy: %v", err))
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
 	if d.config.GetProxyMode() == config.ProxyModeL7 {
 		if err := setup.Install(ctx); err != nil {
+			platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to install setup: %v", err))
 			return fmt.Errorf("failed to install setup: %v", err)
 		}
 	}
@@ -256,10 +258,12 @@ func (d *Daemon) run(ctx context.Context) error {
 	go d.runDockerCALoop(ctx)
 
 	if err := d.registry.InstallAll(ctx); err != nil {
+		platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to install scanners: %v", err))
 		return fmt.Errorf("failed to install all scanners: %v", err)
 	}
 
 	if err := d.heartbeat(); err != nil {
+		platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed initial heartbeat: %v", err))
 		return fmt.Errorf("failed to heartbeat on startup: %v", err)
 	}
 
