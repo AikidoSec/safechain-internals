@@ -65,8 +65,11 @@ pub(super) async fn try_new_service(
     let data_storage = storage::SyncCompactDataStorage::try_new(data_path.clone())
         .context("create compact data storage using (app) storage dir")
         .with_context_debug_field("path", || data_path.clone())?;
-    let root_ca = match crate::tls::load_root_ca_key_pair(config.use_vpn_shared_identity)
-        .context("load managed identity MITM CA Crt/Key pair")?
+    let root_ca = match crate::tls::load_root_ca_key_pair(
+        config.use_vpn_shared_identity,
+        &config.host_bundle_id,
+    )
+    .context("load managed identity MITM CA Crt/Key pair")?
     {
         Some(root_ca) => root_ca,
         None => {

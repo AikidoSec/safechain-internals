@@ -121,7 +121,7 @@ chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 echo "Copying L4 proxy app bundle..."
 ditto "$L4_PROXY_APP" "$INSTALL_DIR/bin/AikidoEndpointL4ProxyHost.app"
 chmod 755 "$INSTALL_DIR/bin/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost"
-chmod 755 "$INSTALL_DIR/bin/AikidoEndpointL4ProxyHost.app/Contents/Library/SystemExtensions/AikidoEndpointL4ProxyExtension.systemextension/Contents/MacOS/AikidoEndpointL4ProxyExtension"
+chmod 755 "$INSTALL_DIR/bin/AikidoEndpointL4ProxyHost.app/Contents/Library/SystemExtensions/com.aikido.endpoint.proxy.l4.dist.extension.systemextension/Contents/MacOS/com.aikido.endpoint.proxy.l4.dist.extension"
 
 # Copy scripts
 echo "Copying scripts..."

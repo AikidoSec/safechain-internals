@@ -2,7 +2,9 @@ import Darwin
 import Foundation
 import NetworkExtension
 import OSLog
+import ObjectiveC
 import Security
+import SystemExtensions
 
 private enum HostCommand {
     case start(StartOptions)
@@ -41,12 +43,14 @@ private struct ProxyEngineConfigPayload: Encodable, Equatable {
     let reportingEndpoint: String?
     let aikidoURL: String?
     let useVPNSharedIdentity: Bool
+    let hostBundleID: String
 
     private enum CodingKeys: String, CodingKey {
         case agentIdentity = "agent_identity"
         case reportingEndpoint = "reporting_endpoint"
         case aikidoURL = "aikido_url"
         case useVPNSharedIdentity = "use_vpn_shared_identity"
+        case hostBundleID = "host_bundle_id"
     }
 
     var isEmpty: Bool {
@@ -69,11 +73,14 @@ private enum CLIError: LocalizedError {
 }
 
 private final class TransparentProxyHostCLI {
-    private let extensionBundleId = "com.aikido.endpoint.proxy.l4.extension"
     private let managerDescription = "Aikido Endpoint L4 Transparent Proxy"
     private let managerServerAddress = "127.0.0.1"
-    private let logSubsystem = "com.aikido.endpoint.proxy.l4"
-    private lazy var logger = Logger(subsystem: logSubsystem, category: "host-cli")
+    private lazy var extensionBundleId = infoString(
+        key: "AikidoL4ExtensionBundleIdentifier",
+        fallback: "com.aikido.endpoint.proxy.l4.dev.extension"
+    )
+    private lazy var logger = Logger(
+        subsystem: "com.aikido.endpoint.proxy.l4", category: "host-main")
 
     func run(arguments: [String]) -> Int32 {
         do {
@@ -109,6 +116,13 @@ private final class TransparentProxyHostCLI {
     }
 
     private func start(options: StartOptions) throws {
+        let systemExtensionReady = try ensureSystemExtensionActivated()
+        guard systemExtensionReady else {
+            throw CLIError.runtime(
+                "system extension approval required; open System Settings > General > Login Items & Extensions > Network Extensions"
+            )
+        }
+
         let engineConfigJSON = try Self.makeEngineConfigJSON(from: options)
         let existingManagers = try loadManagers()
 
@@ -120,7 +134,9 @@ private final class TransparentProxyHostCLI {
             }
         }
 
-        let manager = try prepareManager(existingManagers: options.resetProfile ? [] : existingManagers, engineConfigJSON: engineConfigJSON)
+        let manager = try prepareManager(
+            existingManagers: options.resetProfile ? [] : existingManagers,
+            engineConfigJSON: engineConfigJSON)
 
         if shouldRestartTunnel(manager: manager, expectedEngineConfigJSON: engineConfigJSON) {
             log("configuration changed while proxy was active; restarting tunnel")
@@ -138,7 +154,8 @@ private final class TransparentProxyHostCLI {
             try manager.connection.startVPNTunnel()
             log("transparent proxy start requested")
         } catch {
-            throw CLIError.runtime("failed to start transparent proxy: \(error.localizedDescription)")
+            throw CLIError.runtime(
+                "failed to start transparent proxy: \(error.localizedDescription)")
         }
 
         let status = waitForSteadyState(manager: manager, attempts: 20)
@@ -184,8 +201,7 @@ private final class TransparentProxyHostCLI {
         }
 
         print("status: \(statusString(manager.connection.status))")
-        if
-            let proto = manager.protocolConfiguration as? NETunnelProviderProtocol,
+        if let proto = manager.protocolConfiguration as? NETunnelProviderProtocol,
             let engineConfigJSON = proto.providerConfiguration?["engineConfigJson"] as? String
         {
             print("config: \(engineConfigJSON)")
@@ -204,6 +220,34 @@ private final class TransparentProxyHostCLI {
         }
     }
 
+    private func ensureSystemExtensionActivated() throws -> Bool {
+        log("submitting system extension activation request for \(extensionBundleId)")
+
+        return try waitForResult("activate system extension", timeout: 30) { completion in
+            let delegate = SystemExtensionRequestDelegate(
+                extensionBundleId: extensionBundleId,
+                onFinish: { completion(.success(true)) },
+                onApprovalRequired: { completion(.success(false)) },
+                onFailure: { completion(.failure($0)) },
+                log: { [weak self] message in self?.log(message) },
+                logError: { [weak self] prefix, error in self?.logError(prefix, error) }
+            )
+
+            let request = OSSystemExtensionRequest.activationRequest(
+                forExtensionWithIdentifier: extensionBundleId,
+                queue: .main
+            )
+            request.delegate = delegate
+            objc_setAssociatedObject(
+                request,
+                &AssociatedKeys.systemExtensionDelegate,
+                delegate,
+                .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            )
+            OSSystemExtensionManager.shared.submitRequest(request)
+        }
+    }
+
     private func prepareManager(
         existingManagers: [NETransparentProxyManager],
         engineConfigJSON: String?
@@ -213,7 +257,9 @@ private final class TransparentProxyHostCLI {
         let changed = configure(manager: manager, engineConfigJSON: engineConfigJSON)
 
         if changed || existingManager == nil {
-            log(existingManager == nil ? "saving new proxy manager" : "saving updated proxy manager")
+            log(
+                existingManager == nil ? "saving new proxy manager" : "saving updated proxy manager"
+            )
             return try save(manager: manager)
         }
 
@@ -315,7 +361,9 @@ private final class TransparentProxyHostCLI {
         return ["engineConfigJson": engineConfigJSON]
     }
 
-    private func selectManager(from managers: [NETransparentProxyManager]) -> NETransparentProxyManager? {
+    private func selectManager(from managers: [NETransparentProxyManager])
+        -> NETransparentProxyManager?
+    {
         if let exact = managers.first(where: { manager in
             guard let proto = manager.protocolConfiguration as? NETunnelProviderProtocol else {
                 return false
@@ -328,7 +376,9 @@ private final class TransparentProxyHostCLI {
         return managers.first(where: { $0.localizedDescription == managerDescription })
     }
 
-    private func matchingManagers(from managers: [NETransparentProxyManager]) -> [NETransparentProxyManager] {
+    private func matchingManagers(from managers: [NETransparentProxyManager])
+        -> [NETransparentProxyManager]
+    {
         managers.filter { manager in
             if let proto = manager.protocolConfiguration as? NETunnelProviderProtocol,
                 proto.providerBundleIdentifier == extensionBundleId
@@ -357,7 +407,9 @@ private final class TransparentProxyHostCLI {
     }
 
     @discardableResult
-    private func waitUntilDisconnected(manager: NETransparentProxyManager, attempts: Int) -> NEVPNStatus {
+    private func waitUntilDisconnected(manager: NETransparentProxyManager, attempts: Int)
+        -> NEVPNStatus
+    {
         var remainingAttempts = attempts
         while remainingAttempts > 0 {
             let status = manager.connection.status
@@ -372,7 +424,9 @@ private final class TransparentProxyHostCLI {
         return manager.connection.status
     }
 
-    private func waitForSteadyState(manager: NETransparentProxyManager, attempts: Int) -> NEVPNStatus {
+    private func waitForSteadyState(manager: NETransparentProxyManager, attempts: Int)
+        -> NEVPNStatus
+    {
         var remainingAttempts = attempts
         while remainingAttempts > 0 {
             let status = manager.connection.status
@@ -476,6 +530,15 @@ private final class TransparentProxyHostCLI {
         )
     }
 
+    private func infoString(key: String, fallback: String) -> String {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String else {
+            return fallback
+        }
+
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? fallback : trimmed
+    }
+
     private static func parse(arguments: [String]) throws -> HostCommand {
         guard let first = arguments.first else {
             return .help
@@ -518,15 +581,19 @@ private final class TransparentProxyHostCLI {
             let argument = arguments[index]
             switch argument {
             case "--reporting-endpoint":
-                options.reportingEndpoint = try consumeValue(flag: argument, arguments: arguments, index: &index)
+                options.reportingEndpoint = try consumeValue(
+                    flag: argument, arguments: arguments, index: &index)
                 try validateAbsoluteURL(options.reportingEndpoint, flag: argument)
             case "--aikido-url":
-                options.aikidoURL = try consumeValue(flag: argument, arguments: arguments, index: &index)
+                options.aikidoURL = try consumeValue(
+                    flag: argument, arguments: arguments, index: &index)
                 try validateAbsoluteURL(options.aikidoURL, flag: argument)
             case "--agent-token":
-                options.agentToken = try consumeValue(flag: argument, arguments: arguments, index: &index)
+                options.agentToken = try consumeValue(
+                    flag: argument, arguments: arguments, index: &index)
             case "--agent-device-id":
-                options.agentDeviceID = try consumeValue(flag: argument, arguments: arguments, index: &index)
+                options.agentDeviceID = try consumeValue(
+                    flag: argument, arguments: arguments, index: &index)
             case "--use-vpn-shared-identity":
                 options.useVPNSharedIdentity = true
             case "--reset-profile":
@@ -609,7 +676,8 @@ private final class TransparentProxyHostCLI {
             agentIdentity: agentIdentity,
             reportingEndpoint: options.reportingEndpoint,
             aikidoURL: options.aikidoURL,
-            useVPNSharedIdentity: options.useVPNSharedIdentity
+            useVPNSharedIdentity: options.useVPNSharedIdentity,
+            hostBundleID: Bundle.main.bundleIdentifier ?? "com.aikido.endpoint.proxy.l4.dev"
         )
 
         guard !payload.isEmpty else {
@@ -664,6 +732,66 @@ private final class TransparentProxyHostCLI {
             return
         }
         FileHandle.standardError.write(data)
+    }
+}
+
+private enum AssociatedKeys {
+    static var systemExtensionDelegate: UInt8 = 0
+}
+
+private final class SystemExtensionRequestDelegate: NSObject, OSSystemExtensionRequestDelegate {
+    private let extensionBundleId: String
+    private let onFinish: () -> Void
+    private let onApprovalRequired: () -> Void
+    private let onFailure: (Error) -> Void
+    private let log: (String) -> Void
+    private let logError: (String, Error) -> Void
+
+    init(
+        extensionBundleId: String,
+        onFinish: @escaping () -> Void,
+        onApprovalRequired: @escaping () -> Void,
+        onFailure: @escaping (Error) -> Void,
+        log: @escaping (String) -> Void,
+        logError: @escaping (String, Error) -> Void
+    ) {
+        self.extensionBundleId = extensionBundleId
+        self.onFinish = onFinish
+        self.onApprovalRequired = onApprovalRequired
+        self.onFailure = onFailure
+        self.log = log
+        self.logError = logError
+    }
+
+    func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
+        log(
+            "system extension approval required for \(extensionBundleId); open System Settings > General > Login Items & Extensions > Network Extensions"
+        )
+        onApprovalRequired()
+    }
+
+    func request(
+        _ request: OSSystemExtensionRequest,
+        didFinishWithResult result: OSSystemExtensionRequest.Result
+    ) {
+        log("system extension activation finished for \(extensionBundleId)")
+        onFinish()
+    }
+
+    func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) {
+        logError("system extension activation failed for \(extensionBundleId)", error)
+        onFailure(error)
+    }
+
+    func request(
+        _ request: OSSystemExtensionRequest,
+        actionForReplacingExtension existing: OSSystemExtensionProperties,
+        withExtension ext: OSSystemExtensionProperties
+    ) -> OSSystemExtensionRequest.ReplacementAction {
+        log(
+            "replacing system extension \(existing.bundleShortVersion) with \(ext.bundleShortVersion)"
+        )
+        return .replace
     }
 }
 

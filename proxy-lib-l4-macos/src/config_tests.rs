@@ -63,6 +63,18 @@ fn deserializes_valid_configs() {
                 ..ProxyConfig::default()
             },
         ),
+        (
+            "custom host bundle id",
+            Some(
+                br#"{
+                        "host_bundle_id": "com.aikido.endpoint.proxy.l4.dist"
+                    }"# as &[u8],
+            ),
+            ProxyConfig {
+                host_bundle_id: "com.aikido.endpoint.proxy.l4.dist".to_owned(),
+                ..ProxyConfig::default()
+            },
+        ),
     ];
 
     for (name, input, expected) in cases {

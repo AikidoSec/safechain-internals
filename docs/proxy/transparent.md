@@ -88,7 +88,8 @@ FFI/provider surface plus the transparent proxy engine.
 Relevant sources:
 
 - Host CLI: [`packaging/macos/xcode/l4-proxy/Host/main.swift`](../../packaging/macos/xcode/l4-proxy/Host/main.swift)
-- Xcode packaging: [`packaging/macos/xcode/l4-proxy/Project.yml`](../../packaging/macos/xcode/l4-proxy/Project.yml)
+- Xcode packaging (dev): [`packaging/macos/xcode/l4-proxy/Project.dev.yml`](../../packaging/macos/xcode/l4-proxy/Project.dev.yml)
+- Xcode packaging (dist): [`packaging/macos/xcode/l4-proxy/Project.dist.yml`](../../packaging/macos/xcode/l4-proxy/Project.dist.yml)
 - Rust entrypoint: [`proxy-lib-l4-macos/src/lib.rs`](../../proxy-lib-l4-macos/src/lib.rs)
 - Rust TCP proxy service: [`proxy-lib-l4-macos/src/tcp.rs`](../../proxy-lib-l4-macos/src/tcp.rs)
 - Rust config schema: [`proxy-lib-l4-macos/src/config.rs`](../../proxy-lib-l4-macos/src/config.rs)
@@ -152,19 +153,6 @@ If exporting the private key is not allowed or not desirable, the codebase will 
 ### Build And Install
 
 The `Justfile` contains the supported developer commands.
-
-Build the Rust static library and generate the Xcode project:
-
-```bash
-just macos-l4-build-rust
-just macos-l4-xcodegen-generate
-```
-
-Build the macOS host app and extension without signing checks:
-
-```bash
-just macos-l4-xcodegen-build-debug
-```
 
 Build with signing and install the app bundle into `/Applications`:
 

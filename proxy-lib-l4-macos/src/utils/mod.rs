@@ -9,8 +9,6 @@ use rama::{
 };
 use tracing_oslog::OsLogger;
 
-use crate::utils::env::L4_PROXY_HOST_BUNDLE_ID;
-
 pub mod env;
 pub mod storage;
 
@@ -37,7 +35,7 @@ fn setup_tracing() -> Result<TraceContext, BoxError> {
         .with_span_list(true)
         .with_writer(std::io::stderr);
 
-    let oslog_layer = OsLogger::new(L4_PROXY_HOST_BUNDLE_ID, "proxy");
+    let oslog_layer = OsLogger::new("com.aikido.endpoint.proxy.l4", "proxy");
 
     subscriber::registry()
         .with(filter::LevelFilter::DEBUG)

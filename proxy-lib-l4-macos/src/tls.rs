@@ -17,10 +17,11 @@ use security_framework::{
     key::SecKey,
 };
 
-use crate::utils::env::{L4_PROXY_HOST_BUNDLE_ID, MANAGED_VPN_SHARED_ACCESS_GROUP};
+use crate::utils::env::MANAGED_VPN_SHARED_ACCESS_GROUP;
 
 pub(crate) fn load_root_ca_key_pair(
     use_vpn_shared_identity: bool,
+    host_bundle_id: &str,
 ) -> Result<Option<RootCaKeyPair>, BoxError> {
     if !use_vpn_shared_identity {
         return Ok(None);
@@ -28,7 +29,7 @@ pub(crate) fn load_root_ca_key_pair(
 
     tracing::info!(
         access_group = MANAGED_VPN_SHARED_ACCESS_GROUP,
-        identity_label = L4_PROXY_HOST_BUNDLE_ID,
+        identity_label = host_bundle_id,
         "loading managed VPN shared CA identity"
     );
 
@@ -37,7 +38,7 @@ pub(crate) fn load_root_ca_key_pair(
         .class(ItemClass::identity())
         .load_refs(true)
         .limit(Limit::Max(1))
-        .label(L4_PROXY_HOST_BUNDLE_ID)
+        .label(host_bundle_id)
         .access_group(MANAGED_VPN_SHARED_ACCESS_GROUP)
         .ignore_legacy_keychains();
 
@@ -49,7 +50,7 @@ pub(crate) fn load_root_ca_key_pair(
         .ok_or_else(|| {
             BoxError::from("managed VPN shared identity not found")
                 .context_str_field("access_group", MANAGED_VPN_SHARED_ACCESS_GROUP)
-                .context_str_field("identity_label", L4_PROXY_HOST_BUNDLE_ID)
+                .context_str_field("identity_label", host_bundle_id)
         })?;
 
     let identity = match result {

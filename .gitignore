@@ -46,3 +46,4 @@ go.work
 *.xcworkspace/
 xcuserdata/
 DerivedData/
+.xcode-derived/

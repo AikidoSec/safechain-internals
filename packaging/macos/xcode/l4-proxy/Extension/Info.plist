@@ -14,7 +14,8 @@
   <string>$(CURRENT_PROJECT_VERSION)</string>
   <key>CFBundlePackageType</key>
   <string>SYSX</string>
-
+  <key>LSMinimumSystemVersion</key>
+  <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
   <key>NetworkExtension</key>
   <dict>
     <key>NEProviderClasses</key>

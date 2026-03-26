@@ -54,6 +54,12 @@ pub struct ProxyConfig {
     /// `com.apple.managed.vpn.shared` rather than generating or storing its
     /// own CA material.
     pub use_vpn_shared_identity: bool,
+
+    /// Bundle identifier used as the keychain identity label for the managed VPN shared identity.
+    ///
+    /// The host wrapper should pass its active bundle identifier explicitly.
+    /// Local development falls back to the developer host bundle ID.
+    pub host_bundle_id: String,
 }
 
 impl Default for ProxyConfig {
@@ -64,6 +70,7 @@ impl Default for ProxyConfig {
             reporting_endpoint: None,
             aikido_url: Uri::from_static("https://app.aikido.dev"),
             use_vpn_shared_identity: false,
+            host_bundle_id: "com.aikido.endpoint.proxy.l4.dev".to_owned(),
         }
     }
 }

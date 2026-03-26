@@ -61,7 +61,7 @@ jobs:
       - name: Generate L4 proxy Xcode project
         run: |
           cd packaging/macos/xcode/l4-proxy
-          xcodegen generate
+          xcodegen generate --spec Project.dist.yml
 
       - name: Make scripts executable
         run: chmod +x .github/scripts/macos/**/*.sh
@@ -256,7 +256,7 @@ jobs:
           L4_EXT_PROVISION_PROFILE_B64: ${{ secrets.L4_EXT_PROVISION_PROFILE_B64 }}
         run: |
           APP="bin/AikidoEndpointL4ProxyHost.app"
-          SYSEXT="$APP/Contents/Library/SystemExtensions/AikidoEndpointL4ProxyExtension.systemextension"
+          SYSEXT="$APP/Contents/Library/SystemExtensions/com.aikido.endpoint.proxy.l4.dist.extension.systemextension"
 
           if [ -z "$L4_HOST_PROVISION_PROFILE_B64" ] || [ -z "$L4_EXT_PROVISION_PROFILE_B64" ]; then
             echo "ERROR: L4_HOST_PROVISION_PROFILE_B64 or L4_EXT_PROVISION_PROFILE_B64 secret is empty"
@@ -288,7 +288,7 @@ jobs:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          SYSEXT="bin/AikidoEndpointL4ProxyHost.app/Contents/Library/SystemExtensions/AikidoEndpointL4ProxyExtension.systemextension"
+          SYSEXT="bin/AikidoEndpointL4ProxyHost.app/Contents/Library/SystemExtensions/com.aikido.endpoint.proxy.l4.dist.extension.systemextension"
           APP="bin/AikidoEndpointL4ProxyHost.app"
 
           echo "Signing L4 system extension..."
