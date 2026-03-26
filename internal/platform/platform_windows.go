@@ -436,6 +436,11 @@ func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 	)
 }
 
+func ShowErrorDialog(_ context.Context, message string) error {
+	// TODO: implement
+	return nil
+}
+
 // STILL_ACTIVE is the value returned by GetExitCodeProcess when the
 // process has not yet terminated. It is defined by the Windows API as 259.
 // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getexitcodeprocess
