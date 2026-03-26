@@ -21,11 +21,13 @@ var assets embed.FS
 var icon []byte
 
 type FocusEventPayload struct {
-	EventId string `json:"eventId"`
+	EventId   string `json:"eventId"`
+	EventType string `json:"eventType"`
 }
 
 func init() {
 	application.RegisterEvent[daemon.BlockEvent]("blocked")
+	application.RegisterEvent[daemon.TlsTerminationFailedEvent]("tls_termination_failed")
 	application.RegisterEvent[FocusEventPayload]("focus_event")
 }
 
@@ -198,7 +200,24 @@ func startAppServer(app *application.App, statusCh chan<- string, notifier *noti
 					Title:      "Aikido Endpoint Protection blocked an event",
 					Body:       ev.Artifact.Product + ": " + ev.Artifact.PackageName,
 					CategoryID: "aikido-blocked",
-					Data:       map[string]interface{}{"eventId": ev.ID},
+					Data:       map[string]interface{}{"eventId": ev.ID, "eventType": "block"},
+				})
+			}
+		},
+		func(ev daemon.TlsTerminationFailedEvent) {
+			log.Println("TLS termination failed event:", ev)
+			app.Event.Emit("tls_termination_failed", ev)
+			if notifAuthorized {
+				body := "SNI: " + ev.SNI
+				if ev.App != "" {
+					body += " (" + ev.App + ")"
+				}
+				notifier.SendNotificationWithActions(notifications.NotificationOptions{
+					ID:         "tls-fail-" + ev.ID,
+					Title:      "TLS termination failed",
+					Body:       body,
+					CategoryID: "aikido-blocked",
+					Data:       map[string]interface{}{"eventId": ev.ID, "eventType": "tls"},
 				})
 			}
 		},
@@ -227,10 +246,11 @@ func main() {
 		if eventId == "" {
 			return
 		}
+		eventType, _ := result.Response.UserInfo["eventType"].(string)
 		wm.showDashboard()
 		go func() {
 			time.Sleep(500 * time.Millisecond)
-			app.Event.Emit("focus_event", FocusEventPayload{EventId: eventId})
+			app.Event.Emit("focus_event", FocusEventPayload{EventId: eventId, EventType: eventType})
 		}()
 	})
 

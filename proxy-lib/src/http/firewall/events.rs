@@ -59,6 +59,15 @@ pub struct MinPackageAgeEvent {
     pub suppressed_versions: Vec<PackageVersion>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TlsTerminationFailedEvent {
+    pub ts_ms: i64,
+    pub sni: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub app: Option<String>,
+    pub error: String,
+}
+
 #[cfg(test)]
 #[path = "events_tests.rs"]
 mod tests;

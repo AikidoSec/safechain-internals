@@ -150,6 +150,13 @@ func (c *Client) NotifyBlocked(ev any) {
 	}
 }
 
+// NotifyTlsTerminationFailed sends a TLS termination failure notification to the UI.
+func (c *Client) NotifyTlsTerminationFailed(ev any) {
+	if err := c.post("/v1/tls-termination-failed", ev); err != nil {
+		log.Printf("Failed to notify UI of TLS termination failed event: %v (UI may not be running)", err)
+	}
+}
+
 type proxyStatusBody struct {
 	Running bool `json:"running"`
 }
@@ -157,7 +164,7 @@ type proxyStatusBody struct {
 // NotifyProxyStatus sends the current proxy running state to the UI.
 func (c *Client) NotifyProxyStatus(running bool) error {
 	if err := c.post("/v1/proxy-status", proxyStatusBody{Running: running}); err != nil {
-		return err
+		return fmt.Errorf("failed to notify UI of proxy status: %w", err)
 	}
 	return nil
 }
