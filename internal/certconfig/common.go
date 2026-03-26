@@ -1,10 +1,13 @@
 package certconfig
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
+	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
@@ -12,6 +15,14 @@ type managedBlockFormat struct {
 	startMarker string
 	endMarker   string
 }
+
+const aikidoCertMarker = "AIKIDO_CERT="
+
+const (
+	pipCertEnvVar          = "PIP_CERT"
+	requestsCABundleEnvVar = "REQUESTS_CA_BUNDLE"
+	sslCertFileEnvVar      = "SSL_CERT_FILE"
+)
 
 func buildManagedBlock(body string, format managedBlockFormat, newline string) string {
 	return format.startMarker + newline + body + newline + format.endMarker + newline
@@ -53,4 +64,69 @@ func writeManagedBlock(path string, body string, perm os.FileMode, format manage
 	}
 
 	return os.WriteFile(path, []byte(stripped+buildManagedBlock(body, format, newline)), perm)
+}
+
+// extractMarkedCertValue scans output for a line starting with aikidoCertMarker
+// and returns the value after it. This tolerates arbitrary text before or after
+// the marker line, which interactive shells may produce.
+func extractMarkedCertValue(output string) string {
+	for line := range strings.SplitSeq(output, "\n") {
+		if strings.HasPrefix(line, aikidoCertMarker) {
+			return strings.TrimSpace(line[len(aikidoCertMarker):])
+		}
+	}
+	return ""
+}
+
+func findCertifiCABundle(ctx context.Context) string {
+	for _, pythonBin := range []string{"python3", "python"} {
+		pythonPath, err := exec.LookPath(pythonBin)
+		if err != nil {
+			continue
+		}
+		out, err := platform.RunAsCurrentUserWithPathEnv(ctx, pythonPath, "-c", "import certifi; print(certifi.where())")
+		if err != nil {
+			continue
+		}
+		path := strings.TrimSpace(out)
+		if path == "" {
+			continue
+		}
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
+}
+
+func extractMarkedPipCertSetting(output string) pipCertSetting {
+	return parsePipCertSettingString(extractMarkedCertValue(output))
+}
+
+func parsePipCertSettingString(value string) pipCertSetting {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return pipCertSetting{}
+	}
+
+	envVar, path, ok := strings.Cut(trimmed, ":")
+	if !ok {
+		return pipCertSetting{
+			EnvVar: pipCertEnvVar,
+			Path:   trimmed,
+		}
+	}
+
+	switch envVar {
+	case pipCertEnvVar, requestsCABundleEnvVar, sslCertFileEnvVar:
+		return pipCertSetting{
+			EnvVar: envVar,
+			Path:   strings.TrimSpace(path),
+		}
+	default:
+		return pipCertSetting{
+			EnvVar: pipCertEnvVar,
+			Path:   trimmed,
+		}
+	}
 }

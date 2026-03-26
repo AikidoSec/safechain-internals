@@ -19,6 +19,7 @@ func New() *CertConfig {
 	return &CertConfig{
 		configurators: []Configurator{
 			newNodeConfigurator(),
+			newPipConfigurator(),
 			newFirefoxConfigurator(),
 		},
 	}

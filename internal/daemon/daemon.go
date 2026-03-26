@@ -146,10 +146,8 @@ func (d *Daemon) Stop(ctx context.Context) error {
 
 		d.uiManager.Kill()
 
-		if d.config.GetProxyMode() == config.ProxyModeL7 {
-			if err := setup.Teardown(ctx); err != nil {
-				log.Printf("Error teardown setup: %v", err)
-			}
+		if err := setup.Teardown(ctx, d.config.GetProxyMode()); err != nil {
+			log.Printf("Error teardown setup: %v", err)
 		}
 
 		if err := d.proxy.Stop(); err != nil {
@@ -247,11 +245,9 @@ func (d *Daemon) run(ctx context.Context) error {
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
-	if d.config.GetProxyMode() == config.ProxyModeL7 {
-		if err := setup.Install(ctx); err != nil {
-			platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to install setup: %v", err))
-			return fmt.Errorf("failed to install setup: %v", err)
-		}
+	if err := setup.Install(ctx, d.config.GetProxyMode()); err != nil {
+    platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to install setup: %v", err))
+		return fmt.Errorf("failed to install setup: %v", err)
 	}
 
 	d.wg.Add(1)
