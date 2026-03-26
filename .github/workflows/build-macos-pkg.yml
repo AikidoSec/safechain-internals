@@ -256,7 +256,7 @@ jobs:
           L4_EXT_PROVISION_PROFILE_B64: ${{ secrets.L4_EXT_PROVISION_PROFILE_B64 }}
         run: |
           APP="bin/AikidoEndpointL4ProxyHost.app"
-          APPEX="$APP/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
+          SYSEXT="$APP/Contents/Library/SystemExtensions/AikidoEndpointL4ProxyExtension.systemextension"
 
           if [ -z "$L4_HOST_PROVISION_PROFILE_B64" ] || [ -z "$L4_EXT_PROVISION_PROFILE_B64" ]; then
             echo "ERROR: L4_HOST_PROVISION_PROFILE_B64 or L4_EXT_PROVISION_PROFILE_B64 secret is empty"
@@ -267,10 +267,10 @@ jobs:
           printf '%s' "$L4_HOST_PROVISION_PROFILE_B64" | base64 -d > "$APP/Contents/embedded.provisionprofile"
 
           echo "Embedding Developer ID provisioning profile in extension..."
-          printf '%s' "$L4_EXT_PROVISION_PROFILE_B64" | base64 -d > "$APPEX/Contents/embedded.provisionprofile"
+          printf '%s' "$L4_EXT_PROVISION_PROFILE_B64" | base64 -d > "$SYSEXT/Contents/embedded.provisionprofile"
 
           echo "Verifying profiles are valid Developer ID profiles..."
-          for PROFILE in "$APP/Contents/embedded.provisionprofile" "$APPEX/Contents/embedded.provisionprofile"; do
+          for PROFILE in "$APP/Contents/embedded.provisionprofile" "$SYSEXT/Contents/embedded.provisionprofile"; do
             ls -la "$PROFILE"
             PROFILE_INFO=$(security cms -D -i "$PROFILE")
             echo "$PROFILE_INFO" | grep -q "ProvisionsAllDevices" || {
