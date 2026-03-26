@@ -291,6 +291,26 @@ func showCAInstallDialog(ctx context.Context) error {
 	return nil
 }
 
+func ShowErrorDialog(ctx context.Context, message string) error {
+	script := `
+on run argv
+	button returned of (display dialog (item 1 of argv) ¬
+		with title "Aikido Endpoint Protection" ¬
+		buttons {"OK"} default button "OK" with icon stop)
+end run
+`
+
+	_, err := RunInAuditSessionOfCurrentUser(
+		ctx,
+		"osascript",
+		[]string{"-e", script, "--", message},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to show error dialog: %w", err)
+	}
+	return nil
+}
+
 func InstallProxyCA(ctx context.Context, certPath string) error {
 	// Show a dialog so the user understands the upcoming admin prompt is from SafeChain.
 	if err := showCAInstallDialog(ctx); err != nil {
