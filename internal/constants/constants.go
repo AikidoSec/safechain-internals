@@ -10,5 +10,6 @@ const (
 	HeartbeatReportInterval = 10 * time.Minute
 	SBOMReportInterval      = 24 * time.Hour
 	ProxyStartMaxRetries    = 20
-	ProxyStartRetryInterval = 3 * time.Minute
+	ProxyStartRetryInterval         = 3 * time.Minute
+	ExtensionUninstallCheckInterval = 5 * time.Minute
 )

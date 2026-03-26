@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/AikidoSec/safechain-internals/internal/cloud"
+	"github.com/AikidoSec/safechain-internals/internal/cloud/blocked_packages"
 	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
 	"github.com/AikidoSec/safechain-internals/internal/device"
@@ -49,8 +50,9 @@ type Daemon struct {
 	proxyRetryCount    int
 	proxyLastRetryTime time.Time
 
-	daemonLastStatusLogTime  time.Time
-	daemonLastSBOMReportTime time.Time
+	daemonLastStatusLogTime          time.Time
+	daemonLastSBOMReportTime         time.Time
+	daemonLastExtensionUninstallTime time.Time
 }
 
 func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
@@ -61,6 +63,7 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 	}
 
 	cloud.Init()
+	blocked_packages.Init()
 
 	deviceInfo := device.NewDeviceInfo()
 	if deviceInfo == nil {
@@ -457,6 +460,27 @@ func (d *Daemon) heartbeat() error {
 		}
 		return nil
 	})
+	d.runIfIntervalExceeded(&d.daemonLastExtensionUninstallTime, constants.ExtensionUninstallCheckInterval, d.uninstallBlockedExtensions)
+	return nil
+}
+
+func (d *Daemon) uninstallBlockedExtensions() error {
+	resp, err := blocked_packages.GetBlockedPackages(d.ctx, d.config)
+	if err != nil {
+		return err
+	}
+
+	vscodeExceptions, vscodeOk := resp.Ecosystems["vscode"]
+	openVsxExceptions, openVsxOk := resp.Ecosystems["open_vsx"]
+	if vscodeOk && openVsxOk {
+		vscode.UninstallBlockedExtensions(d.ctx, vscodeExceptions.Exceptions.RejectedPackages, openVsxExceptions.Exceptions.RejectedPackages)
+	}
+
+	chromeExceptions, chromeOk := resp.Ecosystems["chrome"]
+	if chromeOk {
+		chrome.UninstallBlockedExtensions(d.ctx, chromeExceptions.Exceptions.RejectedPackages)
+	}
+
 	return nil
 }
 
