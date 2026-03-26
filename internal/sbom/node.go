@@ -54,6 +54,8 @@ func nodeGlobPaths(homeDir, binary string) []string {
 	for _, pattern := range patterns {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
+			// filepath.Glob only errors on malformed patterns
+			// skipping preserves best-effort discovery if one ever becomes invalid.
 			continue
 		}
 		results = append(results, matches...)

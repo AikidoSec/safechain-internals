@@ -2,6 +2,7 @@ package skills
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"runtime"
 
@@ -39,24 +40,31 @@ func runSkills(ctx context.Context, binaryPath string, args ...string) (string, 
 // If skills is not installed as a standalone binary, npx is used as a fallback.
 func findBinaries(homeDir string) []string {
 	npmPaths := sbom.FindNodeBinaries(homeDir, npmBinaryName())
-	binary := binaryName()
+	skillsBinary := binaryName()
 
-	var candidates []string
+	var skillsCandidates []string
 	for _, npmPath := range npmPaths {
 		dir := filepath.Dir(npmPath)
-		candidates = append(candidates, filepath.Join(dir, binary))
+		candidate := filepath.Join(dir, skillsBinary)
+		if _, err := os.Stat(candidate); err == nil {
+			skillsCandidates = append(skillsCandidates, candidate)
+		}
 	}
 
-	found := sbom.DeduplicatePaths(candidates)
-	if len(found) > 0 {
-		return found
+	foundSkills := sbom.DeduplicatePaths(skillsCandidates)
+	if len(foundSkills) > 0 {
+		return foundSkills
 	}
 
 	// skills not installed globally: fall back to npx alongside any npm installation.
 	npxBinary := npxBinaryName()
+	var npxCandidates []string
 	for _, npmPath := range npmPaths {
 		dir := filepath.Dir(npmPath)
-		candidates = append(candidates, filepath.Join(dir, npxBinary))
+		candidate := filepath.Join(dir, npxBinary)
+		if _, err := os.Stat(candidate); err == nil {
+			npxCandidates = append(npxCandidates, candidate)
+		}
 	}
-	return sbom.DeduplicatePaths(candidates)
+	return sbom.DeduplicatePaths(npxCandidates)
 }

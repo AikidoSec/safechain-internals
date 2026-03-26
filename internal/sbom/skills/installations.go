@@ -70,12 +70,12 @@ func listGlobalSkills(ctx context.Context, binary string) ([]skillsEntry, error)
 }
 
 func parseSkillsLsOutput(output string) ([]skillsEntry, error) {
-	output = strings.TrimSpace(output)
-	if output == "" {
+	trimmedOutput := strings.TrimSpace(output)
+	if trimmedOutput == "" {
 		return nil, nil
 	}
 	var entries []skillsEntry
-	if err := json.Unmarshal([]byte(output), &entries); err != nil {
+	if err := json.Unmarshal([]byte(trimmedOutput), &entries); err != nil {
 		return nil, fmt.Errorf("failed to parse skills ls output: %w", err)
 	}
 	return entries, nil
