@@ -7,6 +7,7 @@ type ProxyManager interface {
 	Stop() error
 	IsRunning() bool
 	Version() (string, error)
+	InstallCA(ctx context.Context) error
 }
 
 type StartOptions struct {

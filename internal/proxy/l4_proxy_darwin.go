@@ -47,24 +47,7 @@ func (p *L4Proxy) Start(ctx context.Context, opts StartOptions) error {
 		log.Println("L4 transparent proxy started successfully")
 		return nil
 	}
-
-	timeout := time.After(l4ReadyTimeout)
-	ticker := time.NewTicker(l4ReadyInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout:
-			return fmt.Errorf("timeout waiting for L4 proxy to reach connected state")
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			if p.IsRunning() {
-				log.Println("L4 transparent proxy started successfully")
-				return nil
-			}
-		}
-	}
+	return fmt.Errorf("L4 transparent proxy did not start at this time, but will be retried by the daemon")
 }
 
 func (p *L4Proxy) Stop() error {
@@ -81,6 +64,10 @@ func (p *L4Proxy) IsRunning() bool {
 		return false
 	}
 	return strings.Contains(string(output), "status: connected")
+}
+
+func (p *L4Proxy) InstallCA(ctx context.Context) error {
+	return InstallL4ProxyCA(ctx)
 }
 
 func (p *L4Proxy) Version() (string, error) {
