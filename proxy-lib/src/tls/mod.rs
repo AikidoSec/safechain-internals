@@ -40,6 +40,14 @@ impl RootCaKeyPair {
         }
     }
 
+    pub fn try_form_pem(certificate: &str, private_key: &str) -> Result<Self, BoxError> {
+        let crt_x509 =
+            X509::from_pem(certificate.as_bytes()).context("parse PEM as x509 (ca) crt")?;
+        let key_x509 = PKey::<Private>::private_key_from_pem(private_key.as_bytes())
+            .context("parse (ca) crt key from PEM")?;
+        Ok(Self { crt_x509, key_x509 })
+    }
+
     #[inline(always)]
     pub fn certificate(&self) -> &X509 {
         &self.crt_x509

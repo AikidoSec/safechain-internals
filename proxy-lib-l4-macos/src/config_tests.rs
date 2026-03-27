@@ -55,26 +55,6 @@ fn deserializes_valid_configs() {
                 ..ProxyConfig::default()
             },
         ),
-        (
-            "managed vpn identity enabled",
-            Some(br#"{"use_vpn_shared_identity":true}"# as &[u8]),
-            ProxyConfig {
-                use_vpn_shared_identity: true,
-                ..ProxyConfig::default()
-            },
-        ),
-        (
-            "custom host bundle id",
-            Some(
-                br#"{
-                        "host_bundle_id": "com.aikido.endpoint.proxy.l4.dist"
-                    }"# as &[u8],
-            ),
-            ProxyConfig {
-                host_bundle_id: "com.aikido.endpoint.proxy.l4.dist".to_owned(),
-                ..ProxyConfig::default()
-            },
-        ),
     ];
 
     for (name, input, expected) in cases {

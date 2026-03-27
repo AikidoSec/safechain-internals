@@ -24,7 +24,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.aikido.endpoint.proxy.l4.dist
         CURRENT_PROJECT_VERSION: 1
         INFOPLIST_FILE: Host/Info.plist
-        MARKETING_VERSION: 0.1
+        MARKETING_VERSION: 0.2
         CODE_SIGN_ENTITLEMENTS: Host/Host.entitlements
         CODE_SIGNING_ALLOWED: YES
         CODE_SIGNING_REQUIRED: YES
@@ -59,7 +59,7 @@ targets:
         PRODUCT_NAME: com.aikido.endpoint.proxy.l4.dist.extension
         CURRENT_PROJECT_VERSION: 1
         INFOPLIST_FILE: Extension/Info.plist
-        MARKETING_VERSION: 0.1
+        MARKETING_VERSION: 0.2
         CODE_SIGN_ENTITLEMENTS: Extension/Extension.entitlements
         CODE_SIGNING_ALLOWED: YES
         CODE_SIGNING_REQUIRED: YES

@@ -12,8 +12,8 @@ xcode_l7_scheme := "AikidoEndpointL7Proxy"
 xcode_l7_derived_data := ".aikido/xcode/safechain-l7-proxy-wrapper"
 xcode_l7_app_exe := xcode_l7_derived_data + "/Build/Products/Debug/" + xcode_l7_scheme + ".app/Contents/MacOS/safechain-l7-proxy-bin"
 l4_team_id := "7VPF8GD6J4"
-l4_dev_host_bundle_id := "com.aikido.endpoint.proxy.l4.dev"
-l4_dev_extension_bundle_id := "com.aikido.endpoint.proxy.l4.dev.extension"
+l4_dev_host_bundle_id := "com.aikido.endpoint.proxy.l4"
+l4_dev_extension_bundle_id := "com.aikido.endpoint.proxy.l4.extension"
 l4_dist_host_bundle_id := "com.aikido.endpoint.proxy.l4.dist"
 l4_dist_extension_bundle_id := "com.aikido.endpoint.proxy.l4.dist.extension"
 xcode_l4_project_dir := "packaging/macos/xcode/l4-proxy"
@@ -24,7 +24,7 @@ xcode_l4_derived_data := ".aikido/xcode/safechain-l4-proxy-wrapper"
 xcode_l4_app_name := "AikidoEndpointL4ProxyHost.app"
 xcode_l4_app := xcode_l4_derived_data + "/Build/Products/Debug/" + xcode_l4_app_name
 xcode_l4_app_exe := xcode_l4_app + "/Contents/MacOS/AikidoEndpointL4ProxyHost"
-xcode_l4_installed_app := "/Library/Application Support/AikidoSecurity/EndpointProtection/bin/" + xcode_l4_app_name
+xcode_l4_installed_app := "/Applications/" + xcode_l4_app_name
 xcode_l4_installed_app_exe := xcode_l4_installed_app + "/Contents/MacOS/AikidoEndpointL4ProxyHost"
 xcode_l4_installed_sysext := xcode_l4_installed_app + "/Contents/Library/SystemExtensions/" + l4_dev_extension_bundle_id + ".systemextension"
 
@@ -144,11 +144,6 @@ macos-l4-xcodegen-build-debug-signed: macos-l4-build-rust macos-l4-xcodegen-gene
         build
 
 macos-l4-install-signed: macos-l4-xcodegen-build-debug-signed
-    systemextensionsctl uninstall "{{l4_team_id}}" "{{l4_dev_extension_bundle_id}}" || true
-    systemextensionsctl uninstall "{{l4_team_id}}" "{{l4_dist_extension_bundle_id}}" || true
-    pkill -f "{{l4_dev_host_bundle_id}}" || true
-    pkill -f "{{l4_dist_host_bundle_id}}" || true
-    sleep 1
     rm -rf "{{xcode_l4_installed_app}}"
     ditto "{{xcode_l4_app}}" "{{xcode_l4_installed_app}}"
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "{{xcode_l4_app}}" || true

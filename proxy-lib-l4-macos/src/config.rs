@@ -48,18 +48,10 @@ pub struct ProxyConfig {
     #[serde(deserialize_with = "deserialize_uri")]
     pub aikido_url: Uri,
 
-    /// Use the managed VPN shared identity instead of the self-managed CA.
-    ///
-    /// When enabled, the proxy loads the hardcoded shared identity from
-    /// `com.apple.managed.vpn.shared` rather than generating or storing its
-    /// own CA material.
-    pub use_vpn_shared_identity: bool,
-
-    /// Bundle identifier used as the keychain identity label for the managed VPN shared identity.
-    ///
-    /// The host wrapper should pass its active bundle identifier explicitly.
-    /// Local development falls back to the developer host bundle ID.
-    pub host_bundle_id: String,
+    /// CA Tls Certificate
+    pub ca_cert_pem: String,
+    /// CA Tls Certificate Key
+    pub ca_key_pem: String,
 }
 
 impl Default for ProxyConfig {
@@ -69,8 +61,8 @@ impl Default for ProxyConfig {
             agent_identity: None,
             reporting_endpoint: None,
             aikido_url: Uri::from_static("https://app.aikido.dev"),
-            use_vpn_shared_identity: false,
-            host_bundle_id: "com.aikido.endpoint.proxy.l4.dev".to_owned(),
+            ca_cert_pem: Default::default(),
+            ca_key_pem: Default::default(),
         }
     }
 }

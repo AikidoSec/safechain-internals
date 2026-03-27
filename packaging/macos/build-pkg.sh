@@ -97,6 +97,8 @@ echo "Using temporary build directory: $BUILD_DIR"
 # Create package directory structure
 PKG_ROOT="$BUILD_DIR/pkg_root"
 PKG_SCRIPTS="$BUILD_DIR/scripts"
+# TODO: On MacOS applications which contain System Extensions _HAVE_
+# to be stored in /Applications/.... otherwise you get error from the OS.
 INSTALL_DIR="$PKG_ROOT/Library/Application Support/AikidoSecurity/EndpointProtection"
 LAUNCHDAEMONS_DIR="$PKG_ROOT/Library/LaunchDaemons"
 LOGS_DIR="$PKG_ROOT/Library/Logs/AikidoSecurity/EndpointProtection"

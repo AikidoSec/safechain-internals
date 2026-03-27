@@ -9,7 +9,6 @@ use rama::{
 };
 use tracing_oslog::OsLogger;
 
-pub mod env;
 pub mod storage;
 
 pub fn init_tracing() -> bool {

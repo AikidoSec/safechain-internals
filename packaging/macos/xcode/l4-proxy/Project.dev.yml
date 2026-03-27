@@ -21,7 +21,7 @@ targets:
         codeSign: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aikido.endpoint.proxy.l4.dev
+        PRODUCT_BUNDLE_IDENTIFIER: com.aikido.endpoint.proxy.l4
         CURRENT_PROJECT_VERSION: 1
         INFOPLIST_FILE: Host/Info.plist
         MARKETING_VERSION: 0.1
@@ -33,9 +33,9 @@ targets:
         DEVELOPMENT_TEAM: "7VPF8GD6J4"
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
         NE_ENTITLEMENT_SUFFIX: ""
-        AIKIDO_L4_EXTENSION_BUNDLE_ID: com.aikido.endpoint.proxy.l4.dev.extension
-        AIKIDO_L4_SHARED_ACCESS_GROUP_BUNDLE_ID: com.aikido.endpoint.proxy.l4.dev.extension
-        AIKIDO_L4_LOG_SUBSYSTEM: com.aikido.endpoint.proxy.l4.dev
+        AIKIDO_L4_EXTENSION_BUNDLE_ID: com.aikido.endpoint.proxy.l4.extension
+        AIKIDO_L4_SHARED_ACCESS_GROUP_BUNDLE_ID: com.aikido.endpoint.proxy.l4.extension
+        AIKIDO_L4_LOG_SUBSYSTEM: com.aikido.endpoint.proxy.l4
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   AikidoEndpointL4ProxyExtension:
@@ -46,10 +46,21 @@ targets:
     dependencies:
       - package: RamaAppleNetworkExtension
         product: RamaAppleNetworkExtension
+    postBuildScripts:
+      - name: Bump CFBundleVersion
+        script: |
+          VERSION=$(date +%Y%m%d%H%M%S)
+          PLIST="$TARGET_BUILD_DIR/$INFOPLIST_PATH"
+
+          echo "Updating CFBundleVersion in $PLIST to $VERSION"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST"
+
+          echo "Re-signing $CODESIGNING_FOLDER_PATH"
+          /usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --timestamp=none "$CODESIGNING_FOLDER_PATH"
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aikido.endpoint.proxy.l4.dev.extension
-        PRODUCT_NAME: com.aikido.endpoint.proxy.l4.dev.extension
+        PRODUCT_BUNDLE_IDENTIFIER: com.aikido.endpoint.proxy.l4.extension
+        PRODUCT_NAME: com.aikido.endpoint.proxy.l4.extension
         CURRENT_PROJECT_VERSION: 1
         INFOPLIST_FILE: Extension/Info.plist
         MARKETING_VERSION: 0.1
@@ -61,8 +72,8 @@ targets:
         DEVELOPMENT_TEAM: "7VPF8GD6J4"
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
         NE_ENTITLEMENT_SUFFIX: ""
-        AIKIDO_L4_SHARED_ACCESS_GROUP_BUNDLE_ID: com.aikido.endpoint.proxy.l4.dev.extension
-        AIKIDO_L4_LOG_SUBSYSTEM: com.aikido.endpoint.proxy.l4.dev
+        AIKIDO_L4_SHARED_ACCESS_GROUP_BUNDLE_ID: com.aikido.endpoint.proxy.l4.extension
+        AIKIDO_L4_LOG_SUBSYSTEM: com.aikido.endpoint.proxy.l4
         ENABLE_DEBUG_DYLIB: NO
         OTHER_LDFLAGS:
           - "$(SRCROOT)/../../../../target/universal/libsafechain_lib_l4_proxy_macos.a"
