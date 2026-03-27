@@ -20,5 +20,7 @@
   <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
   <key>AikidoL4ExtensionBundleIdentifier</key>
   <string>$(AIKIDO_L4_EXTENSION_BUNDLE_ID)</string>
+  <key>AikidoL4SharedAccessGroup</key>
+  <string>$(AppIdentifierPrefix)$(AIKIDO_L4_SHARED_ACCESS_GROUP_BUNDLE_ID)</string>
 </dict>
 </plist>

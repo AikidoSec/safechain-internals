@@ -801,6 +801,9 @@ private final class TransparentProxyHostCLI {
             return value
         case errSecItemNotFound:
             return nil
+        case errSecInteractionNotAllowed, errSecAuthFailed, errSecNotAvailable:
+            log("keychain secret \(service) unavailable (OSStatus \(status)); will regenerate")
+            return nil
         default:
             throw CLIError.runtime("failed to load keychain secret \(service): OSStatus \(status)")
         }
@@ -838,6 +841,9 @@ private final class TransparentProxyHostCLI {
 
         var addQuery = baseQuery
         addQuery[kSecValueData as String] = data
+        if let accessControl = createAccessControl() {
+            addQuery[kSecAttrAccessControl as String] = accessControl
+        }
 
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         if addStatus != errSecSuccess {
@@ -886,6 +892,22 @@ private final class TransparentProxyHostCLI {
         }
 
         return MITMCASecrets(certPEM: certPEM, keyPEM: keyPEM)
+    }
+
+    private func createAccessControl() -> SecAccessControl? {
+        var error: Unmanaged<CFError>?
+        let access = SecAccessControlCreateWithFlags(
+            nil,
+            kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            [],
+            &error
+        )
+
+        if let err = error {
+            logError("failed to create access control for keychain secret", err.takeRetainedValue())
+        }
+
+        return access
     }
 
     private func runProcessCaptureStdout(
