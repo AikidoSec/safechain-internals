@@ -56,7 +56,7 @@ fn unrelated_accept_header_is_unchanged() {
 }
 
 #[tokio::test]
-async fn removes_versions_newer_than_24h() {
+async fn removes_versions_newer_than_48h() {
     let recent = timestamp_hours_ago(1);
     let body = format!(
         r#"{{"time":{{"created":"2020-01-01T00:00:00.000Z","modified":"2020-01-02T00:00:00.000Z","1.0.0":"2020-01-01T00:00:00.000Z","1.0.1":"{recent}"}}}}"#
@@ -76,8 +76,8 @@ async fn removes_versions_newer_than_24h() {
 }
 
 #[tokio::test]
-async fn keeps_versions_older_than_24h() {
-    let old = timestamp_hours_ago(48);
+async fn keeps_versions_older_than_48h() {
+    let old = timestamp_hours_ago(50);
     let body = format!(r#"{{"time":{{"created":"2020-01-01T00:00:00.000Z","1.0.0":"{old}"}}}}"#);
     let resp = make_json_response(&body);
     let min_package_age = MinPackageAge::new(None, None);
@@ -279,9 +279,9 @@ async fn does_not_strip_headers_for_non_json_response() {
 
 #[tokio::test]
 async fn does_not_strip_cache_headers_when_json_is_not_modified() {
-    let older_than_24_hours = timestamp_hours_ago(30);
+    let older_than_48_hours = timestamp_hours_ago(50);
     let body = format!(
-        r#"{{"time":{{"created":"2020-01-01T00:00:00.000Z","modified":"2020-01-02T00:00:00.000Z","1.0.0":"2020-01-01T00:00:00.000Z","1.0.1":"{older_than_24_hours}"}}}}"#
+        r#"{{"time":{{"created":"2020-01-01T00:00:00.000Z","modified":"2020-01-02T00:00:00.000Z","1.0.0":"2020-01-01T00:00:00.000Z","1.0.1":"{older_than_48_hours}"}}}}"#
     );
     let resp = Response::builder()
         .header("content-type", "application/json")
