@@ -4,14 +4,10 @@
 <dict>
 	<key>com.apple.developer.networking.networkextension</key>
 	<array>
-		<string>app-proxy-provider</string>
+		<string>app-proxy-provider$(NE_ENTITLEMENT_SUFFIX)</string>
 	</array>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
-	<key>keychain-access-groups</key>
-	<array>
-		<string>$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	</array>
 	<key>com.apple.security.network.client</key>
 	<true/>
 </dict>

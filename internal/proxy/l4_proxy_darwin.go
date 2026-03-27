@@ -39,50 +39,20 @@ func (p *L4Proxy) Start(ctx context.Context, opts StartOptions) error {
 
 	log.Printf("Starting L4 transparent proxy: %s %s", platform.SafeChainL4ProxyHostPath, strings.Join(args, " "))
 
-	cmd := exec.CommandContext(ctx, platform.SafeChainL4ProxyHostPath, args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to start L4 proxy: %v, output: %s", err, string(output))
-	}
-
-	outputStr := strings.TrimSpace(string(output))
+	output, _ := platform.RunInAuditSessionOfCurrentUser(ctx, platform.SafeChainL4ProxyHostPath, args)
+	outputStr := strings.TrimSpace(output)
 	log.Printf("L4 proxy start output: %s", outputStr)
 
 	if strings.Contains(outputStr, "status: connected") {
 		log.Println("L4 transparent proxy started successfully")
 		return nil
 	}
-
-	timeout := time.After(l4ReadyTimeout)
-	ticker := time.NewTicker(l4ReadyInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout:
-			return fmt.Errorf("timeout waiting for L4 proxy to reach connected state")
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			if p.IsRunning() {
-				log.Println("L4 transparent proxy started successfully")
-				return nil
-			}
-		}
-	}
+	return fmt.Errorf("L4 transparent proxy did not start at this time, but will be retried by the daemon")
 }
 
 func (p *L4Proxy) Stop() error {
-	log.Println("Stopping L4 transparent proxy...")
-
-	cmd := exec.Command(platform.SafeChainL4ProxyHostPath, "stop")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to stop L4 proxy: %v, output: %s", err, string(output))
-	}
-
-	log.Printf("L4 proxy stop output: %s", strings.TrimSpace(string(output)))
-	log.Println("L4 transparent proxy stopped successfully")
+	// L4 proxy does not need to be stopped when daemon exits
+	// It will be stopped on pkg uninstall
 	return nil
 }
 
@@ -94,6 +64,10 @@ func (p *L4Proxy) IsRunning() bool {
 		return false
 	}
 	return strings.Contains(string(output), "status: connected")
+}
+
+func (p *L4Proxy) InstallCA(ctx context.Context) error {
+	return InstallL4ProxyCA(ctx)
 }
 
 func (p *L4Proxy) Version() (string, error) {

@@ -61,7 +61,7 @@ jobs:
       - name: Generate L4 proxy Xcode project
         run: |
           cd packaging/macos/xcode/l4-proxy
-          xcodegen generate
+          xcodegen generate --spec Project.dist.yml
 
       - name: Make scripts executable
         run: chmod +x .github/scripts/macos/**/*.sh
@@ -73,21 +73,17 @@ jobs:
           MACOS_INSTALLER_CERTIFICATE_P12: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_P12 }}
         run: .github/scripts/macos/core/import-certificate.sh
 
-      - name: Install App Store Connect API key
+      - name: Install Developer ID provisioning profiles
         env:
-          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          L4_HOST_PROVISION_PROFILE_B64: ${{ secrets.L4_HOST_PROVISION_PROFILE_B64 }}
+          L4_EXT_PROVISION_PROFILE_B64: ${{ secrets.L4_EXT_PROVISION_PROFILE_B64 }}
         run: |
-          mkdir -p ~/private_keys
-          echo "$APPLE_API_KEY_BASE64" | base64 -d > ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
-
-      - name: Shorten hostname for Apple device registration
-        run: sudo scutil --set ComputerName "aikido-ci-runner"
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILE_DIR"
+          echo "$L4_HOST_PROVISION_PROFILE_B64" | base64 -d > "$PROFILE_DIR/l4_host.provisionprofile"
+          echo "$L4_EXT_PROVISION_PROFILE_B64" | base64 -d > "$PROFILE_DIR/l4_ext.provisionprofile"
 
       - name: Build L4 proxy macOS app
-        env:
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_KEY_ISSUER_ID: ${{ secrets.APPLE_API_KEY_ISSUER_ID }}
         run: |
           cd packaging/macos/xcode/l4-proxy
           xcodebuild \
@@ -95,15 +91,8 @@ jobs:
             -scheme AikidoEndpointL4ProxyHost \
             -configuration Release \
             -derivedDataPath "${{ github.workspace }}/l4-derived-data" \
-            -allowProvisioningUpdates \
-            -allowProvisioningDeviceRegistration \
-            -authenticationKeyPath ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8 \
-            -authenticationKeyID "$APPLE_API_KEY_ID" \
-            -authenticationKeyIssuerID "$APPLE_API_KEY_ISSUER_ID" \
             ARCHS="x86_64 arm64" \
             ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
-            OTHER_CODE_SIGN_FLAGS="--timestamp" \
             clean build
 
       - name: Prepare L4 proxy app artifact
@@ -261,18 +250,51 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: .github/scripts/macos/core/sign-binary.sh bin/safechain-l4-proxy-darwin-universal
 
+      - name: Embed Developer ID provisioning profiles in L4 app bundle
+        env:
+          L4_HOST_PROVISION_PROFILE_B64: ${{ secrets.L4_HOST_PROVISION_PROFILE_B64 }}
+          L4_EXT_PROVISION_PROFILE_B64: ${{ secrets.L4_EXT_PROVISION_PROFILE_B64 }}
+        run: |
+          APP="bin/AikidoEndpointL4ProxyHost.app"
+          SYSEXT="$APP/Contents/Library/SystemExtensions/com.aikido.endpoint.proxy.l4.dist.extension.systemextension"
+
+          if [ -z "$L4_HOST_PROVISION_PROFILE_B64" ] || [ -z "$L4_EXT_PROVISION_PROFILE_B64" ]; then
+            echo "ERROR: L4_HOST_PROVISION_PROFILE_B64 or L4_EXT_PROVISION_PROFILE_B64 secret is empty"
+            exit 1
+          fi
+
+          echo "Embedding Developer ID provisioning profile in host app..."
+          printf '%s' "$L4_HOST_PROVISION_PROFILE_B64" | base64 -d > "$APP/Contents/embedded.provisionprofile"
+
+          echo "Embedding Developer ID provisioning profile in extension..."
+          printf '%s' "$L4_EXT_PROVISION_PROFILE_B64" | base64 -d > "$SYSEXT/Contents/embedded.provisionprofile"
+
+          echo "Verifying profiles are valid Developer ID profiles..."
+          for PROFILE in "$APP/Contents/embedded.provisionprofile" "$SYSEXT/Contents/embedded.provisionprofile"; do
+            ls -la "$PROFILE"
+            PROFILE_INFO=$(security cms -D -i "$PROFILE")
+            echo "$PROFILE_INFO" | grep -q "ProvisionsAllDevices" || {
+              echo "ERROR: Profile $PROFILE is NOT a Developer ID profile (missing ProvisionsAllDevices)"
+              echo "$PROFILE_INFO" | grep -E "Name|ProfileDistributionType"
+              exit 1
+            }
+            echo "$PROFILE_INFO" | grep -E "Name|ProvisionsAllDevices"
+          done
+          
+          echo "Developer ID provisioning profiles embedded and verified successfully"
+
       - name: Sign macOS L4 proxy app bundle
         env:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          APPEX="bin/AikidoEndpointL4ProxyHost.app/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
+          SYSEXT="bin/AikidoEndpointL4ProxyHost.app/Contents/Library/SystemExtensions/com.aikido.endpoint.proxy.l4.dist.extension.systemextension"
           APP="bin/AikidoEndpointL4ProxyHost.app"
 
-          echo "Signing L4 extension..."
+          echo "Signing L4 system extension..."
           codesign --force --sign "$DEV_ID_SHA" --timestamp --options runtime \
             --preserve-metadata=entitlements \
-            --keychain build.keychain "$APPEX"
+            --keychain build.keychain "$SYSEXT"
 
           echo "Signing L4 host app..."
           codesign --force --sign "$DEV_ID_SHA" --timestamp --options runtime \
@@ -280,11 +302,11 @@ jobs:
             --keychain build.keychain "$APP"
 
           echo "Verifying signatures..."
-          codesign --verify --strict --verbose=2 "$APPEX"
+          codesign --verify --strict --verbose=2 "$SYSEXT"
           codesign --verify --strict --verbose=2 "$APP"
 
           echo "Verifying entitlements include networkextension..."
-          codesign -d --entitlements :- "$APPEX" | grep -q "networkextension"
+          codesign -d --entitlements :- "$SYSEXT" | grep -q "networkextension"
           codesign -d --entitlements :- "$APP" | grep -q "networkextension"
 
           echo "Verifying team identifier..."

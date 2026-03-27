@@ -3071,13 +3071,10 @@ dependencies = [
 name = "safechain-lib-l4-proxy-macos"
 version = "1.0.0"
 dependencies = [
- "core-foundation 0.10.1",
  "moka",
  "rama",
  "rustls-platform-verifier",
  "safechain-proxy-lib",
- "security-framework",
- "security-framework-sys",
  "serde",
  "serde_json",
  "tikv-jemallocator",

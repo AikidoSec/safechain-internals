@@ -2,7 +2,9 @@ import Darwin
 import Foundation
 import NetworkExtension
 import OSLog
+import ObjectiveC
 import Security
+import SystemExtensions
 
 private enum HostCommand {
     case start(StartOptions)
@@ -15,6 +17,7 @@ private enum HostCommand {
 private struct StopOptions {
     var removeProfile = false
     var cleanSecrets = false
+    var deactivateExtension = false
 }
 
 private struct StartOptions {
@@ -22,7 +25,6 @@ private struct StartOptions {
     var aikidoURL: String?
     var agentToken: String?
     var agentDeviceID: String?
-    var useVPNSharedIdentity = false
     var resetProfile = false
 }
 
@@ -40,19 +42,31 @@ private struct ProxyEngineConfigPayload: Encodable, Equatable {
     let agentIdentity: AgentIdentityPayload?
     let reportingEndpoint: String?
     let aikidoURL: String?
-    let useVPNSharedIdentity: Bool
+    let hostBundleID: String
+    let caCertPEM: String?
+    let caKeyPEM: String?
 
     private enum CodingKeys: String, CodingKey {
         case agentIdentity = "agent_identity"
         case reportingEndpoint = "reporting_endpoint"
         case aikidoURL = "aikido_url"
-        case useVPNSharedIdentity = "use_vpn_shared_identity"
+        case hostBundleID = "host_bundle_id"
+        case caCertPEM = "ca_cert_pem"
+        case caKeyPEM = "ca_key_pem"
     }
 
     var isEmpty: Bool {
-        agentIdentity == nil && reportingEndpoint == nil && aikidoURL == nil
-            && useVPNSharedIdentity == false
+        agentIdentity == nil
+            && reportingEndpoint == nil
+            && aikidoURL == nil
+            && caCertPEM == nil
+            && caKeyPEM == nil
     }
+}
+
+private struct MITMCASecrets: Equatable {
+    let certPEM: String
+    let keyPEM: String
 }
 
 private enum CLIError: LocalizedError {
@@ -68,12 +82,25 @@ private enum CLIError: LocalizedError {
     }
 }
 
+private enum SystemExtensionActivationOutcome {
+    case completed
+    case replaced
+    case approvalRequired
+}
+
 private final class TransparentProxyHostCLI {
-    private let extensionBundleId = "com.aikido.endpoint.proxy.l4.extension"
     private let managerDescription = "Aikido Endpoint L4 Transparent Proxy"
     private let managerServerAddress = "127.0.0.1"
-    private let logSubsystem = "com.aikido.endpoint.proxy.l4"
-    private lazy var logger = Logger(subsystem: logSubsystem, category: "host-cli")
+    private lazy var extensionBundleId = infoString(
+        key: "AikidoL4ExtensionBundleIdentifier",
+        fallback: "com.aikido.endpoint.proxy.l4.dev.extension"
+    )
+    private lazy var logger = Logger(
+        subsystem: "com.aikido.endpoint.proxy.l4", category: "host-main")
+    private lazy var sharedAccessGroup: String? = {
+        let value = infoString(key: "AikidoL4SharedAccessGroup", fallback: "")
+        return value.isEmpty ? nil : value
+    }()
 
     func run(arguments: [String]) -> Int32 {
         do {
@@ -109,7 +136,15 @@ private final class TransparentProxyHostCLI {
     }
 
     private func start(options: StartOptions) throws {
-        let engineConfigJSON = try Self.makeEngineConfigJSON(from: options)
+        let activationOutcome = try ensureSystemExtensionActivated()
+        guard activationOutcome != .approvalRequired else {
+            throw CLIError.runtime(
+                "system extension approval required; open System Settings > General > Login Items & Extensions > Network Extensions"
+            )
+        }
+
+        let mitmCA = try loadOrCreateMITMCA()
+        let engineConfigJSON = try Self.makeEngineConfigJSON(from: options, mitmCA: mitmCA)
         let existingManagers = try loadManagers()
 
         if options.resetProfile {
@@ -120,17 +155,22 @@ private final class TransparentProxyHostCLI {
             }
         }
 
-        let manager = try prepareManager(existingManagers: options.resetProfile ? [] : existingManagers, engineConfigJSON: engineConfigJSON)
+        let manager = try prepareManager(
+            existingManagers: options.resetProfile ? [] : existingManagers,
+            engineConfigJSON: engineConfigJSON)
 
-        if shouldRestartTunnel(manager: manager, expectedEngineConfigJSON: engineConfigJSON) {
-            log("configuration changed while proxy was active; restarting tunnel")
+        let mustRestartBecauseBinaryChanged = activationOutcome == .replaced
+
+        if mustRestartBecauseBinaryChanged
+            || shouldRestartTunnel(manager: manager, expectedEngineConfigJSON: engineConfigJSON)
+        {
+            log(
+                "configuration or extension binary changed while proxy was active; restarting tunnel"
+            )
             manager.connection.stopVPNTunnel()
             waitUntilDisconnected(manager: manager, attempts: 40)
         } else if isActive(manager.connection.status) {
             print("status: \(statusString(manager.connection.status))")
-            if let engineConfigJSON {
-                print("config: \(engineConfigJSON)")
-            }
             return
         }
 
@@ -138,24 +178,21 @@ private final class TransparentProxyHostCLI {
             try manager.connection.startVPNTunnel()
             log("transparent proxy start requested")
         } catch {
-            throw CLIError.runtime("failed to start transparent proxy: \(error.localizedDescription)")
+            throw CLIError.runtime(
+                "failed to start transparent proxy: \(error.localizedDescription)")
         }
 
         let status = waitForSteadyState(manager: manager, attempts: 20)
         print("status: \(statusString(status))")
-        if let engineConfigJSON {
-            print("config: \(engineConfigJSON)")
-        }
     }
 
     private func stop(options: StopOptions) throws {
         let managers = try loadManagers()
-        guard let manager = selectManager(from: managers) else {
-            print("status: not-installed")
-            return
-        }
+        let manager = selectManager(from: managers)
 
-        if manager.connection.status != .disconnected && manager.connection.status != .invalid {
+        if let manager,
+            manager.connection.status != .disconnected && manager.connection.status != .invalid
+        {
             log("stopping transparent proxy tunnel")
             manager.connection.stopVPNTunnel()
             waitUntilDisconnected(manager: manager, attempts: 40)
@@ -171,9 +208,16 @@ private final class TransparentProxyHostCLI {
                 log("removing \(managersToRemove.count) saved transparent proxy manager(s)")
                 try removeManagersFromPreferences(managersToRemove)
             }
-            print("status: removed")
+        }
+
+        if options.deactivateExtension {
+            try deactivateSystemExtension()
+        }
+
+        if let manager {
+            print("status: \(options.removeProfile ? "removed" : statusString(manager.connection.status))")
         } else {
-            print("status: \(statusString(manager.connection.status))")
+            print("status: not-installed")
         }
     }
 
@@ -184,12 +228,6 @@ private final class TransparentProxyHostCLI {
         }
 
         print("status: \(statusString(manager.connection.status))")
-        if
-            let proto = manager.protocolConfiguration as? NETunnelProviderProtocol,
-            let engineConfigJSON = proto.providerConfiguration?["engineConfigJson"] as? String
-        {
-            print("config: \(engineConfigJSON)")
-        }
     }
 
     private func loadManagers() throws -> [NETransparentProxyManager] {
@@ -204,6 +242,66 @@ private final class TransparentProxyHostCLI {
         }
     }
 
+    private func ensureSystemExtensionActivated() throws -> SystemExtensionActivationOutcome {
+        log("submitting system extension activation request for \(extensionBundleId)")
+
+        return try waitForResult("activate system extension", timeout: 30) { completion in
+            let delegate = SystemExtensionRequestDelegate(
+                extensionBundleId: extensionBundleId,
+                onFinish: { outcome in completion(.success(outcome)) },
+                onApprovalRequired: { completion(.success(.approvalRequired)) },
+                onFailure: { completion(.failure($0)) },
+                log: { [weak self] message in self?.log(message) },
+                logError: { [weak self] prefix, error in self?.logError(prefix, error) }
+            )
+
+            let request = OSSystemExtensionRequest.activationRequest(
+                forExtensionWithIdentifier: extensionBundleId,
+                queue: .main
+            )
+            request.delegate = delegate
+            objc_setAssociatedObject(
+                request,
+                &AssociatedKeys.systemExtensionDelegate,
+                delegate,
+                .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            )
+            OSSystemExtensionManager.shared.submitRequest(request)
+        }
+    }
+
+    private func deactivateSystemExtension() throws {
+        log("submitting system extension deactivation request for \(extensionBundleId)")
+
+        let _: SystemExtensionActivationOutcome = try waitForResult(
+            "deactivate system extension", timeout: 30
+        ) { completion in
+            let delegate = SystemExtensionRequestDelegate(
+                extensionBundleId: extensionBundleId,
+                onFinish: { outcome in completion(.success(outcome)) },
+                onApprovalRequired: { completion(.success(.approvalRequired)) },
+                onFailure: { completion(.failure($0)) },
+                log: { [weak self] message in self?.log(message) },
+                logError: { [weak self] prefix, error in self?.logError(prefix, error) }
+            )
+
+            let request = OSSystemExtensionRequest.deactivationRequest(
+                forExtensionWithIdentifier: extensionBundleId,
+                queue: .main
+            )
+            request.delegate = delegate
+            objc_setAssociatedObject(
+                request,
+                &AssociatedKeys.systemExtensionDelegate,
+                delegate,
+                .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            )
+            OSSystemExtensionManager.shared.submitRequest(request)
+        }
+
+        log("system extension deactivated")
+    }
+
     private func prepareManager(
         existingManagers: [NETransparentProxyManager],
         engineConfigJSON: String?
@@ -213,7 +311,9 @@ private final class TransparentProxyHostCLI {
         let changed = configure(manager: manager, engineConfigJSON: engineConfigJSON)
 
         if changed || existingManager == nil {
-            log(existingManager == nil ? "saving new proxy manager" : "saving updated proxy manager")
+            log(
+                existingManager == nil ? "saving new proxy manager" : "saving updated proxy manager"
+            )
             return try save(manager: manager)
         }
 
@@ -321,7 +421,9 @@ private final class TransparentProxyHostCLI {
         return ["engineConfigJson": engineConfigJSON]
     }
 
-    private func selectManager(from managers: [NETransparentProxyManager]) -> NETransparentProxyManager? {
+    private func selectManager(from managers: [NETransparentProxyManager])
+        -> NETransparentProxyManager?
+    {
         if let exact = managers.first(where: { manager in
             guard let proto = manager.protocolConfiguration as? NETunnelProviderProtocol else {
                 return false
@@ -334,7 +436,9 @@ private final class TransparentProxyHostCLI {
         return managers.first(where: { $0.localizedDescription == managerDescription })
     }
 
-    private func matchingManagers(from managers: [NETransparentProxyManager]) -> [NETransparentProxyManager] {
+    private func matchingManagers(from managers: [NETransparentProxyManager])
+        -> [NETransparentProxyManager]
+    {
         managers.filter { manager in
             if let proto = manager.protocolConfiguration as? NETunnelProviderProtocol,
                 proto.providerBundleIdentifier == extensionBundleId
@@ -363,7 +467,9 @@ private final class TransparentProxyHostCLI {
     }
 
     @discardableResult
-    private func waitUntilDisconnected(manager: NETransparentProxyManager, attempts: Int) -> NEVPNStatus {
+    private func waitUntilDisconnected(manager: NETransparentProxyManager, attempts: Int)
+        -> NEVPNStatus
+    {
         var remainingAttempts = attempts
         while remainingAttempts > 0 {
             let status = manager.connection.status
@@ -378,7 +484,9 @@ private final class TransparentProxyHostCLI {
         return manager.connection.status
     }
 
-    private func waitForSteadyState(manager: NETransparentProxyManager, attempts: Int) -> NEVPNStatus {
+    private func waitForSteadyState(manager: NETransparentProxyManager, attempts: Int)
+        -> NEVPNStatus
+    {
         var remainingAttempts = attempts
         while remainingAttempts > 0 {
             let status = manager.connection.status
@@ -439,27 +547,26 @@ private final class TransparentProxyHostCLI {
     }
 
     private static let secretAccount = "safechain-lib-l4-proxy-macos"
+    private static let secretServiceKeyPEM = "tls-root-selfsigned-ca-key"
+    private static let secretServiceCertPEM = "tls-root-selfsigned-ca-crt"
     private static let secretServiceKeys = [
-        "tls-root-ca-key",
-        "tls-root-ca-crt-meta",
+        secretServiceKeyPEM,
+        secretServiceCertPEM,
     ]
-    private static let secretChunkPrefix = "tls-root-ca-crt-chunk"
-    private static let maxChunks = 16
 
     private func cleanSecrets() {
-        var allKeys = Self.secretServiceKeys
-        for i in 0..<Self.maxChunks {
-            allKeys.append("\(Self.secretChunkPrefix)-\(i)")
-        }
-
-        for key in allKeys {
-            let query: [String: Any] = [
+        for key in Self.secretServiceKeys {
+            var query: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: key,
                 kSecAttrAccount as String: Self.secretAccount,
-                kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
                 kSecUseDataProtectionKeychain as String: true,
             ]
+
+            if let sharedAccessGroup {
+                query[kSecAttrAccessGroup as String] = sharedAccessGroup
+            }
+
             let status = SecItemDelete(query as CFDictionary)
             if status == errSecSuccess {
                 log("deleted keychain secret: \(key)")
@@ -480,6 +587,15 @@ private final class TransparentProxyHostCLI {
         logger.error(
             "\(prefix, privacy: .public): domain=\(ns.domain, privacy: .public) code=\(ns.code, privacy: .public) description=\(ns.localizedDescription, privacy: .public)"
         )
+    }
+
+    private func infoString(key: String, fallback: String) -> String {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String else {
+            return fallback
+        }
+
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? fallback : trimmed
     }
 
     private static func parse(arguments: [String]) throws -> HostCommand {
@@ -524,17 +640,19 @@ private final class TransparentProxyHostCLI {
             let argument = arguments[index]
             switch argument {
             case "--reporting-endpoint":
-                options.reportingEndpoint = try consumeValue(flag: argument, arguments: arguments, index: &index)
+                options.reportingEndpoint = try consumeValue(
+                    flag: argument, arguments: arguments, index: &index)
                 try validateAbsoluteURL(options.reportingEndpoint, flag: argument)
             case "--aikido-url":
-                options.aikidoURL = try consumeValue(flag: argument, arguments: arguments, index: &index)
+                options.aikidoURL = try consumeValue(
+                    flag: argument, arguments: arguments, index: &index)
                 try validateAbsoluteURL(options.aikidoURL, flag: argument)
             case "--agent-token":
-                options.agentToken = try consumeValue(flag: argument, arguments: arguments, index: &index)
+                options.agentToken = try consumeValue(
+                    flag: argument, arguments: arguments, index: &index)
             case "--agent-device-id":
-                options.agentDeviceID = try consumeValue(flag: argument, arguments: arguments, index: &index)
-            case "--use-vpn-shared-identity":
-                options.useVPNSharedIdentity = true
+                options.agentDeviceID = try consumeValue(
+                    flag: argument, arguments: arguments, index: &index)
             case "--reset-profile":
                 options.resetProfile = true
             default:
@@ -563,6 +681,8 @@ private final class TransparentProxyHostCLI {
                 options.removeProfile = true
             case "--clean-secrets":
                 options.cleanSecrets = true
+            case "--deactivate-extension":
+                options.deactivateExtension = true
             default:
                 throw CLIError.usage("unknown `stop` argument: \(argument)")
             }
@@ -603,7 +723,10 @@ private final class TransparentProxyHostCLI {
         }
     }
 
-    private static func makeEngineConfigJSON(from options: StartOptions) throws -> String? {
+    private static func makeEngineConfigJSON(
+        from options: StartOptions,
+        mitmCA: MITMCASecrets
+    ) throws -> String? {
         let agentIdentity: AgentIdentityPayload?
         if let token = options.agentToken, let deviceID = options.agentDeviceID {
             agentIdentity = AgentIdentityPayload(token: token, deviceID: deviceID)
@@ -615,12 +738,10 @@ private final class TransparentProxyHostCLI {
             agentIdentity: agentIdentity,
             reportingEndpoint: options.reportingEndpoint,
             aikidoURL: options.aikidoURL,
-            useVPNSharedIdentity: options.useVPNSharedIdentity
+            hostBundleID: Bundle.main.bundleIdentifier ?? "com.aikido.endpoint.proxy.l4.dev",
+            caCertPEM: mitmCA.certPEM,
+            caKeyPEM: mitmCA.keyPEM
         )
-
-        guard !payload.isEmpty else {
-            return nil
-        }
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -629,6 +750,249 @@ private final class TransparentProxyHostCLI {
             throw CLIError.runtime("failed to encode transparent proxy config as UTF-8 JSON")
         }
         return json
+    }
+
+    private func loadOrCreateMITMCA() throws -> MITMCASecrets {
+        let existingKey = try loadSecret(service: Self.secretServiceKeyPEM)
+        let existingCert = try loadSecret(service: Self.secretServiceCertPEM)
+
+        if let keyPEM = existingKey, let certPEM = existingCert {
+            log("loaded MITM CA PEM from keychain")
+            return MITMCASecrets(certPEM: certPEM, keyPEM: keyPEM)
+        }
+
+        if existingKey != nil || existingCert != nil {
+            log("MITM CA keychain state incomplete; deleting partial CA material and regenerating")
+            cleanSecrets()
+        }
+
+        let generated = try generateSelfSignedCAPEM()
+        try storeSecret(service: Self.secretServiceKeyPEM, value: generated.keyPEM)
+        try storeSecret(service: Self.secretServiceCertPEM, value: generated.certPEM)
+        log("generated and stored new MITM CA PEM in keychain")
+        return generated
+    }
+
+    private func loadSecret(service: String) throws -> String? {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: Self.secretAccount,
+            kSecUseDataProtectionKeychain as String: true,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+
+        if let sharedAccessGroup {
+            query[kSecAttrAccessGroup as String] = sharedAccessGroup
+        }
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+
+        switch status {
+        case errSecSuccess:
+            guard let data = item as? Data else {
+                throw CLIError.runtime("keychain item for \(service) did not return Data")
+            }
+            guard let value = String(data: data, encoding: .utf8) else {
+                throw CLIError.runtime("keychain item for \(service) was not valid UTF-8")
+            }
+            return value
+        case errSecItemNotFound:
+            return nil
+        case errSecInteractionNotAllowed, errSecAuthFailed, errSecNotAvailable:
+            log("keychain secret \(service) unavailable (OSStatus \(status)); will regenerate")
+            return nil
+        default:
+            throw CLIError.runtime("failed to load keychain secret \(service): OSStatus \(status)")
+        }
+    }
+
+    private func storeSecret(service: String, value: String) throws {
+        guard let data = value.data(using: .utf8) else {
+            throw CLIError.runtime("failed to encode keychain secret \(service) as UTF-8")
+        }
+
+        var baseQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: Self.secretAccount,
+            kSecUseDataProtectionKeychain as String: true,
+        ]
+
+        if let sharedAccessGroup {
+            baseQuery[kSecAttrAccessGroup as String] = sharedAccessGroup
+        }
+
+        let updateAttrs: [String: Any] = [
+            kSecValueData as String: data
+        ]
+
+        let updateStatus = SecItemUpdate(baseQuery as CFDictionary, updateAttrs as CFDictionary)
+        if updateStatus == errSecSuccess {
+            return
+        }
+
+        if updateStatus != errSecItemNotFound {
+            throw CLIError.runtime(
+                "failed to update keychain secret \(service): OSStatus \(updateStatus)")
+        }
+
+        var addQuery = baseQuery
+        addQuery[kSecValueData as String] = data
+        if let accessControl = createAccessControl() {
+            addQuery[kSecAttrAccessControl as String] = accessControl
+        }
+
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        if addStatus != errSecSuccess {
+            throw CLIError.runtime(
+                "failed to add keychain secret \(service): OSStatus \(addStatus)")
+        }
+    }
+
+    private func generateSelfSignedCAPEM() throws -> MITMCASecrets {
+        let keyPEM = try runProcessCaptureStdout(
+            launchPath: "/usr/bin/openssl",
+            arguments: [
+                "genpkey",
+                "-algorithm", "RSA",
+                "-pkeyopt", "rsa_keygen_bits:3072",
+                "-outform", "PEM",
+            ]
+        )
+
+        guard keyPEM.contains("BEGIN PRIVATE KEY") || keyPEM.contains("BEGIN RSA PRIVATE KEY")
+        else {
+            throw CLIError.runtime("generated CA private key PEM had unexpected format")
+        }
+
+        let certPEM = try runProcessCaptureStdout(
+            launchPath: "/usr/bin/openssl",
+            arguments: [
+                "req",
+                "-x509",
+                "-new",
+                "-sha256",
+                "-days", "3650",
+                "-key", "/dev/stdin",
+                "-out", "/dev/stdout",
+                "-subj", "/CN=Aikido Endpoint L4 Proxy Root CA/O=Aikido/OU=Endpoint/C=BE",
+                "-addext", "basicConstraints=critical,CA:true,pathlen:0",
+                "-addext", "keyUsage=critical,digitalSignature,keyCertSign,cRLSign",
+                "-addext", "subjectKeyIdentifier=hash",
+                "-addext", "authorityKeyIdentifier=keyid:always,issuer",
+            ],
+            stdin: keyPEM
+        )
+
+        guard certPEM.contains("BEGIN CERTIFICATE") else {
+            throw CLIError.runtime("generated CA certificate PEM had unexpected format")
+        }
+
+        return MITMCASecrets(certPEM: certPEM, keyPEM: keyPEM)
+    }
+
+    private func createAccessControl() -> SecAccessControl? {
+        var error: Unmanaged<CFError>?
+        let access = SecAccessControlCreateWithFlags(
+            nil,
+            kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            [],
+            &error
+        )
+
+        if let err = error {
+            logError("failed to create access control for keychain secret", err.takeRetainedValue())
+        }
+
+        return access
+    }
+
+    private func runProcessCaptureStdout(
+        launchPath: String,
+        arguments: [String],
+        stdin: String? = nil
+    ) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: launchPath)
+        process.arguments = arguments
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        let stdinPipe: Pipe?
+        if stdin != nil {
+            let pipe = Pipe()
+            process.standardInput = pipe
+            stdinPipe = pipe
+        } else {
+            stdinPipe = nil
+        }
+
+        do {
+            try process.run()
+        } catch {
+            throw CLIError.runtime("failed to launch \(launchPath): \(error.localizedDescription)")
+        }
+
+        if let stdin, let stdinPipe, let data = stdin.data(using: .utf8) {
+            stdinPipe.fileHandleForWriting.write(data)
+            try? stdinPipe.fileHandleForWriting.close()
+        }
+
+        process.waitUntilExit()
+
+        let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+
+        let stdoutText = String(data: stdoutData, encoding: .utf8) ?? ""
+        let stderrText = String(data: stderrData, encoding: .utf8) ?? ""
+
+        guard process.terminationStatus == 0 else {
+            throw CLIError.runtime(
+                "command failed: \(launchPath) \(arguments.joined(separator: " ")): \(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))"
+            )
+        }
+
+        guard !stdoutText.isEmpty else {
+            throw CLIError.runtime(
+                "command produced no stdout: \(launchPath) \(arguments.joined(separator: " "))"
+            )
+        }
+
+        return stdoutText
+    }
+
+    private func runProcess(launchPath: String, arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: launchPath)
+        process.arguments = arguments
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        do {
+            try process.run()
+        } catch {
+            throw CLIError.runtime("failed to launch \(launchPath): \(error.localizedDescription)")
+        }
+
+        process.waitUntilExit()
+
+        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        let stderrText = String(data: stderrData, encoding: .utf8) ?? ""
+
+        guard process.terminationStatus == 0 else {
+            throw CLIError.runtime(
+                "command failed: \(launchPath) \(arguments.joined(separator: " ")): \(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))"
+            )
+        }
     }
 
     private static func usage() -> String {
@@ -648,13 +1012,13 @@ private final class TransparentProxyHostCLI {
         Stop options:
           --remove-profile             Remove the saved Network Extension profile after stopping.
           --clean-secrets              Delete proxy CA secrets from the keychain.
+          --deactivate-extension       Deactivate the system extension (for uninstall).
 
         Start options:
           --reporting-endpoint URL   POST blocked-event reports to this absolute URL.
           --aikido-url URL           Override the Aikido app base URL used by the extension.
           --agent-token TOKEN        Agent token to forward to the extension config.
           --agent-device-id ID       Agent device identifier to forward to the extension config.
-          --use-vpn-shared-identity  Use the managed identity from com.apple.managed.vpn.shared.
           --reset-profile            Remove the saved Network Extension profile before starting.
           --help                     Show this help text.
 
@@ -670,6 +1034,71 @@ private final class TransparentProxyHostCLI {
             return
         }
         FileHandle.standardError.write(data)
+    }
+}
+
+private enum AssociatedKeys {
+    static var systemExtensionDelegate: UInt8 = 0
+}
+
+private final class SystemExtensionRequestDelegate: NSObject, OSSystemExtensionRequestDelegate {
+    private let extensionBundleId: String
+    private let onFinish: (SystemExtensionActivationOutcome) -> Void
+    private let onApprovalRequired: () -> Void
+    private let onFailure: (Error) -> Void
+    private let log: (String) -> Void
+    private let logError: (String, Error) -> Void
+
+    private var didReplace = false
+
+    init(
+        extensionBundleId: String,
+        onFinish: @escaping (SystemExtensionActivationOutcome) -> Void,
+        onApprovalRequired: @escaping () -> Void,
+        onFailure: @escaping (Error) -> Void,
+        log: @escaping (String) -> Void,
+        logError: @escaping (String, Error) -> Void
+    ) {
+        self.extensionBundleId = extensionBundleId
+        self.onFinish = onFinish
+        self.onApprovalRequired = onApprovalRequired
+        self.onFailure = onFailure
+        self.log = log
+        self.logError = logError
+    }
+
+    func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
+        log(
+            "system extension approval required for \(extensionBundleId); open System Settings > General > Login Items & Extensions > Network Extensions"
+        )
+        onApprovalRequired()
+    }
+
+    func request(
+        _ request: OSSystemExtensionRequest,
+        didFinishWithResult result: OSSystemExtensionRequest.Result
+    ) {
+        log(
+            "system extension activation finished for \(extensionBundleId), result: \(result.rawValue), replaced: \(didReplace)"
+        )
+        onFinish(didReplace ? .replaced : .completed)
+    }
+
+    func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) {
+        logError("system extension activation failed for \(extensionBundleId)", error)
+        onFailure(error)
+    }
+
+    func request(
+        _ request: OSSystemExtensionRequest,
+        actionForReplacingExtension existing: OSSystemExtensionProperties,
+        withExtension ext: OSSystemExtensionProperties
+    ) -> OSSystemExtensionRequest.ReplacementAction {
+        didReplace = true
+        log(
+            "replacing system extension short \(existing.bundleShortVersion) build \(existing.bundleVersion) with short \(ext.bundleShortVersion) build \(ext.bundleVersion)"
+        )
+        return .replace
     }
 }
 
