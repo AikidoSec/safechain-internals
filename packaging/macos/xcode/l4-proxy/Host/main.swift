@@ -967,34 +967,6 @@ private final class TransparentProxyHostCLI {
         return stdoutText
     }
 
-    private func runProcess(launchPath: String, arguments: [String]) throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: launchPath)
-        process.arguments = arguments
-
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        do {
-            try process.run()
-        } catch {
-            throw CLIError.runtime("failed to launch \(launchPath): \(error.localizedDescription)")
-        }
-
-        process.waitUntilExit()
-
-        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        let stderrText = String(data: stderrData, encoding: .utf8) ?? ""
-
-        guard process.terminationStatus == 0 else {
-            throw CLIError.runtime(
-                "command failed: \(launchPath) \(arguments.joined(separator: " ")): \(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))"
-            )
-        }
-    }
-
     private static func usage() -> String {
         """
         Usage:
