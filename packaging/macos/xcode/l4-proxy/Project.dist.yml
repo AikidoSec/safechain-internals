@@ -36,7 +36,6 @@ targets:
         NE_ENTITLEMENT_SUFFIX: "-systemextension"
         AIKIDO_L4_EXTENSION_BUNDLE_ID: com.aikido.endpoint.proxy.l4.dist.extension
         AIKIDO_L4_SHARED_ACCESS_GROUP_BUNDLE_ID: com.aikido.endpoint.proxy.l4.dist.extension
-        AIKIDO_L4_LOG_SUBSYSTEM: com.aikido.endpoint.proxy.l4.dist
         CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
         GENERATE_PROVISIONING_PROFILE: NO
         ENABLE_HARDENED_RUNTIME: YES
@@ -70,7 +69,6 @@ targets:
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
         NE_ENTITLEMENT_SUFFIX: "-systemextension"
         AIKIDO_L4_SHARED_ACCESS_GROUP_BUNDLE_ID: com.aikido.endpoint.proxy.l4.dist.extension
-        AIKIDO_L4_LOG_SUBSYSTEM: com.aikido.endpoint.proxy.l4.dist
         CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
         GENERATE_PROVISIONING_PROFILE: NO
         ENABLE_HARDENED_RUNTIME: YES

@@ -92,7 +92,7 @@ private final class TransparentProxyHostCLI {
     private let managerServerAddress = "127.0.0.1"
     private lazy var extensionBundleId = infoString(
         key: "AikidoL4ExtensionBundleIdentifier",
-        fallback: "com.aikido.endpoint.proxy.l4.extension"
+        fallback: "com.aikido.endpoint.proxy.l4.dev.extension"
     )
     private lazy var logger = Logger(
         subsystem: "com.aikido.endpoint.proxy.l4", category: "host-main")
@@ -691,7 +691,7 @@ private final class TransparentProxyHostCLI {
             agentIdentity: agentIdentity,
             reportingEndpoint: options.reportingEndpoint,
             aikidoURL: options.aikidoURL,
-            hostBundleID: Bundle.main.bundleIdentifier ?? "com.aikido.endpoint.proxy.l4",
+            hostBundleID: Bundle.main.bundleIdentifier ?? "com.aikido.endpoint.proxy.l4.dev",
             caCertPEM: mitmCA.certPEM,
             caKeyPEM: mitmCA.keyPEM
         )
