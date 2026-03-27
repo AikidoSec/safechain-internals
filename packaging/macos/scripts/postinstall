@@ -16,7 +16,7 @@ mkdir -p "$RUN_DIR"
 chmod 755 "$LOGS_DIR"
 
 L4_APP="$INSTALL_DIR/bin/AikidoEndpointL4ProxyHost.app"
-L4_SYSEXT="$L4_APP/Contents/Library/SystemExtensions/AikidoEndpointL4ProxyExtension.systemextension"
+L4_SYSEXT="$L4_APP/Contents/Library/SystemExtensions/com.aikido.endpoint.proxy.l4.dist.extension.systemextension"
 
 # Set proper permissions on binaries
 echo "Setting permissions on binaries..."
