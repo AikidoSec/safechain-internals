@@ -39,13 +39,8 @@ func (p *L4Proxy) Start(ctx context.Context, opts StartOptions) error {
 
 	log.Printf("Starting L4 transparent proxy: %s %s", platform.SafeChainL4ProxyHostPath, strings.Join(args, " "))
 
-	cmd := exec.CommandContext(ctx, platform.SafeChainL4ProxyHostPath, args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to start L4 proxy: %v, output: %s", err, string(output))
-	}
-
-	outputStr := strings.TrimSpace(string(output))
+	output, _ := platform.RunInAuditSessionOfCurrentUser(ctx, platform.SafeChainL4ProxyHostPath, args)
+	outputStr := strings.TrimSpace(output)
 	log.Printf("L4 proxy start output: %s", outputStr)
 
 	if strings.Contains(outputStr, "status: connected") {
@@ -73,16 +68,8 @@ func (p *L4Proxy) Start(ctx context.Context, opts StartOptions) error {
 }
 
 func (p *L4Proxy) Stop() error {
-	log.Println("Stopping L4 transparent proxy...")
-
-	cmd := exec.Command(platform.SafeChainL4ProxyHostPath, "stop")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to stop L4 proxy: %v, output: %s", err, string(output))
-	}
-
-	log.Printf("L4 proxy stop output: %s", strings.TrimSpace(string(output)))
-	log.Println("L4 transparent proxy stopped successfully")
+	// L4 proxy does not need to be stopped when daemon exists
+	// It will be stopped on pkg uninstall
 	return nil
 }
 

@@ -9,7 +9,7 @@ L4_HOST="/Applications/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpoi
 # Stop the L4 transparent proxy if it's running
 if [ -x "$L4_HOST" ]; then
     echo "Stopping L4 transparent proxy..."
-    "$L4_HOST" stop 2>/dev/null || true
+    "$L4_HOST" stop --remove-profile --clean-secrets --deactivate-extension 2>/dev/null || true
 fi
 
 # Stop the daemon if it's running
