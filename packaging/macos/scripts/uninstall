@@ -31,10 +31,9 @@ L4_HOST="$L4_APP/Contents/MacOS/AikidoEndpointL4ProxyHost"
 
 echo "Stopping Aikido Endpoint Protection processes..."
 
-# Stop the L4 transparent proxy first
 if [ -x "$L4_HOST" ]; then
     echo "  Stopping L4 transparent proxy..."
-    "$L4_HOST" stop --remove-profile --clean-secrets 2>/dev/null && echo "  ✓ L4 Proxy stopped" || echo "  L4 Proxy not running"
+    "$L4_HOST" stop --remove-profile --clean-secrets --deactivate-extension 2>/dev/null && echo "  ✓ L4 Proxy stopped" || echo "  L4 Proxy not running"
 fi
 
 if launchctl list | grep -q "$DAEMON_LABEL"; then

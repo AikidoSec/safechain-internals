@@ -17,6 +17,7 @@ private enum HostCommand {
 private struct StopOptions {
     var removeProfile = false
     var cleanSecrets = false
+    var deactivateExtension = false
 }
 
 private struct StartOptions {
@@ -187,12 +188,11 @@ private final class TransparentProxyHostCLI {
 
     private func stop(options: StopOptions) throws {
         let managers = try loadManagers()
-        guard let manager = selectManager(from: managers) else {
-            print("status: not-installed")
-            return
-        }
+        let manager = selectManager(from: managers)
 
-        if manager.connection.status != .disconnected && manager.connection.status != .invalid {
+        if let manager,
+            manager.connection.status != .disconnected && manager.connection.status != .invalid
+        {
             log("stopping transparent proxy tunnel")
             manager.connection.stopVPNTunnel()
             waitUntilDisconnected(manager: manager, attempts: 40)
@@ -208,9 +208,16 @@ private final class TransparentProxyHostCLI {
                 log("removing \(managersToRemove.count) saved transparent proxy manager(s)")
                 try removeManagersFromPreferences(managersToRemove)
             }
-            print("status: removed")
+        }
+
+        if options.deactivateExtension {
+            try deactivateSystemExtension()
+        }
+
+        if let manager {
+            print("status: \(options.removeProfile ? "removed" : statusString(manager.connection.status))")
         } else {
-            print("status: \(statusString(manager.connection.status))")
+            print("status: not-installed")
         }
     }
 
@@ -261,6 +268,38 @@ private final class TransparentProxyHostCLI {
             )
             OSSystemExtensionManager.shared.submitRequest(request)
         }
+    }
+
+    private func deactivateSystemExtension() throws {
+        log("submitting system extension deactivation request for \(extensionBundleId)")
+
+        let _: SystemExtensionActivationOutcome = try waitForResult(
+            "deactivate system extension", timeout: 30
+        ) { completion in
+            let delegate = SystemExtensionRequestDelegate(
+                extensionBundleId: extensionBundleId,
+                onFinish: { outcome in completion(.success(outcome)) },
+                onApprovalRequired: { completion(.success(.approvalRequired)) },
+                onFailure: { completion(.failure($0)) },
+                log: { [weak self] message in self?.log(message) },
+                logError: { [weak self] prefix, error in self?.logError(prefix, error) }
+            )
+
+            let request = OSSystemExtensionRequest.deactivationRequest(
+                forExtensionWithIdentifier: extensionBundleId,
+                queue: .main
+            )
+            request.delegate = delegate
+            objc_setAssociatedObject(
+                request,
+                &AssociatedKeys.systemExtensionDelegate,
+                delegate,
+                .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            )
+            OSSystemExtensionManager.shared.submitRequest(request)
+        }
+
+        log("system extension deactivated")
     }
 
     private func prepareManager(
@@ -642,6 +681,8 @@ private final class TransparentProxyHostCLI {
                 options.removeProfile = true
             case "--clean-secrets":
                 options.cleanSecrets = true
+            case "--deactivate-extension":
+                options.deactivateExtension = true
             default:
                 throw CLIError.usage("unknown `stop` argument: \(argument)")
             }
@@ -949,6 +990,7 @@ private final class TransparentProxyHostCLI {
         Stop options:
           --remove-profile             Remove the saved Network Extension profile after stopping.
           --clean-secrets              Delete proxy CA secrets from the keychain.
+          --deactivate-extension       Deactivate the system extension (for uninstall).
 
         Start options:
           --reporting-endpoint URL   POST blocked-event reports to this absolute URL.
