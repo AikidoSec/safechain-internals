@@ -79,6 +79,18 @@ run-l7-proxy *ARGS:
 proxy-har-toggle:
     curl -v -XPOST http://127.0.0.1:8088/har/toggle
 
+clean-rust:
+    cargo clean
+
+clean-xcode:
+    rm -rf .aikido/xcode 2> /dev/null
+
+clean-packaging:
+    rm -rf bin 2> /dev/null
+    rm -rf dist 2> /dev/null
+
+clean: clean-rust clean-xcode clean-packaging
+
 rust-update-deps:
     cargo update
     cargo outdated
