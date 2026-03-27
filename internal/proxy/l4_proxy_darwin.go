@@ -51,7 +51,7 @@ func (p *L4Proxy) Start(ctx context.Context, opts StartOptions) error {
 }
 
 func (p *L4Proxy) Stop() error {
-	// L4 proxy does not need to be stopped when daemon exists
+	// L4 proxy does not need to be stopped when daemon exits
 	// It will be stopped on pkg uninstall
 	return nil
 }
