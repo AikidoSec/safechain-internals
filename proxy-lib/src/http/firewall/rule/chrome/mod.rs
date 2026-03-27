@@ -4,10 +4,7 @@ use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
-    http::{
-        Request, Response, Uri,
-        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
-    },
+    http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
     utils::str::{
@@ -81,11 +78,6 @@ impl fmt::Debug for RuleChrome {
 
 impl Rule for RuleChrome {
     #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        "Chrome Plugin"
-    }
-
-    #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
     }
@@ -150,20 +142,6 @@ impl Rule for RuleChrome {
         }
 
         Ok(RequestAction::Allow(req))
-    }
-
-    #[inline(always)]
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        Ok(resp)
-    }
-
-    #[inline(always)]
-    async fn evaluate_ws_relay_msg(
-        &self,
-        _: WebSocketRelayDirection,
-        data: WebSocketRelayOutput,
-    ) -> Result<WebSocketRelayOutput, BoxError> {
-        Ok(data)
     }
 }
 

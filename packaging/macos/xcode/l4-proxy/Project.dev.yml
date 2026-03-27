@@ -7,7 +7,7 @@ options:
 packages:
   RamaAppleNetworkExtension:
     url: https://github.com/plabayo/rama.git
-    revision: 4e1041cc212ea5e4de27a64da4246b7ec731370b
+    revision: edd51d9fe72a620a53ea19f648e49b1d7c77b256
 
 targets:
   AikidoEndpointL4ProxyHost:

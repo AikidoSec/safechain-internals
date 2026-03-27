@@ -4,10 +4,7 @@ use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
-    http::{
-        Request, Response, Uri,
-        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
-    },
+    http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
     utils::str::{
@@ -75,18 +72,8 @@ impl fmt::Debug for RuleOpenVsx {
 
 impl Rule for RuleOpenVsx {
     #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        "Open VSX Extensions"
-    }
-
-    #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
-    }
-
-    #[inline(always)]
-    fn match_ws_handshake<'a>(&self, _: super::WebSocketHandshakeInfo<'a>) -> bool {
-        false
     }
 
     #[cfg(feature = "pac")]
@@ -161,20 +148,6 @@ impl Rule for RuleOpenVsx {
         );
 
         Ok(RequestAction::Allow(req))
-    }
-
-    #[inline(always)]
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        Ok(resp)
-    }
-
-    #[inline(always)]
-    async fn evaluate_ws_relay_msg(
-        &self,
-        _: WebSocketRelayDirection,
-        data: WebSocketRelayOutput,
-    ) -> Result<WebSocketRelayOutput, BoxError> {
-        Ok(data)
     }
 }
 

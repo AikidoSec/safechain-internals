@@ -91,7 +91,7 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 		logRotator:  utils.NewLogRotator(),
 		logReaper:   utils.NewLogReaper(),
 		uiManager:   uiMgr,
-		ingress:     ingress.New(cfg, uiMgr.Client),
+		ingress:     ingress.New(cfg, uiMgr),
 	}
 
 	d.initLogging(ctx)
@@ -146,10 +146,8 @@ func (d *Daemon) Stop(ctx context.Context) error {
 
 		d.uiManager.Kill()
 
-		if d.config.GetProxyMode() == config.ProxyModeL7 {
-			if err := setup.Teardown(ctx); err != nil {
-				log.Printf("Error teardown setup: %v", err)
-			}
+		if err := setup.Teardown(ctx, d.config.GetProxyMode()); err != nil {
+			log.Printf("Error teardown setup: %v", err)
 		}
 
 		if err := d.proxy.Stop(); err != nil {
@@ -243,23 +241,25 @@ func (d *Daemon) run(ctx context.Context) error {
 	}()
 
 	if err := d.startProxy(ctx); err != nil {
+		platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to start proxy: %v", err))
 		return fmt.Errorf("failed to start proxy: %v", err)
 	}
 
-	if d.config.GetProxyMode() == config.ProxyModeL7 {
-		if err := setup.Install(ctx); err != nil {
-			return fmt.Errorf("failed to install setup: %v", err)
-		}
+	if err := setup.Install(ctx, d.config.GetProxyMode()); err != nil {
+    platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to install setup: %v", err))
+		return fmt.Errorf("failed to install setup: %v", err)
 	}
 
 	d.wg.Add(1)
 	go d.runDockerCALoop(ctx)
 
 	if err := d.registry.InstallAll(ctx); err != nil {
+		platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to install scanners: %v", err))
 		return fmt.Errorf("failed to install all scanners: %v", err)
 	}
 
 	if err := d.heartbeat(); err != nil {
+		platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed initial heartbeat: %v", err))
 		return fmt.Errorf("failed to heartbeat on startup: %v", err)
 	}
 
@@ -426,6 +426,9 @@ func (d *Daemon) heartbeat() error {
 	if err != nil {
 		log.Printf("Failed to start proxy: %v", err)
 	}
+
+	// Ensure the UI is running, if not, relaunch it
+	d.uiManager.EnsureRunning()
 
 	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.IsRunning())
 

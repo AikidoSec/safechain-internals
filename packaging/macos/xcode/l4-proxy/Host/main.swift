@@ -332,6 +332,12 @@ private final class TransparentProxyHostCLI {
             changed = true
         }
 
+        if proto.disconnectOnSleep {
+            // ensure the tunnel remains active across system sleep/wake cycles
+            proto.disconnectOnSleep = false
+            changed = true
+        }
+
         let expectedConfiguration = providerConfiguration(engineConfigJSON: engineConfigJSON)
         let currentConfig = proto.providerConfiguration as? [String: String]
         if currentConfig != expectedConfiguration {
