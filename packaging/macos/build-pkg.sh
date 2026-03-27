@@ -123,7 +123,14 @@ chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 echo "Copying L4 proxy app bundle..."
 ditto "$L4_PROXY_APP" "$L4_APP_INSTALL_DIR/AikidoEndpointL4ProxyHost.app"
 chmod 755 "$L4_APP_INSTALL_DIR/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost"
-chmod 755 "$L4_APP_INSTALL_DIR/AikidoEndpointL4ProxyHost.app/Contents/Library/SystemExtensions/com.aikido.endpoint.proxy.l4.dist.extension.systemextension/Contents/MacOS/com.aikido.endpoint.proxy.l4.dist.extension"
+L4_SYSEXT_DIR="$L4_APP_INSTALL_DIR/AikidoEndpointL4ProxyHost.app/Contents/Library/SystemExtensions"
+L4_SYSEXT=$(find "$L4_SYSEXT_DIR" -maxdepth 1 -name "*.systemextension" | head -1)
+if [ -n "$L4_SYSEXT" ]; then
+    L4_SYSEXT_NAME=$(basename "$L4_SYSEXT" .systemextension)
+    chmod 755 "$L4_SYSEXT/Contents/MacOS/$L4_SYSEXT_NAME"
+else
+    echo "Warning: No system extension found in $L4_SYSEXT_DIR"
+fi
 
 # Copy scripts
 echo "Copying scripts..."
