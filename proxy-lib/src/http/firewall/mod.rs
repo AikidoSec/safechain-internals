@@ -35,7 +35,9 @@ pub mod notifier;
 pub mod rule;
 
 mod matched_rules;
-pub use self::matched_rules::{FirewallHttpRules, FirewallWebSocketRules};
+pub use self::matched_rules::{
+    FirewallDecompressionMatcher, FirewallHttpRules, FirewallWebSocketRules,
+};
 
 #[cfg(feature = "pac")]
 mod pac;

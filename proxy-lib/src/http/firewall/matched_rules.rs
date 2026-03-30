@@ -3,13 +3,15 @@ use std::sync::Arc;
 use rama::{
     Service,
     error::BoxError,
+    extensions::ExtensionsRef,
     http::{
         Request, Response,
         ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayInput, WebSocketRelayOutput},
     },
+    matcher::service::{ServiceMatch, ServiceMatcher},
 };
 
-use super::rule::{RequestAction, Rule as _};
+use super::rule::{HttpRequestMatcherView, HttpResponseMatcherView, RequestAction, Rule as _};
 
 #[derive(Debug, Clone)]
 /// Matched firewall rules for http traffic and protocols built upon it.
@@ -18,6 +20,30 @@ use super::rule::{RequestAction, Rule as _};
 pub struct FirewallHttpRules(pub(super) Arc<[super::rule::DynRule]>);
 
 impl FirewallHttpRules {
+    pub fn has_http_response_payload_inspection_match<Body>(&self, req: &Request<Body>) -> bool {
+        self.select_http_response_payload_inspection_rules(req)
+            .is_some()
+    }
+
+    pub fn select_http_response_payload_inspection_rules<Body>(
+        &self,
+        req: &Request<Body>,
+    ) -> Option<FirewallHttpResponsePayloadInspectionRules> {
+        let req = HttpRequestMatcherView::new(req);
+        let matched_rules: Arc<[super::rule::DynRule]> = self
+            .0
+            .iter()
+            .filter(|rule| rule.match_http_response_payload_inspection_request(req))
+            .cloned()
+            .collect();
+
+        if matched_rules.is_empty() {
+            None
+        } else {
+            Some(FirewallHttpResponsePayloadInspectionRules(matched_rules))
+        }
+    }
+
     pub(super) async fn evaluate_http_request(
         &self,
         req: Request,
@@ -70,6 +96,68 @@ impl FirewallHttpRules {
 }
 
 #[derive(Debug, Clone)]
+pub struct FirewallHttpResponsePayloadInspectionRules(pub(super) Arc<[super::rule::DynRule]>);
+
+impl FirewallHttpResponsePayloadInspectionRules {
+    pub fn matches_http_response_payload_inspection<Body>(&self, resp: &Response<Body>) -> bool {
+        let resp = HttpResponseMatcherView::new(resp);
+        self.0
+            .iter()
+            .any(|rule| rule.match_http_response_payload_inspection_response(resp))
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FirewallDecompressionMatcher;
+
+impl<ReqBody> ServiceMatcher<Request<ReqBody>> for FirewallDecompressionMatcher
+where
+    ReqBody: Send + 'static,
+{
+    type Service = FirewallHttpResponsePayloadInspectionRules;
+    type Error = std::convert::Infallible;
+    type ModifiedInput = Request<ReqBody>;
+
+    async fn match_service(
+        &self,
+        req: Request<ReqBody>,
+    ) -> Result<ServiceMatch<Self::ModifiedInput, Self::Service>, Self::Error> {
+        let service = req
+            .extensions()
+            .get()
+            .and_then(|rules: &FirewallHttpRules| {
+                rules.select_http_response_payload_inspection_rules(&req)
+            });
+
+        Ok(ServiceMatch {
+            input: req,
+            service,
+        })
+    }
+}
+
+impl<ResBody> ServiceMatcher<Response<ResBody>> for FirewallHttpResponsePayloadInspectionRules
+where
+    ResBody: Send + 'static,
+{
+    type Service = ();
+    type Error = std::convert::Infallible;
+    type ModifiedInput = Response<ResBody>;
+
+    async fn match_service(
+        &self,
+        resp: Response<ResBody>,
+    ) -> Result<ServiceMatch<Self::ModifiedInput, Self::Service>, Self::Error> {
+        Ok(ServiceMatch {
+            service: self
+                .matches_http_response_payload_inspection(&resp)
+                .then_some(()),
+            input: resp,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
 /// Matched ws rules.
 ///
 /// Is created via [`FirewallHttpRules`].
@@ -99,3 +187,7 @@ impl Service<WebSocketRelayInput> for FirewallWebSocketRules {
         Ok(output)
     }
 }
+
+#[cfg(test)]
+#[path = "matched_rules_tests.rs"]
+mod tests;

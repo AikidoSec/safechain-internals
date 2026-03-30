@@ -39,7 +39,7 @@ use rama::{
 use safechain_proxy_lib::{
     http::{
         client::new_http_client_for_internal,
-        firewall::Firewall,
+        firewall::{Firewall, FirewallDecompressionMatcher},
         service::hijack::{self, HIJACK_DOMAIN},
         ws_relay::WebSocketMitmRelayService,
     },
@@ -202,7 +202,9 @@ where
         ),
         firewall,
         MapResponseBodyLayer::new_boxed_streaming_body(),
-        DecompressionLayer::new().with_insert_accept_encoding_header(false),
+        DecompressionLayer::new()
+            .with_insert_accept_encoding_header(false)
+            .with_matcher(FirewallDecompressionMatcher),
         HttpUpgradeMitmRelayLayer::new(
             exec,
             (
