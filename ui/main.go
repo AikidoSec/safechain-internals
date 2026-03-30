@@ -7,6 +7,7 @@ import (
 	"flag"
 	"log"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -149,9 +150,31 @@ func (wm *windowManager) showDashboard() {
 	wm.window.Focus()
 }
 
+// --- Text wrapping -------------------------------------------------------
+
+const menuMaxWidth = 50
+
+func wrapText(text string, maxWidth int) []string {
+	var lines []string
+	for len(text) > maxWidth {
+		i := strings.LastIndex(text[:maxWidth], " ")
+		if i <= 0 {
+			i = maxWidth
+		}
+		lines = append(lines, text[:i])
+		text = strings.TrimLeft(text[i:], " ")
+	}
+	if len(text) > 0 {
+		lines = append(lines, text)
+	}
+	return lines
+}
+
 // --- System tray ---------------------------------------------------------
 
-func setupSystemTray(app *application.App, showDashboard func()) chan<- string {
+const maxStatusLines = 4
+
+func setupSystemTray(app *application.App, showDashboard func()) chan<- appserver.ProxyStatusBody {
 	systray := app.SystemTray.New()
 	systray.SetTooltip("Aikido Endpoint Protection")
 	if runtime.GOOS == "darwin" {
@@ -161,11 +184,16 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- string {
 	}
 
 	menu := application.NewMenu()
-	statusItem := menu.Add("Aikido Proxy: checking…")
-	statusItem.SetEnabled(false)
+	statusLines := make([]*application.MenuItem, maxStatusLines)
+	statusLines[0] = menu.Add("Aikido Proxy: checking…")
+	statusLines[0].SetEnabled(false)
+	for i := 1; i < maxStatusLines; i++ {
+		statusLines[i] = menu.Add("")
+		statusLines[i].SetEnabled(false)
+		statusLines[i].SetHidden(true)
+	}
 	menu.AddSeparator()
 	menu.Add("Open Dashboard").OnClick(func(_ *application.Context) {
-		// unset the focus event to reset the UI
 		app.Event.Emit("focus_event", FocusEventPayload{EventId: ""})
 		showDashboard()
 	})
@@ -174,10 +202,24 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- string {
 		systray.OnClick(systray.OpenMenu)
 	}
 
-	statusCh := make(chan string, 8)
+	statusCh := make(chan appserver.ProxyStatusBody, 8)
 	go func() {
-		for label := range statusCh {
-			statusItem.SetLabel(label)
+		for ev := range statusCh {
+			prefix := "🔴 "
+			if ev.Running {
+				prefix = "🟢 "
+			}
+			lines := wrapText(prefix+"Aikido Proxy: "+ev.StdoutMessage, menuMaxWidth)
+			for i, item := range statusLines {
+				if i < len(lines) {
+					item.SetLabel(lines[i])
+					item.SetHidden(false)
+				} else {
+					item.SetLabel("")
+					item.SetHidden(true)
+				}
+			}
+			menu.Update()
 		}
 	}()
 	return statusCh
@@ -185,10 +227,10 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- string {
 
 // --- App server (receives events from daemon) ----------------------------
 
-func startAppServer(app *application.App, statusCh chan<- string, notifier *notifications.NotificationService, notifAuthorized bool) {
+func startAppServer(app *application.App, statusCh chan<- appserver.ProxyStatusBody, notifier *notifications.NotificationService, notifAuthorized bool) {
 	srv := appserver.New()
 	srv.SetHandlers(
-		func(displayLabel string) { statusCh <- displayLabel },
+		func(ev appserver.ProxyStatusBody) { statusCh <- ev },
 		func(ev daemon.BlockEvent) {
 			log.Println("Blocked event:", ev)
 			app.Event.Emit("blocked", ev)

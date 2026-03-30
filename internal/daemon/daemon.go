@@ -421,7 +421,7 @@ func (d *Daemon) heartbeat() error {
 	// Ensure the UI is running, if not, relaunch it
 	d.uiManager.EnsureRunning()
 
-	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.IsRunning())
+	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.GetStatus())
 
 	d.runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() error {
 		d.printDaemonStatus()

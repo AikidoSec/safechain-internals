@@ -32,3 +32,7 @@ func (p *L4Proxy) InstallCA(_ context.Context) error {
 func (p *L4Proxy) Version() (string, error) {
 	return "", fmt.Errorf("L4 transparent proxy is only supported on macOS")
 }
+
+func (p *L4Proxy) GetStatus() (bool, string) {
+	return false, "disconnected"
+}

@@ -29,13 +29,14 @@ func validateToken(w http.ResponseWriter, r *http.Request) bool {
 }
 
 type ProxyStatusBody struct {
-	Running bool `json:"running"`
+	Running       bool   `json:"running"`
+	StdoutMessage string `json:"stdout_message"`
 }
 
 // Server receives proxy-status and block events from the daemon via HTTP.
 type Server struct {
 	mu             sync.Mutex
-	onStatusUpdate func(displayLabel string)
+	onStatusUpdate func(ev ProxyStatusBody)
 	onBlocked      func(ev daemon.BlockEvent)
 }
 
@@ -43,7 +44,7 @@ func New() *Server {
 	return &Server{}
 }
 
-func (s *Server) SetHandlers(onStatus func(string), onBlocked func(daemon.BlockEvent)) {
+func (s *Server) SetHandlers(onStatus func(ev ProxyStatusBody), onBlocked func(daemon.BlockEvent)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onStatusUpdate = onStatus
@@ -79,13 +80,7 @@ func (s *Server) handleProxyStatus(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	displayLabel := "Aikido Daemon is not reachable"
-	if body.Running {
-		displayLabel = "🟢 Aikido Proxy is running"
-	} else {
-		displayLabel = "🔴 Aikido Proxy is stopped"
-	}
-	cb(displayLabel)
+	cb(body)
 	w.WriteHeader(http.StatusOK)
 }
 
