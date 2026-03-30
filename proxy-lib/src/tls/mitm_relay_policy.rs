@@ -237,8 +237,8 @@ where
                 self.firewall
                     .record_tls_termination_failed(TlsTerminationFailedEvent {
                         ts_ms: rama::utils::time::now_unix_ms(),
-                        sni,
-                        app: source_app_bundle_id,
+                        sni: sni.clone(),
+                        app: source_app_bundle_id.as_deref().map(String::from),
                         error: err.to_string(),
                     });
 

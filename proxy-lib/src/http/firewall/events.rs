@@ -1,3 +1,4 @@
+use rama::net::address::Domain;
 use rama::utils::{str::arcstr::ArcStr, time::now_unix_ms};
 use serde::{Deserialize, Serialize};
 
@@ -64,7 +65,7 @@ pub struct TlsTerminationFailedEvent {
     pub ts_ms: i64,
     pub sni: Domain,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub app: Option<SmolStr>,
+    pub app: Option<String>,
     pub error: String,
 }
 
