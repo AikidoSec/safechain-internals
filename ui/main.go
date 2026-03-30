@@ -7,6 +7,7 @@ import (
 	"flag"
 	"log"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -149,7 +150,29 @@ func (wm *windowManager) showDashboard() {
 	wm.window.Focus()
 }
 
+// --- Text wrapping -------------------------------------------------------
+
+const menuMaxWidth = 50
+
+func wrapText(text string, maxWidth int) []string {
+	var lines []string
+	for len(text) > maxWidth {
+		i := strings.LastIndex(text[:maxWidth], " ")
+		if i <= 0 {
+			i = maxWidth
+		}
+		lines = append(lines, text[:i])
+		text = strings.TrimLeft(text[i:], " ")
+	}
+	if len(text) > 0 {
+		lines = append(lines, text)
+	}
+	return lines
+}
+
 // --- System tray ---------------------------------------------------------
+
+const maxStatusLines = 4
 
 func setupSystemTray(app *application.App, showDashboard func()) chan<- appserver.ProxyStatusBody {
 	systray := app.SystemTray.New()
@@ -161,11 +184,16 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 	}
 
 	menu := application.NewMenu()
-	statusItem := menu.Add("Aikido Proxy: checking…")
-	statusItem.SetEnabled(false)
+	statusLines := make([]*application.MenuItem, maxStatusLines)
+	statusLines[0] = menu.Add("Aikido Proxy: checking…")
+	statusLines[0].SetEnabled(false)
+	for i := 1; i < maxStatusLines; i++ {
+		statusLines[i] = menu.Add("")
+		statusLines[i].SetEnabled(false)
+		statusLines[i].SetHidden(true)
+	}
 	menu.AddSeparator()
 	menu.Add("Open Dashboard").OnClick(func(_ *application.Context) {
-		// unset the focus event to reset the UI
 		app.Event.Emit("focus_event", FocusEventPayload{EventId: ""})
 		showDashboard()
 	})
@@ -177,11 +205,21 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 	statusCh := make(chan appserver.ProxyStatusBody, 8)
 	go func() {
 		for ev := range statusCh {
+			prefix := "🔴 "
 			if ev.Running {
-				statusItem.SetLabel("🟢 Aikido Proxy: \n" + ev.StdoutMessage)
-			} else {
-				statusItem.SetLabel("🔴 Aikido Proxy: \n" + ev.StdoutMessage)
+				prefix = "🟢 "
 			}
+			lines := wrapText(prefix+"Aikido Proxy: "+ev.StdoutMessage, menuMaxWidth)
+			for i, item := range statusLines {
+				if i < len(lines) {
+					item.SetLabel(lines[i])
+					item.SetHidden(false)
+				} else {
+					item.SetLabel("")
+					item.SetHidden(true)
+				}
+			}
+			menu.Update()
 		}
 	}()
 	return statusCh
