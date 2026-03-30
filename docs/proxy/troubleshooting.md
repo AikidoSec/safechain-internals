@@ -71,18 +71,15 @@ directly to the target services.
 
 ### Docker builds with the L4 proxy
 
-When `docker build` runs package-manager commands such as `npm install`,
-`pnpm install`, `yarn install`, or `pip install`, the image may fail TLS
-verification unless the container trusts the L4 proxy CA.
-
-Aikido Endpoint also attempts to install its CA automatically into supported
+Aikido Endpoint attempts to install its CA automatically into supported
 Docker containers that are already running or that start after the agent is active.
 
 > In most runtime scenarios, you do not need to modify the image yourself.
 
-However, `docker build` steps that run package managers during image creation
-may still require manual CA installation in the Dockerfile, because build-time
-package downloads happen before that runtime reconciliation can help.
+`docker build` is different. If the build runs package-manager commands such as
+`npm install`, `pnpm install`, `yarn install`, or `pip install`, you may need
+to install the L4 proxy CA in the Dockerfile yourself. Build-time package
+downloads happen before that runtime reconciliation can help.
 
 Add the CA before the first networked package-manager step in every build stage
 that downloads dependencies. The exact command depends on the base image family.
