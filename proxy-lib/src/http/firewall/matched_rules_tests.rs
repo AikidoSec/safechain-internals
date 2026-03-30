@@ -1,18 +1,42 @@
 use std::sync::Arc;
 
 use super::{FirewallHttpResponsePayloadInspectionRules, FirewallHttpRules};
-use crate::http::firewall::rule::Rule;
+use crate::http::firewall::rule::{HttpResponseMatcherView, Rule};
 use rama::{
     http::{Request, Response, StatusCode, service::web::response::IntoResponse as _},
     net::address::Domain,
 };
 
-#[derive(Debug)]
-struct DummyRule {
-    requires_payload_inspection: bool,
+#[derive(Debug, Clone, Copy)]
+enum ResponseMatch {
+    Always,
+    Never,
+    SuccessStatus,
 }
 
-impl Rule for DummyRule {
+#[derive(Debug, Clone, Copy)]
+struct TestRule {
+    request_match: bool,
+    response_match: ResponseMatch,
+}
+
+impl TestRule {
+    const fn request_match(request_match: bool) -> Self {
+        Self {
+            request_match,
+            response_match: ResponseMatch::Always,
+        }
+    }
+
+    const fn with_response_match(response_match: ResponseMatch) -> Self {
+        Self {
+            request_match: true,
+            response_match,
+        }
+    }
+}
+
+impl Rule for TestRule {
     fn match_domain(&self, _: &Domain) -> bool {
         false
     }
@@ -24,65 +48,61 @@ impl Rule for DummyRule {
         &self,
         _: crate::http::firewall::rule::HttpRequestMatcherView<'_>,
     ) -> bool {
-        self.requires_payload_inspection
+        self.request_match
     }
+
+    fn match_http_response_payload_inspection_response(
+        &self,
+        resp: HttpResponseMatcherView<'_>,
+    ) -> bool {
+        match self.response_match {
+            ResponseMatch::Always => true,
+            ResponseMatch::Never => false,
+            ResponseMatch::SuccessStatus => resp.status.is_success(),
+        }
+    }
+}
+
+fn http_rules(rules: impl IntoIterator<Item = TestRule>) -> FirewallHttpRules {
+    FirewallHttpRules(Arc::from(
+        rules
+            .into_iter()
+            .map(TestRule::into_dyn)
+            .collect::<Vec<_>>(),
+    ))
+}
+
+fn response_rules(
+    rules: impl IntoIterator<Item = TestRule>,
+) -> FirewallHttpResponsePayloadInspectionRules {
+    FirewallHttpResponsePayloadInspectionRules(Arc::from(
+        rules
+            .into_iter()
+            .map(TestRule::into_dyn)
+            .collect::<Vec<_>>(),
+    ))
 }
 
 #[test]
 fn requires_response_payload_inspection_when_any_rule_opted_in() {
-    let rules = FirewallHttpRules(Arc::from([
-        DummyRule {
-            requires_payload_inspection: false,
-        }
-        .into_dyn(),
-        DummyRule {
-            requires_payload_inspection: true,
-        }
-        .into_dyn(),
-    ]));
+    let rules = http_rules([
+        TestRule::request_match(false),
+        TestRule::request_match(true),
+    ]);
 
     assert!(rules.has_http_response_payload_inspection_match(&Request::new(())));
 }
 
 #[test]
 fn does_not_require_response_payload_inspection_by_default() {
-    let rules = FirewallHttpRules(Arc::from([DummyRule {
-        requires_payload_inspection: false,
-    }
-    .into_dyn()]));
+    let rules = http_rules([TestRule::request_match(false)]);
 
     assert!(!rules.has_http_response_payload_inspection_match(&Request::new(())));
 }
 
 #[test]
 fn response_matcher_can_disable_response_payload_inspection() {
-    #[derive(Debug)]
-    struct ResponseRule;
-
-    impl Rule for ResponseRule {
-        fn match_domain(&self, _: &Domain) -> bool {
-            false
-        }
-
-        #[cfg(feature = "pac")]
-        fn collect_pac_domains(&self, _: &mut crate::http::firewall::pac::PacScriptGenerator) {}
-
-        fn match_http_response_payload_inspection_request(
-            &self,
-            _: crate::http::firewall::rule::HttpRequestMatcherView<'_>,
-        ) -> bool {
-            true
-        }
-
-        fn match_http_response_payload_inspection_response(
-            &self,
-            resp: crate::http::firewall::rule::HttpResponseMatcherView<'_>,
-        ) -> bool {
-            resp.status.is_success()
-        }
-    }
-
-    let rules = FirewallHttpResponsePayloadInspectionRules(Arc::from([ResponseRule.into_dyn()]));
+    let rules = response_rules([TestRule::with_response_match(ResponseMatch::SuccessStatus)]);
 
     assert!(rules.matches_http_response_payload_inspection(&Response::new(())));
     assert!(
@@ -92,62 +112,10 @@ fn response_matcher_can_disable_response_payload_inspection() {
 
 #[test]
 fn response_payload_inspection_uses_union_across_matched_rules() {
-    #[derive(Debug)]
-    struct RequestOnlyRule;
-
-    impl Rule for RequestOnlyRule {
-        fn match_domain(&self, _: &Domain) -> bool {
-            false
-        }
-
-        #[cfg(feature = "pac")]
-        fn collect_pac_domains(&self, _: &mut crate::http::firewall::pac::PacScriptGenerator) {}
-
-        fn match_http_response_payload_inspection_request(
-            &self,
-            _: crate::http::firewall::rule::HttpRequestMatcherView<'_>,
-        ) -> bool {
-            true
-        }
-
-        fn match_http_response_payload_inspection_response(
-            &self,
-            _: crate::http::firewall::rule::HttpResponseMatcherView<'_>,
-        ) -> bool {
-            false
-        }
-    }
-
-    #[derive(Debug)]
-    struct RequestAndResponseRule;
-
-    impl Rule for RequestAndResponseRule {
-        fn match_domain(&self, _: &Domain) -> bool {
-            false
-        }
-
-        #[cfg(feature = "pac")]
-        fn collect_pac_domains(&self, _: &mut crate::http::firewall::pac::PacScriptGenerator) {}
-
-        fn match_http_response_payload_inspection_request(
-            &self,
-            _: crate::http::firewall::rule::HttpRequestMatcherView<'_>,
-        ) -> bool {
-            true
-        }
-
-        fn match_http_response_payload_inspection_response(
-            &self,
-            resp: crate::http::firewall::rule::HttpResponseMatcherView<'_>,
-        ) -> bool {
-            resp.status.is_success()
-        }
-    }
-
-    let request_rules = FirewallHttpRules(Arc::from([
-        RequestOnlyRule.into_dyn(),
-        RequestAndResponseRule.into_dyn(),
-    ]));
+    let request_rules = http_rules([
+        TestRule::with_response_match(ResponseMatch::Never),
+        TestRule::with_response_match(ResponseMatch::SuccessStatus),
+    ]);
 
     let response_rules = request_rules
         .select_http_response_payload_inspection_rules(&Request::new(()))

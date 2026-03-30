@@ -22,7 +22,7 @@ pub struct ProxyConfig {
     /// This is typically used during protocol detection or early inspection
     /// of incoming traffic.
     ///
-    /// Defaults to `8.0`.
+    /// Defaults to `0.5`.
     pub peek_duration_s: f64,
 
     /// Optional identity of the running agent.
@@ -57,7 +57,7 @@ pub struct ProxyConfig {
 impl Default for ProxyConfig {
     fn default() -> Self {
         Self {
-            peek_duration_s: 8.,
+            peek_duration_s: 0.5,
             agent_identity: None,
             reporting_endpoint: None,
             aikido_url: Uri::from_static("https://app.aikido.dev"),
