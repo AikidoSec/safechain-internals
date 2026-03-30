@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AikidoSec/safechain-internals/internal/certconfig"
 	"github.com/AikidoSec/safechain-internals/internal/cloud"
 	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
@@ -411,6 +412,10 @@ func (d *Daemon) heartbeat() error {
 		if err := d.proxy.InstallCA(d.ctx); err != nil {
 			return fmt.Errorf("failed to install proxy CA: %v", err)
 		}
+
+		// Once the proxy is up and the CA is installed, re-run certconfig
+		// so ecosystem trust is correctly configured.
+		certconfig.Install(d.ctx)
 	}
 
 	// Ensure the UI is running, if not, relaunch it
