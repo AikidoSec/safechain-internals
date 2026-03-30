@@ -151,7 +151,7 @@ func (wm *windowManager) showDashboard() {
 
 // --- System tray ---------------------------------------------------------
 
-func setupSystemTray(app *application.App, showDashboard func()) chan<- string {
+func setupSystemTray(app *application.App, showDashboard func()) chan<- appserver.ProxyStatusBody {
 	systray := app.SystemTray.New()
 	systray.SetTooltip("Aikido Endpoint Protection")
 	if runtime.GOOS == "darwin" {
@@ -174,10 +174,14 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- string {
 		systray.OnClick(systray.OpenMenu)
 	}
 
-	statusCh := make(chan string, 8)
+	statusCh := make(chan appserver.ProxyStatusBody, 8)
 	go func() {
-		for label := range statusCh {
-			statusItem.SetLabel(label)
+		for ev := range statusCh {
+			if ev.Running {
+				statusItem.SetLabel("🟢 Aikido Proxy: \n" + ev.StdoutMessage)
+			} else {
+				statusItem.SetLabel("🔴 Aikido Proxy: \n" + ev.StdoutMessage)
+			}
 		}
 	}()
 	return statusCh
@@ -185,10 +189,10 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- string {
 
 // --- App server (receives events from daemon) ----------------------------
 
-func startAppServer(app *application.App, statusCh chan<- string, notifier *notifications.NotificationService, notifAuthorized bool) {
+func startAppServer(app *application.App, statusCh chan<- appserver.ProxyStatusBody, notifier *notifications.NotificationService, notifAuthorized bool) {
 	srv := appserver.New()
 	srv.SetHandlers(
-		func(displayLabel string) { statusCh <- displayLabel },
+		func(ev appserver.ProxyStatusBody) { statusCh <- ev },
 		func(ev daemon.BlockEvent) {
 			log.Println("Blocked event:", ev)
 			app.Event.Emit("blocked", ev)

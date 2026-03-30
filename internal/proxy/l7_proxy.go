@@ -147,3 +147,11 @@ func (p *L7Proxy) Stop() error {
 	log.Println("SafeChain Proxy stopped successfully!")
 	return nil
 }
+
+func (p *L7Proxy) GetStatus() (bool, string) {
+	isRunning := IsProxyRunning()
+	if isRunning {
+		return isRunning, "connected"
+	}
+	return isRunning, "disconnected"
+}

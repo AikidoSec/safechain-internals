@@ -18,7 +18,9 @@ const (
 	l4ReadyInterval = 1 * time.Second
 )
 
-type L4Proxy struct{}
+type L4Proxy struct {
+	startStdoutMessage string
+}
 
 func NewL4() *L4Proxy {
 	return &L4Proxy{}
@@ -41,6 +43,8 @@ func (p *L4Proxy) Start(ctx context.Context, opts StartOptions) error {
 
 	output, _ := platform.RunInAuditSessionOfCurrentUser(ctx, platform.SafeChainL4ProxyHostPath, args)
 	outputStr := strings.TrimSpace(output)
+	p.startStdoutMessage = outputStr
+
 	log.Printf("L4 proxy start output: %s", outputStr)
 
 	if strings.Contains(outputStr, "status: connected") {
@@ -72,4 +76,16 @@ func (p *L4Proxy) InstallCA(ctx context.Context) error {
 
 func (p *L4Proxy) Version() (string, error) {
 	return "l4-transparent", nil
+}
+
+func (p *L4Proxy) GetStatus() (bool, string) {
+	isRunning := p.IsRunning()
+	if isRunning {
+		return isRunning, "connected"
+	}
+	statusMessage := p.startStdoutMessage
+	if strings.Contains(p.startStdoutMessage, "status:") {
+		statusMessage = strings.Replace(statusMessage, "status: ", "", 1)
+	}
+	return isRunning, statusMessage
 }
