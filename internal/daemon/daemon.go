@@ -413,7 +413,7 @@ func (d *Daemon) heartbeat() error {
 			return fmt.Errorf("failed to install proxy CA: %v", err)
 		}
 
-		// Once the proxy is up and the CA is installed, re-run certconfig
+		// Once the proxy is recovered and the CA is installed, re-run certconfig
 		// so ecosystem trust is correctly configured.
 		certconfig.Install(d.ctx)
 	}
