@@ -69,6 +69,43 @@ This approach is not the simplest, but it is usually sufficient to determine
 why traffic fails when routed through the proxy while succeeding when connecting
 directly to the target services.
 
+### Docker builds with the L4 proxy
+
+When `docker build` runs package-manager commands such as `npm install`,
+`pnpm install`, `yarn install`, or `pip install`, the image may fail TLS
+verification unless the container trusts the L4 proxy CA.
+
+For Debian or Ubuntu based images, add the CA before the first networked
+package-manager step in every build stage that downloads dependencies:
+
+```dockerfile
+RUN apt-get update && apt-get install -y ca-certificates curl && \
+    curl -fsSL http://mitm.ramaproxy.org/data/root.ca.pem \
+      -o /usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt && \
+    update-ca-certificates
+
+ENV NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV PIP_CERT=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV SSL_CERT_FILE=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+```
+
+Notes:
+
+- Add this before the first `RUN npm install`, `RUN pnpm install`, `RUN yarn install`,
+  `RUN pip install`, or similar command.
+- Repeat it in every stage that performs package downloads. Multi-stage builds
+  often need the same setup in both the builder stage and the runtime stage.
+- For Node-based images, `NODE_EXTRA_CA_CERTS` is often required even after the
+  OS trust store has been updated.
+- For Python-based images, `PIP_CERT` is the primary setting; `REQUESTS_CA_BUNDLE`
+  and `SSL_CERT_FILE` help other Python and OpenSSL-based tooling trust the same CA.
+
+If the build still fails after the CA is trusted, inspect the package-manager
+output carefully. The proxy can still block packages that are flagged by policy,
+including packages that require approval. In that case, the failure is expected
+proxy behavior rather than a certificate trust problem.
+
 ### Verbose Logging
 
 Enable debug (or trace even) logging to troubleshoot issues:

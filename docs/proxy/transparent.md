@@ -118,6 +118,9 @@ This is the default mode and works well for:
 - non-MDM flows where the following dynamic process is acceptable:
   - during enrollment, installation, or first-time use, the proxy must be started first
   - the CA certificate can then be installed by retrieving it from the hijacked domain at `/data/root.ca.pem`
+  - for Docker builds that run package managers during image build, install that CA
+    into the image before the first package download; see `proxy/troubleshooting.md`
+    for a concrete Dockerfile example
 
 #### CA Mode: Managed VPN Shared Identity
 
