@@ -132,7 +132,7 @@ where
         ),
         firewall,
         MapResponseBodyLayer::new_boxed_streaming_body(),
-        DecompressionLayer::new(),
+        DecompressionLayer::new().with_insert_accept_encoding_header(false),
         HttpUpgradeMitmRelayLayer::new(
             exec,
             (

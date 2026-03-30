@@ -80,8 +80,8 @@ impl Firewall {
     ) -> Result<Self, BoxError> {
         let layered_client = (
             MapResponseBodyLayer::new_boxed_streaming_body(),
-            DecompressionLayer::new(),
             MapErrLayer::into_opaque_error(),
+            DecompressionLayer::new(),
             TimeoutLayer::new(Duration::from_secs(60)),
             RetryLayer::new(
                 ManagedPolicy::default().with_backoff(
