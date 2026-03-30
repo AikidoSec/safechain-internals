@@ -39,7 +39,7 @@ use rama::{
 use safechain_proxy_lib::{
     http::{
         client::new_http_client_for_internal,
-        firewall::Firewall,
+        firewall::{Firewall, FirewallDecompressionMatcher},
         service::hijack::{self, HIJACK_DOMAIN},
         ws_relay::WebSocketMitmRelayService,
     },
@@ -124,7 +124,7 @@ where
     Ingress: Io + Unpin + ExtensionsMut,
     Egress: Io + Unpin + ExtensionsMut,
 {
-    let peek_duration = Duration::from_secs_f64(proxy_config.peek_duration_s.max(0.5));
+    let peek_duration = Duration::from_secs_f64(proxy_config.peek_duration_s.max(0.05));
 
     let http_mitm_svc =
         HttpMitmRelay::new(exec.clone()).with_http_middleware(http_relay_middleware(
@@ -202,7 +202,9 @@ where
         ),
         firewall,
         MapResponseBodyLayer::new_boxed_streaming_body(),
-        DecompressionLayer::new(),
+        DecompressionLayer::new()
+            .with_insert_accept_encoding_header(false)
+            .with_matcher(FirewallDecompressionMatcher),
         HttpUpgradeMitmRelayLayer::new(
             exec,
             (

@@ -2,8 +2,11 @@ use std::{pin::Pin, sync::Arc};
 
 use rama::{
     error::BoxError,
+    extensions::{Extensions, ExtensionsRef as _},
     http::{
-        Request, Response, request,
+        Method, Request, Response, StatusCode, Uri, Version,
+        header::{HeaderMap, HeaderValue},
+        request,
         ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
     },
     net::address::Domain,
@@ -92,6 +95,46 @@ pub struct WebSocketHandshakeInfo<'a> {
     pub req_headers: Option<&'a request::Parts>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct HttpRequestMatcherView<'a> {
+    pub method: &'a Method,
+    pub uri: &'a Uri,
+    pub version: Version,
+    pub headers: &'a HeaderMap<HeaderValue>,
+    pub extensions: &'a Extensions,
+}
+
+impl<'a> HttpRequestMatcherView<'a> {
+    pub fn new<Body>(req: &'a Request<Body>) -> Self {
+        Self {
+            method: req.method(),
+            uri: req.uri(),
+            version: req.version(),
+            headers: req.headers(),
+            extensions: req.extensions(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct HttpResponseMatcherView<'a> {
+    pub status: StatusCode,
+    pub version: Version,
+    pub headers: &'a HeaderMap<HeaderValue>,
+    pub extensions: &'a Extensions,
+}
+
+impl<'a> HttpResponseMatcherView<'a> {
+    pub fn new<Body>(resp: &'a Response<Body>) -> Self {
+        Self {
+            status: resp.status(),
+            version: resp.version(),
+            headers: resp.headers(),
+            extensions: resp.extensions(),
+        }
+    }
+}
+
 /// A trait defining how the [`Firewall`] inspects, modifies, or blocks HTTP traffic.
 ///
 /// A [`Rule`] serves two primary purposes:
@@ -119,6 +162,31 @@ pub trait Rule: Sized + Send + Sync + 'static {
     ///
     /// [`Firewall`]: super::Firewall
     fn match_domain(&self, domain: &Domain) -> bool;
+
+    /// Request-time matcher for response payload inspection.
+    ///
+    /// Rules should usually match on request metadata such as URI or headers here.
+    /// If this matches, Rama will evaluate the response-time matcher before deciding
+    /// whether to decompress the response body.
+    fn match_http_response_payload_inspection_request(
+        &self,
+        _req: HttpRequestMatcherView<'_>,
+    ) -> bool {
+        false
+    }
+
+    /// Response-time matcher for response payload inspection.
+    ///
+    /// This is only evaluated when
+    /// [`Rule::match_http_response_payload_inspection_request`] matched earlier.
+    /// The default implementation returns `true` as most rules will only
+    /// know enough with request alone.
+    fn match_http_response_payload_inspection_response(
+        &self,
+        _resp: HttpResponseMatcherView<'_>,
+    ) -> bool {
+        true
+    }
 
     /// Determines if this [`Rule`] should inspect a WebSocket upgrade for a given handshake.
     ///
@@ -262,6 +330,16 @@ trait DynRuleInner {
 
     fn dyn_match_domain(&self, domain: &Domain) -> bool;
 
+    fn dyn_match_http_response_payload_inspection_request(
+        &self,
+        req: HttpRequestMatcherView<'_>,
+    ) -> bool;
+
+    fn dyn_match_http_response_payload_inspection_response(
+        &self,
+        resp: HttpResponseMatcherView<'_>,
+    ) -> bool;
+
     fn dyn_match_ws_handshake<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool;
 
     fn dyn_evaluate_ws_relay_msg(
@@ -307,6 +385,24 @@ impl<R: Rule> DynRuleInner for R {
     /// see [`Rule::match_domain`] for more information.
     fn dyn_match_domain(&self, domain: &Domain) -> bool {
         self.match_domain(domain)
+    }
+
+    #[inline(always)]
+    /// see [`Rule::match_http_response_payload_inspection_request`] for more information.
+    fn dyn_match_http_response_payload_inspection_request(
+        &self,
+        req: HttpRequestMatcherView<'_>,
+    ) -> bool {
+        self.match_http_response_payload_inspection_request(req)
+    }
+
+    #[inline(always)]
+    /// see [`Rule::match_http_response_payload_inspection_response`] for more information.
+    fn dyn_match_http_response_payload_inspection_response(
+        &self,
+        resp: HttpResponseMatcherView<'_>,
+    ) -> bool {
+        self.match_http_response_payload_inspection_response(resp)
     }
 
     #[inline(always)]
@@ -368,6 +464,24 @@ impl Rule for DynRule {
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.inner.dyn_match_domain(domain)
+    }
+
+    #[inline(always)]
+    fn match_http_response_payload_inspection_request(
+        &self,
+        req: HttpRequestMatcherView<'_>,
+    ) -> bool {
+        self.inner
+            .dyn_match_http_response_payload_inspection_request(req)
+    }
+
+    #[inline(always)]
+    fn match_http_response_payload_inspection_response(
+        &self,
+        resp: HttpResponseMatcherView<'_>,
+    ) -> bool {
+        self.inner
+            .dyn_match_http_response_payload_inspection_response(resp)
     }
 
     #[inline(always)]
