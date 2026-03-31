@@ -46,7 +46,7 @@ windows-native-keyring-store = "0.5"
 
 [workspace.dependencies.rama]
 git = "https://github.com/plabayo/rama"
-rev = "0753178d41c9f3b634b74ea7164fa7a0e313b5af"
+rev = "71c164e08e2af71a0b5ce017f14b5f31b70714c6"
 
 [profile.release]
 strip = true
