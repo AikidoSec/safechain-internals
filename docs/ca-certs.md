@@ -22,9 +22,61 @@ Firefox maintains its own certificate store and does not trust the OS trust stor
 
 Aikido Endpoint automatically installs the CA into running Docker containers for supported Linux distributions (Debian/Ubuntu, Alpine, RHEL/CentOS/Fedora/Amazon Linux). Containers that start after the agent is active are also reconciled automatically.
 
-### Docker troubleshooting
+### Docker build troubleshooting
 
-`docker build` runs before runtime reconciliation can help. If your build downloads packages (`npm install`, `pip install`, etc.), you need to install the CA in the Dockerfile manually. See [Proxy Troubleshooting: Docker builds](proxy/troubleshooting.md#docker-builds-with-the-l4-proxy) for per-distro Dockerfile instructions.
+`docker build` runs before runtime reconciliation can help. If your build downloads packages (`npm install`, `pip install`, etc.), you need to install the CA in the Dockerfile manually.
+
+Add the following before the first networked package-manager step (`RUN npm install`, `RUN pip install`, etc.) in every build stage that downloads dependencies.
+
+**Debian / Ubuntu:**
+
+```dockerfile
+RUN apt-get update && apt-get install -y ca-certificates curl && \
+    curl -fsSL http://mitm.ramaproxy.org/data/root.ca.pem \
+      -o /usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt && \
+    update-ca-certificates
+
+ENV NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV PIP_CERT=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV SSL_CERT_FILE=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+```
+
+**Alpine:**
+
+```dockerfile
+RUN apk add --no-cache ca-certificates curl && \
+    curl -fsSL http://mitm.ramaproxy.org/data/root.ca.pem \
+      -o /usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt && \
+    update-ca-certificates
+
+ENV NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV PIP_CERT=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV SSL_CERT_FILE=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+```
+
+**RHEL / CentOS / Fedora / Amazon Linux / Rocky / AlmaLinux / Oracle Linux:**
+
+```dockerfile
+RUN mkdir -p /etc/pki/ca-trust/source/anchors && \
+    (command -v dnf >/dev/null && dnf install -y ca-certificates curl || yum install -y ca-certificates curl) && \
+    curl -fsSL http://mitm.ramaproxy.org/data/root.ca.pem \
+      -o /etc/pki/ca-trust/source/anchors/aikido-safechain-proxy-ca.crt && \
+    update-ca-trust
+
+ENV NODE_EXTRA_CA_CERTS=/etc/pki/ca-trust/source/anchors/aikido-safechain-proxy-ca.crt
+ENV PIP_CERT=/etc/pki/ca-trust/source/anchors/aikido-safechain-proxy-ca.crt
+ENV REQUESTS_CA_BUNDLE=/etc/pki/ca-trust/source/anchors/aikido-safechain-proxy-ca.crt
+ENV SSL_CERT_FILE=/etc/pki/ca-trust/source/anchors/aikido-safechain-proxy-ca.crt
+```
+
+Notes:
+
+- Repeat in every stage that performs package downloads (multi-stage builds often need it in both the builder and runtime stages).
+- For Node-based images, `NODE_EXTRA_CA_CERTS` is often required even after the OS trust store has been updated.
+- For Python-based images, `PIP_CERT` is the primary setting; `REQUESTS_CA_BUNDLE` and `SSL_CERT_FILE` help other Python and OpenSSL-based tooling trust the same CA.
+- If the build still fails after the CA is trusted, the proxy may be blocking a package by policy. Check the package-manager output for details.
 
 ## JetBrains IDEs
 
@@ -33,3 +85,19 @@ JetBrains IDEs (IntelliJ IDEA, PyCharm, WebStorm, GoLand, CLion, PhpStorm, Rider
 **The IDE must be restarted** after Aikido Endpoint is installed (or after the CA is updated). JetBrains IDEs load certificates at startup and do not watch for changes to the OS trust store at runtime.
 
 > **Note:** Maven and Gradle running inside JetBrains use the project JDK's `cacerts` keystore, not the IDE's trust manager. If Maven/Gradle builds fail with certificate errors while the IDE itself works fine, the CA may need to be added to the JDK's trust store separately via `keytool`.
+
+## Custom / other software
+
+If you use software that maintains its own certificate store or does not read from the OS trust store, you can retrieve the Aikido Endpoint CA certificate and install it manually.
+
+While the proxy is running, the CA certificate is available at:
+
+```
+http://mitm.ramaproxy.org/data/root.ca.pem
+```
+
+Download it with curl:
+
+```bash
+curl -fsSL http://mitm.ramaproxy.org/data/root.ca.pem -o aikido-safechain-proxy-ca.pem
+```

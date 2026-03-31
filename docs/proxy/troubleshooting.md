@@ -145,6 +145,10 @@ output carefully. The proxy can still block packages that are flagged by policy,
 including packages that require approval. In that case, the failure is expected
 proxy behavior rather than a certificate trust problem.
 
+### JetBrains IDEs
+
+JetBrains IDEs read from the OS trust store but only load certificates at startup. If you see certificate errors after installing Aikido Endpoint, restart the IDE. See [CA Certificates: JetBrains IDEs](../ca-certs.md#jetbrains-ides) for more details.
+
 ### Verbose Logging
 
 Enable debug (or trace even) logging to troubleshoot issues:
