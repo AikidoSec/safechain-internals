@@ -130,7 +130,7 @@ func GetEvent(eventID string) (BlockEvent, error) {
 // ListTlsEvents fetches GET /v1/tls-events?limit=N.
 func ListTlsEvents(limit int) ([]TlsTerminationFailedEvent, error) {
 	if limit <= 0 {
-		limit = 50
+		limit = 50 // default limit of 50
 	}
 	resp, err := doRequest(http.MethodGet, fmt.Sprintf("/v1/tls-events?limit=%d", limit), nil)
 	if err != nil {
