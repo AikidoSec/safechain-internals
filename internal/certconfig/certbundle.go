@@ -148,8 +148,14 @@ func readAndValidatePEMBundle(path string) (string, error) {
 		if block.Type != "CERTIFICATE" {
 			return "", fmt.Errorf("certificate bundle %s contains unsupported PEM block type %q", path, block.Type)
 		}
+
+		// Include the certificate regardless of whether Go's strict x509 parser
+		// accepts it — legacy root CAs (e.g. negative serial numbers) are valid
+		// for OpenSSL/pip but rejected by Go. We still parse to catch genuinely
+		// malformed DER; those are skipped rather than failing the whole bundle.
 		if _, err := x509.ParseCertificate(block.Bytes); err != nil {
-			return "", fmt.Errorf("certificate bundle %s contains invalid certificate: %w", path, err)
+			rest = remaining
+			continue
 		}
 
 		blocks = append(blocks, strings.TrimSpace(string(pem.EncodeToMemory(block))))

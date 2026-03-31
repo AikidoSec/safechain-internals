@@ -78,7 +78,7 @@ func extractMarkedCertValue(output string) string {
 	return ""
 }
 
-func findCertifiCABundle(ctx context.Context) string {
+func findSystemPipCABundle(ctx context.Context) string {
 	for _, pythonBin := range []string{"python3", "python"} {
 		pythonPath, err := exec.LookPath(pythonBin)
 		if err != nil {
@@ -96,6 +96,28 @@ func findCertifiCABundle(ctx context.Context) string {
 			return path
 		}
 	}
+
+	// certifi is not installed — fall back to the path reported by Python's
+	// stdlib ssl module (available in every Python installation).
+	for _, pythonBin := range []string{"python3", "python"} {
+		pythonPath, err := exec.LookPath(pythonBin)
+		if err != nil {
+			continue
+		}
+		out, err := platform.RunAsCurrentUserWithPathEnv(ctx, pythonPath, "-c",
+			"import ssl; p = ssl.get_default_verify_paths(); print(p.cafile or p.openssl_cafile or '')")
+		if err != nil {
+			continue
+		}
+		path := strings.TrimSpace(out)
+		if path == "" {
+			continue
+		}
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+
 	return ""
 }
 
