@@ -21,8 +21,10 @@ func NewL4ChromeL7() *L4ChromeL7Proxy {
 }
 
 func (p *L4ChromeL7Proxy) Start(ctx context.Context, opts StartOptions) error {
-	if err := p.l7.Start(ctx, opts); err != nil {
-		return err
+	if !p.l7.IsRunning() {
+		if err := p.l7.Start(ctx, opts); err != nil {
+			return err
+		}
 	}
 	if err := p.l4.Start(ctx, opts); err != nil {
 		log.Printf("L4 proxy failed to start (will be retried): %v", err)
@@ -41,7 +43,7 @@ func (p *L4ChromeL7Proxy) Stop() error {
 }
 
 func (p *L4ChromeL7Proxy) IsRunning() bool {
-	return p.l7.IsRunning()
+	return p.l7.IsRunning() && p.l4.IsRunning()
 }
 
 func (p *L4ChromeL7Proxy) Version() (string, error) {
