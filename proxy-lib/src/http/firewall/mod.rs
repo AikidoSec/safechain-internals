@@ -170,6 +170,7 @@ impl Firewall {
                 .await
                 .context("create block rule: nuget")?
                 .into_dyn(),
+                #[cfg(not(feature = "apple-networkextension"))]
                 self::rule::chrome::RuleChrome::try_new(
                     guard.clone(),
                     layered_client.clone(),
