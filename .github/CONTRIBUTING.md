@@ -92,6 +92,36 @@ recording on and off:
 just proxy-har-toggle
 ```
 
+### Instructions: UI
+
+The desktop tray application is built with [Wails v3](https://v3.wails.io/) (Go + React/TypeScript). See [`ui/README.md`](../ui/README.md) for architecture details and full setup instructions.
+
+**Extra prerequisites:** [Wails v3 CLI](https://v3.wails.io/getting-started/installation/), Node.js, [Task](https://taskfile.dev/)
+
+```sh
+brew install go-task
+go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+```
+
+#### UI: development
+
+```sh
+cd ui
+task dev
+```
+
+This generates Wails bindings, builds the frontend, and starts the app with hot-reload.
+
+> **Note:** The frontend cannot be run standalone with `npm run dev` — the Vite config depends on Wails-generated bindings. Always use `task dev` for development.
+
+#### UI: build
+
+```sh
+cd ui
+task build       # compile binary
+task package     # platform-specific distributable (.app, .exe)
+```
+
 ## Local testing against a non-production backend
 
 To point the agent and proxy at a local or staging backend instead of `https://app.aikido.dev`, add a `base_url` field to the config file 
