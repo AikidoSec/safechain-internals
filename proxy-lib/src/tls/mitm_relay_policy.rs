@@ -19,7 +19,10 @@ use rama::{
     utils::str::smol_str::{SmolStr, ToSmolStr},
 };
 
-use crate::{http::firewall::Firewall, utils::net::get_app_source_bundle_id_from_ext};
+use crate::{
+    http::firewall::{Firewall, events::TlsTerminationFailedEvent},
+    utils::net::get_app_source_bundle_id_from_ext,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct CacheKey {
@@ -230,6 +233,15 @@ where
                     %err,
                     "adding SNI exception for follow-up tls relay inputs due to Handshake Relay Issue"
                 );
+
+                self.firewall
+                    .record_tls_termination_failed(TlsTerminationFailedEvent {
+                        ts_ms: rama::utils::time::now_unix_ms(),
+                        sni: sni.clone(),
+                        app: source_app_bundle_id.clone(),
+                        error: err.to_string(),
+                    });
+
                 self.cache.insert(
                     CacheKey {
                         sni,

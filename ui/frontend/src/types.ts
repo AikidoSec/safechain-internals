@@ -15,4 +15,12 @@ export interface BlockEvent {
   artifact: Artifact;
   block_reason: BlockReason;
   status?: EventStatus;
- }
+}
+
+export interface TlsTerminationFailedEvent {
+  id?: string;
+  ts_ms: number;
+  sni: string;
+  app?: string;
+  error: string;
+}

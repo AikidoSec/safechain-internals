@@ -157,6 +157,11 @@ func (m *UIManager) NotifyBlocked(ev any) {
 	m.Client.NotifyBlocked(ev)
 }
 
+// NotifyTlsTerminationFailed sends a TLS termination failure notification to the UI.
+func (m *UIManager) NotifyTlsTerminationFailed(ev any) {
+	m.Client.NotifyTlsTerminationFailed(ev)
+}
+
 // NotifyProxyStatusIfChanged sends a proxy-status update to the UI only when
 // the running state has changed (or on the very first call).
 func (m *UIManager) NotifyProxyStatusIfChanged(running bool, stdoutMessage string) {

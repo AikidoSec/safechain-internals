@@ -35,20 +35,26 @@ type ProxyStatusBody struct {
 
 // Server receives proxy-status and block events from the daemon via HTTP.
 type Server struct {
-	mu             sync.Mutex
-	onStatusUpdate func(ev ProxyStatusBody)
-	onBlocked      func(ev daemon.BlockEvent)
+	mu                     sync.Mutex
+	onStatusUpdate         func(ev ProxyStatusBody)
+	onBlocked              func(ev daemon.BlockEvent)
+	onTlsTerminationFailed func(ev daemon.TlsTerminationFailedEvent)
 }
 
 func New() *Server {
 	return &Server{}
 }
 
-func (s *Server) SetHandlers(onStatus func(ev ProxyStatusBody), onBlocked func(daemon.BlockEvent)) {
+func (s *Server) SetHandlers(
+	onStatus func(ev ProxyStatusBody),
+	onBlocked func(daemon.BlockEvent),
+	onTlsTerminationFailed func(daemon.TlsTerminationFailedEvent),
+) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onStatusUpdate = onStatus
 	s.onBlocked = onBlocked
+	s.onTlsTerminationFailed = onTlsTerminationFailed
 }
 
 // Start launches the HTTP server in a background goroutine.
@@ -56,6 +62,7 @@ func (s *Server) Start() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/proxy-status", s.handleProxyStatus)
 	mux.HandleFunc("POST /v1/blocked", s.handleBlocked)
+	mux.HandleFunc("POST /v1/tls-termination-failed", s.handleTlsTerminationFailed)
 
 	go func() {
 		if err := http.ListenAndServe(ListenAddr, mux); err != nil && err != http.ErrServerClosed {
@@ -99,6 +106,28 @@ func (s *Server) handleBlocked(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	cb := s.onBlocked
+	s.mu.Unlock()
+	if cb != nil {
+		cb(ev)
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) handleTlsTerminationFailed(w http.ResponseWriter, r *http.Request) {
+	if !validateToken(w, r) {
+		return
+	}
+	var ev daemon.TlsTerminationFailedEvent
+	if err := json.NewDecoder(r.Body).Decode(&ev); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if err := ev.Validate(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	cb := s.onTlsTerminationFailed
 	s.mu.Unlock()
 	if cb != nil {
 		cb(ev)

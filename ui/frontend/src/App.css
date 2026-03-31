@@ -71,6 +71,33 @@ body {
   display: block;
 }
 
+.app-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  background: #fff;
+}
+
+.app-tab {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.app-tab:hover {
+  color: var(--primary-aik-140);
+}
+
+.app-tab--active {
+  color: var(--primary-aik-100);
+  border-bottom-color: var(--primary-aik-100);
+}
+
 .daemon-banner {
   background: #c00;
   color: #fff;
@@ -571,4 +598,193 @@ body {
 .loading {
   color: var(--text-muted);
   padding: 24px;
+}
+
+/* ── TLS events: card list ── */
+
+.tls-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.tls-card {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--carbon-20);
+  cursor: pointer;
+  transition: background 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tls-card:first-child {
+  border-top: 1px solid var(--carbon-20);
+}
+
+.tls-card:hover {
+  background: var(--bg-input);
+}
+
+.tls-card:focus-visible {
+  outline: 2px solid var(--primary-aik-100);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+.tls-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tls-card-sni {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-aik-140);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.tls-card-chevron {
+  flex-shrink: 0;
+  color: var(--carbon-40);
+}
+
+.tls-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tls-card-sep {
+  color: var(--carbon-40);
+}
+
+/* ── TLS events: detail page ── */
+
+.tls-detail-section {
+  padding: 20px 24px 24px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.tls-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 0;
+  margin: 0 0 20px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.tls-back-link:hover {
+  color: var(--primary-aik-100);
+}
+
+.tls-detail-header {
+  margin-bottom: 20px;
+}
+
+.tls-detail-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 24px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--surface-red-20);
+  color: var(--surface-red-100);
+  margin-bottom: 10px;
+}
+
+.tls-detail-sni {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--primary-aik-140);
+  word-break: break-all;
+}
+
+.tls-detail-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.tls-detail-info {
+  margin: 0 0 20px;
+  padding: 0;
+}
+
+.tls-detail-info-row {
+  display: flex;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--carbon-20);
+}
+
+.tls-detail-info-row:last-child {
+  border-bottom: none;
+}
+
+.tls-detail-info-row dt {
+  width: 110px;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.tls-detail-info-row dd {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--primary-aik-140);
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.tls-detail-error-section {
+  margin-top: auto;
+}
+
+.tls-detail-error-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+}
+
+.tls-detail-error-block {
+  margin: 0;
+  padding: 14px 16px;
+  background: var(--primary-aik-140);
+  color: #e0dce8;
+  border-radius: 8px;
+  font-family: "SF Mono", "Menlo", "Monaco", "Consolas", monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.tls-detail-error-block code {
+  font-family: inherit;
 }

@@ -240,6 +240,12 @@ impl Firewall {
         }
     }
 
+    pub fn record_tls_termination_failed(&self, event: self::events::TlsTerminationFailedEvent) {
+        if let Some(notifier) = self.notifier.as_ref() {
+            notifier.notify_tls_termination_failed(event);
+        }
+    }
+
     pub fn match_http_rules(&self, domain: &Domain) -> Option<FirewallHttpRules> {
         let matched_rules: Arc<[DynRule]> = self
             .block_rules
