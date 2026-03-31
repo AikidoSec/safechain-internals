@@ -36,12 +36,16 @@ use rama::{
     },
     utils::{backoff::ExponentialBackoff, rng::HasherRng, str::NonEmptyStr},
 };
+use tokio::sync::Semaphore;
 
 use crate::Args;
 
-#[derive(Clone)]
 pub(super) struct Runtime {
     _app: App,
+    // Dedicated test runtimes share process-wide mock endpoint state, so keep
+    // them exclusive to avoid cross-test interference under parallel cargo
+    // test execution.
+    _exclusive_permit: Option<tokio::sync::OwnedSemaphorePermit>,
 
     meta_addr: SocketAddress,
     proxy_addr: SocketAddress,
@@ -267,6 +271,7 @@ pub(super) async fn get() -> Runtime {
 
     let runtime = Runtime {
         _app: app,
+        _exclusive_permit: None,
         meta_addr,
         proxy_addr,
     };
@@ -279,6 +284,7 @@ pub(super) async fn get() -> Runtime {
 }
 
 pub(super) async fn spawn_with_args(extra_args: &[&str]) -> Runtime {
+    let exclusive_permit = dedicated_runtime_test_permit().await;
     let data_dir = spawn_safechain_proxy_app_with_args_and_identity(extra_args, None);
     let app = App { data_dir };
 
@@ -296,6 +302,7 @@ pub(super) async fn spawn_with_args(extra_args: &[&str]) -> Runtime {
 
     let runtime = Runtime {
         _app: app,
+        _exclusive_permit: Some(exclusive_permit),
         meta_addr,
         proxy_addr,
     };
@@ -312,6 +319,7 @@ pub(super) async fn spawn_with_agent_identity(
     device_id: &str,
     extra_args: &[&str],
 ) -> Runtime {
+    let exclusive_permit = dedicated_runtime_test_permit().await;
     let data_dir =
         spawn_safechain_proxy_app_with_args_and_identity(extra_args, Some((token, device_id)));
     let app = App { data_dir };
@@ -330,6 +338,7 @@ pub(super) async fn spawn_with_agent_identity(
 
     let runtime = Runtime {
         _app: app,
+        _exclusive_permit: Some(exclusive_permit),
         meta_addr,
         proxy_addr,
     };
@@ -376,6 +385,17 @@ impl App {
         let data_dir = spawn_safechain_proxy_app();
         Self { data_dir }
     }
+}
+
+async fn dedicated_runtime_test_permit() -> tokio::sync::OwnedSemaphorePermit {
+    static DEDICATED_RUNTIME_TEST_SEMAPHORE: LazyLock<Arc<Semaphore>> =
+        LazyLock::new(|| Arc::new(Semaphore::new(1)));
+
+    DEDICATED_RUNTIME_TEST_SEMAPHORE
+        .clone()
+        .acquire_owned()
+        .await
+        .expect("dedicated runtime test semaphore should never be closed")
 }
 
 fn spawn_safechain_proxy_app() -> PathBuf {

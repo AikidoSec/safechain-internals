@@ -36,9 +36,10 @@ rust-quick-qa:
     cargo check --all-features --workspace --all-targets
     cargo clippy --all-features --workspace --all-targets
 
-rust-qa: rust-quick-qa
-    cargo test --all-features --workspace
-    just rust-fuzz-check
+rust-test *ARGS:
+    cargo test --all-features --workspace {{ARGS}}
+
+rust-qa: rust-quick-qa rust-test rust-fuzz-check
 
 rust-fuzz-check:
     @cargo install cargo-fuzz
