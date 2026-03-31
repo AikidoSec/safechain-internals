@@ -72,7 +72,7 @@ body {
 }
 
 .app-version {
-  margin-left: 12px;
+  margin-left: auto;
   font-size: 12px;
   font-weight: 500;
   color: var(--carbon-60);
