@@ -71,6 +71,8 @@ directly to the target services.
 
 ### Docker builds with the L4 proxy
 
+> See also: [CA Certificates](../ca-certs.md) for a full overview of how Aikido Endpoint configures certificate trust across all supported tools.
+
 Aikido Endpoint attempts to install its CA automatically into supported
 Docker containers that are already running or that start after the agent is active.
 
