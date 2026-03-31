@@ -66,6 +66,8 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("GET /v1/tls-events", s.handleTlsEvents)
 	mux.HandleFunc("GET /v1/tls-events/{id}", s.handleGetTlsEventByID)
 
+	mux.HandleFunc("GET /v1/version", s.handleVersion)
+
 	listener, err := net.Listen("tcp", DefaultBind)
 	if err != nil {
 		return fmt.Errorf("failed to bind ingress server: %w", err)
