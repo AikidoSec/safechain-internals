@@ -20,12 +20,7 @@ mimalloc = { workspace = true }
 [dependencies]
 arc-swap = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
-humantime = { workspace = true }
-rustls-platform-verifier = { workspace = true }
 safechain-proxy-lib = { workspace = true, features = ["pac"] }
-serde = { workspace = true }
-serde_html_form = { workspace = true }
-serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [dependencies.rama]
@@ -36,6 +31,7 @@ features = ["http-full", "proxy-full", "dns", "boring", "rustls", "aws-lc"]
 static_vcruntime = { workspace = true }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 tracing-test = { workspace = true }
 
 [dev-dependencies.rama]
