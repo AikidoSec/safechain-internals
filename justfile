@@ -173,9 +173,37 @@ macos-l4-log-stream:
 
 macos-l4-start *ARGS:
     "{{xcode_l4_installed_app_exe}}" start {{ARGS}}
+    @for i in $(seq 1 120); do \
+        status="$("{{xcode_l4_installed_app_exe}}" status | sed -n 's/^status: //p')"; \
+        echo "$i) status: $status"; \
+        case "$status" in \
+            connected) \
+                echo "Dev proxy enabled, have fun!"; \
+                exit 0; \
+                ;; \
+        esac; \
+        sleep 0.5; \
+    done; \
+    echo "timed out waiting for macOS L4 proxy to become active" >&2; \
+    "{{xcode_l4_installed_app_exe}}" status; \
+    exit 1
 
 macos-l4-stop:
     "{{xcode_l4_installed_app_exe}}" stop
+    @for i in $(seq 1 120); do \
+        status="$("{{xcode_l4_installed_app_exe}}" status | sed -n 's/^status: //p')"; \
+        echo "$i) status: $status"; \
+        case "$status" in \
+            disconnected) \
+                echo "Dev proxy disabled, bye!"; \
+                exit 0; \
+                ;; \
+        esac; \
+        sleep 0.5; \
+    done; \
+    echo "timed out waiting for macOS L4 proxy to stop" >&2; \
+    "{{xcode_l4_installed_app_exe}}" status; \
+    exit 1
 
 run-macos-l4-proxy *ARGS: macos-l4-install-signed
     just macos-l4-start {{ARGS}}
