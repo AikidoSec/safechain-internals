@@ -19,7 +19,7 @@ use crate::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
     },
-    package::malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
+    package::{malware_list::{LowerCaseEntryFormatter, RemoteMalwareList}, version::PackageVersion},
     storage::SyncCompactDataStorage,
 };
 
@@ -165,7 +165,7 @@ impl RuleVSCode {
             product: arcstr!("vscode"),
             identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
             display_name: None,
-            version: None,
+            version: vscode_extension.version.clone(),
         }
     }
 
@@ -189,7 +189,7 @@ impl RuleVSCode {
         )
     }
 
-    /// Parse extension ID (publisher.name) from .vsix download URL path.
+    /// Parse extension ID (publisher.name) and version from .vsix download URL path.
     fn parse_extension_id_from_path(path: &str) -> Option<VsCodeExtensionId> {
         let mut it = path.trim_start_matches('/').split('/');
 
@@ -199,18 +199,19 @@ impl RuleVSCode {
         if first.eq_ignore_ascii_case("files") {
             let publisher = it.next()?;
             let extension = it.next()?;
-            let _ = it.next()?; // we require at least a fourth path
-            return Some(VsCodeExtensionId::new(publisher, extension));
+            let version = it.next()?; // we require at least a fourth path segment
+            return Some(VsCodeExtensionId::new(publisher, extension, Some(version)));
         }
 
-        // Pattern: extensions/<publisher>/<extension>/...
+        // Pattern: extensions/<publisher>/<extension>/<version>/...
         if first.eq_ignore_ascii_case("extensions") {
             let publisher = it.next()?;
             let extension = it.next()?;
-            return Some(VsCodeExtensionId::new(publisher, extension));
+            let version = it.next();
+            return Some(VsCodeExtensionId::new(publisher, extension, version));
         }
 
-        // Pattern: _apis/public/gallery/publishers/<publisher>/vsextensions/<extension>/...
+        // Pattern: _apis/public/gallery/publishers/<publisher>/vsextensions/<extension>/<version>/...
         if first.eq_ignore_ascii_case("_apis") {
             let second = it.next()?;
             let third = it.next()?;
@@ -226,12 +227,13 @@ impl RuleVSCode {
                     || fifth.eq_ignore_ascii_case("extensions")
                 {
                     let extension = it.next()?;
-                    return Some(VsCodeExtensionId::new(publisher, extension));
+                    let version = it.next();
+                    return Some(VsCodeExtensionId::new(publisher, extension, version));
                 }
             }
 
             // Pattern: _apis/public/gallery/publisher/<publisher>/<extension>/...
-            // Pattern: _apis/public/gallery/publisher/<publisher>/extension/<extension>/...
+            // Pattern: _apis/public/gallery/publisher/<publisher>/extension/<extension>/<version>/...
             if second.eq_ignore_ascii_case("public")
                 && third.eq_ignore_ascii_case("gallery")
                 && fourth.eq_ignore_ascii_case("publisher")
@@ -241,10 +243,12 @@ impl RuleVSCode {
 
                 if next.eq_ignore_ascii_case("extension") {
                     let extension = it.next()?;
-                    return Some(VsCodeExtensionId::new(publisher, extension));
+                    let version = it.next();
+                    return Some(VsCodeExtensionId::new(publisher, extension, version));
                 }
 
-                return Some(VsCodeExtensionId::new(publisher, next));
+                let version = it.next();
+                return Some(VsCodeExtensionId::new(publisher, next, version));
             }
         }
 
@@ -254,12 +258,14 @@ impl RuleVSCode {
 
 struct VsCodeExtensionId {
     extension_id: String,
+    version: Option<PackageVersion>,
 }
 
 impl VsCodeExtensionId {
-    fn new(publisher: &str, extension: &str) -> VsCodeExtensionId {
+    fn new(publisher: &str, extension: &str, version: Option<&str>) -> VsCodeExtensionId {
         Self {
             extension_id: format!("{publisher}.{extension}").to_lowercase(),
+            version: version.map(|v| v.parse().unwrap()),
         }
     }
 }
