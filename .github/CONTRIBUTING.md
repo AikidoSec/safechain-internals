@@ -112,6 +112,14 @@ task dev
 
 This generates Wails bindings, builds the frontend, and starts the app with hot-reload.
 
+To develop without running the full agent stack, start the mock daemon first:
+
+```sh
+task mock   # serves seed data on :7878
+# then in another terminal:
+task dev
+```
+
 > **Note:** The frontend cannot be run standalone with `npm run dev` — the Vite config depends on Wails-generated bindings. Always use `task dev` for development.
 
 #### UI: build

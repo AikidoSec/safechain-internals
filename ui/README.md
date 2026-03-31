@@ -48,6 +48,16 @@ This starts the Wails dev server with hot-reload for both Go and frontend change
 
 > **Note:** The frontend cannot be run standalone with `npm run dev` — the Vite config uses the Wails plugin, which requires generated bindings that are only produced by the full `task dev` or `task build` pipeline.
 
+### Mock daemon
+
+The UI connects to the daemon API at `127.0.0.1:7878` by default. If you don't have the real daemon running, start the mock server in a separate terminal first:
+
+```sh
+task mock
+```
+
+This serves seed data (block events, TLS failures) and returns version `v1.2.3`. Then run `task dev` in another terminal to start the UI.
+
 ### Build without running
 
 ```sh
