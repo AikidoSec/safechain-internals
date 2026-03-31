@@ -3,12 +3,12 @@ use rama::{
     telemetry::tracing,
 };
 
-use crate::test::e2e;
-
-/// These must match the entries served by `mock_server::malware_list::released_vscode`.
-const FRESH_EXTENSION_PUBLISHER: &str = "newpublisher";
-const FRESH_EXTENSION_NAME: &str = "freshextension";
-const FRESH_EXTENSION_VERSION: &str = "1.0.0";
+use crate::{
+    client::mock_server::malware_list::{
+        FRESH_EXTENSION_NAME, FRESH_EXTENSION_PUBLISHER, FRESH_EXTENSION_VERSION,
+    },
+    test::e2e,
+};
 
 const SAFE_EXTENSION_URL: &str = "https://gallerycdn.vsassets.io/_apis/public/gallery/publishers/python/vsextensions/python/1.0.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage";
 

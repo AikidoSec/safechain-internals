@@ -21,7 +21,22 @@ use crate::{storage::SyncCompactDataStorage, utils::uri::uri_to_filename};
 
 /// How long to keep entries in the trie (7 days).
 /// Entries older than this are irrelevant to the 24h blocking window.
-const MAX_ENTRY_AGE_SECS: u64 = 7 * 24 * 3600;
+const MAX_ENTRY_AGE_SECS: i64 = 7 * 24 * 3600;
+
+pub trait ReleasedPackageEntryFormatter: Send + Sync {
+    /// Map a raw malware-list entry into the trie lookup key.
+    ///
+    /// This is called only when (re)building the trie
+    fn format(&self, entry: &ReleasedPackageData) -> String;
+}
+
+#[derive(Debug, Default, Clone)]
+pub(crate) struct LowerCaseReleasedPackageFormatter;
+impl ReleasedPackageEntryFormatter for LowerCaseReleasedPackageFormatter {
+    fn format(&self, entry: &ReleasedPackageData) -> String {
+        entry.package_name.trim().to_ascii_lowercase()
+    }
+}
 
 type ReleasedPackagesTrie = Trie<String, Vec<ReleasedEntry>>;
 
@@ -37,14 +52,16 @@ impl fmt::Debug for RemoteReleasedPackagesList {
 }
 
 impl RemoteReleasedPackagesList {
-    pub async fn try_new<C>(
+    pub async fn try_new<C, F>(
         guard: ShutdownGuard,
         uri: Uri,
         sync_storage: SyncCompactDataStorage,
         client: C,
+        formatter: F,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError>,
+        F: ReleasedPackageEntryFormatter + Clone + 'static,
     {
         let filename = uri_to_filename(&uri);
         let refresh_interval = Duration::from_mins(10);
@@ -54,6 +71,7 @@ impl RemoteReleasedPackagesList {
             refresh_interval,
             sync_storage,
             client,
+            formatter,
         };
 
         let (trie, e_tag) = match client.load_cached_trie().await {
@@ -122,11 +140,11 @@ impl RemoteReleasedPackagesList {
         &self,
         package_name: &str,
         version: Option<&str>,
-        cutoff_secs: u64,
+        cutoff_secs: i64,
     ) -> bool {
-        let key = package_name.trim().to_ascii_lowercase();
+        let key = package_name;
         let guard = self.trie.load();
-        let Some(entries) = guard.get(key.as_str()) else {
+        let Some(entries) = guard.get(key) else {
             return false;
         };
         entries.iter().any(|e| {
@@ -136,17 +154,19 @@ impl RemoteReleasedPackagesList {
     }
 }
 
-struct RemoteReleasedPackagesListClient<C> {
+struct RemoteReleasedPackagesListClient<C, F> {
     uri: Uri,
     filename: ArcStr,
     refresh_interval: Duration,
     sync_storage: SyncCompactDataStorage,
     client: C,
+    formatter: F,
 }
 
-impl<C> RemoteReleasedPackagesListClient<C>
+impl<C, F> RemoteReleasedPackagesListClient<C, F>
 where
     C: Service<Request, Output = Response, Error = OpaqueError>,
+    F: ReleasedPackageEntryFormatter + Clone + 'static,
 {
     async fn download_trie(
         &self,
@@ -158,8 +178,8 @@ where
 
         self.spawn_caching_task(list.clone(), new_e_tag.clone());
 
-        let now_secs = (rama::utils::time::now_unix_ms() as u64) / 1000;
-        let trie = trie_from_released_packages_list(list, now_secs);
+        let now_secs = (rama::utils::time::now_unix_ms()) / 1000;
+        let trie = trie_from_released_packages_list(list, now_secs, self.formatter.clone());
 
         tracing::debug!(
             "released packages trie refreshed with link to remote endpoint '{}'",
@@ -258,7 +278,8 @@ where
         tokio::task::spawn_blocking({
             let storage = self.sync_storage.clone();
             let filename = self.filename.clone();
-            move || load_cached_trie_sync_inner(storage, filename)
+            let formatter = self.formatter.clone();
+            move || load_cached_trie_sync_inner(storage, filename, formatter)
         })
         .await
         .context("wait for blocking task to use cached released packages list")
@@ -266,10 +287,14 @@ where
     }
 }
 
-fn load_cached_trie_sync_inner(
+fn load_cached_trie_sync_inner<F>(
     storage: SyncCompactDataStorage,
     filename: ArcStr,
-) -> Result<Option<(ReleasedPackagesTrie, Option<ArcStr>)>, BoxError> {
+    formatter: F,
+) -> Result<Option<(ReleasedPackagesTrie, Option<ArcStr>)>, BoxError>
+where
+    F: ReleasedPackageEntryFormatter,
+{
     let cached: Option<CachedReleasedPackagesList> =
         storage.load(&filename).context("storage failure")?;
 
@@ -277,19 +302,20 @@ fn load_cached_trie_sync_inner(
         return Ok(None);
     };
 
-    let now_secs = (rama::utils::time::now_unix_ms() as u64) / 1000;
-    let trie = trie_from_released_packages_list(cached.list, now_secs);
+    let now_secs = (rama::utils::time::now_unix_ms()) / 1000;
+    let trie = trie_from_released_packages_list(cached.list, now_secs, formatter);
 
     Ok(Some((trie, cached.e_tag)))
 }
 
-async fn remote_released_packages_update_loop<C>(
+async fn remote_released_packages_update_loop<C, F>(
     guard: ShutdownGuard,
-    client: RemoteReleasedPackagesListClient<C>,
+    client: RemoteReleasedPackagesListClient<C, F>,
     e_tag: Option<ArcStr>,
     shared_trie: Arc<ArcSwap<ReleasedPackagesTrie>>,
 ) where
     C: Service<Request, Output = Response, Error = OpaqueError>,
+    F: ReleasedPackageEntryFormatter + Clone + 'static,
 {
     tracing::debug!(
         "remote released packages list (uri = {}), update loop task up and running",
@@ -358,17 +384,21 @@ fn with_jitter(refresh: Duration) -> Duration {
     refresh + Duration::from_secs_f64(jitter_secs)
 }
 
-fn trie_from_released_packages_list(
+fn trie_from_released_packages_list<F>(
     list: Vec<ReleasedPackageData>,
-    now_secs: u64,
-) -> ReleasedPackagesTrie {
+    now_secs: i64,
+    formatter: F,
+) -> ReleasedPackagesTrie
+where
+    F: ReleasedPackageEntryFormatter,
+{
     let cutoff = now_secs.saturating_sub(MAX_ENTRY_AGE_SECS);
     let mut trie = ReleasedPackagesTrie::new();
     for item in list {
         if item.released_on < cutoff {
             continue;
         }
-        let key = item.package_name.trim().to_ascii_lowercase();
+        let key = formatter.format(&item);
         let entry = ReleasedEntry {
             version: item.version.trim().to_ascii_lowercase(),
             released_on: item.released_on,
@@ -392,28 +422,28 @@ fn trie_from_released_packages_list(
 pub struct ReleasedPackageData {
     pub package_name: String,
     pub version: String,
-    pub released_on: u64,
+    pub released_on: i64,
 }
 
 /// Stored in the trie (version + timestamp; package_name is the key)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleasedEntry {
     pub version: String,
-    pub released_on: u64,
+    pub released_on: i64,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn make_trie(entries: Vec<ReleasedPackageData>, now_secs: u64) -> ReleasedPackagesTrie {
-        trie_from_released_packages_list(entries, now_secs)
+    fn make_trie(entries: Vec<ReleasedPackageData>, now_secs: i64) -> ReleasedPackagesTrie {
+        trie_from_released_packages_list(entries, now_secs, LowerCaseReleasedPackageFormatter)
     }
 
     fn make_list(
         package_name: &str,
         version: &str,
-        released_on: u64,
+        released_on: i64,
     ) -> RemoteReleasedPackagesList {
         let trie = trie_from_released_packages_list(
             vec![ReleasedPackageData {
@@ -422,6 +452,7 @@ mod tests {
                 released_on,
             }],
             released_on + 3600, // now = 1h after release
+            LowerCaseReleasedPackageFormatter,
         );
         RemoteReleasedPackagesList {
             trie: Arc::new(ArcSwap::new(Arc::new(trie))),
@@ -431,7 +462,7 @@ mod tests {
     #[test]
     fn test_is_recently_released_specific_version_match() {
         // package released 1h ago, cutoff = 2h ago → should be recent
-        let released_on = 1_000_000_u64;
+        let released_on = 1_000_000_i64;
         let list = make_list("my-ext", "1.0.0", released_on);
         let cutoff = released_on - 7200; // 2h before release
         assert!(list.is_recently_released("my-ext", Some("1.0.0"), cutoff));
@@ -439,7 +470,7 @@ mod tests {
 
     #[test]
     fn test_is_recently_released_specific_version_no_match_wrong_version() {
-        let released_on = 1_000_000_u64;
+        let released_on = 1_000_000_i64;
         let list = make_list("my-ext", "1.0.0", released_on);
         let cutoff = released_on - 7200;
         assert!(!list.is_recently_released("my-ext", Some("2.0.0"), cutoff));
@@ -447,7 +478,7 @@ mod tests {
 
     #[test]
     fn test_is_recently_released_any_version() {
-        let released_on = 1_000_000_u64;
+        let released_on = 1_000_000_i64;
         let list = make_list("my-ext", "1.0.0", released_on);
         let cutoff = released_on - 7200;
         assert!(list.is_recently_released("my-ext", None, cutoff));
@@ -456,7 +487,7 @@ mod tests {
     #[test]
     fn test_is_recently_released_stale_entry() {
         // released_on is BEFORE the cutoff → not recent
-        let released_on = 1_000_000_u64;
+        let released_on = 1_000_000_i64;
         let list = make_list("my-ext", "1.0.0", released_on);
         let cutoff = released_on + 3600; // cutoff is 1h AFTER release
         assert!(!list.is_recently_released("my-ext", Some("1.0.0"), cutoff));
@@ -464,7 +495,7 @@ mod tests {
 
     #[test]
     fn test_is_recently_released_unknown_package() {
-        let released_on = 1_000_000_u64;
+        let released_on = 1_000_000_i64;
         let list = make_list("my-ext", "1.0.0", released_on);
         let cutoff = released_on - 7200;
         assert!(!list.is_recently_released("unknown-ext", None, cutoff));
@@ -472,7 +503,7 @@ mod tests {
 
     #[test]
     fn test_trie_filters_old_entries() {
-        let now_secs = 1_000_000_u64;
+        let now_secs = 1_000_000_i64;
         let cutoff = now_secs.saturating_sub(MAX_ENTRY_AGE_SECS);
         let entries = vec![
             ReleasedPackageData {
@@ -493,7 +524,7 @@ mod tests {
 
     #[test]
     fn test_is_recently_released_case_insensitive() {
-        let released_on = 1_000_000_u64;
+        let released_on = 1_000_000_i64;
         let list = make_list("My-Ext", "1.0.0", released_on);
         let cutoff = released_on - 7200;
         assert!(list.is_recently_released("MY-EXT", Some("1.0.0"), cutoff));

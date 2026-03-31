@@ -24,7 +24,7 @@ use crate::{
     },
     package::{
         malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
-        released_packages_list::RemoteReleasedPackagesList,
+        released_packages_list::{LowerCaseReleasedPackageFormatter, RemoteReleasedPackagesList},
     },
     storage::SyncCompactDataStorage,
 };
@@ -68,6 +68,7 @@ impl RuleVSCode {
             Uri::from_static("https://malware-list.aikido.dev/releases/vscode.json"),
             sync_storage,
             remote_malware_list_https_client,
+            LowerCaseReleasedPackageFormatter,
         )
         .await
         .context("create remote released packages list for vscode block rule")?;
@@ -178,7 +179,7 @@ impl Rule for RuleVSCode {
             tracing::info!(
                 http.url.path = %path,
                 package = %vscode_extension,
-                "blocked VSCode extension install: package released less than 24h ago"
+                "blocked VSCode extension install: package released too recently"
             );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
@@ -198,18 +199,18 @@ impl Rule for RuleVSCode {
 }
 
 impl RuleVSCode {
-    const DEFAULT_MIN_PACKAGE_AGE_SECS: u64 = 24 * 3600;
+    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 24 * 3600;
 
-    fn get_package_age_cutoff_secs(&self) -> u64 {
+    fn get_package_age_cutoff_secs(&self) -> i64 {
         let maybe_ts = self.remote_endpoint_config.as_ref().and_then(|c| {
             c.get_ecosystem_config("vscode")
                 .config()
                 .and_then(|cfg| cfg.minimum_allowed_age_timestamp)
         });
         if let Some(ts_secs) = maybe_ts {
-            return ts_secs as u64;
+            return ts_secs;
         }
-        (now_unix_ms() as u64) / 1000 - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
+        (now_unix_ms()) / 1000 - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
     }
 
     fn blocked_artifact(vscode_extension: &VsCodeExtensionId) -> Artifact {

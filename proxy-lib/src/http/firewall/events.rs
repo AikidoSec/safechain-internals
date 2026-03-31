@@ -27,7 +27,7 @@ pub enum BlockReason {
     BlockAll,
     /// Blocked because `request_installs` is enabled — install pending approval.
     RequestInstall,
-    /// Blocked because the package was released less than 24 hours ago (not yet vetted).
+    /// Blocked because the package was released less time ago than the minimum package age (not yet vetted).
     NewPackage,
 }
 
