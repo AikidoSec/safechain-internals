@@ -58,7 +58,10 @@ pub mod pypi;
 pub mod skills_sh;
 pub mod vscode;
 
-#[cfg_attr(all(feature = "apple-networkextension", not(test)), expect(unused))]
+#[cfg_attr(
+    not(any(not(feature = "apple-networkextension"), feature = "test-utils", test)),
+    expect(unused)
+)]
 pub mod chrome;
 
 /// Action determined by a [`Rule`] when evaluating an http [`Request`]
