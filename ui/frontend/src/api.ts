@@ -22,3 +22,7 @@ export async function listTlsEvents(limit: number): Promise<TlsTerminationFailed
 export async function getTlsEvent(eventId: string): Promise<TlsTerminationFailedEvent> {
   return DaemonService.GetTlsEvent(eventId);
 }
+
+export async function getVersion(): Promise<string> {
+  return DaemonService.GetVersion();
+}

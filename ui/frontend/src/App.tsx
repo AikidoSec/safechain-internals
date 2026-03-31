@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, NavLink, useNavigate } from "react-router-dom";
 import { Events } from "@wailsio/runtime";
 import { EventsList } from "./pages/EventsList";
 import { EventDetail } from "./pages/EventDetail";
 import { TlsEventsList } from "./pages/TlsEventsList";
 import { TlsEventDetail } from "./pages/TlsEventDetail";
+import { getVersion } from "./api";
 import logoUrl from "../assets/logo.svg";
 import "./App.css";
 
@@ -47,11 +48,17 @@ function AppRoutes() {
 }
 
 function App() {
+  const [version, setVersion] = useState("");
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => {});
+  }, []);
+
   return (
     <BrowserRouter>
       <div className="container">
         <header className="app-header">
           <img src={logoUrl} alt="Aikido" className="app-logo-img" />
+          {version && <span className="app-version">v{version}</span>}
         </header>
         <nav className="app-tabs">
           <NavLink to="/events" className={({ isActive }) => `app-tab${isActive || location.pathname === "/" ? " app-tab--active" : ""}`}>
