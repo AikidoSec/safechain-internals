@@ -1,5 +1,8 @@
 use rama::net::address::Domain;
-use rama::utils::{str::arcstr::ArcStr, time::now_unix_ms};
+use rama::utils::{
+    str::{arcstr::ArcStr, smol_str::SmolStr},
+    time::now_unix_ms,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::package::version::PackageVersion;
