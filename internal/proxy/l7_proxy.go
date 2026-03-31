@@ -20,6 +20,13 @@ const (
 	ProxyReadyInterval = 1 * time.Second
 )
 
+// L7PacURL returns the PAC URL served by the L7 proxy. Derived from the
+// known ProxyMeta address so it can be used before the proxy has started.
+func L7PacURL() string {
+	_, port, _ := strings.Cut(ProxyMeta, ":")
+	return "https://localhost:" + port + "/pac"
+}
+
 type L7Proxy struct {
 	cmd      *exec.Cmd
 	ctx      context.Context
@@ -82,7 +89,7 @@ func (p *L7Proxy) Start(ctx context.Context, opts StartOptions) error {
 		"--meta", ProxyMeta,
 		"--data", platform.GetRunDir(),
 		"--output", filepath.Join(config.LogDir, platform.SafeChainL7ProxyLogName),
-		"--secrets", "keyring",
+		"--secrets", "protected:access-group=7VPF8GD6J4.com.aikido.endpoint.proxy.l7",
 		"--reporting-endpoint", fmt.Sprintf("http://%s", opts.IngressAddr),
 		"--aikido-url", opts.BaseURL,
 	)

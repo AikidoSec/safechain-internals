@@ -94,6 +94,30 @@ func InstallL4ProxyCA(ctx context.Context) error {
 	return installDownloadedProxyCA(ctx)
 }
 
+func GetL7CaCertPath() string {
+	return filepath.Join(platform.GetRunDir(), "endpoint-protection-l7-proxy-ca-crt.pem")
+}
+
+// InstallL7ProxyCAAsAdditional downloads the L7 CA cert and installs it into
+// the OS keychain alongside the primary proxy CA. Used in l4-chrome-l7 mode
+// so Chrome trusts L7's MITM certificates while L4's CA remains the primary
+// cert for ecosystem tools (npm, pip, vscode).
+func InstallL7ProxyCAAsAdditional(ctx context.Context) error {
+	log.Println("Installing L7 proxy CA as additional trusted cert...")
+	metaUrl, _, _, err := GetMetaUrls()
+	if err != nil {
+		return fmt.Errorf("failed to get L7 meta url: %w", err)
+	}
+	if err := utils.DownloadBinary(ctx, metaUrl+"/ca", GetL7CaCertPath()); err != nil {
+		return fmt.Errorf("failed to download L7 CA cert: %w", err)
+	}
+	if err := platform.InstallProxyCA(ctx, GetL7CaCertPath()); err != nil {
+		return fmt.Errorf("failed to install L7 CA cert: %w", err)
+	}
+	log.Println("L7 proxy CA installed as additional trusted cert successfully")
+	return nil
+}
+
 func UninstallProxyCA(ctx context.Context) error {
 	if err := platform.UninstallProxyCA(ctx); err != nil {
 		return fmt.Errorf("failed to uninstall ca cert: %v", err)
