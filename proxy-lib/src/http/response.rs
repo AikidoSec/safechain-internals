@@ -15,6 +15,7 @@ const REJECTED_BLOCKED_MESSAGE: &str = "This download was blocked by your organi
 const BLOCK_ALL_BLOCKED_MESSAGE: &str = "Your organization blocks all installs for this source.";
 const REQUEST_INSTALL_BLOCKED_MESSAGE: &str =
     "Install approval is required by your organization policy.";
+const NEW_PACKAGE_BLOCKED_MESSAGE: &str = "This download was blocked because the package was published less than 24 hours ago and has not yet been vetted.";
 
 fn html_blocked_payload(message: &str) -> String {
     format!(
@@ -69,6 +70,7 @@ fn blocked_message_for_reason(block_reason: &BlockReason) -> &'static str {
         BlockReason::Rejected => REJECTED_BLOCKED_MESSAGE,
         BlockReason::BlockAll => BLOCK_ALL_BLOCKED_MESSAGE,
         BlockReason::RequestInstall => REQUEST_INSTALL_BLOCKED_MESSAGE,
+        BlockReason::NewPackage => NEW_PACKAGE_BLOCKED_MESSAGE,
     }
 }
 

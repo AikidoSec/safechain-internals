@@ -125,3 +125,58 @@ fn test_parse_extension_id_from_path_lowercased() {
         );
     }
 }
+
+#[test]
+fn test_parse_extension_id_version_captured() {
+    // files/<pub>/<ext>/<version>/...
+    let parsed = RuleVSCode::parse_extension_id_from_path(
+        "/files/ms-python/python/2024.22.0/ms-python.python-2024.22.0.vsix",
+    )
+    .unwrap();
+    assert_eq!(parsed.extension_id, "ms-python.python");
+    assert_eq!(parsed.version.as_deref(), Some("2024.22.0"));
+
+    // extensions/<pub>/<ext>/<version>/...
+    let parsed = RuleVSCode::parse_extension_id_from_path(
+        "/extensions/ms-python/python/2024.22.0/Microsoft.VisualStudio.Services.VsixSignature",
+    )
+    .unwrap();
+    assert_eq!(parsed.extension_id, "ms-python.python");
+    assert_eq!(parsed.version.as_deref(), Some("2024.22.0"));
+
+    // extensions/<pub>/<ext> (no version)
+    let parsed = RuleVSCode::parse_extension_id_from_path("/extensions/ms-python/python").unwrap();
+    assert_eq!(parsed.extension_id, "ms-python.python");
+    assert_eq!(parsed.version, None);
+
+    // _apis/public/gallery/publishers/<pub>/vsextensions/<ext>/<version>/...
+    let parsed = RuleVSCode::parse_extension_id_from_path(
+        "/_apis/public/gallery/publishers/ms-python/vsextensions/python/2024.22.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage",
+    )
+    .unwrap();
+    assert_eq!(parsed.extension_id, "ms-python.python");
+    assert_eq!(parsed.version.as_deref(), Some("2024.22.0"));
+
+    // _apis/public/gallery/publisher/<pub>/<ext>/<version>/...
+    let parsed = RuleVSCode::parse_extension_id_from_path(
+        "/_apis/public/gallery/publisher/ms-python/python/2024.22.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage",
+    )
+    .unwrap();
+    assert_eq!(parsed.extension_id, "ms-python.python");
+    assert_eq!(parsed.version.as_deref(), Some("2024.22.0"));
+
+    // _apis/public/gallery/publisher/<pub>/extension/<ext>/<version>/...
+    let parsed = RuleVSCode::parse_extension_id_from_path(
+        "/_apis/public/gallery/publisher/AddictedGuys/extension/vscode-har-explorer/1.0.0/assetbyname/Microsoft.VisualStudio.Code.Manifest",
+    )
+    .unwrap();
+    assert_eq!(parsed.extension_id, "addictedguys.vscode-har-explorer");
+    assert_eq!(parsed.version.as_deref(), Some("1.0.0"));
+
+    // version lowercased
+    let parsed = RuleVSCode::parse_extension_id_from_path(
+        "/files/Publisher/Extension/1.0.0-BETA/extension.vsix",
+    )
+    .unwrap();
+    assert_eq!(parsed.version.as_deref(), Some("1.0.0-beta"));
+}
