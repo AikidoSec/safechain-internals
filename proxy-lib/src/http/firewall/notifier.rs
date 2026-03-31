@@ -94,6 +94,11 @@ impl EventNotifier {
         let dedup = moka::sync::CacheBuilder::new(MAX_EVENTS)
             .time_to_live(EVENT_DEDUP_WINDOW)
             .build();
+        let reporting_endpoint = reporting_endpoint
+            .to_string()
+            .trim_end_matches('/')
+            .parse::<Uri>()
+            .context("trimmed reporting_endpoint should be a valid Uri")?;
         Ok(Self {
             exec,
             client,
@@ -183,10 +188,7 @@ async fn send_blocked_event(
         event.artifact
     );
 
-    let url = format!(
-        "{}/events/blocks",
-        reporting_endpoint.to_string().trim_end_matches('/')
-    );
+    let url = format!("{}/events/blocks", reporting_endpoint);
 
     send_event(client, reporting_endpoint, event, &url).await;
 }
@@ -202,10 +204,7 @@ async fn send_min_package_age_event(
         event.artifact
     );
 
-    let url = format!(
-        "{}/events/min-package-age",
-        reporting_endpoint.to_string().trim_end_matches('/')
-    );
+    let url = format!("{}/events/min-package-age", reporting_endpoint);
 
     send_event(client, reporting_endpoint, event, &url).await;
 }
@@ -215,10 +214,7 @@ async fn send_tls_termination_failed_event(
     reporting_endpoint: Uri,
     event: TlsTerminationFailedEvent,
 ) {
-    let url = format!(
-        "{}/events/tls-termination-failed",
-        reporting_endpoint.to_string().trim_end_matches('/')
-    );
+    let url = format!("{}/events/tls-termination-failed", reporting_endpoint);
 
     send_event(client, reporting_endpoint, event, &url).await;
 }
