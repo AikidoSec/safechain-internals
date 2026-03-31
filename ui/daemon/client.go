@@ -170,6 +170,25 @@ func GetTlsEvent(eventID string) (TlsTerminationFailedEvent, error) {
 	return out, nil
 }
 
+// GetVersion fetches GET /v1/version.
+func GetVersion() (string, error) {
+	resp, err := doRequest(http.MethodGet, "/v1/version", nil)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("get version: %s", resp.Status)
+	}
+	var out struct {
+		Version string `json:"version"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", err
+	}
+	return out.Version, nil
+}
+
 // RequestAccess sends POST /v1/events/:id/request-access
 func RequestAccess(eventID string) error {
 	if err := validateEventID(eventID); err != nil {

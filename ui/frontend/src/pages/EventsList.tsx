@@ -44,7 +44,7 @@ export function EventsList() {
 
   return (
     <div className="events-list">
-      <h1>Recent blocked events</h1>
+      <h1>Recent Blocked Events</h1>
       {loading && <p className="events-list-loading">Loading…</p>}
       {error && !connectionFailed && (
         <div className="events-list-error-inline">

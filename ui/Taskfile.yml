@@ -31,6 +31,11 @@ tasks:
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
+  mock:
+    summary: Runs a mock daemon on :7878 so the UI can be developed without the real agent stack
+    cmds:
+      - go run ./mock
+
   build:server:
     summary: Builds the application in server mode (no GUI, HTTP server only)
     cmds:

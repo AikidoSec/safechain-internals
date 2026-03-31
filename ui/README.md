@@ -29,6 +29,14 @@ The app runs as a **system-tray icon** (no dock icon). It receives proxy-status 
 - Go 1.25+
 - [Wails v3 CLI](https://v3.wails.io/getting-started/installation/)
 - Node.js (for the frontend build)
+- [Task](https://taskfile.dev/) (task runner)
+
+Install Task and the Wails CLI (macOS):
+
+```sh
+brew install go-task
+go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+```
 
 ## Development
 
@@ -36,14 +44,45 @@ The app runs as a **system-tray icon** (no dock icon). It receives proxy-status 
 task dev
 ```
 
-This starts the app with hot-reload for both Go and frontend changes.
+This starts the Wails dev server with hot-reload for both Go and frontend changes. It automatically generates bindings, installs npm dependencies, builds the frontend, and launches the app.
 
-## Build
+> **Note:** The frontend cannot be run standalone with `npm run dev` — the Vite config uses the Wails plugin, which requires generated bindings that are only produced by the full `task dev` or `task build` pipeline.
+
+### Mock daemon
+
+The UI connects to the daemon API at `127.0.0.1:7878` by default. If you don't have the real daemon running, start the mock server in a separate terminal first:
 
 ```sh
-task build       # compile binary
-task package     # platform-specific distributable (.app, .exe, etc.)
+task mock
 ```
+
+This serves seed data (block events, TLS failures) and returns version `v1.2.3`. Then run `task dev` in another terminal to start the UI.
+
+### Build without running
+
+```sh
+# Verify the frontend compiles (includes bindings generation)
+task common:build:frontend
+
+# Full build
+task build
+
+# Platform-specific distributable (.app, .exe, etc.)
+task package
+```
+
+### Server mode (no GUI)
+
+Runs the app as a plain HTTP server, useful for testing on headless machines:
+
+```sh
+task build:server
+task run:server
+```
+
+### Available tasks
+
+Run `task --list` from the `ui/` directory to see all available tasks.
 
 ## CLI Flags
 

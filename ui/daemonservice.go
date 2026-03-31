@@ -26,3 +26,7 @@ func (s *DaemonService) ListTlsEvents(limit int) ([]daemon.TlsTerminationFailedE
 func (s *DaemonService) GetTlsEvent(eventId string) (daemon.TlsTerminationFailedEvent, error) {
 	return daemon.GetTlsEvent(eventId)
 }
+
+func (s *DaemonService) GetVersion() (string, error) {
+	return daemon.GetVersion()
+}

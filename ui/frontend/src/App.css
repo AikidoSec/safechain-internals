@@ -71,6 +71,13 @@ body {
   display: block;
 }
 
+.app-version {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--carbon-60);
+}
+
 .app-tabs {
   display: flex;
   gap: 0;

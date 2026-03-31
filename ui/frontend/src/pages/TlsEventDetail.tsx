@@ -75,11 +75,11 @@ export function TlsEventDetail() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-          All TLS failures
+          All TLS Failures
         </button>
 
         <div className="tls-detail-header">
-          <div className="tls-detail-badge">TLS failure</div>
+          <div className="tls-detail-badge">TLS Failure</div>
           <h2 className="tls-detail-sni">{event.sni}</h2>
           <p className="tls-detail-subtitle">
             The proxy could not complete the TLS handshake for this connection, likely due to certificate pinning or an incompatible server configuration.
@@ -100,7 +100,7 @@ export function TlsEventDetail() {
         </dl>
 
         <div className="tls-detail-error-section">
-          <h3 className="tls-detail-error-label">Error details</h3>
+          <h3 className="tls-detail-error-label">Error Details</h3>
           <pre className="tls-detail-error-block"><code>{event.error}</code></pre>
         </div>
       </div>
