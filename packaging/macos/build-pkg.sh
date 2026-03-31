@@ -98,10 +98,12 @@ echo "Using temporary build directory: $BUILD_DIR"
 PKG_ROOT="$BUILD_DIR/pkg_root"
 PKG_SCRIPTS="$BUILD_DIR/scripts"
 INSTALL_DIR="$PKG_ROOT/Library/Application Support/AikidoSecurity/EndpointProtection"
+L4_APP_INSTALL_DIR="$PKG_ROOT/Applications"
 LAUNCHDAEMONS_DIR="$PKG_ROOT/Library/LaunchDaemons"
 LOGS_DIR="$PKG_ROOT/Library/Logs/AikidoSecurity/EndpointProtection"
 
 mkdir -p "$INSTALL_DIR/bin"
+mkdir -p "$L4_APP_INSTALL_DIR"
 mkdir -p "$LAUNCHDAEMONS_DIR"
 mkdir -p "$LOGS_DIR"
 mkdir -p "$PKG_SCRIPTS"
@@ -119,9 +121,16 @@ chmod 755 "$INSTALL_DIR/bin/endpoint-protection"
 chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
 
 echo "Copying L4 proxy app bundle..."
-ditto "$L4_PROXY_APP" "$INSTALL_DIR/bin/AikidoEndpointL4ProxyHost.app"
-chmod 755 "$INSTALL_DIR/bin/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost"
-chmod 755 "$INSTALL_DIR/bin/AikidoEndpointL4ProxyHost.app/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex/Contents/MacOS/AikidoEndpointL4ProxyExtension"
+ditto "$L4_PROXY_APP" "$L4_APP_INSTALL_DIR/AikidoEndpointL4ProxyHost.app"
+chmod 755 "$L4_APP_INSTALL_DIR/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost"
+L4_SYSEXT_DIR="$L4_APP_INSTALL_DIR/AikidoEndpointL4ProxyHost.app/Contents/Library/SystemExtensions"
+L4_SYSEXT=$(find "$L4_SYSEXT_DIR" -maxdepth 1 -name "*.systemextension" | head -1)
+if [ -n "$L4_SYSEXT" ]; then
+    L4_SYSEXT_NAME=$(basename "$L4_SYSEXT" .systemextension)
+    chmod 755 "$L4_SYSEXT/Contents/MacOS/$L4_SYSEXT_NAME"
+else
+    echo "Warning: No system extension found in $L4_SYSEXT_DIR"
+fi
 
 # Copy scripts
 echo "Copying scripts..."

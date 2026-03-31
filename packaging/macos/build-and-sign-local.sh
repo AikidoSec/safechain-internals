@@ -112,7 +112,7 @@ echo "✓ L4 proxy static library built"
 
 echo "Generating L4 proxy Xcode project..."
 cd "$PROJECT_DIR/packaging/macos/xcode/l4-proxy"
-xcodegen generate
+xcodegen generate --spec Project.dev.yml
 
 L4_DERIVED_DATA="$PROJECT_DIR/.aikido/xcode/safechain-l4-proxy-release"
 

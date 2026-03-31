@@ -39,13 +39,13 @@ use rama::{
 use safechain_proxy_lib::{
     http::{
         client::new_http_client_for_internal,
-        firewall::Firewall,
+        firewall::{Firewall, FirewallDecompressionMatcher},
         service::hijack::{self, HIJACK_DOMAIN},
         ws_relay::WebSocketMitmRelayService,
     },
     storage,
     tcp::new_tcp_connector_service_for_proxy,
-    tls::mitm_relay_policy::TlsMitmRelayPolicyLayer,
+    tls::{RootCaKeyPair, mitm_relay_policy::TlsMitmRelayPolicyLayer},
     utils::token::AgentIdentity,
 };
 
@@ -59,33 +59,8 @@ pub(super) async fn try_new_service(
 
     let executor = ctx.executor.clone();
     let data_path = crate::utils::storage::storage_dir().context("(app) data path is missing")?;
-    std::fs::create_dir_all(&data_path)
-        .context("create (app) data directory")
-        .with_context_debug_field("path", || data_path.clone())?;
-    let data_storage = storage::SyncCompactDataStorage::try_new(data_path.clone())
-        .context("create compact data storage using (app) storage dir")
-        .with_context_debug_field("path", || data_path.clone())?;
-    let root_ca = match crate::tls::load_root_ca_key_pair(config.use_vpn_shared_identity)
-        .context("load managed identity MITM CA Crt/Key pair")?
-    {
-        Some(root_ca) => root_ca,
-        None => {
-            let secret_storage = storage::SyncSecrets::try_new(
-                crate::utils::env::project_name(),
-                storage::SecretStorageKind::AppleProtected {
-                    access_group: None,
-                    cloud_sync: false,
-                },
-            )
-            .context("create Apple Protected secrets storage for MITM CA")?;
-
-            safechain_proxy_lib::tls::load_or_create_root_ca_key_pair(
-                &secret_storage,
-                &data_storage,
-            )
-            .context("load/create self-managed MITM CA Crt/Key pair")?
-        }
-    };
+    let root_ca = RootCaKeyPair::try_form_pem(&config.ca_cert_pem, &config.ca_key_pem)
+        .context("load config-provided ca crt/key pair")?;
 
     let ca_crt_pem_bytes: &[u8] = root_ca
         .certificate()
@@ -110,6 +85,8 @@ pub(super) async fn try_new_service(
         config.aikido_url.clone(),
     )
     .await?;
+
+    tracing::debug!("creating middleware and other services");
 
     let tls_mitm_relay_policy = TlsMitmRelayPolicyLayer::new(firewall.clone());
     let tls_mitm_relay = TlsMitmRelay::new_cached_in_memory(ca_crt, ca_key);
@@ -147,7 +124,7 @@ where
     Ingress: Io + Unpin + ExtensionsMut,
     Egress: Io + Unpin + ExtensionsMut,
 {
-    let peek_duration = Duration::from_secs_f64(proxy_config.peek_duration_s.max(0.5));
+    let peek_duration = Duration::from_secs_f64(proxy_config.peek_duration_s.max(0.05));
 
     let http_mitm_svc =
         HttpMitmRelay::new(exec.clone()).with_http_middleware(http_relay_middleware(
@@ -225,7 +202,9 @@ where
         ),
         firewall,
         MapResponseBodyLayer::new_boxed_streaming_body(),
-        DecompressionLayer::new(),
+        DecompressionLayer::new()
+            .with_insert_accept_encoding_header(false)
+            .with_matcher(FirewallDecompressionMatcher),
         HttpUpgradeMitmRelayLayer::new(
             exec,
             (

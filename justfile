@@ -12,17 +12,21 @@ xcode_l7_scheme := "AikidoEndpointL7Proxy"
 xcode_l7_derived_data := ".aikido/xcode/safechain-l7-proxy-wrapper"
 xcode_l7_app_exe := xcode_l7_derived_data + "/Build/Products/Debug/" + xcode_l7_scheme + ".app/Contents/MacOS/safechain-l7-proxy-bin"
 l4_team_id := "7VPF8GD6J4"
-l4_host_bundle_id := "com.aikido.endpoint.proxy.l4"
+l4_dev_host_bundle_id := "com.aikido.endpoint.proxy.l4.dev"
+l4_dev_extension_bundle_id := "com.aikido.endpoint.proxy.l4.dev.extension"
+l4_dist_host_bundle_id := "com.aikido.endpoint.proxy.l4.dist"
+l4_dist_extension_bundle_id := "com.aikido.endpoint.proxy.l4.dist.extension"
 xcode_l4_project_dir := "packaging/macos/xcode/l4-proxy"
+xcode_l4_project_spec_dev := xcode_l4_project_dir + "/Project.dev.yml"
 xcode_l4_project_file := xcode_l4_project_dir + "/AikidoEndpointL4Proxy.xcodeproj"
 xcode_l4_host_scheme := "AikidoEndpointL4ProxyHost"
 xcode_l4_derived_data := ".aikido/xcode/safechain-l4-proxy-wrapper"
 xcode_l4_app_name := "AikidoEndpointL4ProxyHost.app"
 xcode_l4_app := xcode_l4_derived_data + "/Build/Products/Debug/" + xcode_l4_app_name
 xcode_l4_app_exe := xcode_l4_app + "/Contents/MacOS/AikidoEndpointL4ProxyHost"
-xcode_l4_installed_app := "/Library/Application Support/AikidoSecurity/EndpointProtection/bin/" + xcode_l4_app_name
+xcode_l4_installed_app := "/Applications/" + xcode_l4_app_name
 xcode_l4_installed_app_exe := xcode_l4_installed_app + "/Contents/MacOS/AikidoEndpointL4ProxyHost"
-xcode_l4_installed_appex := xcode_l4_installed_app + "/Contents/PlugIns/AikidoEndpointL4ProxyExtension.appex"
+xcode_l4_installed_sysext := xcode_l4_installed_app + "/Contents/Library/SystemExtensions/" + l4_dev_extension_bundle_id + ".systemextension"
 
 rust-quick-qa:
     cargo fmt
@@ -75,6 +79,18 @@ run-l7-proxy *ARGS:
 proxy-har-toggle:
     curl -v -XPOST http://127.0.0.1:8088/har/toggle
 
+clean-rust:
+    cargo clean
+
+clean-xcode:
+    rm -rf .aikido/xcode 2> /dev/null
+
+clean-packaging:
+    rm -rf bin 2> /dev/null
+    rm -rf dist 2> /dev/null
+
+clean: clean-rust clean-xcode clean-packaging
+
 rust-update-deps:
     cargo update
     cargo outdated
@@ -126,18 +142,7 @@ macos-l4-build-rust:
         target/x86_64-apple-darwin/debug/libsafechain_lib_l4_proxy_macos.a
 
 macos-l4-xcodegen-generate:
-    xcodegen generate --spec "{{xcode_l4_project_dir}}/Project.yml"
-
-macos-l4-xcodegen-build-debug: macos-l4-build-rust macos-l4-xcodegen-generate
-    xcodebuild \
-        -project "{{xcode_l4_project_file}}" \
-        -scheme "{{xcode_l4_host_scheme}}" \
-        -configuration Debug \
-        -derivedDataPath "{{xcode_l4_derived_data}}" \
-        CODE_SIGNING_ALLOWED=NO \
-        CODE_SIGNING_REQUIRED=NO \
-        CODE_SIGN_IDENTITY="" \
-        build
+    xcodegen generate --spec "{{xcode_l4_project_spec_dev}}"
 
 macos-l4-xcodegen-build-debug-signed: macos-l4-build-rust macos-l4-xcodegen-generate
     xcodebuild \
@@ -151,12 +156,11 @@ macos-l4-xcodegen-build-debug-signed: macos-l4-build-rust macos-l4-xcodegen-gene
         build
 
 macos-l4-install-signed: macos-l4-xcodegen-build-debug-signed
-    pkill -f "{{l4_host_bundle_id}}" || true
-    sleep 1
-    sudo rm -rf "{{xcode_l4_installed_app}}"
-    sudo ditto "{{xcode_l4_app}}" "{{xcode_l4_installed_app}}"
+    rm -rf "{{xcode_l4_installed_app}}"
+    ditto "{{xcode_l4_app}}" "{{xcode_l4_installed_app}}"
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "{{xcode_l4_app}}" || true
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "{{xcode_l4_installed_app}}"
-    pluginkit -a "{{xcode_l4_installed_appex}}" || true
+    echo "Installed Development system extension bundle at {{xcode_l4_installed_sysext}}"
 
 macos-l4-status:
     "{{xcode_l4_installed_app_exe}}" status

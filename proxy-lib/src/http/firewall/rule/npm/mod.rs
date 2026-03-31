@@ -91,6 +91,14 @@ impl Rule for RuleNpm {
         self.target_domains.is_match(domain)
     }
 
+    #[inline(always)]
+    fn match_http_response_payload_inspection_request(
+        &self,
+        _: super::HttpRequestMatcherView<'_>,
+    ) -> bool {
+        self.maybe_min_package_age.is_some()
+    }
+
     #[cfg(feature = "pac")]
     #[inline(always)]
     fn collect_pac_domains(&self, generator: &mut PacScriptGenerator) {

@@ -31,7 +31,7 @@ pub(in crate::http::firewall) struct MinPackageAge {
     config: Option<RemoteEndpointConfig>,
 }
 
-const DEFAULT_MIN_PACKAGE_AGE_MS: i64 = 86_400_000;
+const DEFAULT_MIN_PACKAGE_AGE_MS: i64 = 172_800_000; // 48 hours
 
 impl MinPackageAge {
     pub fn new(notifier: Option<EventNotifier>, config: Option<RemoteEndpointConfig>) -> Self {

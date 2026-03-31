@@ -88,7 +88,8 @@ FFI/provider surface plus the transparent proxy engine.
 Relevant sources:
 
 - Host CLI: [`packaging/macos/xcode/l4-proxy/Host/main.swift`](../../packaging/macos/xcode/l4-proxy/Host/main.swift)
-- Xcode packaging: [`packaging/macos/xcode/l4-proxy/Project.yml`](../../packaging/macos/xcode/l4-proxy/Project.yml)
+- Xcode packaging (dev): [`packaging/macos/xcode/l4-proxy/Project.dev.yml`](../../packaging/macos/xcode/l4-proxy/Project.dev.yml)
+- Xcode packaging (dist): [`packaging/macos/xcode/l4-proxy/Project.dist.yml`](../../packaging/macos/xcode/l4-proxy/Project.dist.yml)
 - Rust entrypoint: [`proxy-lib-l4-macos/src/lib.rs`](../../proxy-lib-l4-macos/src/lib.rs)
 - Rust TCP proxy service: [`proxy-lib-l4-macos/src/tcp.rs`](../../proxy-lib-l4-macos/src/tcp.rs)
 - Rust config schema: [`proxy-lib-l4-macos/src/config.rs`](../../proxy-lib-l4-macos/src/config.rs)
@@ -117,6 +118,9 @@ This is the default mode and works well for:
 - non-MDM flows where the following dynamic process is acceptable:
   - during enrollment, installation, or first-time use, the proxy must be started first
   - the CA certificate can then be installed by retrieving it from the hijacked domain at `/data/root.ca.pem`
+  - for Docker builds that run package managers during image build, install that CA
+    into the image before the first package download; see `proxy/troubleshooting.md`
+    for a concrete Dockerfile example
 
 #### CA Mode: Managed VPN Shared Identity
 
@@ -142,7 +146,7 @@ Step 5 is executed every time the proxy (app extension) starts.
 
 Current managed identity assumptions:
 
-- the identity lookup is hardcoded to `com.aikido.endpoint.proxy.l4`
+- the identity lookup is mode dependent (dev vs dist)
 - the access group is hardcoded to `com.apple.managed.vpn.shared`
 - the private key is assumed to be exportable (for example, allowed by the SCEP profile)
 
@@ -152,19 +156,6 @@ If exporting the private key is not allowed or not desirable, the codebase will 
 ### Build And Install
 
 The `Justfile` contains the supported developer commands.
-
-Build the Rust static library and generate the Xcode project:
-
-```bash
-just macos-l4-build-rust
-just macos-l4-xcodegen-generate
-```
-
-Build the macOS host app and extension without signing checks:
-
-```bash
-just macos-l4-xcodegen-build-debug
-```
 
 Build with signing and install the app bundle into `/Applications`:
 
@@ -288,7 +279,7 @@ log show --last 30m --style compact --debug --info \
 ### Notes For Developers
 
 - The host executable lives inside the installed app bundle at:
-  `/Library/Application Support/AikidoSecurity/EndpointProtection/bin/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost`
+  `/Applications/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost`
 - `status` reports the current Network Extension state and the saved JSON config, if any.
 - The transparent proxy profile is persisted by `NETransparentProxyManager`.
 - The extension is expected to be restarted by the system according to the saved profile state;

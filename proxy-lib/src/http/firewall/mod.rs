@@ -35,7 +35,9 @@ pub mod notifier;
 pub mod rule;
 
 mod matched_rules;
-pub use self::matched_rules::{FirewallHttpRules, FirewallWebSocketRules};
+pub use self::matched_rules::{
+    FirewallDecompressionMatcher, FirewallHttpRules, FirewallWebSocketRules,
+};
 
 #[cfg(feature = "pac")]
 mod pac;
@@ -80,8 +82,8 @@ impl Firewall {
     ) -> Result<Self, BoxError> {
         let layered_client = (
             MapResponseBodyLayer::new_boxed_streaming_body(),
-            DecompressionLayer::new(),
             MapErrLayer::into_opaque_error(),
+            DecompressionLayer::new(),
             TimeoutLayer::new(Duration::from_secs(60)),
             RetryLayer::new(
                 ManagedPolicy::default().with_backoff(

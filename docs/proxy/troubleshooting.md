@@ -69,6 +69,80 @@ This approach is not the simplest, but it is usually sufficient to determine
 why traffic fails when routed through the proxy while succeeding when connecting
 directly to the target services.
 
+### Docker builds with the L4 proxy
+
+Aikido Endpoint attempts to install its CA automatically into supported
+Docker containers that are already running or that start after the agent is active.
+
+> In most runtime scenarios, you do not need to modify the image yourself.
+
+`docker build` is different. If the build runs package-manager commands such as
+`npm install`, `pnpm install`, `yarn install`, or `pip install`, you may need
+to install the L4 proxy CA in the Dockerfile yourself. Build-time package
+downloads happen before that runtime reconciliation can help.
+
+Add the CA before the first networked package-manager step in every build stage
+that downloads dependencies. The exact command depends on the base image family.
+
+Debian or Ubuntu based images:
+
+```dockerfile
+RUN apt-get update && apt-get install -y ca-certificates curl && \
+    curl -fsSL http://mitm.ramaproxy.org/data/root.ca.pem \
+      -o /usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt && \
+    update-ca-certificates
+
+ENV NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV PIP_CERT=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV SSL_CERT_FILE=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+```
+
+Alpine based images:
+
+```dockerfile
+RUN apk add --no-cache ca-certificates curl && \
+    curl -fsSL http://mitm.ramaproxy.org/data/root.ca.pem \
+      -o /usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt && \
+    update-ca-certificates
+
+ENV NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV PIP_CERT=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+ENV SSL_CERT_FILE=/usr/local/share/ca-certificates/aikido-safechain-proxy-ca.crt
+```
+
+RHEL, CentOS, Fedora, Amazon Linux, Rocky, AlmaLinux, or Oracle Linux based images:
+
+```dockerfile
+RUN mkdir -p /etc/pki/ca-trust/source/anchors && \
+    (command -v dnf >/dev/null && dnf install -y ca-certificates curl || yum install -y ca-certificates curl) && \
+    curl -fsSL http://mitm.ramaproxy.org/data/root.ca.pem \
+      -o /etc/pki/ca-trust/source/anchors/aikido-safechain-proxy-ca.crt && \
+    update-ca-trust
+
+ENV NODE_EXTRA_CA_CERTS=/etc/pki/ca-trust/source/anchors/aikido-safechain-proxy-ca.crt
+ENV PIP_CERT=/etc/pki/ca-trust/source/anchors/aikido-safechain-proxy-ca.crt
+ENV REQUESTS_CA_BUNDLE=/etc/pki/ca-trust/source/anchors/aikido-safechain-proxy-ca.crt
+ENV SSL_CERT_FILE=/etc/pki/ca-trust/source/anchors/aikido-safechain-proxy-ca.crt
+```
+
+Notes:
+
+- Add this before the first `RUN npm install`, `RUN pnpm install`, `RUN yarn install`,
+  `RUN pip install`, or similar command.
+- Repeat it in every stage that performs package downloads. Multi-stage builds
+  often need the same setup in both the builder stage and the runtime stage.
+- For Node-based images, `NODE_EXTRA_CA_CERTS` is often required even after the
+  OS trust store has been updated.
+- For Python-based images, `PIP_CERT` is the primary setting; `REQUESTS_CA_BUNDLE`
+  and `SSL_CERT_FILE` help other Python and OpenSSL-based tooling trust the same CA.
+
+If the build still fails after the CA is trusted, inspect the package-manager
+output carefully. The proxy can still block packages that are flagged by policy,
+including packages that require approval. In that case, the failure is expected
+proxy behavior rather than a certificate trust problem.
+
 ### Verbose Logging
 
 Enable debug (or trace even) logging to troubleshoot issues:

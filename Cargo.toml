@@ -17,7 +17,6 @@ rust-version = "1.93"
 apple-native-keyring-store = "0.2"
 arc-swap = "1.7"
 clap = { version = "4.5" }
-core-foundation = "0.10"
 humantime = "2.3"
 jemallocator = { package = "tikv-jemallocator", version = "0.6" }
 keyring-core = "0.7"
@@ -34,8 +33,6 @@ rand = "0.10"
 rustls-platform-verifier = "0.6"
 safechain-proxy-lib = { path = "./proxy-lib" }
 secrecy = "0.10"
-security-framework = "3.6"
-security-framework-sys = "2.14"
 serde = "1.0"
 serde_html_form = "0.4"
 serde_json = "1"
@@ -49,7 +46,7 @@ windows-native-keyring-store = "0.5"
 
 [workspace.dependencies.rama]
 git = "https://github.com/plabayo/rama"
-rev = "edd51d9fe72a620a53ea19f648e49b1d7c77b256"
+rev = "0753178d41c9f3b634b74ea7164fa7a0e313b5af"
 
 [profile.release]
 strip = true

@@ -13,13 +13,10 @@ crate-type = ["staticlib"]
 [features]
 
 [target.'cfg(target_os = "macos")'.dependencies]
-core-foundation = { workspace = true }
 jemallocator = { workspace = true }
 moka = { workspace = true }
 rustls-platform-verifier = { workspace = true }
 safechain-proxy-lib = { workspace = true, features = ["apple-networkextension"] }
-security-framework = { workspace = true }
-security-framework-sys = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { version = "1.48", features = ["net", "io-std"] }
