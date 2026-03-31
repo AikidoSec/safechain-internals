@@ -15,7 +15,7 @@ const BLOCK_REASON_INFO: Record<BlockReason, { title: string; description: strin
     description: "This package has been explicitly blocked by policy.",
   },
   block_all: {
-    title: "All installs blocked",
+    title: "All Installs Blocked",
     description: "All package installations are currently blocked by policy.",
   },
   request_install: {
@@ -27,7 +27,7 @@ const BLOCK_REASON_INFO: Record<BlockReason, { title: string; description: strin
 const BLOCK_REASON_LABEL: Record<BlockReason, string> = {
   malware: "Malware",
   rejected: "Rejected by policy",
-  block_all: "All installs blocked",
+  block_all: "All Installs Blocked",
   request_install: "Approval required",
 };
 
@@ -160,7 +160,7 @@ export function EventDetail() {
                 <path d="M22 4L12 14.01l-3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
-            <h2>Request sent</h2>
+            <h2>Request Sent</h2>
             <p className="subtitle">
               Your access request for <strong>{event.artifact.display_name ?? event.artifact.identifier}</strong> has been submitted.
             </p>
@@ -197,7 +197,7 @@ export function EventDetail() {
             className="button-brand button--tertiary button--normal button--rounded"
             onClick={() => navigate("/events")}
           >
-            {canRequest ? "Cancel" : "Back to list"}
+            {canRequest ? "Back" : "Back to list"}
           </button>
           {canRequest && (
             <button
