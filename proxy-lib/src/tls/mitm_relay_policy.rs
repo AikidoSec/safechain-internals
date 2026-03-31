@@ -238,7 +238,7 @@ where
                     .record_tls_termination_failed(TlsTerminationFailedEvent {
                         ts_ms: rama::utils::time::now_unix_ms(),
                         sni: sni.clone(),
-                        app: source_app_bundle_id,
+                        app: source_app_bundle_id.clone(),
                         error: err.to_string(),
                     });
 
