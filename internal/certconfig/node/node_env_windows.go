@@ -1,6 +1,6 @@
 //go:build windows
 
-package certconfig
+package node
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
 
-func runNodeExtraCACertsLookup(ctx context.Context) (string, error) {
+func runExtraCACertsLookup(ctx context.Context) (string, error) {
 	return platform.RunAsCurrentUser(ctx, "powershell", []string{
 		"-NoProfile",
 		"-NonInteractive",

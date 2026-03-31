@@ -19,7 +19,7 @@ func (s *Step) InstallName() string {
 }
 
 func (s *Step) InstallDescription() string {
-	return "Configures ecosystem-specific trust settings for npm, pip, and Firefox"
+	return "Configures ecosystem-specific trust settings for npm, pip, Firefox, and Docker"
 }
 
 func (s *Step) UninstallName() string {

@@ -1,6 +1,6 @@
 //go:build darwin
 
-package dockerca
+package docker
 
 import (
 	"bufio"

@@ -1,15 +1,15 @@
 //go:build windows
 
-package certconfig
+package pip
 
 import (
 	"strings"
 	"testing"
 )
 
-func TestRestoreWindowsPipEnvScriptRestoresRequestsBundle(t *testing.T) {
-	script := restoreWindowsPipEnvScript(pipCertSetting{
-		EnvVar: requestsCABundleEnvVar,
+func TestRestoreWindowsEnvScriptRestoresRequestsBundle(t *testing.T) {
+	script := restoreWindowsEnvScript(CertSetting{
+		EnvVar: RequestsCABundleEnvVar,
 		Path:   `C:\corp\bundle.pem`,
 	})
 

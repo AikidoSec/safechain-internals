@@ -3,6 +3,11 @@ package certconfig
 import (
 	"context"
 	"log"
+
+	"github.com/AikidoSec/safechain-internals/internal/certconfig/docker"
+	"github.com/AikidoSec/safechain-internals/internal/certconfig/firefox"
+	"github.com/AikidoSec/safechain-internals/internal/certconfig/node"
+	"github.com/AikidoSec/safechain-internals/internal/certconfig/pip"
 )
 
 type Configurator interface {
@@ -18,9 +23,10 @@ type CertConfig struct {
 func New() *CertConfig {
 	return &CertConfig{
 		configurators: []Configurator{
-			newNodeConfigurator(),
-			newPipConfigurator(),
-			newFirefoxConfigurator(),
+			node.New(),
+			pip.New(),
+			firefox.New(),
+			docker.New(),
 		},
 	}
 }

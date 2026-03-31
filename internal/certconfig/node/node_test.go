@@ -1,4 +1,4 @@
-package certconfig
+package node
 
 import (
 	"context"
@@ -8,13 +8,13 @@ import (
 	"testing"
 )
 
-func TestEnsureOriginalNodeExtraCACertsFirstInstall(t *testing.T) {
+func TestEnsureOriginalExtraCACertsFirstInstall(t *testing.T) {
 	savedPath := filepath.Join(t.TempDir(), "original.txt")
 	lookup := func(_ context.Context) (string, error) {
 		return "/corporate/ca.pem", nil
 	}
 
-	got, err := ensureOriginalNodeExtraCACertsAt(context.Background(), savedPath, lookup)
+	got, err := ensureOriginalExtraCACertsAt(context.Background(), savedPath, lookup)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -31,11 +31,11 @@ func TestEnsureOriginalNodeExtraCACertsFirstInstall(t *testing.T) {
 	}
 }
 
-func TestEnsureOriginalNodeExtraCACertsFirstInstallNothingSet(t *testing.T) {
+func TestEnsureOriginalExtraCACertsFirstInstallNothingSet(t *testing.T) {
 	savedPath := filepath.Join(t.TempDir(), "original.txt")
 	lookup := func(_ context.Context) (string, error) { return "", nil }
 
-	got, err := ensureOriginalNodeExtraCACertsAt(context.Background(), savedPath, lookup)
+	got, err := ensureOriginalExtraCACertsAt(context.Background(), savedPath, lookup)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestEnsureOriginalNodeExtraCACertsFirstInstallNothingSet(t *testing.T) {
 	}
 }
 
-func TestEnsureOriginalNodeExtraCACertsReinstallSkipsLookup(t *testing.T) {
+func TestEnsureOriginalExtraCACertsReinstallSkipsLookup(t *testing.T) {
 	savedPath := filepath.Join(t.TempDir(), "original.txt")
 	if err := os.WriteFile(savedPath, []byte("/saved/ca.pem"), 0o600); err != nil {
 		t.Fatal(err)
@@ -61,7 +61,7 @@ func TestEnsureOriginalNodeExtraCACertsReinstallSkipsLookup(t *testing.T) {
 		return "/new-value/ca.pem", nil
 	}
 
-	got, err := ensureOriginalNodeExtraCACertsAt(context.Background(), savedPath, lookup)
+	got, err := ensureOriginalExtraCACertsAt(context.Background(), savedPath, lookup)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -73,13 +73,13 @@ func TestEnsureOriginalNodeExtraCACertsReinstallSkipsLookup(t *testing.T) {
 	}
 }
 
-func TestEnsureOriginalNodeExtraCACertsTrimsSavedWhitespace(t *testing.T) {
+func TestEnsureOriginalExtraCACertsTrimsSavedWhitespace(t *testing.T) {
 	savedPath := filepath.Join(t.TempDir(), "original.txt")
 	if err := os.WriteFile(savedPath, []byte("  /trimmed/ca.pem\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := ensureOriginalNodeExtraCACertsAt(context.Background(), savedPath, nil)
+	got, err := ensureOriginalExtraCACertsAt(context.Background(), savedPath, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -88,11 +88,11 @@ func TestEnsureOriginalNodeExtraCACertsTrimsSavedWhitespace(t *testing.T) {
 	}
 }
 
-func TestEnsureOriginalNodeExtraCACertsTrimsLookupWhitespace(t *testing.T) {
+func TestEnsureOriginalExtraCACertsTrimsLookupWhitespace(t *testing.T) {
 	savedPath := filepath.Join(t.TempDir(), "original.txt")
 	lookup := func(_ context.Context) (string, error) { return "  /padded/ca.pem\n", nil }
 
-	got, err := ensureOriginalNodeExtraCACertsAt(context.Background(), savedPath, lookup)
+	got, err := ensureOriginalExtraCACertsAt(context.Background(), savedPath, lookup)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -101,13 +101,13 @@ func TestEnsureOriginalNodeExtraCACertsTrimsLookupWhitespace(t *testing.T) {
 	}
 }
 
-func TestEnsureOriginalNodeExtraCACertsLookupError(t *testing.T) {
+func TestEnsureOriginalExtraCACertsLookupError(t *testing.T) {
 	savedPath := filepath.Join(t.TempDir(), "original.txt")
 	lookup := func(_ context.Context) (string, error) {
 		return "", errors.New("shell not found")
 	}
 
-	_, err := ensureOriginalNodeExtraCACertsAt(context.Background(), savedPath, lookup)
+	_, err := ensureOriginalExtraCACertsAt(context.Background(), savedPath, lookup)
 	if err == nil {
 		t.Fatal("expected error when lookup fails")
 	}

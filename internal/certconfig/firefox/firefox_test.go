@@ -1,4 +1,4 @@
-package certconfig
+package firefox
 
 import (
 	"os"
@@ -8,18 +8,18 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
 
-func TestIsFirefoxProfileDir(t *testing.T) {
+func TestIsProfileDir(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "prefs.js"), []byte("// prefs"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if !isFirefoxProfileDir(dir) {
+	if !isProfileDir(dir) {
 		t.Fatal("expected prefs.js to mark directory as Firefox profile")
 	}
 }
 
-func TestFirefoxProfilesFiltersDirectories(t *testing.T) {
+func TestProfilesFiltersDirectories(t *testing.T) {
 	cfg := platform.GetConfig()
 	originalHome := cfg.HomeDir
 	t.Cleanup(func() {
@@ -29,9 +29,9 @@ func TestFirefoxProfilesFiltersDirectories(t *testing.T) {
 	home := t.TempDir()
 	cfg.HomeDir = home
 
-	root := firefoxProfilesRoot()
+	root := profilesRoot()
 	if root == "" {
-		t.Skip("unsupported OS for firefoxProfilesRoot")
+		t.Skip("unsupported OS for profilesRoot")
 	}
 
 	valid := filepath.Join(root, "abcd1234.default-release")
@@ -47,7 +47,7 @@ func TestFirefoxProfilesFiltersDirectories(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := firefoxProfiles()
+	got := profiles()
 	if len(got) != 1 {
 		t.Fatalf("expected 1 Firefox profile, got %d (%v)", len(got), got)
 	}

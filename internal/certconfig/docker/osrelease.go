@@ -1,4 +1,4 @@
-package dockerca
+package docker
 
 import "strings"
 
