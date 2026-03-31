@@ -107,7 +107,7 @@ func parseSavedPipCertSetting(data []byte) (pipCertSetting, error) {
 }
 
 func resolvePipBaseCACertBundle(ctx context.Context, original string) (string, error) {
-	return resolvePipBaseCACertBundleAt(ctx, original, findCertifiCABundle)
+	return resolvePipBaseCACertBundleAt(ctx, original, findSystemPipCABundle)
 }
 
 func resolvePipBaseCACertBundleAt(
