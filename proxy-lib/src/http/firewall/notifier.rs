@@ -72,7 +72,7 @@ impl From<&BlockedEvent> for DedupKey {
 pub struct EventNotifier {
     exec: Executor,
     client: BoxService<Request, Response, OpaqueError>,
-    reporting_endpoint: Uri,
+    reporting_endpoint: String,
     limit: Arc<Semaphore>,
     dedup: DedupCache,
 }
@@ -97,8 +97,7 @@ impl EventNotifier {
         let reporting_endpoint = reporting_endpoint
             .to_string()
             .trim_end_matches('/')
-            .parse::<Uri>()
-            .context("trimmed reporting_endpoint should be a valid Uri")?;
+            .to_owned();
         Ok(Self {
             exec,
             client,
@@ -139,7 +138,7 @@ impl EventNotifier {
 
     fn spawn_event_task<F, Fut>(&self, f: F)
     where
-        F: FnOnce(BoxService<Request, Response, OpaqueError>, Uri) -> Fut + Send + 'static,
+        F: FnOnce(BoxService<Request, Response, OpaqueError>, String) -> Fut + Send + 'static,
         Fut: Future<Output = ()> + Send + 'static,
     {
         self.exec.spawn_task({
@@ -179,7 +178,7 @@ async fn acquire_concurrency_guard<'a>(
 
 async fn send_blocked_event(
     client: BoxService<Request, Response, OpaqueError>,
-    reporting_endpoint: Uri,
+    reporting_endpoint: String,
     event: BlockedEvent,
 ) {
     tracing::debug!(
@@ -195,7 +194,7 @@ async fn send_blocked_event(
 
 async fn send_min_package_age_event(
     client: BoxService<Request, Response, OpaqueError>,
-    reporting_endpoint: Uri,
+    reporting_endpoint: String,
     event: MinPackageAgeEvent,
 ) {
     tracing::debug!(
@@ -211,7 +210,7 @@ async fn send_min_package_age_event(
 
 async fn send_tls_termination_failed_event(
     client: BoxService<Request, Response, OpaqueError>,
-    reporting_endpoint: Uri,
+    reporting_endpoint: String,
     event: TlsTerminationFailedEvent,
 ) {
     let url = format!("{}/events/tls-termination-failed", reporting_endpoint);
@@ -221,7 +220,7 @@ async fn send_tls_termination_failed_event(
 
 async fn send_event<T: serde::Serialize>(
     client: BoxService<Request, Response, OpaqueError>,
-    reporting_endpoint: Uri,
+    reporting_endpoint: String,
     event: T,
     url: &str,
 ) {
