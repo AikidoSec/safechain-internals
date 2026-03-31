@@ -1,4 +1,4 @@
-package certconfig
+package node
 
 import (
 	"context"
@@ -7,44 +7,45 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/AikidoSec/safechain-internals/internal/certconfig/shared"
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
 
-type nodeTrustConfigurator interface {
+type trustConfigurator interface {
 	Install(context.Context) error
 	Uninstall(context.Context) error
 }
 
-type nodeConfigurator struct {
-	trust nodeTrustConfigurator
+type Configurator struct {
+	trust trustConfigurator
 }
 
-func newNodeConfigurator() Configurator {
-	return &nodeConfigurator{
-		trust: newNodeTrustConfigurator(combinedCaBundlePath()),
+func New() *Configurator {
+	return &Configurator{
+		trust: newTrustConfigurator(shared.CombinedCaBundlePath()),
 	}
 }
 
-func (c *nodeConfigurator) Name() string {
+func (c *Configurator) Name() string {
 	return "node"
 }
 
-// originalNodeExtraCACertsPath is where we persist the user's pre-existing
+// originalExtraCACertsPath is where we persist the user's pre-existing
 // NODE_EXTRA_CA_CERTS value so it can be preserved across reinstalls and
 // restored on uninstall.
-func originalNodeExtraCACertsPath() string {
+func originalExtraCACertsPath() string {
 	return filepath.Join(platform.GetRunDir(), "endpoint-protection-node-original-extra-ca-certs.txt")
 }
 
-// ensureOriginalNodeExtraCACerts returns the user's pre-existing NODE_EXTRA_CA_CERTS
+// ensureOriginalExtraCACerts returns the user's pre-existing NODE_EXTRA_CA_CERTS
 // value, saving it to disk on first install. On reinstall the saved value is
 // returned directly — avoiding a live shell lookup that would return our own
 // combined bundle path instead of the user's original.
-func ensureOriginalNodeExtraCACerts(ctx context.Context) (string, error) {
-	return ensureOriginalNodeExtraCACertsAt(ctx, originalNodeExtraCACertsPath(), runNodeExtraCACertsLookup)
+func ensureOriginalExtraCACerts(ctx context.Context) (string, error) {
+	return ensureOriginalExtraCACertsAt(ctx, originalExtraCACertsPath(), runExtraCACertsLookup)
 }
 
-func ensureOriginalNodeExtraCACertsAt(
+func ensureOriginalExtraCACertsAt(
 	ctx context.Context,
 	savedPath string,
 	lookup func(context.Context) (string, error),
@@ -65,21 +66,21 @@ func ensureOriginalNodeExtraCACertsAt(
 	return original, nil
 }
 
-func (c *nodeConfigurator) Install(ctx context.Context) error {
-	original, err := ensureOriginalNodeExtraCACerts(ctx)
+func (c *Configurator) Install(ctx context.Context) error {
+	original, err := ensureOriginalExtraCACerts(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := ensureCombinedCABundle(original); err != nil {
+	if _, err := shared.EnsureCombinedCABundle(original); err != nil {
 		return err
 	}
 	return c.trust.Install(ctx)
 }
 
-func (c *nodeConfigurator) Uninstall(ctx context.Context) error {
+func (c *Configurator) Uninstall(ctx context.Context) error {
 	if err := c.trust.Uninstall(ctx); err != nil {
 		return err
 	}
-	_ = os.Remove(originalNodeExtraCACertsPath())
-	return removeCombinedCABundle()
+	_ = os.Remove(originalExtraCACertsPath())
+	return shared.RemoveCombinedCABundle()
 }

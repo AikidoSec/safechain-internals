@@ -14,7 +14,7 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
 	"github.com/AikidoSec/safechain-internals/internal/device"
-	"github.com/AikidoSec/safechain-internals/internal/dockerca"
+	"github.com/AikidoSec/safechain-internals/internal/certconfig/docker"
 	"github.com/AikidoSec/safechain-internals/internal/ingress"
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
@@ -296,7 +296,7 @@ func (d *Daemon) runDockerCALoop(ctx context.Context) {
 			cycleErr = runDockerCACycle(quietCtx)
 		} else {
 			// Docker was running but went offline. Probe the daemon.
-			cycleErr = dockerca.ProbeDockerDaemon(quietCtx)
+			cycleErr = docker.ProbeDockerDaemon(quietCtx)
 		}
 		if ctx.Err() != nil {
 			return
@@ -320,10 +320,10 @@ func (d *Daemon) runDockerCALoop(ctx context.Context) {
 }
 
 func runDockerCACycle(ctx context.Context) error {
-	if err := dockerca.InstallCAOnRunningContainers(ctx); err != nil {
+	if err := docker.InstallDockerCA(ctx); err != nil {
 		return err
 	}
-	return dockerca.WatchContainerStarts(ctx)
+	return docker.WatchContainerStarts(ctx)
 }
 
 func (d *Daemon) printDaemonStatus() {

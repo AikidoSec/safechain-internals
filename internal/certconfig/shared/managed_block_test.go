@@ -1,4 +1,4 @@
-package certconfig
+package shared
 
 import (
 	"os"
@@ -13,9 +13,9 @@ func TestWriteManagedBlockReplacesExistingBlock(t *testing.T) {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), "config.txt")
-	format := managedBlockFormat{
-		startMarker: "# start",
-		endMarker:   "# end",
+	format := ManagedBlockFormat{
+		StartMarker: "# start",
+		EndMarker:   "# end",
 	}
 
 	initial := strings.Join([]string{
@@ -30,8 +30,8 @@ func TestWriteManagedBlockReplacesExistingBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := writeManagedBlock(path, "new", 0o644, format); err != nil {
-		t.Fatalf("writeManagedBlock failed: %v", err)
+	if err := WriteManagedBlock(path, "new", 0o644, format); err != nil {
+		t.Fatalf("WriteManagedBlock failed: %v", err)
 	}
 
 	gotBytes, err := os.ReadFile(path)
@@ -53,9 +53,9 @@ func TestWriteManagedBlockReplacesExistingBlock(t *testing.T) {
 
 func TestWriteManagedBlockPreservesCRLF(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.txt")
-	format := managedBlockFormat{
-		startMarker: "# start",
-		endMarker:   "# end",
+	format := ManagedBlockFormat{
+		StartMarker: "# start",
+		EndMarker:   "# end",
 	}
 
 	initial := "before\r\nafter\r\n"
@@ -63,8 +63,8 @@ func TestWriteManagedBlockPreservesCRLF(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := writeManagedBlock(path, "line1\nline2", 0o644, format); err != nil {
-		t.Fatalf("writeManagedBlock failed: %v", err)
+	if err := WriteManagedBlock(path, "line1\nline2", 0o644, format); err != nil {
+		t.Fatalf("WriteManagedBlock failed: %v", err)
 	}
 
 	gotBytes, err := os.ReadFile(path)
@@ -80,9 +80,9 @@ func TestWriteManagedBlockPreservesCRLF(t *testing.T) {
 
 func TestRemoveManagedBlockRemovesOnlyManagedSection(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.txt")
-	format := managedBlockFormat{
-		startMarker: "# start",
-		endMarker:   "# end",
+	format := ManagedBlockFormat{
+		StartMarker: "# start",
+		EndMarker:   "# end",
 	}
 
 	initial := strings.Join([]string{
@@ -97,7 +97,7 @@ func TestRemoveManagedBlockRemovesOnlyManagedSection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := utils.RemoveManagedBlock(path, 0o644, format.startMarker, format.endMarker); err != nil {
+	if err := utils.RemoveManagedBlock(path, 0o644, format.StartMarker, format.EndMarker); err != nil {
 		t.Fatalf("RemoveManagedBlock failed: %v", err)
 	}
 

@@ -1,4 +1,4 @@
-package certconfig
+package shared
 
 import (
 	"crypto/rand"
@@ -16,14 +16,14 @@ import (
 
 func TestReadAndValidatePEMBundleValidCertificate(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "bundle.pem")
-	pemData := mustCreateTestCertificatePEM(t, "test-cert")
+	pemData := MustCreateTestCertificatePEM(t, "test-cert")
 	if err := os.WriteFile(path, []byte(pemData), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := readAndValidatePEMBundle(path)
+	got, err := ReadAndValidatePEMBundle(path)
 	if err != nil {
-		t.Fatalf("readAndValidatePEMBundle failed: %v", err)
+		t.Fatalf("ReadAndValidatePEMBundle failed: %v", err)
 	}
 
 	if !strings.Contains(got, "BEGIN CERTIFICATE") {
@@ -37,7 +37,7 @@ func TestReadAndValidatePEMBundleRejectsNonPEMContent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := readAndValidatePEMBundle(path)
+	_, err := ReadAndValidatePEMBundle(path)
 	if err == nil {
 		t.Fatal("expected error for non-PEM content")
 	}
@@ -48,7 +48,7 @@ func TestReadAndValidatePEMBundleRejectsSymlink(t *testing.T) {
 	target := filepath.Join(dir, "target.pem")
 	link := filepath.Join(dir, "link.pem")
 
-	pemData := mustCreateTestCertificatePEM(t, "symlink-test")
+	pemData := MustCreateTestCertificatePEM(t, "symlink-test")
 	if err := os.WriteFile(target, []byte(pemData), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -56,13 +56,15 @@ func TestReadAndValidatePEMBundleRejectsSymlink(t *testing.T) {
 		t.Skipf("symlink creation not supported: %v", err)
 	}
 
-	_, err := readAndValidatePEMBundle(link)
+	_, err := ReadAndValidatePEMBundle(link)
 	if err == nil {
 		t.Fatal("expected error for symlinked bundle")
 	}
 }
 
-func mustCreateTestCertificatePEM(t *testing.T, commonName string) string {
+// MustCreateTestCertificatePEM creates a self-signed test certificate PEM.
+// Exported for use by sub-package tests.
+func MustCreateTestCertificatePEM(t *testing.T, commonName string) string {
 	t.Helper()
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)

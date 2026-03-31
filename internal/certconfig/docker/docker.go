@@ -1,4 +1,4 @@
-// Package dockerca installs the Safechain proxy CA certificate into running
+// Package docker installs the Safechain proxy CA certificate into running
 // Docker containers. The following Linux distributions are supported:
 //
 //   - Debian family (Debian, Ubuntu, Linux Mint, Pop!_OS, Kali): via
@@ -10,7 +10,7 @@
 //
 // Unsupported distributions (e.g. Arch, openSUSE, distroless/scratch images)
 // are detected and skipped with a warning log.
-package dockerca
+package docker
 
 import (
 	"bufio"
@@ -36,7 +36,29 @@ const (
 	installMethodRHEL    installMethod = "rhel"
 )
 
-func InstallCAOnRunningContainers(ctx context.Context) error {
+// Configurator implements the certconfig Configurator interface for Docker containers.
+type Configurator struct{}
+
+func New() *Configurator {
+	return &Configurator{}
+}
+
+func (c *Configurator) Name() string {
+	return "docker"
+}
+
+func (c *Configurator) Install(ctx context.Context) error {
+	return InstallDockerCA(ctx)
+}
+
+// Uninstall is a no-op: containers are ephemeral, and removing CAs from
+// running containers at teardown would be fragile and of little value.
+func (c *Configurator) Uninstall(_ context.Context) error {
+	log.Println("Docker CA: skipping uninstall (containers are ephemeral)")
+	return nil
+}
+
+func InstallDockerCA(ctx context.Context) error {
 	dockerBinary, err := findDockerBinary()
 	if err != nil {
 		log.Println("Docker CA: docker binary not found, skipping reconcile")

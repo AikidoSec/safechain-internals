@@ -1,6 +1,6 @@
 //go:build windows
 
-package certconfig
+package pip
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
 
-func runPipCertLookup(ctx context.Context) (pipCertSetting, error) {
+func runCertLookup(ctx context.Context) (CertSetting, error) {
 	out, err := platform.RunAsCurrentUser(ctx, "powershell", []string{
 		"-NoProfile",
 		"-NonInteractive",
@@ -16,7 +16,7 @@ func runPipCertLookup(ctx context.Context) (pipCertSetting, error) {
 		`if ($env:PIP_CERT) { [Console]::Write('PIP_CERT:' + $env:PIP_CERT) } elseif ($env:REQUESTS_CA_BUNDLE) { [Console]::Write('REQUESTS_CA_BUNDLE:' + $env:REQUESTS_CA_BUNDLE) } elseif ($env:SSL_CERT_FILE) { [Console]::Write('SSL_CERT_FILE:' + $env:SSL_CERT_FILE) }`,
 	})
 	if err != nil {
-		return pipCertSetting{}, err
+		return CertSetting{}, err
 	}
-	return parsePipCertSettingString(out), nil
+	return parseCertSettingString(out), nil
 }
