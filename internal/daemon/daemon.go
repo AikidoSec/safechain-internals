@@ -423,14 +423,6 @@ func (d *Daemon) heartbeat() error {
 
 	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.GetStatus())
 
-	if d.config.Token != "" {
-		if perms, err := cloud.FetchPermissions(d.ctx, d.config); err != nil {
-			log.Printf("Failed to fetch permissions: %v", err)
-		} else {
-			d.uiManager.NotifyPermissionsUpdated(perms)
-		}
-	}
-
 	d.runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() error {
 		d.printDaemonStatus()
 		return nil
