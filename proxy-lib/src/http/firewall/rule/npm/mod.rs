@@ -160,7 +160,7 @@ impl Rule for RuleNpm {
 }
 
 impl RuleNpm {
-    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::hours(48);
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 
     fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
         self.remote_endpoint_config

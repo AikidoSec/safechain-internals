@@ -31,7 +31,7 @@ pub(in crate::http::firewall) struct MinPackageAge {
     config: Option<RemoteEndpointConfig<NpmPackageNameFormatter>>,
 }
 
-const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::hours(48);
+const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 
 impl MinPackageAge {
     pub(in crate::http::firewall) fn new(

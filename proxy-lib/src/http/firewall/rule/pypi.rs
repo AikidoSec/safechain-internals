@@ -132,7 +132,7 @@ impl RulePyPI {
         })
     }
 
-    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::hours(48);
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 
     fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
         self.remote_endpoint_config
@@ -231,7 +231,9 @@ impl Rule for RulePyPI {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Defer => {}
-                decision => {
+                PackagePolicyDecision::BlockAll
+                | PackagePolicyDecision::Rejected
+                | PackagePolicyDecision::RequestInstall => {
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         package_info.into_blocked_artifact(),

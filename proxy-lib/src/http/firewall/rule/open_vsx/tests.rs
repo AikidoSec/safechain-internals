@@ -84,16 +84,16 @@ fn test_parse_extension_id_from_path() {
 }
 
 #[test]
-fn test_parse_extension_id_from_path_preserves_case() {
-    // Publisher and extension names preserve original case; matching happens case-insensitively at lookup
+fn test_parse_extension_id_from_path_normalizes_case() {
+    // Publisher and extension names are normalized to lowercase at construction time
     let test_cases = vec![
         (
             "/vscode/asset/RedHat/java/1.30.0/Microsoft.VisualStudio.Services.VSIXPackage",
-            Some("RedHat/java"),
+            Some("redhat/java"),
         ),
         (
             "/open-vsx-mirror/vscode/asset/Tomi/XaSnippets/2.13.1/Microsoft.VisualStudio.Services.VSIXPackage",
-            Some("Tomi/XaSnippets"),
+            Some("tomi/xasnippets"),
         ),
     ];
 

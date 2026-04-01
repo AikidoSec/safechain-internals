@@ -1,9 +1,12 @@
 use rama::{
-    http::{StatusCode, service::client::HttpClientExt as _},
+    http::{BodyExtractExt as _, StatusCode, service::client::HttpClientExt as _},
     telemetry::tracing,
 };
 
-use crate::test::e2e;
+use crate::{
+    client::mock_server::malware_list::{FRESH_MAVEN_PACKAGE_NAME, FRESH_MAVEN_PACKAGE_VERSION},
+    test::e2e,
+};
 
 #[tokio::test]
 #[tracing_test::traced_test]
@@ -160,4 +163,52 @@ async fn test_maven_package_blocked_by_endpoint_policy_request_installs() {
         .unwrap();
 
     assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_maven_new_package_blocked() {
+    let runtime = e2e::runtime::get().await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // com.example:fresh-artifact → group path com/example, artifact fresh-artifact
+    let (group_artifact, artifact_id) = FRESH_MAVEN_PACKAGE_NAME.split_once(':').unwrap();
+    let group_path = group_artifact.replace('.', "/");
+    let ver = FRESH_MAVEN_PACKAGE_VERSION;
+    let url = format!(
+        "https://repo.maven.apache.org/maven2/{group_path}/{artifact_id}/{ver}/{artifact_id}-{ver}.jar"
+    );
+
+    let resp = client.get(url).send().await.unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+
+    let payload = resp.try_into_string().await.unwrap();
+    assert!(
+        payload.to_lowercase().contains("24 hours") || payload.to_lowercase().contains("vetted"),
+        "expected blocked response to mention 24-hour vetting, got: {payload}"
+    );
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_maven_new_package_not_blocked_via_policy_cutoff() {
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-bypass-new-package-maven",
+        "mock_device",
+        &[],
+    )
+    .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    let (group_artifact, artifact_id) = FRESH_MAVEN_PACKAGE_NAME.split_once(':').unwrap();
+    let group_path = group_artifact.replace('.', "/");
+    let ver = FRESH_MAVEN_PACKAGE_VERSION;
+    let url = format!(
+        "https://repo.maven.apache.org/maven2/{group_path}/{artifact_id}/{ver}/{artifact_id}-{ver}.jar"
+    );
+
+    let resp = client.get(url).send().await.unwrap();
+
+    assert_eq!(StatusCode::OK, resp.status());
 }

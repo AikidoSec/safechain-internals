@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, str::FromStr as _};
 
 use rama::{
     Service,
@@ -15,7 +15,9 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::{EcosystemKey, PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::{
+        EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
+    },
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
@@ -23,8 +25,11 @@ use crate::{
     package::{
         malware_list::RemoteMalwareList,
         name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
+        released_packages_list::RemoteReleasedPackagesList,
+        version::PackageVersion,
     },
     storage::SyncCompactDataStorage,
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
 #[cfg(feature = "pac")]
@@ -36,6 +41,8 @@ type OpenVsxPackageNameFormatter = LowerCasePackageNameFormatter;
 type OpenVsxPackageName = LowerCasePackageName;
 
 type OpenVsxRemoteMalwareList = RemoteMalwareList<OpenVsxPackageNameFormatter>;
+type OpenVsxRemoteReleasedPackagesList = RemoteReleasedPackagesList<OpenVsxPackageNameFormatter>;
+type OpenVsxRemoteEndpointConfig = RemoteEndpointConfig<OpenVsxPackageNameFormatter>;
 type OpenVsxPolicyEvaluator = PolicyEvaluator<OpenVsxPackageNameFormatter>;
 
 const OPEN_VSX_PRODUCT_KEY: ArcStr = arcstr!("open_vsx");
@@ -44,6 +51,8 @@ const OPEN_VSX_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("open_vsx
 pub(in crate::http::firewall) struct RuleOpenVsx {
     target_domains: DomainMatcher,
     remote_malware_list: OpenVsxRemoteMalwareList,
+    remote_released_packages_list: OpenVsxRemoteReleasedPackagesList,
+    remote_endpoint_config: Option<OpenVsxRemoteEndpointConfig>,
     policy_evaluator: Option<OpenVsxPolicyEvaluator>,
 }
 
@@ -53,25 +62,38 @@ impl RuleOpenVsx {
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<OpenVsxPolicyEvaluator>,
+        remote_endpoint_config: Option<OpenVsxRemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_open_vsx.json"),
+            sync_storage.clone(),
+            remote_malware_list_https_client.clone(),
+            OpenVsxPackageNameFormatter::new(),
+        )
+        .await
+        .context("create remote malware list for open vsx block rule")?;
+
+        let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
+            guard.clone(),
+            Uri::from_static("https://malware-list.aikido.dev/releases/open_vsx.json"),
             sync_storage,
             remote_malware_list_https_client,
             OpenVsxPackageNameFormatter::new(),
         )
         .await
-        .context("create remote malware list for open vsx block rule")?;
+        .context("create remote released packages list for open vsx block rule")?;
 
         Ok(Self {
             target_domains: ["open-vsx.org", "marketplace.cursorapi.com"]
                 .into_iter()
                 .collect(),
             remote_malware_list,
+            remote_released_packages_list,
+            remote_endpoint_config,
             policy_evaluator,
         })
     }
@@ -130,11 +152,13 @@ impl Rule for RuleOpenVsx {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
-                PackagePolicyDecision::Defer => {}
-                decision => {
+                PackagePolicyDecision::Defer => (),
+                PackagePolicyDecision::BlockAll
+                | PackagePolicyDecision::Rejected
+                | PackagePolicyDecision::RequestInstall => {
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        Self::blocked_artifact(&extension),
+                        extension.into_blocked_artifact(),
                         super::block_reason_for(decision),
                     )));
                 }
@@ -149,8 +173,26 @@ impl Rule for RuleOpenVsx {
             );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&extension),
+                extension.into_blocked_artifact(),
                 BlockReason::Malware,
+            )));
+        }
+
+        let cutoff_ts = self.get_package_age_cutoff_ts();
+        if self.remote_released_packages_list.is_recently_released(
+            &extension.extension_id,
+            extension.version.as_ref(),
+            cutoff_ts,
+        ) {
+            tracing::debug!(
+                http.url.path = %path,
+                package = %extension,
+                "blocked Open VSX extension install: package released too recently"
+            );
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
+                req,
+                extension.into_blocked_artifact(),
+                BlockReason::NewPackage,
             )));
         }
 
@@ -165,13 +207,15 @@ impl Rule for RuleOpenVsx {
 }
 
 impl RuleOpenVsx {
-    fn blocked_artifact(extension: &OpenVsxExtensionId) -> Artifact {
-        Artifact {
-            product: OPEN_VSX_PRODUCT_KEY,
-            identifier: extension.extension_id.as_arcstr(),
-            display_name: None,
-            version: None,
-        }
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(1);
+
+    fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
+        self.remote_endpoint_config
+            .as_ref()
+            .map(|c| {
+                c.get_package_age_cutoff_ts(&OPEN_VSX_ECOSYSTEM_KEY, Self::DEFAULT_MIN_PACKAGE_AGE)
+            })
+            .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 
     fn is_package_listed_as_malware(&self, extension: &OpenVsxExtensionId) -> bool {
@@ -200,17 +244,18 @@ impl RuleOpenVsx {
 
         let first = it.next()?;
 
-        // Pattern: vscode/asset/{publisher}/{extension}/...
+        // Pattern: vscode/asset/{publisher}/{extension}/{version}/...
         if first.eq_ignore_ascii_case("vscode") {
             let second = it.next()?;
             if second.eq_ignore_ascii_case("asset") {
                 let publisher = it.next()?;
                 let extension = it.next()?;
-                return Some(OpenVsxExtensionId::new(publisher, extension));
+                let version = it.next();
+                return Some(OpenVsxExtensionId::new(publisher, extension, version));
             }
         }
 
-        // Pattern: open-vsx-mirror/vscode/asset/{publisher}/{extension}/...
+        // Pattern: open-vsx-mirror/vscode/asset/{publisher}/{extension}/{version}/...
         if first.eq_ignore_ascii_case("open-vsx-mirror") {
             let second = it.next()?;
             if second.eq_ignore_ascii_case("vscode") {
@@ -218,7 +263,8 @@ impl RuleOpenVsx {
                 if third.eq_ignore_ascii_case("asset") {
                     let publisher = it.next()?;
                     let extension = it.next()?;
-                    return Some(OpenVsxExtensionId::new(publisher, extension));
+                    let version = it.next();
+                    return Some(OpenVsxExtensionId::new(publisher, extension, version));
                 }
             }
         }
@@ -229,12 +275,30 @@ impl RuleOpenVsx {
 
 struct OpenVsxExtensionId {
     extension_id: OpenVsxPackageName,
+    version: Option<PackageVersion>,
 }
 
 impl OpenVsxExtensionId {
-    fn new(publisher: &str, extension: &str) -> OpenVsxExtensionId {
+    fn new(publisher: &str, extension: &str, version_str: Option<&str>) -> OpenVsxExtensionId {
         Self {
             extension_id: OpenVsxPackageName::from(format_smolstr!("{publisher}/{extension}")),
+            version: version_str.map(|s| {
+                let Ok(version) = PackageVersion::from_str(s);
+                version
+            }),
+        }
+    }
+
+    fn into_blocked_artifact(self) -> Artifact {
+        let Self {
+            extension_id,
+            version,
+        } = self;
+        Artifact {
+            product: OPEN_VSX_PRODUCT_KEY,
+            identifier: extension_id.into_arcstr(),
+            display_name: None,
+            version,
         }
     }
 }

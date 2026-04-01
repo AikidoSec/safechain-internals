@@ -215,6 +215,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     lowercase_policy_evaluator.clone(),
+                    lowercase_remote_endpoint_config.clone(),
                 )
                 .await
                 .context("create block rule: maven")?
@@ -224,6 +225,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     lowercase_policy_evaluator,
+                    lowercase_remote_endpoint_config.clone(),
                 )
                 .await
                 .context("create block rule: open vsx")?
