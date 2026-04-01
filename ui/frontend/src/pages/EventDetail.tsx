@@ -20,7 +20,7 @@ const BLOCK_REASON_INFO: Record<BlockReason, { title: string; description: strin
   },
   request_install: {
     title: "Request Access",
-    description: "You need to request access to install the following package.",
+    description: "You need to request access to install the following package. After requesting access, an admin of your Aikido workspace will be able to approve or reject this package.",
   },
 };
 
