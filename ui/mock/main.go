@@ -54,21 +54,28 @@ func seedData() ([]BlockEvent, []TlsEvent) {
 			ID:          "block-1",
 			TsMs:        now - 60_000,
 			Artifact:    Artifact{Product: "npm", Identifier: "evil-package", Version: "1.0.0", DisplayName: "evil-package"},
-			BlockReason: "vulnerable",
+			BlockReason: "malware",
 			Status:      "blocked",
 		},
 		{
 			ID:          "block-2",
 			TsMs:        now - 120_000,
 			Artifact:    Artifact{Product: "pip", Identifier: "shady-lib", Version: "0.3.1", DisplayName: "shady-lib"},
-			BlockReason: "policy",
+			BlockReason: "rejected",
 			Status:      "blocked",
 		},
 		{
 			ID:          "block-3",
 			TsMs:        now - 300_000,
 			Artifact:    Artifact{Product: "npm", Identifier: "typosquat-pkg", Version: "2.0.0", DisplayName: "typosquat-pkg"},
-			BlockReason: "vulnerable",
+			BlockReason: "block_all",
+			Status:      "blocked",
+		},
+		{
+			ID:          "block-4",
+			TsMs:        now - 45_000,
+			Artifact:    Artifact{Product: "npm", Identifier: "left-pad", Version: "1.3.0", DisplayName: "left-pad"},
+			BlockReason: "request_install",
 			Status:      "blocked",
 		},
 	}
@@ -93,12 +100,53 @@ func seedData() ([]BlockEvent, []TlsEvent) {
 	return blocks, tlsEvents
 }
 
+type EcosystemExceptions struct {
+	AllowedPackages  []string `json:"allowed_packages"`
+	RejectedPackages []string `json:"rejected_packages"`
+}
+
+type EcosystemPermissions struct {
+	BlockAllInstalls           bool                `json:"block_all_installs"`
+	RequestInstalls            bool                `json:"request_installs"`
+	MinimumAllowedAgeTimestamp int64               `json:"minimum_allowed_age_timestamp"`
+	Exceptions                 EcosystemExceptions `json:"exceptions"`
+}
+
+type PermissionsResponse struct {
+	PermissionGroup struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	} `json:"permission_group"`
+	Ecosystems map[string]EcosystemPermissions `json:"ecosystems"`
+}
+
+func seedPermissions() PermissionsResponse {
+	return PermissionsResponse{
+		PermissionGroup: struct {
+			ID   int    `json:"id"`
+			Name string `json:"name"`
+		}{ID: 5, Name: "Engineering"},
+		Ecosystems: map[string]EcosystemPermissions{
+			"npm": {
+				BlockAllInstalls:           false,
+				RequestInstalls:            true,
+				MinimumAllowedAgeTimestamp: 1740000000,
+				Exceptions: EcosystemExceptions{
+					AllowedPackages:  []string{"left-pad"},
+					RejectedPackages: []string{},
+				},
+			},
+		},
+	}
+}
+
 // ── server ───────────────────────────────────────────────────────────
 
 type server struct {
-	mu        sync.RWMutex
-	blocks    []BlockEvent
-	tlsEvents []TlsEvent
+	mu          sync.RWMutex
+	blocks      []BlockEvent
+	tlsEvents   []TlsEvent
+	permissions PermissionsResponse
 }
 
 func (s *server) writeJSON(w http.ResponseWriter, v any) {
@@ -150,14 +198,20 @@ func (s *server) handleGetTlsEvent(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
+func (s *server) handlePermissions(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	s.writeJSON(w, s.permissions)
+}
+
 func (s *server) handleRequestAccess(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, e := range s.blocks {
 		if e.ID == id {
-			s.blocks[i].Status = "pending"
-			log.Printf("mock: request-access for %s → status=pending", id)
+			s.blocks[i].Status = "request_pending"
+			log.Printf("mock: request-access for %s → status=request_pending", id)
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -167,7 +221,7 @@ func (s *server) handleRequestAccess(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	blocks, tlsEvents := seedData()
-	s := &server{blocks: blocks, tlsEvents: tlsEvents}
+	s := &server{blocks: blocks, tlsEvents: tlsEvents, permissions: seedPermissions()}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/version", s.handleVersion)
@@ -175,6 +229,7 @@ func main() {
 	mux.HandleFunc("GET /v1/events/{id}", s.handleGetEvent)
 	mux.HandleFunc("GET /v1/tls-events", s.handleListTlsEvents)
 	mux.HandleFunc("GET /v1/tls-events/{id}", s.handleGetTlsEvent)
+	mux.HandleFunc("GET /v1/permissions", s.handlePermissions)
 	mux.HandleFunc("POST /v1/events/{id}/request-access", s.handleRequestAccess)
 
 	addr := "127.0.0.1:7878"
