@@ -14,7 +14,9 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::{EcosystemKey, PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::{
+        EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
+    },
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
@@ -23,9 +25,11 @@ use crate::{
     package::{
         malware_list::RemoteMalwareList,
         name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
+        released_packages_list::RemoteReleasedPackagesList,
         version::{PackageVersion, PragmaticSemver},
     },
     storage::SyncCompactDataStorage,
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
 #[cfg(feature = "pac")]
@@ -35,6 +39,8 @@ type NugetPackageNameFormatter = LowerCasePackageNameFormatter;
 type NugetPackageName = LowerCasePackageName;
 
 type NugetRemoteMalwareList = RemoteMalwareList<NugetPackageNameFormatter>;
+type NugetRemoteReleasedPackageList = RemoteReleasedPackagesList<NugetPackageNameFormatter>;
+type NugetRemoteEndpointConfig = RemoteEndpointConfig<NugetPackageNameFormatter>;
 type NugetPolicyEvaluator = PolicyEvaluator<NugetPackageNameFormatter>;
 
 const NUGET_PRODUCT_KEY: ArcStr = arcstr!("nuget");
@@ -43,6 +49,8 @@ const NUGET_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("nuget");
 pub(in crate::http::firewall) struct RuleNuget {
     target_domains: DomainMatcher,
     remote_malware_list: NugetRemoteMalwareList,
+    remote_released_packages_list: NugetRemoteReleasedPackageList,
+    remote_endpoint_config: Option<NugetRemoteEndpointConfig>,
     policy_evaluator: Option<NugetPolicyEvaluator>,
 }
 
@@ -52,23 +60,36 @@ impl RuleNuget {
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<NugetPolicyEvaluator>,
+        remote_endpoint_config: Option<NugetRemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_nuget.json"),
-            sync_storage,
-            remote_malware_list_https_client,
+            sync_storage.clone(),
+            remote_malware_list_https_client.clone(),
             NugetPackageNameFormatter::new(),
         )
         .await
         .context("create remote malware list for nuget block rule")?;
 
+        let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
+            guard,
+            Uri::from_static("https://malware-list.aikido.dev/releases/nuget.json"),
+            sync_storage,
+            remote_malware_list_https_client,
+            NugetPackageNameFormatter::new(),
+        )
+        .await
+        .context("create remote released packages list for nuget block rule")?;
+
         Ok(Self {
             target_domains: ["api.nuget.org", "www.nuget.org"].into_iter().collect(),
             remote_malware_list,
+            remote_released_packages_list,
+            remote_endpoint_config,
             policy_evaluator,
         })
     }
@@ -131,7 +152,7 @@ impl Rule for RuleNuget {
                 decision => {
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        Self::blocked_artifact(&nuget_package),
+                        nuget_package.into_blocked_artifact(),
                         super::block_reason_for(decision),
                     )));
                 }
@@ -139,18 +160,36 @@ impl Rule for RuleNuget {
         }
 
         if self.is_package_listed_as_malware(&nuget_package) {
-            Ok(RequestAction::Block(BlockedRequest::blocked(
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&nuget_package),
+                nuget_package.into_blocked_artifact(),
                 BlockReason::Malware,
-            )))
-        } else {
-            tracing::debug!(
-                http.url.path = %path,
-                "Nuget package does not contain malware: passthrough"
-            );
-            Ok(RequestAction::Allow(req))
+            )));
         }
+
+        let cutoff_ts = self.get_package_age_cutoff_ts();
+        if self.remote_released_packages_list.is_recently_released(
+            &nuget_package.fully_qualified_name,
+            Some(&PackageVersion::Semver(nuget_package.version.clone())),
+            cutoff_ts,
+        ) {
+            tracing::info!(
+                http.url.path = %path,
+                package = %nuget_package,
+                "blocked nuget package download: package released too recently"
+            );
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
+                req,
+                nuget_package.into_blocked_artifact(),
+                BlockReason::NewPackage,
+            )));
+        }
+
+        tracing::debug!(
+            http.url.path = %path,
+            "Nuget package does not contain malware: passthrough"
+        );
+        Ok(RequestAction::Allow(req))
     }
 
     #[inline(always)]
@@ -169,13 +208,15 @@ impl Rule for RuleNuget {
 }
 
 impl RuleNuget {
-    fn blocked_artifact(nuget_package: &NugetPackage) -> Artifact {
-        Artifact {
-            product: NUGET_PRODUCT_KEY,
-            identifier: nuget_package.fully_qualified_name.as_arcstr(),
-            display_name: None,
-            version: Some(PackageVersion::Semver(nuget_package.version.clone())),
-        }
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(1);
+
+    fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
+        self.remote_endpoint_config
+            .as_ref()
+            .map(|c| {
+                c.get_package_age_cutoff_ts(&NUGET_ECOSYSTEM_KEY, Self::DEFAULT_MIN_PACKAGE_AGE)
+            })
+            .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 
     fn is_package_listed_as_malware(&self, nuget_package: &NugetPackage) -> bool {
@@ -259,6 +300,25 @@ impl NugetPackage {
             fully_qualified_name: NugetPackageName::from(name),
             version,
         }
+    }
+
+    fn into_blocked_artifact(self) -> Artifact {
+        let Self {
+            fully_qualified_name,
+            version,
+        } = self;
+        Artifact {
+            product: NUGET_PRODUCT_KEY,
+            identifier: fully_qualified_name.into_arcstr(),
+            display_name: None,
+            version: Some(PackageVersion::Semver(version)),
+        }
+    }
+}
+
+impl fmt::Display for NugetPackage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}@{}", self.fully_qualified_name, self.version)
     }
 }
 

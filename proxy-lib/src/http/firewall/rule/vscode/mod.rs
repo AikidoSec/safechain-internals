@@ -169,7 +169,7 @@ impl Rule for RuleVSCode {
                 decision => {
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        Self::blocked_artifact(&vscode_extension),
+                        vscode_extension.into_blocked_artifact(),
                         super::block_reason_for(decision),
                     )));
                 }
@@ -184,7 +184,7 @@ impl Rule for RuleVSCode {
             );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&vscode_extension),
+                vscode_extension.into_blocked_artifact(),
                 BlockReason::Malware,
             )));
         }
@@ -202,7 +202,7 @@ impl Rule for RuleVSCode {
             );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&vscode_extension),
+                vscode_extension.into_blocked_artifact(),
                 BlockReason::NewPackage,
             )));
         }
@@ -227,15 +227,6 @@ impl RuleVSCode {
                 c.get_package_age_cutoff_ts(&VSCODE_ECOSYSTEM_KEY, Self::DEFAULT_MIN_PACKAGE_AGE)
             })
             .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
-    }
-
-    fn blocked_artifact(vscode_extension: &VsCodeExtensionId) -> Artifact {
-        Artifact {
-            product: VSCODE_PRODUCT_KEY,
-            identifier: vscode_extension.extension_id.as_arcstr(),
-            display_name: None,
-            version: vscode_extension.version.clone(),
-        }
     }
 
     fn is_package_listed_as_malware(&self, vscode_extension: &VsCodeExtensionId) -> bool {
@@ -340,6 +331,19 @@ impl VsCodeExtensionId {
         Self {
             extension_id: new_vscode_package_name(&format_smolstr!("{publisher}.{extension}")),
             version: maybe_version,
+        }
+    }
+
+    fn into_blocked_artifact(self) -> Artifact {
+        let Self {
+            extension_id,
+            version,
+        } = self;
+        Artifact {
+            product: VSCODE_PRODUCT_KEY,
+            identifier: extension_id.into_arcstr(),
+            display_name: None,
+            version,
         }
     }
 }
