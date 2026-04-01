@@ -8,9 +8,7 @@ use rama::{
     net::address::Domain,
     telemetry::tracing,
     utils::{
-        str::{
-            arcstr::{ArcStr, arcstr},
-        },
+        str::arcstr::{ArcStr, arcstr},
         time::now_unix_ms,
     },
 };
