@@ -1,4 +1,4 @@
-export type BlockReason = "malware" | "rejected" | "block_all" | "request_install";
+export type BlockReason = "malware" | "rejected" | "block_all" | "request_install" | "new_package";
 
 export type EventStatus = "" | "blocked" | "request_pending" | "request_approved";
 

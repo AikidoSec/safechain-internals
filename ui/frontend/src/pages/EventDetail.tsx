@@ -23,6 +23,10 @@ const BLOCK_REASON_INFO: Record<BlockReason, { title: string; description: strin
     title: "Request Access",
     description: "You need to request access to install the following package. After requesting access, an admin of your Aikido workspace will be able to approve or reject this package.",
   },
+  new_package: {
+    title: "Package Too New",
+    description: "This package was blocked because it was published too recently and hasn't met the minimum package age policy. New packages need time to be vetted by the community before they can be installed.",
+  },
 };
 
 const BLOCK_REASON_LABEL: Record<BlockReason, string> = {
@@ -30,6 +34,7 @@ const BLOCK_REASON_LABEL: Record<BlockReason, string> = {
   rejected: "Rejected by policy",
   block_all: "All Installs Blocked",
   request_install: "Approval required",
+  new_package: "Too recently published",
 };
 
 function EventInfo({ event }: { event: BlockEvent }) {
