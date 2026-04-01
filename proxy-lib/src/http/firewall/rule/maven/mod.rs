@@ -11,17 +11,19 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig},
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
     },
     package::{
         malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
+        released_packages_list::{LowerCaseReleasedPackageFormatter, RemoteReleasedPackagesList},
         version::{PackageVersion, PragmaticSemver},
     },
     storage::SyncCompactDataStorage,
 };
+use rama::utils::time::now_unix_ms;
 
 #[cfg(feature = "pac")]
 use crate::http::firewall::pac::PacScriptGenerator;
@@ -34,6 +36,8 @@ mod test;
 pub(in crate::http::firewall) struct RuleMaven {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    remote_released_packages_list: RemoteReleasedPackagesList,
+    remote_endpoint_config: Option<RemoteEndpointConfig>,
     policy_evaluator: Option<PolicyEvaluator>,
 }
 
@@ -43,19 +47,30 @@ impl RuleMaven {
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<PolicyEvaluator>,
+        remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_maven.json"),
-            sync_storage,
-            remote_malware_list_https_client,
+            sync_storage.clone(),
+            remote_malware_list_https_client.clone(),
             LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for maven block rule")?;
+
+        let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
+            guard,
+            Uri::from_static("https://malware-list.aikido.dev/releases/maven.json"),
+            sync_storage,
+            remote_malware_list_https_client,
+            LowerCaseReleasedPackageFormatter,
+        )
+        .await
+        .context("create remote released packages list for maven block rule")?;
 
         Ok(Self {
             target_domains: [
@@ -67,6 +82,8 @@ impl RuleMaven {
             .into_iter()
             .collect(),
             remote_malware_list,
+            remote_released_packages_list,
+            remote_endpoint_config,
             policy_evaluator,
         })
     }
@@ -147,6 +164,25 @@ impl Rule for RuleMaven {
             )));
         }
 
+        let cutoff_secs = self.get_package_age_cutoff_secs();
+        let artifact_version = PackageVersion::Semver(artifact.version.clone());
+        if self.remote_released_packages_list.is_recently_released(
+            &artifact.fully_qualified_name,
+            Some(&artifact_version),
+            cutoff_secs,
+        ) {
+            tracing::info!(
+                http.url.path = %path,
+                package = %artifact.fully_qualified_name,
+                "blocked maven install: package released too recently"
+            );
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
+                req,
+                Self::blocked_artifact(&artifact),
+                BlockReason::NewPackage,
+            )));
+        }
+
         tracing::debug!("Maven url: {path} does not contain malware: passthrough");
         Ok(RequestAction::Allow(req))
     }
@@ -184,6 +220,20 @@ impl RuleMaven {
             display_name: None,
             version: Some(PackageVersion::Semver(artifact.version.clone())),
         }
+    }
+
+    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 48 * 3600;
+
+    fn get_package_age_cutoff_secs(&self) -> i64 {
+        let maybe_ts = self.remote_endpoint_config.as_ref().and_then(|c| {
+            c.get_ecosystem_config("maven")
+                .config()
+                .and_then(|cfg| cfg.minimum_allowed_age_timestamp)
+        });
+        if let Some(ts_secs) = maybe_ts {
+            return ts_secs;
+        }
+        (now_unix_ms() / 1000) - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
     }
 
     fn is_package_listed_as_malware(&self, artifact: &MavenArtifact) -> bool {

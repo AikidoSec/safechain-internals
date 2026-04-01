@@ -224,6 +224,16 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": []
             }
         }),
+        "policy-bypass-new-package-maven" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            // year ~2286 > released_on year ~2255 → is_recently_released returns false → not blocked
+            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
         _ => default_ecosystem_policy.clone(),
     };
 
