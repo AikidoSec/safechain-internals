@@ -146,7 +146,7 @@ impl RemoteReleasedPackagesList {
         version: Option<&PackageVersion>,
         cutoff_secs: i64,
     ) -> bool {
-        let key = package_name;
+        let key = package_name.trim().to_ascii_lowercase();
         let guard = self.trie.load();
         let Some(entries) = guard.get(key) else {
             return false;
