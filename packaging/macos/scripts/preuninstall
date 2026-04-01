@@ -5,7 +5,6 @@ set -e
 echo "Aikido Endpoint Protection Uninstaller - Pre-uninstall"
 
 LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.endpointprotection.plist"
-CHROME_MANAGED_PREFS_PLIST="/Library/Managed Preferences/com.google.Chrome.plist"
 
 # Stop and unload the daemon
 if launchctl list | grep -q "com.aikidosecurity.endpointprotection"; then
@@ -21,15 +20,6 @@ fi
 if [ -f "$LAUNCHDAEMON_PLIST" ]; then
     echo "Removing LaunchDaemon configuration..."
     rm -f "$LAUNCHDAEMON_PLIST"
-fi
-
-if [ -f "$CHROME_MANAGED_PREFS_PLIST" ]; then
-    echo "Removing Aikido Chrome managed policy..."
-    /usr/bin/defaults delete "$CHROME_MANAGED_PREFS_PLIST" QuicAllowed 2>/dev/null || true
-
-    if [ -f "$CHROME_MANAGED_PREFS_PLIST" ] && [ "$(/usr/bin/plutil -convert json -o - "$CHROME_MANAGED_PREFS_PLIST" 2>/dev/null | tr -d '[:space:]')" = "{}" ]; then
-        rm -f "$CHROME_MANAGED_PREFS_PLIST"
-    fi
 fi
 
 echo "Running Aikido Endpoint Protection teardown..."

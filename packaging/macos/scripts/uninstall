@@ -13,7 +13,6 @@ set -e
 INSTALL_DIR="/Library/Application Support/AikidoSecurity/EndpointProtection"
 LOGS_DIR="/Library/Logs/AikidoSecurity/EndpointProtection"
 LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.endpointprotection.plist"
-CHROME_MANAGED_PREFS_PLIST="/Library/Managed Preferences/com.google.Chrome.plist"
 DAEMON_LABEL="com.aikidosecurity.endpointprotection"
 BINARY="$INSTALL_DIR/bin/endpoint-protection"
 
@@ -70,14 +69,6 @@ echo "Removing installed files..."
 if [ -f "$LAUNCHDAEMON_PLIST" ]; then
     rm -f "$LAUNCHDAEMON_PLIST"
     echo "  ✓ Removed LaunchDaemon plist"
-fi
-
-if [ -f "$CHROME_MANAGED_PREFS_PLIST" ]; then
-    /usr/bin/defaults delete "$CHROME_MANAGED_PREFS_PLIST" QuicAllowed 2>/dev/null || true
-    if [ -f "$CHROME_MANAGED_PREFS_PLIST" ] && [ "$(/usr/bin/plutil -convert json -o - "$CHROME_MANAGED_PREFS_PLIST" 2>/dev/null | tr -d '[:space:]')" = "{}" ]; then
-        rm -f "$CHROME_MANAGED_PREFS_PLIST"
-    fi
-    echo "  ✓ Removed Aikido Chrome managed policy"
 fi
 
 if [ -d "$L4_APP" ]; then
