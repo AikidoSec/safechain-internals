@@ -324,6 +324,16 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": []
             }
         }),
+        "policy-bypass-new-package-chrome" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
+            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
         _ => default_ecosystem_policy.clone(),
     };
 
