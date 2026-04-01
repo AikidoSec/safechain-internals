@@ -56,6 +56,7 @@ fn init(config: Option<&apple_ne::ffi::tproxy::TransparentProxyInitConfig>) -> b
 fn proxy_config() -> TransparentProxyConfig {
     TransparentProxyConfig::new().with_rules(vec![
         TransparentProxyNetworkRule::any().with_protocol(TransparentProxyRuleProtocol::Tcp),
+        TransparentProxyNetworkRule::any().with_protocol(TransparentProxyRuleProtocol::Udp),
     ])
 }
 
