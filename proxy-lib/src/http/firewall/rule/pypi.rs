@@ -10,19 +10,21 @@ use rama::{
     utils::{
         collections::smallvec::SmallVec,
         str::smol_str::{SmolStr, StrExt},
+        time::now_unix_ms,
     },
 };
 
 use rama::utils::str::arcstr::{ArcStr, arcstr};
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig},
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
     },
     package::{
         malware_list::{LowerCaseEntryFormatter, MalwareEntry, RemoteMalwareList},
+        released_packages_list::{PyPINormalizedReleasedPackageFormatter, RemoteReleasedPackagesList},
         version::PackageVersion,
     },
     storage::SyncCompactDataStorage,
@@ -51,6 +53,8 @@ impl PackageInfo {
 pub(in crate::http::firewall) struct RulePyPI {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    remote_released_packages_list: RemoteReleasedPackagesList,
+    remote_endpoint_config: Option<RemoteEndpointConfig>,
     policy_evaluator: Option<PolicyEvaluator>,
 }
 
@@ -60,19 +64,30 @@ impl RulePyPI {
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<PolicyEvaluator>,
+        remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_pypi.json"),
-            sync_storage,
-            remote_malware_list_https_client,
+            sync_storage.clone(),
+            remote_malware_list_https_client.clone(),
             LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for pypi block rule")?;
+
+        let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
+            guard.clone(),
+            Uri::from_static("https://malware-list.aikido.dev/releases/pypi.json"),
+            sync_storage,
+            remote_malware_list_https_client,
+            PyPINormalizedReleasedPackageFormatter,
+        )
+        .await
+        .context("create remote released packages list for pypi block rule")?;
 
         let target_domains = ["pypi.org", "files.pythonhosted.org", "pypi.python.org"]
             .into_iter()
@@ -81,8 +96,24 @@ impl RulePyPI {
         Ok(Self {
             target_domains,
             remote_malware_list,
+            remote_released_packages_list,
+            remote_endpoint_config,
             policy_evaluator,
         })
+    }
+
+    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 48 * 3600;
+
+    fn get_package_age_cutoff_secs(&self) -> i64 {
+        let maybe_ts = self.remote_endpoint_config.as_ref().and_then(|c| {
+            c.get_ecosystem_config("pypi")
+                .config()
+                .and_then(|cfg| cfg.minimum_allowed_age_timestamp)
+        });
+        if let Some(ts_secs) = maybe_ts {
+            return ts_secs;
+        }
+        (now_unix_ms()) / 1000 - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
     }
 
     fn is_blocked(&self, package_info: &PackageInfo) -> Result<bool, BoxError> {
@@ -202,6 +233,24 @@ impl Rule for RulePyPI {
                 req,
                 Self::blocked_artifact(&package_info),
                 BlockReason::Malware,
+            )));
+        }
+
+        let cutoff_secs = self.get_package_age_cutoff_secs();
+        if self.remote_released_packages_list.is_recently_released(
+            &package_info.name,
+            Some(&package_info.version),
+            cutoff_secs,
+        ) {
+            tracing::info!(
+                package = %package_info.name,
+                version = ?package_info.version,
+                "blocked PyPI package download: package released too recently"
+            );
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
+                req,
+                Self::blocked_artifact(&package_info),
+                BlockReason::NewPackage,
             )));
         }
 

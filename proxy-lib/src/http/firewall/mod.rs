@@ -187,7 +187,11 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     policy_evaluator.clone(),
-                    Some(MinPackageAge::new(notifier.clone(), remote_endpoint_config)),
+                    Some(MinPackageAge::new(
+                        notifier.clone(),
+                        remote_endpoint_config.clone(),
+                    )),
+                    remote_endpoint_config.clone(),
                 )
                 .await
                 .context("create block rule: npm")?
@@ -197,6 +201,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     policy_evaluator.clone(),
+                    remote_endpoint_config.clone(),
                 )
                 .await
                 .context("create block rule: pypi")?
