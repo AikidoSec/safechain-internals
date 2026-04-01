@@ -78,12 +78,6 @@ fn parse_update2_crx_url(req: &Request) -> Option<(ArcStr, PackageVersion)> {
         return None;
     }
 
-    tracing::debug!(
-        http.url.full = %uri,
-        chrome.extension_id = extension_id,
-        "Chrome update2/crx request matched extension install intent"
-    );
-
     Some((ArcStr::from(extension_id), PackageVersion::None))
 }
 
