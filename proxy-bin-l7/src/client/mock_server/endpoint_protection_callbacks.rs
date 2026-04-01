@@ -117,8 +117,8 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
         "policy-bypass-new-package-vscode" => json!({
             "block_all_installs": false,
             "request_installs": false,
-            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
-            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            // Cutoff set to far future
+            "minimum_allowed_age_timestamp": i64::MAX / 1000,
             "exceptions": {
                 "allowed_packages": [],
                 "rejected_packages": []

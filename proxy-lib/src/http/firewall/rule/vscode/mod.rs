@@ -7,13 +7,10 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
-    utils::{
-        str::{
-            self as str_utils,
-            arcstr::{ArcStr, arcstr},
-            smol_str::format_smolstr,
-        },
-        time::now_unix_ms,
+    utils::str::{
+        self as str_utils,
+        arcstr::{ArcStr, arcstr},
+        smol_str::format_smolstr,
     },
 };
 
@@ -32,6 +29,7 @@ use crate::{
         version::PackageVersion,
     },
     storage::SyncCompactDataStorage,
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
 #[cfg(feature = "pac")]
@@ -191,11 +189,11 @@ impl Rule for RuleVSCode {
             )));
         }
 
-        let cutoff_secs = self.get_package_age_cutoff_secs();
+        let cutoff_ts = self.get_package_age_cutoff_ts();
         if self.remote_released_packages_list.is_recently_released(
             &vscode_extension.extension_id,
             vscode_extension.version.as_ref(),
-            cutoff_secs,
+            cutoff_ts,
         ) {
             tracing::debug!(
                 http.url.path = %path,
@@ -220,9 +218,9 @@ impl Rule for RuleVSCode {
 }
 
 impl RuleVSCode {
-    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 24 * 3600;
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(1);
 
-    fn get_package_age_cutoff_secs(&self) -> i64 {
+    fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
         let maybe_ts = self
             .remote_endpoint_config
             .as_ref()
@@ -235,7 +233,7 @@ impl RuleVSCode {
         if let Some(ts_secs) = maybe_ts {
             return ts_secs;
         }
-        (now_unix_ms()) / 1000 - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
+        SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE
     }
 
     fn blocked_artifact(vscode_extension: &VsCodeExtensionId) -> Artifact {

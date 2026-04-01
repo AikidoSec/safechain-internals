@@ -1,4 +1,7 @@
-use crate::package::name_formatter::LowerCasePackageNameFormatter;
+use crate::{
+    package::name_formatter::LowerCasePackageNameFormatter,
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
+};
 
 use super::*;
 
@@ -33,7 +36,10 @@ fn test_parse_fetch_permissions_payload() {
         .unwrap();
     assert!(!pypi.block_all_installs);
     assert!(pypi.request_installs);
-    assert_eq!(pypi.minimum_allowed_age_timestamp, Some(1740172800));
+    assert_eq!(
+        pypi.minimum_allowed_age_timestamp,
+        Some(SystemTimestampMilliseconds::EPOCH + SystemDuration::seconds(1740172800))
+    );
     assert_eq!(pypi.exceptions.allowed_packages.len(), 2);
     assert_eq!(pypi.exceptions.rejected_packages.len(), 1);
 }

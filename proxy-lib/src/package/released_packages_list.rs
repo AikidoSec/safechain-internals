@@ -13,12 +13,15 @@ use serde::{Deserialize, Serialize};
 use crate::{
     package::{name_formatter::PackageNameFormatter, version::PackageVersion},
     storage::SyncCompactDataStorage,
-    utils::remote_resource::{self, RemoteResource, RemoteResourceSpec},
+    utils::{
+        remote_resource::{self, RemoteResource, RemoteResourceSpec},
+        time::{SystemDuration, SystemTimestampMilliseconds},
+    },
 };
 
-/// How long to keep entries in the trie (7 days).
+/// How long to keep entries in the trie.
 /// Entries older than this are irrelevant to the configured blocking window.
-const MAX_ENTRY_AGE_SECS: i64 = 7 * 24 * 3600;
+const MAX_ENTRY_AGE: SystemDuration = SystemDuration::days(7);
 
 pub struct RemoteReleasedPackagesList<F: PackageNameFormatter> {
     trie: RemoteResource<ReleasedPackagesTrie<F>>,
@@ -72,7 +75,7 @@ impl<F: PackageNameFormatter> RemoteReleasedPackagesList<F> {
         &self,
         package_name: &F::PackageName,
         version: Option<&PackageVersion>,
-        cutoff_secs: i64,
+        cutoff_ts: SystemTimestampMilliseconds,
     ) -> bool {
         let state_ref = self.trie.get();
         let Some(entries) = state_ref.get(package_name) else {
@@ -80,7 +83,7 @@ impl<F: PackageNameFormatter> RemoteReleasedPackagesList<F> {
         };
         entries
             .iter()
-            .any(|e| e.released_on_epoch_s > cutoff_secs && version.is_none_or(|v| *v == e.version))
+            .any(|e| e.released_on > cutoff_ts && version.is_none_or(|v| *v == e.version))
     }
 }
 
@@ -106,10 +109,10 @@ impl<F: PackageNameFormatter> RemoteResourceSpec for ReleasedPackagesRemoteResou
     }
 
     fn build_state(&self, payload: Self::Payload) -> Result<Self::State, BoxError> {
-        let now_secs = (rama::utils::time::now_unix_ms()) / 1000;
+        let now_ts = SystemTimestampMilliseconds::now();
         Ok(trie_from_released_packages_list(
             payload,
-            now_secs,
+            now_ts,
             &self.formatter,
         ))
     }
@@ -117,10 +120,10 @@ impl<F: PackageNameFormatter> RemoteResourceSpec for ReleasedPackagesRemoteResou
 
 fn trie_from_released_packages_list<F: PackageNameFormatter>(
     list: Vec<ReleasedPackageData>,
-    now_secs: i64,
+    now_ts: SystemTimestampMilliseconds,
     formatter: &F,
 ) -> ReleasedPackagesTrie<F> {
-    let cutoff = now_secs.saturating_sub(MAX_ENTRY_AGE_SECS);
+    let cutoff = now_ts - MAX_ENTRY_AGE;
     let mut trie = ReleasedPackagesTrie::<F>::new();
     for item in list {
         if item.released_on < cutoff {
@@ -129,7 +132,7 @@ fn trie_from_released_packages_list<F: PackageNameFormatter>(
         let key = formatter.format_package_name(&item.package_name);
         let entry = ReleasedEntry {
             version: item.version,
-            released_on_epoch_s: item.released_on,
+            released_on: item.released_on,
         };
         match trie.get_mut(&key) {
             Some(entries) => entries.push(entry),
@@ -150,7 +153,8 @@ fn trie_from_released_packages_list<F: PackageNameFormatter>(
 pub struct ReleasedPackageData {
     pub package_name: String,
     pub version: PackageVersion,
-    pub released_on: i64,
+    #[serde(with = "crate::utils::time::system_time_serde_seconds")]
+    pub released_on: SystemTimestampMilliseconds,
 }
 
 #[allow(type_alias_bounds)]
@@ -160,7 +164,7 @@ pub type ReleasedPackagesTrie<F: PackageNameFormatter> = Trie<F::PackageName, Ve
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleasedEntry {
     pub version: PackageVersion,
-    pub released_on_epoch_s: i64,
+    pub released_on: SystemTimestampMilliseconds,
 }
 
 #[cfg(test)]

@@ -1,5 +1,3 @@
-use std::time::SystemTime;
-
 use rama::{
     error::{BoxError, ErrorContext as _},
     http::{
@@ -11,7 +9,7 @@ use rama::{
         },
     },
     telemetry::tracing,
-    utils::{str::arcstr::ArcStr, time::now_unix_ms},
+    utils::str::arcstr::ArcStr,
 };
 use serde_json::json;
 
@@ -25,6 +23,7 @@ use crate::{
             rule::npm::{NPM_ECOSYSTEM_KEY, NpmPackageNameFormatter},
         },
     },
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
 pub(in crate::http::firewall) struct MinPackageAge {
@@ -32,7 +31,7 @@ pub(in crate::http::firewall) struct MinPackageAge {
     config: Option<RemoteEndpointConfig<NpmPackageNameFormatter>>,
 }
 
-const DEFAULT_MIN_PACKAGE_AGE_MS: i64 = 172_800_000; // 48 hours
+const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::hours(48);
 
 impl MinPackageAge {
     pub(in crate::http::firewall) fn new(
@@ -115,7 +114,7 @@ impl MinPackageAge {
 
         if let Some(notifier) = &self.notifier {
             let event = MinPackageAgeEvent {
-                ts_ms: now_unix_ms(),
+                ts_ms: SystemTimestampMilliseconds::now(),
                 artifact: Artifact {
                     product: "npm".into(),
                     identifier: package_name.clone(),
@@ -194,7 +193,10 @@ impl MinPackageAge {
         json
     }
 
-    fn get_versions_to_remove(json: &serde_json::Value, cutoff_unix_ms: i64) -> Vec<String> {
+    fn get_versions_to_remove(
+        json: &serde_json::Value,
+        cutoff_ts: SystemTimestampMilliseconds,
+    ) -> Vec<String> {
         if let Some(time_obj) = json.get("time").and_then(|t| t.as_object()) {
             let keys_to_remove: Vec<String> = time_obj
                 .iter()
@@ -207,11 +209,8 @@ impl MinPackageAge {
                     };
                     match humantime::parse_rfc3339(timestamp_str) {
                         Ok(published_at) => {
-                            let published_unix_ms = published_at
-                                .duration_since(SystemTime::UNIX_EPOCH)
-                                .map(|d| d.as_millis() as i64)
-                                .unwrap_or(0);
-                            published_unix_ms > cutoff_unix_ms
+                            let published_ts = SystemTimestampMilliseconds::from(published_at);
+                            published_ts > cutoff_ts
                         }
                         Err(err) => {
                             tracing::debug!(
@@ -229,7 +228,7 @@ impl MinPackageAge {
         }
     }
 
-    fn get_cutoff_timestamp(&self) -> i64 {
+    fn get_cutoff_timestamp(&self) -> SystemTimestampMilliseconds {
         let maybe_minimum_allowed_age_timestamp = self
             .config
             .as_ref()
@@ -240,12 +239,11 @@ impl MinPackageAge {
             })
             .flatten();
 
-        if let Some(timestamp_in_seconds) = maybe_minimum_allowed_age_timestamp {
-            // Needs to be converted from seconds to ms
-            return timestamp_in_seconds.saturating_mul(1000);
+        if let Some(timestamp) = maybe_minimum_allowed_age_timestamp {
+            return timestamp;
         }
 
-        now_unix_ms() - DEFAULT_MIN_PACKAGE_AGE_MS
+        SystemTimestampMilliseconds::now() - DEFAULT_MIN_PACKAGE_AGE
     }
 }
 

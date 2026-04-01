@@ -7,7 +7,9 @@ use std::{
 use rama::utils::str::arcstr::ArcStr;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::package::name_formatter::PackageNameFormatter;
+use crate::{
+    package::name_formatter::PackageNameFormatter, utils::time::SystemTimestampMilliseconds,
+};
 
 #[derive(Serialize, Deserialize)]
 #[serde(bound(
@@ -175,8 +177,8 @@ pub struct EcosystemConfig<F: PackageNameFormatter> {
     pub block_all_installs: bool,
     #[serde(default)]
     pub request_installs: bool,
-    #[serde(default)]
-    pub minimum_allowed_age_timestamp: Option<i64>,
+    #[serde(default, with = "crate::utils::time::option_system_time_serde_seconds")]
+    pub minimum_allowed_age_timestamp: Option<SystemTimestampMilliseconds>,
     #[serde(default)]
     pub exceptions: ExceptionLists<F>,
 }

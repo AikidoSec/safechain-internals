@@ -1,11 +1,9 @@
 use rama::net::address::Domain;
-use rama::utils::{
-    str::{arcstr::ArcStr, smol_str::SmolStr},
-    time::now_unix_ms,
-};
+use rama::utils::str::{arcstr::ArcStr, smol_str::SmolStr};
 use serde::{Deserialize, Serialize};
 
 use crate::package::version::PackageVersion;
+use crate::utils::time::SystemTimestampMilliseconds;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Artifact {
@@ -43,7 +41,7 @@ pub struct BlockedEventInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockedEvent {
-    pub ts_ms: i64,
+    pub ts_ms: SystemTimestampMilliseconds,
     pub artifact: Artifact,
     pub block_reason: BlockReason,
 }
@@ -51,7 +49,7 @@ pub struct BlockedEvent {
 impl BlockedEvent {
     pub fn from_info(info: BlockedEventInfo) -> Self {
         Self {
-            ts_ms: now_unix_ms(),
+            ts_ms: SystemTimestampMilliseconds::now(),
             artifact: info.artifact,
             block_reason: info.block_reason,
         }
@@ -60,7 +58,7 @@ impl BlockedEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MinPackageAgeEvent {
-    pub ts_ms: i64,
+    pub ts_ms: SystemTimestampMilliseconds,
     pub artifact: Artifact,
     pub suppressed_versions: Vec<PackageVersion>,
 }
