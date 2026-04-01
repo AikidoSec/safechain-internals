@@ -144,7 +144,6 @@ impl Firewall {
         )
         .await;
 
-        #[cfg(any(not(feature = "apple-networkextension"), feature = "test-utils", test))]
         let (_, chrome_policy_evaluator) = new_policy_evaluator(
             agent_identity.clone(),
             guard.clone(),
