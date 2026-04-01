@@ -7,11 +7,14 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
-    utils::str::arcstr::{ArcStr, arcstr},
+    utils::{
+        str::arcstr::{ArcStr, arcstr},
+        time::now_unix_ms,
+    },
 };
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig},
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
@@ -19,6 +22,7 @@ use crate::{
     },
     package::{
         malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
+        released_packages_list::{LowerCaseReleasedPackageFormatter, RemoteReleasedPackagesList},
         version::{PackageVersion, PragmaticSemver},
     },
     storage::SyncCompactDataStorage,
@@ -34,6 +38,8 @@ pub mod min_package_age;
 pub(in crate::http::firewall) struct RuleNpm {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    remote_released_packages_list: RemoteReleasedPackagesList,
+    remote_endpoint_config: Option<RemoteEndpointConfig>,
     maybe_min_package_age: Option<MinPackageAge>,
     policy_evaluator: Option<PolicyEvaluator>,
 }
@@ -45,23 +51,34 @@ impl RuleNpm {
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<PolicyEvaluator>,
         min_package_age: Option<MinPackageAge>,
+        remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
     {
         // NOTE: should you ever need to share a remote malware list between different rules,
         // you would simply create it outside of the rule, clone and pass it in.
         // These remoter malware list resources are cloneable and will share the list,
         // so it only gets updated once
         let remote_malware_list = RemoteMalwareList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_predictions.json"),
-            sync_storage,
-            remote_malware_list_https_client,
+            sync_storage.clone(),
+            remote_malware_list_https_client.clone(),
             LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for npm block rule")?;
+
+        let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
+            guard.clone(),
+            Uri::from_static("https://malware-list.aikido.dev/releases/npm.json"),
+            sync_storage,
+            remote_malware_list_https_client,
+            LowerCaseReleasedPackageFormatter,
+        )
+        .await
+        .context("create remote released packages list for npm block rule")?;
 
         Ok(Self {
             // NOTE: should you ever make this list dynamic we would stop hardcoding these target domains here...
@@ -73,6 +90,8 @@ impl RuleNpm {
             .into_iter()
             .collect(),
             remote_malware_list,
+            remote_released_packages_list,
+            remote_endpoint_config,
             maybe_min_package_age: min_package_age,
             policy_evaluator,
         })
@@ -129,6 +148,20 @@ impl Rule for RuleNpm {
 }
 
 impl RuleNpm {
+    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 48 * 3600;
+
+    fn get_package_age_cutoff_secs(&self) -> i64 {
+        let maybe_ts = self.remote_endpoint_config.as_ref().and_then(|c| {
+            c.get_ecosystem_config("npm")
+                .config()
+                .and_then(|cfg| cfg.minimum_allowed_age_timestamp)
+        });
+        if let Some(ts_secs) = maybe_ts {
+            return ts_secs;
+        }
+        (now_unix_ms()) / 1000 - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
+    }
+
     fn blocked_artifact(package_name: &str, version: &PragmaticSemver) -> Artifact {
         Artifact {
             product: arcstr!("npm"),
@@ -177,15 +210,32 @@ impl RuleNpm {
             let package_name = package.fully_qualified_name;
             let package_version = package.version;
             tracing::warn!("Blocked malware from {package_name}");
-            Ok(RequestAction::Block(BlockedRequest::blocked(
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
                 Self::blocked_artifact(package_name.as_str(), &package_version),
                 BlockReason::Malware,
-            )))
-        } else {
-            tracing::debug!("Npm url: {path} does not contain malware: passthrough");
-            Ok(RequestAction::Allow(req))
+            )));
         }
+
+        let cutoff_secs = self.get_package_age_cutoff_secs();
+        if self.remote_released_packages_list.is_recently_released(
+            &package.fully_qualified_name,
+            Some(&PackageVersion::Semver(package.version.clone())),
+            cutoff_secs,
+        ) {
+            tracing::info!(
+                package = %package.fully_qualified_name,
+                "blocked npm tarball download: package released too recently"
+            );
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
+                req,
+                Self::blocked_artifact(&package.fully_qualified_name, &package.version),
+                BlockReason::NewPackage,
+            )));
+        }
+
+        tracing::debug!("Npm url: {path} does not contain malware: passthrough");
+        Ok(RequestAction::Allow(req))
     }
 
     fn is_package_listed_as_malware(&self, npm_package: &NpmPackage) -> bool {

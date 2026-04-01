@@ -74,6 +74,16 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": []
             }
         }),
+        "policy-bypass-new-package-pypi" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
+            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
         _ => default_ecosystem_policy.clone(),
     };
 
@@ -164,6 +174,16 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": []
             }
         }),
+        "policy-bypass-new-package-npm" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
+            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
         _ => default_ecosystem_policy.clone(),
     };
 
@@ -204,6 +224,16 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": []
             }
         }),
+        "policy-bypass-new-package-maven" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            // year ~2286 > released_on year ~2255 → is_recently_released returns false → not blocked
+            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
         _ => default_ecosystem_policy.clone(),
     };
 
@@ -239,6 +269,16 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
             "block_all_installs": false,
             "request_installs": true,
             "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
+        "policy-bypass-new-package-nuget" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
+            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
             "exceptions": {
                 "allowed_packages": [],
                 "rejected_packages": []

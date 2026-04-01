@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import type { BlockEvent, BlockReason, PermissionsResponse } from "../types";
+import type { BlockEvent, BlockReason } from "../types";
 import { getEvent, requestAccess } from "../api";
 import { Events } from "@wailsio/runtime";
 import { getToolIcon } from "../constants";
@@ -23,6 +23,10 @@ const BLOCK_REASON_INFO: Record<BlockReason, { title: string; description: strin
     title: "Request Access",
     description: "You need to request access to install the following package. After requesting access, an admin of your Aikido workspace will be able to approve or reject this package.",
   },
+  new_package: {
+    title: "Package Too New",
+    description: "This package was blocked because it was published too recently and hasn't met the minimum package age policy. New packages need time to be vetted by the community before they can be installed.",
+  },
 };
 
 const BLOCK_REASON_LABEL: Record<BlockReason, string> = {
@@ -30,6 +34,7 @@ const BLOCK_REASON_LABEL: Record<BlockReason, string> = {
   rejected: "Rejected by policy",
   block_all: "All Installs Blocked",
   request_install: "Approval required",
+  new_package: "Too recently published",
 };
 
 function EventInfo({ event }: { event: BlockEvent }) {
@@ -91,20 +96,14 @@ export function EventDetail() {
   }, [loadEvent]);
 
   const [requestSent, setRequestSent] = useState(false);
-  const [approved, setApproved] = useState(false);
 
   // Listen for live permission pushes from daemon heartbeat
   useEffect(() => {
     const unsub = Events.On("permissions_updated", (ev: unknown) => {
-      const perms = (ev as { data?: PermissionsResponse }).data;
-      if (!perms || !event) return;
-      const ecosystem = perms.ecosystems[event.artifact.product];
-      if (ecosystem?.exceptions.allowed_packages.includes(event.artifact.identifier)) {
-        setApproved(true);
-      }
+      loadEvent();
     });
     return () => { unsub(); };
-  }, [event]);
+  }, [loadEvent]);
 
   const handleRequestAccess = async () => {
     if (!id) return;
@@ -164,7 +163,7 @@ export function EventDetail() {
   const canRequest = true;
   const info = BLOCK_REASON_INFO[event.block_reason];
 
-  if ((requestSent || event.status === "request_pending") && approved) {
+  if (event.status === "request_approved") {
     return (
       <div className="event-detail event-detail--full">
         <div className="request-success">
@@ -178,6 +177,36 @@ export function EventDetail() {
             <h2>Request Approved</h2>
             <p className="subtitle">
               Your access request for <strong>{event.artifact.display_name ?? event.artifact.identifier}</strong> has been approved. You can now install this package.
+            </p>
+          </div>
+          <div className="request-access-actions">
+            <button
+              type="button"
+              className="button-brand button--primary button--normal button--rounded"
+              onClick={() => navigate("/events")}
+            >
+              Back to list
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (event.status === "request_rejected") {
+    return (
+      <div className="event-detail event-detail--full">
+        <div className="request-success">
+          <div className="request-success-body">
+            <div className="request-success-icon request-rejected-icon" aria-hidden>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M15 9l-6 6M9 9l6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h2>Request Rejected</h2>
+            <p className="subtitle">
+              Your access request for <strong>{event.artifact.display_name ?? event.artifact.identifier}</strong> has been rejected. Contact your workspace admin for more details.
             </p>
           </div>
           <div className="request-access-actions">

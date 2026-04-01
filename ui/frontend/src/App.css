@@ -217,6 +217,10 @@ body {
   color: #166534;
 }
 
+.status-rejected {
+  background: var(--surface-red-20);
+  color: var(--surface-red-100);
+}
 
 .events-list .error,
 .events-list p {
@@ -495,6 +499,11 @@ body {
   color: #1e40af;
 }
 
+.reason-badge--new_package {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .request-success {
   flex: 1;
   display: flex;
@@ -519,6 +528,10 @@ body {
 
 .request-approved-icon {
   color: #16a34a;
+}
+
+.request-rejected-icon {
+  color: var(--surface-red-100, #dc2626);
 }
 
 .request-success h2 {

@@ -40,6 +40,18 @@ impl ReleasedPackageEntryFormatter for LowerCaseReleasedPackageFormatter {
     }
 }
 
+#[derive(Debug, Default, Clone)]
+pub(crate) struct PyPINormalizedReleasedPackageFormatter;
+impl ReleasedPackageEntryFormatter for PyPINormalizedReleasedPackageFormatter {
+    fn format(&self, entry: &ReleasedPackageData) -> String {
+        entry
+            .package_name
+            .trim()
+            .to_ascii_lowercase()
+            .replace('_', "-")
+    }
+}
+
 type ReleasedPackagesTrie = Trie<String, Vec<ReleasedEntry>>;
 
 #[derive(Clone)]

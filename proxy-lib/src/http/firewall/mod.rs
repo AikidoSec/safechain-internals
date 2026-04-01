@@ -168,6 +168,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     policy_evaluator.clone(),
+                    remote_endpoint_config.clone(),
                 )
                 .await
                 .context("create block rule: nuget")?
@@ -191,6 +192,7 @@ impl Firewall {
                         notifier.clone(),
                         remote_endpoint_config.clone(),
                     )),
+                    remote_endpoint_config.clone(),
                 )
                 .await
                 .context("create block rule: npm")?
@@ -200,6 +202,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     policy_evaluator.clone(),
+                    remote_endpoint_config.clone(),
                 )
                 .await
                 .context("create block rule: pypi")?
@@ -209,6 +212,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     policy_evaluator.clone(),
+                    remote_endpoint_config.clone(),
                 )
                 .await
                 .context("create block rule: maven")?
