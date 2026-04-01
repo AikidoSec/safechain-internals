@@ -4,12 +4,13 @@ use std::net::IpAddr;
 
 use rama::{
     net::{
-        address::{Host, HostWithPort},
+        address::Host,
         apple::networkextension::{
             self as apple_ne,
             tproxy::{
-                TransparentProxyConfig, TransparentProxyFlowMeta, TransparentProxyFlowProtocol,
-                TransparentProxyNetworkRule, TransparentProxyRuleProtocol,
+                TransparentProxyConfig, TransparentProxyFlowAction, TransparentProxyFlowMeta,
+                TransparentProxyFlowProtocol, TransparentProxyNetworkRule,
+                TransparentProxyRuleProtocol,
             },
         },
     },
@@ -57,43 +58,73 @@ fn proxy_config() -> TransparentProxyConfig {
     ])
 }
 
-fn should_intercept_flow(meta: &TransparentProxyFlowMeta) -> bool {
-    // we wish to intercept _only_ TCP traffic
-    // that has a remote endpoint (such that we can make a outbound/egress connection to it)
-    //
-    // (in future once we can support h3 we will also need to intercept (some) UDP traffic)
-    let should_intercept = meta.protocol == TransparentProxyFlowProtocol::Tcp
-        && should_intercept_remote_endpoint(meta.remote_endpoint.as_ref());
-
+fn flow_action(meta: &TransparentProxyFlowMeta) -> TransparentProxyFlowAction {
     tracing::debug!(
         protocol = ?meta.protocol,
         remote = ?meta.remote_endpoint,
-        should_intercept,
         local = ?meta.local_endpoint,
         app_bundle_id = ?meta.source_app_bundle_identifier,
         app_sign_id = ?meta.source_app_signing_identifier,
         "flow intercept decision: evaluating (rust callback entered)"
     );
 
-    should_intercept
+    if is_ip_remote_host_passthrough(meta) {
+        return TransparentProxyFlowAction::Passthrough;
+    }
+
+    match meta.protocol {
+        TransparentProxyFlowProtocol::Tcp => flow_action_tcp(meta),
+        TransparentProxyFlowProtocol::Udp => flow_action_udp(meta),
+    }
 }
 
-#[inline(always)]
-fn should_intercept_remote_endpoint(remote_endpoint: Option<&HostWithPort>) -> bool {
-    let Some(target) = remote_endpoint else {
-        return false;
+fn flow_action_tcp(meta: &TransparentProxyFlowMeta) -> TransparentProxyFlowAction {
+    tracing::debug!(
+        protocol = ?meta.protocol,
+        remote = ?meta.remote_endpoint,
+        local = ?meta.local_endpoint,
+        app_bundle_id = ?meta.source_app_bundle_identifier,
+        app_sign_id = ?meta.source_app_signing_identifier,
+        "flow action: tcp traffic: intercept all"
+    );
+    TransparentProxyFlowAction::Intercept
+}
+
+fn flow_action_udp(meta: &TransparentProxyFlowMeta) -> TransparentProxyFlowAction {
+    tracing::debug!(
+        protocol = ?meta.protocol,
+        remote = ?meta.remote_endpoint,
+        local = ?meta.local_endpoint,
+        app_bundle_id = ?meta.source_app_bundle_identifier,
+        app_sign_id = ?meta.source_app_signing_identifier,
+        "flow action: udp traffic: pass through"
+    );
+    TransparentProxyFlowAction::Passthrough
+}
+
+fn is_ip_remote_host_passthrough(meta: &TransparentProxyFlowMeta) -> bool {
+    let Some(target) = meta.remote_endpoint.as_ref() else {
+        tracing::debug!(
+            protocol = ?meta.protocol,
+            remote = ?meta.remote_endpoint,
+            local = ?meta.local_endpoint,
+            app_bundle_id = ?meta.source_app_bundle_identifier,
+            app_sign_id = ?meta.source_app_signing_identifier,
+            "remote host is missing: passthrough traffic"
+        );
+        return true;
     };
 
     match &target.host {
         Host::Name(_) => true,
-        Host::Address(IpAddr::V4(addr)) => !addr.is_loopback() && !addr.is_private(),
-        Host::Address(IpAddr::V6(addr)) => !addr.is_loopback() && !addr.is_unique_local(),
+        Host::Address(IpAddr::V4(addr)) => addr.is_loopback() || addr.is_private(),
+        Host::Address(IpAddr::V6(addr)) => addr.is_loopback() || addr.is_unique_local(),
     }
 }
 
 apple_ne::transparent_proxy_ffi! {
     init = init,
     config = proxy_config,
-    should_intercept_flow = should_intercept_flow,
+    flow_action = flow_action,
     tcp_service = self::tcp::try_new_service,
 }
