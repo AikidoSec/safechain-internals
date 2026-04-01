@@ -179,6 +179,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     policy_evaluator.clone(),
+                    remote_endpoint_config.clone(),
                 )
                 .await
                 .context("create block rule: chrome")?
