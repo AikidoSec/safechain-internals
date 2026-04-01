@@ -24,7 +24,9 @@ use crate::{
     },
     package::{
         malware_list::{LowerCaseEntryFormatter, MalwareEntry, RemoteMalwareList},
-        released_packages_list::{PyPINormalizedReleasedPackageFormatter, RemoteReleasedPackagesList},
+        released_packages_list::{
+            PyPINormalizedReleasedPackageFormatter, RemoteReleasedPackagesList,
+        },
         version::PackageVersion,
     },
     storage::SyncCompactDataStorage,
