@@ -115,35 +115,48 @@ where
                     "no cached remote resource found for endpoint (uri: {}); download fresh state",
                     uri
                 );
-                // #[cfg(not(feature = "apple-networkextension"))]
-                fetch_and_build_state(
-                    storage.clone(),
-                    filename.clone(),
-                    client.clone(),
-                    spec.clone(),
-                    None,
-                )
-                .await
-                .context("download new remote resource state")
-                .with_context_field("uri", || uri.clone())?
-                .context("new remote resource state not available")?
+                #[cfg(feature = "apple-networkextension")]
+                {
+                    Default::default()
+                }
+                #[cfg(not(feature = "apple-networkextension"))]
+                {
+                    fetch_and_build_state(
+                        storage.clone(),
+                        filename.clone(),
+                        client.clone(),
+                        spec.clone(),
+                        None,
+                    )
+                    .await
+                    .context("download new remote resource state")
+                    .with_context_field("uri", || uri.clone())?
+                    .context("new remote resource state not available")?
+                }
             }
             Err(err) => {
                 tracing::warn!(
                     "failed to load cached remote resource for endpoint (uri: {}); err = {err}",
                     uri
                 );
-                fetch_and_build_state(
-                    storage.clone(),
-                    filename.clone(),
-                    client.clone(),
-                    spec.clone(),
-                    None,
-                )
-                .await
-                .context("download new remote resource state")
-                .with_context_field("uri", || uri.clone())?
-                .context("new remote resource state not available")?
+                #[cfg(feature = "apple-networkextension")]
+                {
+                    Default::default()
+                }
+                #[cfg(not(feature = "apple-networkextension"))]
+                {
+                    fetch_and_build_state(
+                        storage.clone(),
+                        filename.clone(),
+                        client.clone(),
+                        spec.clone(),
+                        None,
+                    )
+                    .await
+                    .context("download new remote resource state")
+                    .with_context_field("uri", || uri.clone())?
+                    .context("new remote resource state not available")?
+                }
             }
         };
 
