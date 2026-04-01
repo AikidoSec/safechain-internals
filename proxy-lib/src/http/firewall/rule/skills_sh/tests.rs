@@ -1,29 +1,36 @@
 use super::*;
 
+use crate::package::name_formatter::PackageNameFormatter;
 use crate::package::{malware_list::ListDataEntry, version::PackageVersion};
 
 // --- SkillsShEntryFormatter ---
 
 #[test]
 fn test_formatter_strips_skill_name() {
-    let formatter = SkillsShEntryFormatter;
+    let formatter = SkillsShPackageNameFormatter;
     let entry = ListDataEntry {
         package_name: "asklokesh/claudeskill-loki-mode/loki-mode".to_owned(),
         version: PackageVersion::Unknown("commit-dde60807afea".into()),
         reason: crate::package::malware_list::Reason::Telemetry,
     };
-    assert_eq!(formatter.format(&entry), "asklokesh/claudeskill-loki-mode");
+    assert_eq!(
+        formatter.format_package_name(&entry.package_name),
+        SkillsShPackageName::from("asklokesh/claudeskill-loki-mode"),
+    );
 }
 
 #[test]
 fn test_formatter_lowercases() {
-    let formatter = SkillsShEntryFormatter;
+    let formatter = SkillsShPackageNameFormatter;
     let entry = ListDataEntry {
         package_name: "Owner/Repo/Skill".to_owned(),
         version: PackageVersion::None,
         reason: crate::package::malware_list::Reason::Malware,
     };
-    assert_eq!(formatter.format(&entry), "owner/repo");
+    assert_eq!(
+        formatter.format_package_name(&entry.package_name),
+        SkillsShPackageName::from("owner/repo")
+    );
 }
 
 // --- parse_repo_from_path: with .git suffix ---
@@ -31,19 +38,19 @@ fn test_formatter_lowercases() {
 #[test]
 fn test_parse_repo_git_suffix_info_refs() {
     let result = RuleSkillsSh::parse_repo_from_path("/owner/repo.git/info/refs");
-    assert_eq!(result.as_deref(), Some("owner/repo"));
+    assert_eq!(result, Some(SkillsShPackageName::from("owner/repo")));
 }
 
 #[test]
 fn test_parse_repo_git_suffix_upload_pack() {
     let result = RuleSkillsSh::parse_repo_from_path("/owner/repo.git/git-upload-pack");
-    assert_eq!(result.as_deref(), Some("owner/repo"));
+    assert_eq!(result, Some(SkillsShPackageName::from("owner/repo")));
 }
 
 #[test]
 fn test_parse_repo_git_suffix_receive_pack() {
     let result = RuleSkillsSh::parse_repo_from_path("/owner/repo.git/git-receive-pack");
-    assert_eq!(result.as_deref(), Some("owner/repo"));
+    assert_eq!(result, Some(SkillsShPackageName::from("owner/repo")));
 }
 
 // --- parse_repo_from_path: without .git suffix ---
@@ -51,19 +58,19 @@ fn test_parse_repo_git_suffix_receive_pack() {
 #[test]
 fn test_parse_repo_no_git_suffix_info_refs() {
     let result = RuleSkillsSh::parse_repo_from_path("/owner/repo/info/refs");
-    assert_eq!(result.as_deref(), Some("owner/repo"));
+    assert_eq!(result, Some(SkillsShPackageName::from("owner/repo")));
 }
 
 #[test]
 fn test_parse_repo_no_git_suffix_upload_pack() {
     let result = RuleSkillsSh::parse_repo_from_path("/owner/repo/git-upload-pack");
-    assert_eq!(result.as_deref(), Some("owner/repo"));
+    assert_eq!(result, Some(SkillsShPackageName::from("owner/repo")));
 }
 
 #[test]
 fn test_parse_repo_no_git_suffix_receive_pack() {
     let result = RuleSkillsSh::parse_repo_from_path("/owner/repo/git-receive-pack");
-    assert_eq!(result.as_deref(), Some("owner/repo"));
+    assert_eq!(result, Some(SkillsShPackageName::from("owner/repo")));
 }
 
 // --- parse_repo_from_path: normalisation ---
@@ -71,7 +78,7 @@ fn test_parse_repo_no_git_suffix_receive_pack() {
 #[test]
 fn test_parse_repo_lowercases_name() {
     let result = RuleSkillsSh::parse_repo_from_path("/Owner/Repo/git-upload-pack");
-    assert_eq!(result.as_deref(), Some("owner/repo"));
+    assert_eq!(result, Some(SkillsShPackageName::from("owner/repo")));
 }
 
 // --- parse_repo_from_path: non-matches ---

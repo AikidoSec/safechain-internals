@@ -9,20 +9,21 @@ use rama::{
     telemetry::tracing,
     utils::{
         collections::smallvec::SmallVec,
-        str::smol_str::{SmolStr, StrExt},
+        str::{arcstr::ArcStr, smol_str::StrExt},
     },
 };
 
-use rama::utils::str::arcstr::{ArcStr, arcstr};
+use rama::utils::str::arcstr::arcstr;
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::{EcosystemKey, PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
     },
     package::{
-        malware_list::{LowerCaseEntryFormatter, MalwareEntry, RemoteMalwareList},
+        malware_list::{MalwareEntry, RemoteMalwareList},
+        name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
         version::PackageVersion,
     },
     storage::SyncCompactDataStorage,
@@ -33,8 +34,23 @@ use crate::http::firewall::pac::PacScriptGenerator;
 
 use super::{BlockedRequest, RequestAction, Rule};
 
+type PyPIPackageNameFormatter = LowerCasePackageNameFormatter;
+type PyPIPackageName = LowerCasePackageName;
+
+type PyPIRemoteMalwareList = RemoteMalwareList<PyPIPackageNameFormatter>;
+type PyPIPolicyEvaluator = PolicyEvaluator<PyPIPackageNameFormatter>;
+
+const PYPI_PRODUCT_KEY: ArcStr = arcstr!("pypi");
+const PYPI_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("pypi");
+
+#[inline(always)]
+fn new_pypi_package_name(raw: &str) -> PyPIPackageName {
+    PyPIPackageName::from(raw.replace_smolstr("_", "-"))
+}
+
+#[derive(Debug)]
 struct PackageInfo {
-    name: SmolStr,
+    name: PyPIPackageName,
     version: PackageVersion,
 }
 
@@ -50,8 +66,8 @@ impl PackageInfo {
 
 pub(in crate::http::firewall) struct RulePyPI {
     target_domains: DomainMatcher,
-    remote_malware_list: RemoteMalwareList,
-    policy_evaluator: Option<PolicyEvaluator>,
+    remote_malware_list: PyPIRemoteMalwareList,
+    policy_evaluator: Option<PyPIPolicyEvaluator>,
 }
 
 impl RulePyPI {
@@ -59,17 +75,17 @@ impl RulePyPI {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<PolicyEvaluator>,
+        policy_evaluator: Option<PyPIPolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_pypi.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCaseEntryFormatter,
+            LowerCasePackageNameFormatter,
         )
         .await
         .context("create remote malware list for pypi block rule")?;
@@ -96,8 +112,8 @@ impl RulePyPI {
 
     fn blocked_artifact(package_info: &PackageInfo) -> Artifact {
         Artifact {
-            product: arcstr!("pypi"),
-            identifier: ArcStr::from(package_info.name.as_str()),
+            product: PYPI_PRODUCT_KEY,
+            identifier: package_info.name.as_arcstr(),
             display_name: None,
             version: Some(package_info.version.clone()),
         }
@@ -118,14 +134,14 @@ impl RulePyPI {
 
         if segments.len() == 3 && segments[0] == "pypi" && segments[2] == "json" {
             return Some(PackageInfo {
-                name: normalize_package_name(&segments[1]),
+                name: new_pypi_package_name(&segments[1]),
                 version: PackageVersion::None,
             });
         }
 
         if segments.len() >= 2 && segments[0] == "simple" {
             return Some(PackageInfo {
-                name: normalize_package_name(&segments[1]),
+                name: new_pypi_package_name(&segments[1]),
                 version: PackageVersion::None,
             });
         }
@@ -136,10 +152,6 @@ impl RulePyPI {
 
         None
     }
-}
-
-fn normalize_package_name(raw: &str) -> SmolStr {
-    raw.to_lowercase_smolstr().replace_smolstr("_", "-")
 }
 
 impl fmt::Debug for RulePyPI {
@@ -179,7 +191,7 @@ impl Rule for RulePyPI {
         // Apply endpoint policy (rejected packages, allow exceptions, block_all_installs).
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
             let decision =
-                policy_evaluator.evaluate_package_install("pypi", package_info.name.as_str());
+                policy_evaluator.evaluate_package_install(&PYPI_ECOSYSTEM_KEY, &package_info.name);
 
             match decision {
                 PackagePolicyDecision::Allow => {
@@ -197,7 +209,11 @@ impl Rule for RulePyPI {
         }
 
         if self.is_blocked(&package_info)? {
-            tracing::debug!(package = %package_info.name, version = ?package_info.version, "blocked PyPI package download");
+            tracing::debug!(
+                package = %package_info.name,
+                version = ?package_info.version,
+                "blocked PyPI package download",
+            );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
                 Self::blocked_artifact(&package_info),
@@ -233,7 +249,7 @@ fn parse_wheel_filename(filename: &str) -> Option<PackageInfo> {
     }
 
     Some(PackageInfo {
-        name: normalize_package_name(dist),
+        name: new_pypi_package_name(dist),
         version: PackageVersion::from_str(version).unwrap(),
     })
 }
@@ -260,7 +276,7 @@ fn parse_source_dist_filename(filename: &str) -> Option<PackageInfo> {
     }
 
     Some(PackageInfo {
-        name: normalize_package_name(dist),
+        name: new_pypi_package_name(dist),
         version: PackageVersion::from_str(version).unwrap(),
     })
 }
@@ -366,7 +382,12 @@ mod tests {
             match expected {
                 Some((expected_name, expected_version)) => {
                     let info = result.unwrap_or_else(|| panic!("Expected Some for: {}", input));
-                    assert_eq!(info.name, expected_name, "Failed for input: {}", input);
+                    assert_eq!(
+                        info.name,
+                        PyPIPackageName::from(expected_name),
+                        "Failed for input: {}",
+                        input
+                    );
                     assert_eq!(
                         info.version, expected_version,
                         "Failed for input: {}",
@@ -495,7 +516,12 @@ mod tests {
             match expected {
                 Some((expected_name, expected_version)) => {
                     let info = result.unwrap_or_else(|| panic!("Expected Some for: {}", input));
-                    assert_eq!(info.name, expected_name, "Failed for input: {}", input);
+                    assert_eq!(
+                        info.name,
+                        PyPIPackageName::from(expected_name),
+                        "Failed for input: {}",
+                        input
+                    );
                     assert_eq!(
                         info.version, expected_version,
                         "Failed for input: {}",
@@ -510,7 +536,7 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_package_name() {
+    fn test_new_pypi_package_name() {
         let test_cases = vec![
             ("Requests", "requests"),
             ("foo_bar", "foo-bar"),
@@ -519,8 +545,8 @@ mod tests {
 
         for (input, expected) in test_cases {
             assert_eq!(
-                normalize_package_name(input),
-                expected,
+                new_pypi_package_name(input),
+                PyPIPackageName::from(expected),
                 "Failed for input: {}",
                 input
             );
@@ -530,19 +556,19 @@ mod tests {
     #[test]
     fn test_package_info_is_metadata_request() {
         let metadata_info = PackageInfo {
-            name: SmolStr::from("requests"),
+            name: PyPIPackageName::from("requests"),
             version: PackageVersion::None,
         };
         assert!(metadata_info.is_metadata_request());
 
         let file_info = PackageInfo {
-            name: SmolStr::from("requests"),
+            name: PyPIPackageName::from("requests"),
             version: PackageVersion::Semver(PragmaticSemver::new_semver(2, 31, 0)),
         };
         assert!(!file_info.is_metadata_request());
 
         let any_version_info = PackageInfo {
-            name: SmolStr::from("requests"),
+            name: PyPIPackageName::from("requests"),
             version: PackageVersion::Any,
         };
         assert!(!any_version_info.is_metadata_request());
@@ -553,7 +579,7 @@ mod tests {
         use crate::package::malware_list::{MalwareEntry, Reason};
 
         let package_info = PackageInfo {
-            name: SmolStr::from("malicious-pkg"),
+            name: PyPIPackageName::from("malicious-pkg"),
             version: PackageVersion::Semver(PragmaticSemver::new_semver(1, 0, 0)),
         };
 
@@ -629,7 +655,12 @@ mod tests {
             match expected {
                 Some((expected_name, is_metadata, maybe_semver)) => {
                     let info = result.unwrap_or_else(|| panic!("Expected Some for URI: {}", uri));
-                    assert_eq!(info.name, expected_name, "Failed for URI: {}", uri);
+                    assert_eq!(
+                        info.name,
+                        PyPIPackageName::from(expected_name),
+                        "Failed for URI: {}",
+                        uri
+                    );
                     assert_eq!(
                         info.version.clone(),
                         match maybe_semver {

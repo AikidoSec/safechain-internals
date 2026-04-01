@@ -14,7 +14,7 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::{EcosystemKey, PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
@@ -28,12 +28,19 @@ use crate::http::firewall::pac::PacScriptGenerator;
 
 use super::{BlockedRequest, RequestAction, Rule};
 
-mod malware_key;
+mod package_name;
+use self::package_name::{ChromePackageName, ChromePackageNameFormatter};
+
+type ChromeRemoteMalwareList = RemoteMalwareList<ChromePackageNameFormatter>;
+type ChromePolicyEvaluator = PolicyEvaluator<ChromePackageNameFormatter>;
+
+const CHROME_PRODUCT_KEY: ArcStr = arcstr!("chrome");
+const CHROME_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("chrome");
 
 pub(in crate::http::firewall) struct RuleChrome {
     target_domains: DomainMatcher,
-    remote_malware_list: RemoteMalwareList,
-    policy_evaluator: Option<PolicyEvaluator>,
+    remote_malware_list: ChromeRemoteMalwareList,
+    policy_evaluator: Option<ChromePolicyEvaluator>,
 }
 
 impl RuleChrome {
@@ -41,17 +48,17 @@ impl RuleChrome {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<PolicyEvaluator>,
+        policy_evaluator: Option<ChromePolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_chrome.json"),
             sync_storage,
             remote_malware_list_https_client,
-            malware_key::ChromeMalwareListEntryFormatter,
+            package_name::ChromePackageNameFormatter,
         )
         .await
         .context("create remote malware list for chrome block rule")?;
@@ -109,7 +116,7 @@ impl Rule for RuleChrome {
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
             let decision =
-                policy_evaluator.evaluate_package_install("chrome", extension_id.as_str());
+                policy_evaluator.evaluate_package_install(&CHROME_ECOSYSTEM_KEY, &extension_id);
 
             match decision {
                 PackagePolicyDecision::Allow => {
@@ -126,7 +133,7 @@ impl Rule for RuleChrome {
             }
         }
 
-        if self.matches_malware_entry(extension_id.as_str(), &version) {
+        if self.matches_malware_entry(&extension_id, &version) {
             tracing::info!(
                 http.url.full = %req.uri(),
                 http.request.method = %req.method(),
@@ -146,18 +153,21 @@ impl Rule for RuleChrome {
 }
 
 impl RuleChrome {
-    fn blocked_artifact(extension_id: &ArcStr, version: &PackageVersion) -> Artifact {
+    fn blocked_artifact(extension_id: &ChromePackageName, version: &PackageVersion) -> Artifact {
         Artifact {
-            product: arcstr!("chrome"),
-            identifier: extension_id.clone(),
+            product: CHROME_PRODUCT_KEY,
+            identifier: extension_id.as_arcstr(),
             display_name: None,
             version: Some(version.clone()),
         }
     }
 
-    fn matches_malware_entry(&self, extension_id: &str, version: &PackageVersion) -> bool {
-        let normalized_id = extension_id.to_ascii_lowercase();
-        let entries = self.remote_malware_list.find_entries(&normalized_id);
+    fn matches_malware_entry(
+        &self,
+        extension_id: &ChromePackageName,
+        version: &PackageVersion,
+    ) -> bool {
+        let entries = self.remote_malware_list.find_entries(extension_id);
         let Some(entries) = entries.entries() else {
             return false;
         };
@@ -165,7 +175,7 @@ impl RuleChrome {
         entries.iter().any(|e| e.version.eq(version))
     }
 
-    fn parse_crx_download_url(req: &Request) -> Option<(ArcStr, PackageVersion)> {
+    fn parse_crx_download_url(req: &Request) -> Option<(ChromePackageName, PackageVersion)> {
         // Example CRX download URL path (after redirect):
         //   /crx/lajondecmobodlejlcjllhojikagldgd_1_2_3_4.crx
         let path = req.uri().path();
@@ -181,10 +191,9 @@ impl RuleChrome {
 
         let version_string = version_raw.replace_smolstr("_", ".");
 
-        let version =
-            PackageVersion::from_str(version_string.as_str()).unwrap_or(PackageVersion::None);
+        let Ok(version) = PackageVersion::from_str(version_string.as_str());
 
-        Some((ArcStr::from(extension_id), version))
+        Some((ChromePackageName::from(extension_id), version))
     }
 }
 

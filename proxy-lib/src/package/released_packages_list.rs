@@ -1,60 +1,45 @@
-use std::{fmt, sync::Arc, time::Duration};
+use std::{fmt, time::Duration};
 
 use rama::{
     Service,
-    error::{BoxError, ErrorContext, ErrorExt, extra::OpaqueError},
+    error::{BoxError, ErrorContext, extra::OpaqueError},
     graceful::ShutdownGuard,
-    http::{
-        BodyExtractExt, Request, Response, StatusCode, Uri, service::client::HttpClientExt as _,
-    },
-    telemetry::tracing,
-    utils::str::arcstr::ArcStr,
+    http::{Body, Request, Response, Uri},
 };
 
-use arc_swap::ArcSwap;
 use radix_trie::Trie;
-use rand::RngExt as _;
 use serde::{Deserialize, Serialize};
-use tokio::time::Instant;
 
 use crate::{
-    package::version::PackageVersion, storage::SyncCompactDataStorage, utils::uri::uri_to_filename,
+    package::{name_formatter::PackageNameFormatter, version::PackageVersion},
+    storage::SyncCompactDataStorage,
+    utils::remote_resource::{self, RemoteResource, RemoteResourceSpec},
 };
 
 /// How long to keep entries in the trie (7 days).
 /// Entries older than this are irrelevant to the configured blocking window.
 const MAX_ENTRY_AGE_SECS: i64 = 7 * 24 * 3600;
 
-pub trait ReleasedPackageEntryFormatter: Send + Sync {
-    /// Map a raw malware-list entry into the trie lookup key.
-    ///
-    /// This is called only when (re)building the trie
-    fn format(&self, entry: &ReleasedPackageData) -> String;
+pub struct RemoteReleasedPackagesList<F: PackageNameFormatter> {
+    trie: RemoteResource<ReleasedPackagesTrie<F>>,
 }
 
-#[derive(Debug, Default, Clone)]
-pub(crate) struct LowerCaseReleasedPackageFormatter;
-impl ReleasedPackageEntryFormatter for LowerCaseReleasedPackageFormatter {
-    fn format(&self, entry: &ReleasedPackageData) -> String {
-        entry.package_name.trim().to_ascii_lowercase()
+impl<F: PackageNameFormatter> Clone for RemoteReleasedPackagesList<F> {
+    fn clone(&self) -> Self {
+        Self {
+            trie: self.trie.clone(),
+        }
     }
 }
 
-type ReleasedPackagesTrie = Trie<String, Vec<ReleasedEntry>>;
-
-#[derive(Clone)]
-pub struct RemoteReleasedPackagesList {
-    trie: Arc<ArcSwap<ReleasedPackagesTrie>>,
-}
-
-impl fmt::Debug for RemoteReleasedPackagesList {
+impl<F: PackageNameFormatter> fmt::Debug for RemoteReleasedPackagesList<F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RemoteReleasedPackagesList").finish()
     }
 }
 
-impl RemoteReleasedPackagesList {
-    pub async fn try_new<C, F>(
+impl<F: PackageNameFormatter> RemoteReleasedPackagesList<F> {
+    pub async fn try_new<C>(
         guard: ShutdownGuard,
         uri: Uri,
         sync_storage: SyncCompactDataStorage,
@@ -62,91 +47,35 @@ impl RemoteReleasedPackagesList {
         formatter: F,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
-        F: ReleasedPackageEntryFormatter + Clone + 'static,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
-        let filename = uri_to_filename(&uri);
-        let refresh_interval = Duration::from_mins(10);
-        let client = RemoteReleasedPackagesListClient {
-            uri,
-            filename,
-            refresh_interval,
+        let (trie, _refresh_handle) = remote_resource::try_new(
+            guard,
             sync_storage,
             client,
-            formatter,
-        };
+            ReleasedPackagesRemoteResource { uri, formatter },
+        )
+        .await
+        .context("create new remote released packages list")?;
 
-        let (trie, e_tag) = match client.load_cached_trie().await {
-            Ok(Some(cached_info)) => {
-                tracing::debug!(
-                    "create new remote released packages list (uri: {}) with cached trie",
-                    client.uri
-                );
-                cached_info
-            }
-            Ok(None) => {
-                tracing::debug!(
-                    "no cached released packages list found for remote endpoint (uri: {})",
-                    client.uri
-                );
-                #[cfg(feature = "apple-networkextension")]
-                {
-                    Default::default()
-                }
-                #[cfg(not(feature = "apple-networkextension"))]
-                {
-                    client
-                        .download_trie(None)
-                        .await
-                        .context("download new released packages list")?
-                        .context("new released packages list not available")?
-                }
-            }
-            Err(err) => {
-                tracing::warn!(
-                    "failed to load cached released packages list for remote endpoint (uri: {}); err = {err}",
-                    client.uri
-                );
-                #[cfg(feature = "apple-networkextension")]
-                {
-                    Default::default()
-                }
-                #[cfg(not(feature = "apple-networkextension"))]
-                {
-                    client
-                        .download_trie(None)
-                        .await
-                        .context("download new released packages list")?
-                        .context("new released packages list not available")?
-                }
-            }
-        };
-
-        let shared_trie = Arc::new(ArcSwap::new(Arc::new(trie)));
-
-        tokio::spawn(remote_released_packages_update_loop(
-            guard,
-            client,
-            e_tag,
-            shared_trie.clone(),
-        ));
-
-        Ok(Self { trie: shared_trie })
+        Ok(Self { trie })
     }
 
     /// Returns true if the package was released recently (after `cutoff_secs`).
+    ///
+    /// NOTE: It is assumed that _package_name_ is pre-formatted by the callee,
+    /// using the same formatter used here to insert the data.
     ///
     /// - `version = Some(v)`: only the specific version must be recent
     /// - `version = None`: true if ANY version of the package is recent
     pub fn is_recently_released(
         &self,
-        package_name: &str,
+        package_name: &F::PackageName,
         version: Option<&PackageVersion>,
         cutoff_secs: i64,
     ) -> bool {
-        let key = package_name.trim().to_ascii_lowercase();
-        let guard = self.trie.load();
-        let Some(entries) = guard.get(&key) else {
+        let state_ref = self.trie.get();
+        let Some(entries) = state_ref.get(package_name) else {
             return false;
         };
         entries
@@ -155,256 +84,54 @@ impl RemoteReleasedPackagesList {
     }
 }
 
-struct RemoteReleasedPackagesListClient<C, F> {
+#[derive(Clone)]
+struct ReleasedPackagesRemoteResource<F> {
     uri: Uri,
-    filename: ArcStr,
-    refresh_interval: Duration,
-    sync_storage: SyncCompactDataStorage,
-    client: C,
     formatter: F,
 }
 
-impl<C, F> RemoteReleasedPackagesListClient<C, F>
-where
-    C: Service<Request, Output = Response, Error = OpaqueError>,
-    F: ReleasedPackageEntryFormatter + Clone + 'static,
-{
-    async fn download_trie(
-        &self,
-        e_tag: Option<&str>,
-    ) -> Result<Option<(ReleasedPackagesTrie, Option<ArcStr>)>, BoxError> {
-        let Some((list, new_e_tag)) = self.fetch_remote_list_and_e_tag(e_tag).await? else {
-            return Ok(None);
-        };
+impl<F: PackageNameFormatter> RemoteResourceSpec for ReleasedPackagesRemoteResource<F> {
+    type Payload = Vec<ReleasedPackageData>;
+    type State = ReleasedPackagesTrie<F>;
 
-        self.spawn_caching_task(list.clone(), new_e_tag.clone());
+    fn refresh_interval(&self) -> Duration {
+        Duration::from_mins(10)
+    }
 
+    fn build_request(&self) -> Result<Request, BoxError> {
+        Request::builder()
+            .uri(self.uri.clone())
+            .body(Body::empty())
+            .context("build package list http request")
+    }
+
+    fn build_state(&self, payload: Self::Payload) -> Result<Self::State, BoxError> {
         let now_secs = (rama::utils::time::now_unix_ms()) / 1000;
-        let trie = trie_from_released_packages_list(list, now_secs, self.formatter.clone());
-
-        tracing::debug!(
-            "released packages trie refreshed with link to remote endpoint '{}'",
-            self.uri,
-        );
-
-        Ok(Some((trie, new_e_tag)))
-    }
-
-    async fn fetch_remote_list_and_e_tag(
-        &self,
-        previous_e_tag: Option<&str>,
-    ) -> Result<Option<(Vec<ReleasedPackageData>, Option<ArcStr>)>, BoxError> {
-        let start = Instant::now();
-
-        let req_builder = self.client.get(self.uri.clone());
-        let req_builder = if let Some(e_tag) = previous_e_tag {
-            req_builder.header("if-none-match", e_tag)
-        } else {
-            req_builder
-        };
-
-        let resp = req_builder
-            .send()
-            .await
-            .context("fetch released packages list from remote endpoint")
-            .context_debug_field("tt", start.elapsed())
-            .with_context_field("uri", || self.uri.clone())?;
-
-        if resp.status() == StatusCode::NOT_MODIFIED {
-            tracing::debug!(
-                "released packages list endpoint '{}' reported list not modified; (tt: {:?})",
-                self.uri,
-                start.elapsed()
-            );
-            return Ok(None);
-        }
-
-        if !resp.status().is_success() {
-            let http_status_code = resp.status();
-            let maybe_error_msg = resp.try_into_string().await.unwrap_or_default();
-            return Err(BoxError::from(
-                "failed to download released packages list from remote endpoint",
-            )
-            .with_context_field("uri", || self.uri.clone())
-            .context_field("status", http_status_code)
-            .context_field("message", maybe_error_msg));
-        }
-
-        let e_tag: Option<ArcStr> = resp
-            .headers()
-            .get("etag")
-            .and_then(|v| v.as_bytes().try_into().ok());
-
-        let list: Vec<ReleasedPackageData> = resp
-            .try_into_json()
-            .await
-            .context(
-                "collect and json-decode released packages list response payload from remote endpoint",
-            )
-            .with_context_field("uri", || self.uri.clone())
-            .with_context_debug_field("tt", || start.elapsed())?;
-
-        tracing::debug!(
-            "fetched and decoded released packages list from remote endpoint '{}', with {} entries (tt: {:?})",
-            self.uri,
-            list.len(),
-            start.elapsed(),
-        );
-
-        Ok(Some((list, e_tag)))
-    }
-
-    fn spawn_caching_task(&self, list: Vec<ReleasedPackageData>, e_tag: Option<ArcStr>) {
-        let storage = self.sync_storage.clone();
-        let filename = self.filename.clone();
-
-        tokio::task::spawn_blocking(move || {
-            if let Err(err) = storage.store(
-                &filename,
-                &CachedReleasedPackagesList {
-                    e_tag: e_tag.clone(),
-                    list,
-                },
-            ) {
-                tracing::error!(
-                    "failed to backup downloaded released packages list @ '{filename}': {err}"
-                )
-            }
-        });
-    }
-
-    async fn load_cached_trie(
-        &self,
-    ) -> Result<Option<(ReleasedPackagesTrie, Option<ArcStr>)>, BoxError> {
-        tokio::task::spawn_blocking({
-            let storage = self.sync_storage.clone();
-            let filename = self.filename.clone();
-            let formatter = self.formatter.clone();
-            move || load_cached_trie_sync_inner(storage, filename, formatter)
-        })
-        .await
-        .context("wait for blocking task to use cached released packages list")
-        .with_context_field("uri", || self.uri.clone())?
+        Ok(trie_from_released_packages_list(
+            payload,
+            now_secs,
+            &self.formatter,
+        ))
     }
 }
 
-fn load_cached_trie_sync_inner<F>(
-    storage: SyncCompactDataStorage,
-    filename: ArcStr,
-    formatter: F,
-) -> Result<Option<(ReleasedPackagesTrie, Option<ArcStr>)>, BoxError>
-where
-    F: ReleasedPackageEntryFormatter,
-{
-    let cached: Option<CachedReleasedPackagesList> =
-        storage.load(&filename).context("storage failure")?;
-
-    let Some(cached) = cached else {
-        return Ok(None);
-    };
-
-    let now_secs = (rama::utils::time::now_unix_ms()) / 1000;
-    let trie = trie_from_released_packages_list(cached.list, now_secs, formatter);
-
-    Ok(Some((trie, cached.e_tag)))
-}
-
-async fn remote_released_packages_update_loop<C, F>(
-    guard: ShutdownGuard,
-    client: RemoteReleasedPackagesListClient<C, F>,
-    e_tag: Option<ArcStr>,
-    shared_trie: Arc<ArcSwap<ReleasedPackagesTrie>>,
-) where
-    C: Service<Request, Output = Response, Error = OpaqueError>,
-    F: ReleasedPackageEntryFormatter + Clone + 'static,
-{
-    tracing::debug!(
-        "remote released packages list (uri = {}), update loop task up and running",
-        client.uri
-    );
-
-    let mut sleep_for = if e_tag.is_some() {
-        with_jitter(client.refresh_interval)
-    } else {
-        Duration::ZERO
-    };
-
-    let mut latest_e_tag = e_tag;
-
-    loop {
-        tracing::debug!(
-            "remote released packages list (uri = {}), sleep for: {sleep_for:?}",
-            client.uri
-        );
-        tokio::select! {
-            _ = tokio::time::sleep(sleep_for) => {},
-            _ = guard.cancelled() => {
-                tracing::debug!(
-                    "remote released packages list (uri = {}), guard cancelled; exit",
-                    client.uri
-                );
-                return;
-            }
-        }
-
-        match client.download_trie(latest_e_tag.as_deref()).await {
-            Ok(Some((fresh_trie, fresh_e_tag))) => {
-                tracing::debug!(
-                    "remote released packages list (uri = {}), trie updated",
-                    client.uri
-                );
-                shared_trie.store(Arc::new(fresh_trie));
-                sleep_for = with_jitter(client.refresh_interval);
-                latest_e_tag = fresh_e_tag;
-            }
-            Ok(None) => {
-                tracing::debug!("released packages list was unmodified, preserve current one...");
-                sleep_for = with_jitter(client.refresh_interval);
-            }
-            Err(err) => {
-                tracing::error!(
-                    "remote released packages list (uri = {}), failed to update (err = {err}), try again in shorter interval...",
-                    client.uri
-                );
-                let fail_interval = Duration::from_secs(std::cmp::max(sleep_for.as_secs() / 2, 60));
-                sleep_for = with_jitter(fail_interval);
-            }
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-struct CachedReleasedPackagesList {
-    pub e_tag: Option<ArcStr>,
-    pub list: Vec<ReleasedPackageData>,
-}
-
-fn with_jitter(refresh: Duration) -> Duration {
-    let max_jitter = std::cmp::min(refresh, Duration::from_secs(60));
-    let jitter_secs = rand::rng().random_range(0.0..=max_jitter.as_secs_f64());
-    refresh + Duration::from_secs_f64(jitter_secs)
-}
-
-fn trie_from_released_packages_list<F>(
+fn trie_from_released_packages_list<F: PackageNameFormatter>(
     list: Vec<ReleasedPackageData>,
     now_secs: i64,
-    formatter: F,
-) -> ReleasedPackagesTrie
-where
-    F: ReleasedPackageEntryFormatter,
-{
+    formatter: &F,
+) -> ReleasedPackagesTrie<F> {
     let cutoff = now_secs.saturating_sub(MAX_ENTRY_AGE_SECS);
-    let mut trie = ReleasedPackagesTrie::new();
+    let mut trie = ReleasedPackagesTrie::<F>::new();
     for item in list {
         if item.released_on < cutoff {
             continue;
         }
-        let key = formatter.format(&item);
+        let key = formatter.format_package_name(&item.package_name);
         let entry = ReleasedEntry {
             version: item.version,
             released_on_epoch_s: item.released_on,
         };
-        match trie.get_mut(key.as_str()) {
+        match trie.get_mut(&key) {
             Some(entries) => entries.push(entry),
             None => {
                 let _previous = trie.insert(key, vec![entry]);
@@ -425,6 +152,9 @@ pub struct ReleasedPackageData {
     pub version: PackageVersion,
     pub released_on: i64,
 }
+
+#[allow(type_alias_bounds)]
+pub type ReleasedPackagesTrie<F: PackageNameFormatter> = Trie<F::PackageName, Vec<ReleasedEntry>>;
 
 /// Stored in the trie (version + timestamp; package_name is the key)
 #[derive(Debug, Clone, PartialEq, Eq)]

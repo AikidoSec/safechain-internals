@@ -1,11 +1,12 @@
 use rama::http::{Body, Request, Uri};
 
 use crate::package::{
-    malware_list::{ListDataEntry, MalwareListEntryFormatter, Reason},
+    malware_list::{ListDataEntry, Reason},
+    name_formatter::PackageNameFormatter,
     version::{PackageVersion, PragmaticSemver},
 };
 
-use super::malware_key::ChromeMalwareListEntryFormatter;
+use super::package_name::ChromePackageNameFormatter;
 use super::*;
 
 #[test]
@@ -21,7 +22,10 @@ fn test_parse_crx_download_url() {
     assert!(result.is_some());
 
     let (extension_id, version) = result.unwrap();
-    assert_eq!(extension_id.as_str(), "GLNPJGLILKICBCKJPBGCFKOGEBGLLEMB");
+    assert_eq!(
+        extension_id,
+        ChromePackageName::from("GLNPJGLILKICBCKJPBGCFKOGEBGLLEMB")
+    );
     assert_eq!(
         version,
         PackageVersion::Semver(PragmaticSemver::new_two_components(6, 45))
@@ -72,7 +76,7 @@ fn test_version_matches() {
 
 #[test]
 fn test_normalize_chrome_malware_key_known_entries() {
-    let formatter = ChromeMalwareListEntryFormatter;
+    let formatter = ChromePackageNameFormatter;
     let make_entry = |name: &str| ListDataEntry {
         package_name: name.to_string(),
         version: PackageVersion::Any,
@@ -82,20 +86,20 @@ fn test_normalize_chrome_malware_key_known_entries() {
     let key_1 =
         "Malicious Extension - Chrome Web Store@lajondecmobodlejlcjllhojikagldgd".to_owned();
     assert_eq!(
-        formatter.format(&make_entry(key_1.as_str())),
-        "lajondecmobodlejlcjllhojikagldgd"
+        formatter.format_package_name(&make_entry(key_1.as_str()).package_name),
+        ChromePackageName::from("lajondecmobodlejlcjllhojikagldgd"),
     );
 
     let key_2 =
         "Into the Black Hole - Chrome Web Store@faeadnfmdfamenfhaipofoffijhlnkif".to_owned();
     assert_eq!(
-        formatter.format(&make_entry(key_2.as_str())),
-        "faeadnfmdfamenfhaipofoffijhlnkif"
+        formatter.format_package_name(&make_entry(key_2.as_str()).package_name),
+        ChromePackageName::from("faeadnfmdfamenfhaipofoffijhlnkif")
     );
 
     let key_3 = "  Something@FAEADNFMD FAMENFHAIPOFOFFIJHLNKIF  ".replace(' ', "");
     assert_eq!(
-        formatter.format(&make_entry(key_3.as_str())),
-        "faeadnfmdfamenfhaipofoffijhlnkif"
+        formatter.format_package_name(&make_entry(key_3.as_str()).package_name),
+        ChromePackageName::from("faeadnfmdfamenfhaipofoffijhlnkif")
     );
 }

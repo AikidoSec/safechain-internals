@@ -14,14 +14,15 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::{EcosystemKey, PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
         rule::{BlockedRequest, RequestAction, Rule},
     },
     package::{
-        malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
+        malware_list::RemoteMalwareList,
+        name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
         version::{PackageVersion, PragmaticSemver},
     },
     storage::SyncCompactDataStorage,
@@ -30,10 +31,19 @@ use crate::{
 #[cfg(feature = "pac")]
 use crate::http::firewall::pac::PacScriptGenerator;
 
+type NugetPackageNameFormatter = LowerCasePackageNameFormatter;
+type NugetPackageName = LowerCasePackageName;
+
+type NugetRemoteMalwareList = RemoteMalwareList<NugetPackageNameFormatter>;
+type NugetPolicyEvaluator = PolicyEvaluator<NugetPackageNameFormatter>;
+
+const NUGET_PRODUCT_KEY: ArcStr = arcstr!("nuget");
+const NUGET_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("nuget");
+
 pub(in crate::http::firewall) struct RuleNuget {
     target_domains: DomainMatcher,
-    remote_malware_list: RemoteMalwareList,
-    policy_evaluator: Option<PolicyEvaluator>,
+    remote_malware_list: NugetRemoteMalwareList,
+    policy_evaluator: Option<NugetPolicyEvaluator>,
 }
 
 impl RuleNuget {
@@ -41,17 +51,17 @@ impl RuleNuget {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<PolicyEvaluator>,
+        policy_evaluator: Option<NugetPolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_nuget.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCaseEntryFormatter,
+            LowerCasePackageNameFormatter,
         )
         .await
         .context("create remote malware list for nuget block rule")?;
@@ -108,8 +118,10 @@ impl Rule for RuleNuget {
         );
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision = policy_evaluator
-                .evaluate_package_install("nuget", &nuget_package.fully_qualified_name);
+            let decision = policy_evaluator.evaluate_package_install(
+                &NUGET_ECOSYSTEM_KEY,
+                &nuget_package.fully_qualified_name,
+            );
 
             match decision {
                 PackagePolicyDecision::Allow => {
@@ -159,8 +171,8 @@ impl Rule for RuleNuget {
 impl RuleNuget {
     fn blocked_artifact(nuget_package: &NugetPackage) -> Artifact {
         Artifact {
-            product: arcstr!("nuget"),
-            identifier: ArcStr::from(nuget_package.fully_qualified_name.as_str()),
+            product: NUGET_PRODUCT_KEY,
+            identifier: nuget_package.fully_qualified_name.as_arcstr(),
             display_name: None,
             version: Some(PackageVersion::Semver(nuget_package.version.clone())),
         }
@@ -169,7 +181,7 @@ impl RuleNuget {
     fn is_package_listed_as_malware(&self, nuget_package: &NugetPackage) -> bool {
         self.remote_malware_list.has_entries_with_version(
             &nuget_package.fully_qualified_name,
-            PackageVersion::Semver(nuget_package.version.clone()),
+            &PackageVersion::Semver(nuget_package.version.clone()),
         )
     }
 
@@ -237,14 +249,14 @@ impl RuleNuget {
 }
 
 struct NugetPackage {
-    fully_qualified_name: String,
+    fully_qualified_name: NugetPackageName,
     version: PragmaticSemver,
 }
 
 impl NugetPackage {
     fn new(name: &str, version: PragmaticSemver) -> NugetPackage {
         Self {
-            fully_qualified_name: name.trim().to_ascii_lowercase(),
+            fully_qualified_name: NugetPackageName::from(name),
             version,
         }
     }

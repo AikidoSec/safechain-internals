@@ -11,14 +11,15 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::{EcosystemKey, PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
         rule::npm::min_package_age::MinPackageAge,
     },
     package::{
-        malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
+        malware_list::RemoteMalwareList,
+        name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
         version::{PackageVersion, PragmaticSemver},
     },
     storage::SyncCompactDataStorage,
@@ -31,11 +32,20 @@ use super::{BlockedRequest, RequestAction, Rule};
 
 pub mod min_package_age;
 
+type NpmPackageNameFormatter = LowerCasePackageNameFormatter;
+type NpmPackageName = LowerCasePackageName;
+
+type NpmRemoteMalwareList = RemoteMalwareList<NpmPackageNameFormatter>;
+type NpmPolicyEvaluator = PolicyEvaluator<NpmPackageNameFormatter>;
+
+const NPM_PRODUCT_KEY: ArcStr = arcstr!("npm");
+const NPM_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("npm");
+
 pub(in crate::http::firewall) struct RuleNpm {
     target_domains: DomainMatcher,
-    remote_malware_list: RemoteMalwareList,
+    remote_malware_list: NpmRemoteMalwareList,
     maybe_min_package_age: Option<MinPackageAge>,
-    policy_evaluator: Option<PolicyEvaluator>,
+    policy_evaluator: Option<NpmPolicyEvaluator>,
 }
 
 impl RuleNpm {
@@ -43,11 +53,11 @@ impl RuleNpm {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<PolicyEvaluator>,
+        policy_evaluator: Option<NpmPolicyEvaluator>,
         min_package_age: Option<MinPackageAge>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         // NOTE: should you ever need to share a remote malware list between different rules,
         // you would simply create it outside of the rule, clone and pass it in.
@@ -58,7 +68,7 @@ impl RuleNpm {
             Uri::from_static("https://malware-list.aikido.dev/malware_predictions.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCaseEntryFormatter,
+            LowerCasePackageNameFormatter,
         )
         .await
         .context("create remote malware list for npm block rule")?;
@@ -129,15 +139,6 @@ impl Rule for RuleNpm {
 }
 
 impl RuleNpm {
-    fn blocked_artifact(package_name: &str, version: &PragmaticSemver) -> Artifact {
-        Artifact {
-            product: arcstr!("npm"),
-            identifier: ArcStr::from(package_name),
-            display_name: None,
-            version: Some(PackageVersion::Semver(version.clone())),
-        }
-    }
-
     fn is_tarball_download(&self, req: &Request) -> bool {
         let path = req.uri().path();
         path.ends_with(".tgz") && path.contains("/-/")
@@ -152,8 +153,8 @@ impl RuleNpm {
         };
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision =
-                policy_evaluator.evaluate_package_install("npm", &package.fully_qualified_name);
+            let decision = policy_evaluator
+                .evaluate_package_install(&NPM_ECOSYSTEM_KEY, &package.fully_qualified_name);
 
             match decision {
                 PackagePolicyDecision::Allow => {
@@ -163,10 +164,7 @@ impl RuleNpm {
                 decision => {
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        Self::blocked_artifact(
-                            package.fully_qualified_name.as_str(),
-                            &package.version,
-                        ),
+                        package.into_blocked_artifact(),
                         super::block_reason_for(decision),
                     )));
                 }
@@ -174,12 +172,14 @@ impl RuleNpm {
         }
 
         if self.is_package_listed_as_malware(&package) {
-            let package_name = package.fully_qualified_name;
-            let package_version = package.version;
-            tracing::warn!("Blocked malware from {package_name}");
+            tracing::warn!(
+                name = %package.fully_qualified_name,
+                version = %package.version,
+                "Blocked malware",
+            );
             Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(package_name.as_str(), &package_version),
+                package.into_blocked_artifact(),
                 BlockReason::Malware,
             )))
         } else {
@@ -191,21 +191,34 @@ impl RuleNpm {
     fn is_package_listed_as_malware(&self, npm_package: &NpmPackage) -> bool {
         self.remote_malware_list.has_entries_with_version(
             &npm_package.fully_qualified_name,
-            PackageVersion::Semver(npm_package.version.clone()),
+            &PackageVersion::Semver(npm_package.version.clone()),
         )
     }
 }
 
 struct NpmPackage {
-    fully_qualified_name: String,
+    fully_qualified_name: NpmPackageName,
     version: PragmaticSemver,
 }
 
 impl NpmPackage {
     fn new(name: &str, version: PragmaticSemver) -> NpmPackage {
         Self {
-            fully_qualified_name: name.trim().to_ascii_lowercase(),
+            fully_qualified_name: NpmPackageName::from(name),
             version,
+        }
+    }
+
+    fn into_blocked_artifact(self) -> Artifact {
+        let Self {
+            fully_qualified_name,
+            version,
+        } = self;
+        Artifact {
+            product: NPM_PRODUCT_KEY,
+            identifier: fully_qualified_name.into_arcstr(),
+            display_name: None,
+            version: Some(PackageVersion::Semver(version)),
         }
     }
 }

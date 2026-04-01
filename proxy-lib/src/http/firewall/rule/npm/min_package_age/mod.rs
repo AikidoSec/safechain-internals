@@ -22,23 +22,27 @@ use crate::{
         firewall::{
             events::{Artifact, MinPackageAgeEvent},
             notifier::EventNotifier,
+            rule::npm::{NPM_ECOSYSTEM_KEY, NpmPackageNameFormatter},
         },
     },
 };
 
 pub(in crate::http::firewall) struct MinPackageAge {
     notifier: Option<EventNotifier>,
-    config: Option<RemoteEndpointConfig>,
+    config: Option<RemoteEndpointConfig<NpmPackageNameFormatter>>,
 }
 
 const DEFAULT_MIN_PACKAGE_AGE_MS: i64 = 172_800_000; // 48 hours
 
 impl MinPackageAge {
-    pub fn new(notifier: Option<EventNotifier>, config: Option<RemoteEndpointConfig>) -> Self {
+    pub(in crate::http::firewall) fn new(
+        notifier: Option<EventNotifier>,
+        config: Option<RemoteEndpointConfig<NpmPackageNameFormatter>>,
+    ) -> Self {
         Self { notifier, config }
     }
 
-    pub fn modify_request_headers(&self, req: &mut Request) {
+    pub(super) fn modify_request_headers(&self, req: &mut Request) {
         if !req
             .headers()
             .typed_get()
@@ -54,7 +58,7 @@ impl MinPackageAge {
         req.headers_mut().typed_insert(Accept::json());
     }
 
-    pub async fn remove_new_packages(&self, resp: Response) -> Result<Response, BoxError> {
+    pub(super) async fn remove_new_packages(&self, resp: Response) -> Result<Response, BoxError> {
         if resp
             .headers()
             .typed_get::<ContentType>()
@@ -226,12 +230,15 @@ impl MinPackageAge {
     }
 
     fn get_cutoff_timestamp(&self) -> i64 {
-        let maybe_minimum_allowed_age_timestamp = self.config.as_ref().and_then(|c| {
-            let ecosystem = c.get_ecosystem_config("npm");
-            ecosystem
-                .config()
-                .and_then(|c| c.minimum_allowed_age_timestamp)
-        });
+        let maybe_minimum_allowed_age_timestamp = self
+            .config
+            .as_ref()
+            .and_then(|c| {
+                c.map_ecosystem_config(&NPM_ECOSYSTEM_KEY, |ecosystem_config| {
+                    ecosystem_config.minimum_allowed_age_timestamp
+                })
+            })
+            .flatten();
 
         if let Some(timestamp_in_seconds) = maybe_minimum_allowed_age_timestamp {
             // Needs to be converted from seconds to ms

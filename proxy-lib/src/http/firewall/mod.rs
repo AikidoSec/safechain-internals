@@ -18,6 +18,7 @@ use rama::{
     layer::MapErrLayer,
     net::address::Domain,
     rt::Executor,
+    service::BoxService,
     telemetry::tracing,
     utils::{backoff::ExponentialBackoff, rng::HasherRng, str::arcstr::ArcStr},
 };
@@ -45,6 +46,7 @@ mod pac;
 use crate::{
     endpoint_protection::{PolicyEvaluator, RemoteEndpointConfig},
     http::firewall::rule::{DynRule, npm::min_package_age::MinPackageAge},
+    package::name_formatter::PackageNameFormatter,
     storage::SyncCompactDataStorage,
     utils::{env::network_service_identifier, token::AgentIdentity},
 };
@@ -124,32 +126,33 @@ impl Firewall {
 
         let endpoint_config_uri = Self::endpoint_config_uri(&aikido_url)?;
 
-        let remote_endpoint_config = match agent_identity.as_ref() {
-            Some(identity) => {
-                match RemoteEndpointConfig::try_new(
-                    guard.clone(),
-                    endpoint_config_uri.clone(),
-                    ArcStr::from(identity.token.as_ref()),
-                    ArcStr::from(identity.device_id.as_ref()),
-                    data.clone(),
-                    layered_client.clone(),
-                    notifier.clone(),
-                )
-                .await
-                {
-                    Ok(config) => Some(config),
-                    Err(err) => {
-                        tracing::warn!(
-                            error = %err,
-                            "failed to initialize endpoint config; config-based policy checks disabled"
-                        );
-                        None
-                    }
-                }
-            }
-            None => None,
-        };
-        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
+        let (lowercase_remote_endpoint_config, lowercase_policy_evaluator) = new_policy_evaluator(
+            agent_identity.clone(),
+            guard.clone(),
+            endpoint_config_uri.clone(),
+            data.clone(),
+            layered_client.clone(),
+        )
+        .await;
+
+        let (_, skill_sh_policy_evaluator) = new_policy_evaluator(
+            agent_identity.clone(),
+            guard.clone(),
+            endpoint_config_uri.clone(),
+            data.clone(),
+            layered_client.clone(),
+        )
+        .await;
+
+        #[cfg(any(not(feature = "apple-networkextension"), feature = "test-utils", test))]
+        let (_, chrome_policy_evaluator) = new_policy_evaluator(
+            agent_identity.clone(),
+            guard.clone(),
+            endpoint_config_uri.clone(),
+            data.clone(),
+            layered_client.clone(),
+        )
+        .await;
 
         Ok(Self {
             block_rules: Arc::from([
@@ -157,8 +160,8 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
-                    remote_endpoint_config.clone(),
+                    lowercase_policy_evaluator.clone(),
+                    lowercase_remote_endpoint_config.clone(),
                 )
                 .await
                 .context("create block rule: vscode")?
@@ -167,7 +170,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
+                    lowercase_policy_evaluator.clone(),
                 )
                 .await
                 .context("create block rule: nuget")?
@@ -177,7 +180,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
+                    chrome_policy_evaluator,
                 )
                 .await
                 .context("create block rule: chrome")?
@@ -186,8 +189,11 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
-                    Some(MinPackageAge::new(notifier.clone(), remote_endpoint_config)),
+                    lowercase_policy_evaluator.clone(),
+                    Some(MinPackageAge::new(
+                        notifier.clone(),
+                        lowercase_remote_endpoint_config,
+                    )),
                 )
                 .await
                 .context("create block rule: npm")?
@@ -196,7 +202,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
+                    lowercase_policy_evaluator.clone(),
                 )
                 .await
                 .context("create block rule: pypi")?
@@ -205,7 +211,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
+                    lowercase_policy_evaluator.clone(),
                 )
                 .await
                 .context("create block rule: maven")?
@@ -214,7 +220,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
+                    lowercase_policy_evaluator,
                 )
                 .await
                 .context("create block rule: open vsx")?
@@ -223,7 +229,7 @@ impl Firewall {
                     guard,
                     layered_client,
                     data,
-                    policy_evaluator,
+                    skill_sh_policy_evaluator,
                 )
                 .await
                 .context("create block rule: skills.sh")?
@@ -294,4 +300,41 @@ impl Firewall {
         )
             .into_response()
     }
+}
+
+async fn new_policy_evaluator<F: PackageNameFormatter>(
+    agent_identity: Option<AgentIdentity>,
+    guard: ShutdownGuard,
+    endpoint_config_uri: Uri,
+    data: SyncCompactDataStorage,
+    layered_client: BoxService<Request, Response, OpaqueError>,
+) -> (Option<RemoteEndpointConfig<F>>, Option<PolicyEvaluator<F>>) {
+    let remote_endpoint_config = match agent_identity.as_ref() {
+        Some(identity) => {
+            match RemoteEndpointConfig::try_new(
+                guard.clone(),
+                endpoint_config_uri.clone(),
+                ArcStr::from(identity.token.as_ref()),
+                ArcStr::from(identity.device_id.as_ref()),
+                data.clone(),
+                layered_client.clone(),
+            )
+            .await
+            {
+                Ok(config) => Some(config),
+                Err(err) => {
+                    tracing::warn!(
+                        error = %err,
+                        "failed to initialize endpoint config; config-based policy checks disabled"
+                    );
+                    None
+                }
+            }
+        }
+        None => None,
+    };
+
+    let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
+
+    (remote_endpoint_config, policy_evaluator)
 }

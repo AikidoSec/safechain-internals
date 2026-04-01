@@ -33,7 +33,10 @@ use tokio::sync::{Semaphore, SemaphorePermit};
 use crate::{
     endpoint_protection::types::EndpointConfig,
     http::firewall::events::MinPackageAgeEvent,
-    package::version::{PackageVersion, PackageVersionKey},
+    package::{
+        name_formatter::PackageNameFormatter,
+        version::{PackageVersion, PackageVersionKey},
+    },
     utils::env::{compute_concurrent_request_count, network_service_identifier},
 };
 
@@ -137,7 +140,10 @@ impl EventNotifier {
         });
     }
 
-    pub fn notify_permissions_updated(&self, config: EndpointConfig) {
+    pub fn notify_permissions_updated<F: PackageNameFormatter>(
+        &self,
+        config: Arc<EndpointConfig<F>>,
+    ) {
         self.spawn_event_task(|client, reporting_endpoint| {
             send_permissions_updated_event(client, reporting_endpoint, config)
         });
@@ -225,10 +231,10 @@ async fn send_tls_termination_failed_event(
     send_event(client, reporting_endpoint, event, &url).await;
 }
 
-async fn send_permissions_updated_event(
+async fn send_permissions_updated_event<F: PackageNameFormatter>(
     client: BoxService<Request, Response, OpaqueError>,
     reporting_endpoint: String,
-    config: EndpointConfig,
+    config: Arc<EndpointConfig<F>>,
 ) {
     tracing::debug!(
         "sending permissions update notification (permission_group_id={})",

@@ -10,16 +10,20 @@ use rama::{
     utils::str::{
         self as str_utils,
         arcstr::{ArcStr, arcstr},
+        smol_str::format_smolstr,
     },
 };
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::{EcosystemKey, PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
     },
-    package::malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
+    package::{
+        malware_list::RemoteMalwareList,
+        name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
+    },
     storage::SyncCompactDataStorage,
 };
 
@@ -28,10 +32,19 @@ use crate::http::firewall::pac::PacScriptGenerator;
 
 use super::{BlockedRequest, RequestAction, Rule};
 
+type OpenVsxPackageNameFormatter = LowerCasePackageNameFormatter;
+type OpenVsxPackageName = LowerCasePackageName;
+
+type OpenVsxRemoteMalwareList = RemoteMalwareList<OpenVsxPackageNameFormatter>;
+type OpenVsxPolicyEvaluator = PolicyEvaluator<OpenVsxPackageNameFormatter>;
+
+const OPEN_VSX_PRODUCT_KEY: ArcStr = arcstr!("open_vsx");
+const OPEN_VSX_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("open_vsx");
+
 pub(in crate::http::firewall) struct RuleOpenVsx {
     target_domains: DomainMatcher,
-    remote_malware_list: RemoteMalwareList,
-    policy_evaluator: Option<PolicyEvaluator>,
+    remote_malware_list: OpenVsxRemoteMalwareList,
+    policy_evaluator: Option<OpenVsxPolicyEvaluator>,
 }
 
 impl RuleOpenVsx {
@@ -39,17 +52,17 @@ impl RuleOpenVsx {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<PolicyEvaluator>,
+        policy_evaluator: Option<OpenVsxPolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_open_vsx.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCaseEntryFormatter,
+            LowerCasePackageNameFormatter,
         )
         .await
         .context("create remote malware list for open vsx block rule")?;
@@ -111,7 +124,7 @@ impl Rule for RuleOpenVsx {
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
             let decision = policy_evaluator
-                .evaluate_package_install("open_vsx", extension.extension_id.as_str());
+                .evaluate_package_install(&OPEN_VSX_ECOSYSTEM_KEY, &extension.extension_id);
 
             match decision {
                 PackagePolicyDecision::Allow => {
@@ -154,8 +167,8 @@ impl Rule for RuleOpenVsx {
 impl RuleOpenVsx {
     fn blocked_artifact(extension: &OpenVsxExtensionId) -> Artifact {
         Artifact {
-            product: arcstr!("open_vsx"),
-            identifier: ArcStr::from(extension.extension_id.as_str()),
+            product: OPEN_VSX_PRODUCT_KEY,
+            identifier: extension.extension_id.as_arcstr(),
             display_name: None,
             version: None,
         }
@@ -163,7 +176,7 @@ impl RuleOpenVsx {
 
     fn is_package_listed_as_malware(&self, extension: &OpenVsxExtensionId) -> bool {
         self.remote_malware_list
-            .find_entries(&extension.extension_id.to_ascii_lowercase())
+            .find_entries(&extension.extension_id)
             .entries()
             .is_some()
     }
@@ -215,20 +228,21 @@ impl RuleOpenVsx {
 }
 
 struct OpenVsxExtensionId {
-    extension_id: String,
+    extension_id: OpenVsxPackageName,
 }
 
 impl OpenVsxExtensionId {
     fn new(publisher: &str, extension: &str) -> OpenVsxExtensionId {
         Self {
-            extension_id: format!("{publisher}/{extension}"),
+            extension_id: OpenVsxPackageName::from(format_smolstr!("{publisher}/{extension}")),
         }
     }
 }
 
 impl fmt::Display for OpenVsxExtensionId {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.extension_id)
+        self.extension_id.fmt(f)
     }
 }
 

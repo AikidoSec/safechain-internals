@@ -75,7 +75,11 @@ fn test_parse_extension_id_from_path() {
 
     for (input, expected) in test_cases {
         let parsed = RuleOpenVsx::parse_extension_id_from_path(input).map(|v| v.extension_id);
-        assert_eq!(parsed.as_deref(), expected, "input: '{input}'");
+        assert_eq!(
+            parsed,
+            expected.map(OpenVsxPackageName::from),
+            "input: '{input}'"
+        );
     }
 }
 
@@ -96,8 +100,8 @@ fn test_parse_extension_id_from_path_preserves_case() {
     for (input, expected) in test_cases {
         let parsed = RuleOpenVsx::parse_extension_id_from_path(input).map(|v| v.extension_id);
         assert_eq!(
-            parsed.as_deref(),
-            expected,
+            parsed,
+            expected.map(OpenVsxPackageName::from),
             "Failed to parse path: {}",
             input
         );

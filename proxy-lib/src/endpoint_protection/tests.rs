@@ -1,3 +1,5 @@
+use crate::package::name_formatter::LowerCasePackageNameFormatter;
+
 use super::*;
 
 #[test]
@@ -20,12 +22,15 @@ fn test_parse_fetch_permissions_payload() {
         }
     }"#;
 
-    let config: EndpointConfig = serde_json::from_str(json).unwrap();
+    let config: EndpointConfig<LowerCasePackageNameFormatter> = serde_json::from_str(json).unwrap();
 
     assert_eq!(config.permission_group.id, 123);
     assert_eq!(config.permission_group.name.as_str(), "Development");
 
-    let pypi = config.ecosystems.get("pypi").unwrap();
+    let pypi = config
+        .ecosystems
+        .get(&EcosystemKey::from_static("pypi"))
+        .unwrap();
     assert!(!pypi.block_all_installs);
     assert!(pypi.request_installs);
     assert_eq!(pypi.minimum_allowed_age_timestamp, Some(1740172800));
@@ -45,8 +50,11 @@ fn test_parse_fetch_permissions_defaults() {
         }
     }"#;
 
-    let config: EndpointConfig = serde_json::from_str(json).unwrap();
-    let npm = config.ecosystems.get("npm").unwrap();
+    let config: EndpointConfig<LowerCasePackageNameFormatter> = serde_json::from_str(json).unwrap();
+    let npm = config
+        .ecosystems
+        .get(&EcosystemKey::from_static("npm"))
+        .unwrap();
 
     assert!(!npm.block_all_installs);
     assert!(!npm.request_installs);
@@ -69,7 +77,8 @@ fn test_parse_fetch_permissions_timestamp_true_is_invalid() {
         }
     }"#;
 
-    let err = serde_json::from_str::<EndpointConfig>(json).unwrap_err();
+    let err =
+        serde_json::from_str::<EndpointConfig<LowerCasePackageNameFormatter>>(json).unwrap_err();
     assert!(err.to_string().contains("invalid type: boolean `true`"));
 }
 
@@ -87,6 +96,7 @@ fn test_parse_fetch_permissions_timestamp_false_is_invalid() {
         }
     }"#;
 
-    let err = serde_json::from_str::<EndpointConfig>(json).unwrap_err();
+    let err =
+        serde_json::from_str::<EndpointConfig<LowerCasePackageNameFormatter>>(json).unwrap_err();
     assert!(err.to_string().contains("invalid type: boolean `false`"));
 }

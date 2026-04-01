@@ -11,13 +11,14 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::{EcosystemKey, PackagePolicyDecision, PolicyEvaluator},
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
     },
     package::{
-        malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
+        malware_list::RemoteMalwareList,
+        name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
         version::{PackageVersion, PragmaticSemver},
     },
     storage::SyncCompactDataStorage,
@@ -31,10 +32,19 @@ use super::{BlockedRequest, RequestAction, Rule};
 #[cfg(test)]
 mod test;
 
+type MavenPackageNameFormatter = LowerCasePackageNameFormatter;
+type MavenPackageName = LowerCasePackageName;
+
+type MavenRemoteMalwareList = RemoteMalwareList<MavenPackageNameFormatter>;
+type MavenPolicyEvaluator = PolicyEvaluator<MavenPackageNameFormatter>;
+
+const MAVEN_PRODUCT_KEY: ArcStr = arcstr!("maven");
+const MAVEN_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("maven");
+
 pub(in crate::http::firewall) struct RuleMaven {
     target_domains: DomainMatcher,
-    remote_malware_list: RemoteMalwareList,
-    policy_evaluator: Option<PolicyEvaluator>,
+    remote_malware_list: MavenRemoteMalwareList,
+    policy_evaluator: Option<MavenPolicyEvaluator>,
 }
 
 impl RuleMaven {
@@ -42,17 +52,17 @@ impl RuleMaven {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<PolicyEvaluator>,
+        policy_evaluator: Option<MavenPolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
             Uri::from_static("https://malware-list.aikido.dev/malware_maven.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCaseEntryFormatter,
+            LowerCasePackageNameFormatter,
         )
         .await
         .context("create remote malware list for maven block rule")?;
@@ -122,7 +132,7 @@ impl Rule for RuleMaven {
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
             let decision = policy_evaluator
-                .evaluate_package_install("maven", artifact.fully_qualified_name.as_str());
+                .evaluate_package_install(&MAVEN_ECOSYSTEM_KEY, &artifact.fully_qualified_name);
 
             match decision {
                 PackagePolicyDecision::Allow => {
@@ -153,7 +163,7 @@ impl Rule for RuleMaven {
 }
 
 struct MavenArtifact {
-    fully_qualified_name: ArcStr,
+    fully_qualified_name: MavenPackageName,
     version: PragmaticSemver,
 }
 
@@ -167,10 +177,9 @@ impl MavenArtifact {
         }
         name.push(':');
         name.push_str(artifact_id);
-        name.make_ascii_lowercase();
 
         Self {
-            fully_qualified_name: ArcStr::from(name),
+            fully_qualified_name: MavenPackageName::from(name),
             version,
         }
     }
@@ -179,8 +188,8 @@ impl MavenArtifact {
 impl RuleMaven {
     fn blocked_artifact(artifact: &MavenArtifact) -> Artifact {
         Artifact {
-            product: arcstr!("maven"),
-            identifier: artifact.fully_qualified_name.clone(),
+            product: MAVEN_PRODUCT_KEY,
+            identifier: artifact.fully_qualified_name.as_arcstr(),
             display_name: None,
             version: Some(PackageVersion::Semver(artifact.version.clone())),
         }
@@ -188,8 +197,8 @@ impl RuleMaven {
 
     fn is_package_listed_as_malware(&self, artifact: &MavenArtifact) -> bool {
         self.remote_malware_list.has_entries_with_version(
-            artifact.fully_qualified_name.as_str(),
-            PackageVersion::Semver(artifact.version.clone()),
+            &artifact.fully_qualified_name,
+            &PackageVersion::Semver(artifact.version.clone()),
         )
     }
 

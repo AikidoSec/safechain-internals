@@ -8,7 +8,10 @@ fn test_parse_artifact_happy_paths_table() {
         let artifact = RuleMaven::parse_artifact_from_path_for_domain(path, domain)
             .unwrap_or_else(|| panic!("expected artifact to parse: domain={domain} path={path}"));
 
-        assert_eq!(artifact.fully_qualified_name.as_str(), expected_fqn);
+        assert_eq!(
+            artifact.fully_qualified_name,
+            MavenPackageName::from(expected_fqn)
+        );
         assert_eq!(
             artifact.version,
             PragmaticSemver::parse(expected_version).unwrap()
@@ -92,7 +95,10 @@ fn test_parse_artifact_for_repository_apache_all_known_prefixes() {
         let artifact =
             RuleMaven::parse_artifact_from_path_for_domain(path, "repository.apache.org")
                 .unwrap_or_else(|| panic!("expected apache repository path to parse: {path}"));
-        assert_eq!(artifact.fully_qualified_name.as_str(), "org.example:lib");
+        assert_eq!(
+            artifact.fully_qualified_name,
+            MavenPackageName::from("org.example:lib")
+        );
         assert_eq!(
             artifact.version,
             PragmaticSemver::parse(expected_version).unwrap()
@@ -108,7 +114,10 @@ fn test_parse_artifact_handles_leading_slash_paths() {
     )
     .unwrap_or_else(|| panic!("expected leading-slash path to parse"));
 
-    assert_eq!(artifact.fully_qualified_name.as_str(), "org.example:lib");
+    assert_eq!(
+        artifact.fully_qualified_name,
+        MavenPackageName::from("org.example:lib")
+    );
     assert_eq!(artifact.version, PragmaticSemver::parse("1.2.3").unwrap());
 }
 
@@ -172,6 +181,11 @@ fn test_parse_real_world_full_urls_smoke() {
             .unwrap_or_else(|| panic!("expected maven .jar to be parsed: {url}"));
 
         // Ensure we didn't accidentally treat the repository prefix as part of the groupId.
-        assert!(!artifact.fully_qualified_name.as_str().contains("maven2."));
+        assert!(
+            !artifact
+                .fully_qualified_name
+                .as_arcstr()
+                .contains("maven2.")
+        );
     }
 }

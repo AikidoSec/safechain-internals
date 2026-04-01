@@ -1,41 +1,44 @@
-use std::{sync::Arc, time::Duration};
+use std::{marker::PhantomData, time::Duration};
 
 use rama::{
     Service,
-    error::{BoxError, ErrorContext, ErrorExt as _, extra::OpaqueError},
+    error::{BoxError, ErrorContext, extra::OpaqueError},
     graceful::ShutdownGuard,
-    http::{
-        BodyExtractExt, Request, Response, StatusCode, Uri, service::client::HttpClientExt as _,
-    },
+    http::{Body, Request, Response, Uri},
     telemetry::tracing,
     utils::str::arcstr::ArcStr,
 };
 
-use arc_swap::{ArcSwap, Guard};
-use rand::RngExt as _;
-use serde::{Deserialize, Serialize};
-use tokio::time::Instant;
-
 use crate::{
-    http::firewall::notifier::EventNotifier, storage::SyncCompactDataStorage,
-    utils::uri::uri_to_filename,
+    endpoint_protection::EcosystemKey,
+    package::name_formatter::PackageNameFormatter,
+    storage::SyncCompactDataStorage,
+    utils::remote_resource::{self, RefreshHandle, RemoteResource, RemoteResourceSpec},
 };
 
 use super::types::{EcosystemConfig, EndpointConfig};
 
-#[derive(Clone)]
-pub struct RemoteEndpointConfig {
-    config: Arc<ArcSwap<EndpointConfig>>,
-    trigger_notify: Arc<tokio::sync::Notify>,
+pub struct RemoteEndpointConfig<F: PackageNameFormatter> {
+    config: RemoteResource<Option<EndpointConfig<F>>>,
+    trigger_refresh: RefreshHandle,
 }
 
-impl std::fmt::Debug for RemoteEndpointConfig {
+impl<F: PackageNameFormatter> Clone for RemoteEndpointConfig<F> {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            trigger_refresh: self.trigger_refresh.clone(),
+        }
+    }
+}
+
+impl<F: PackageNameFormatter> std::fmt::Debug for RemoteEndpointConfig<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RemoteEndpointConfig").finish()
     }
 }
 
-impl RemoteEndpointConfig {
+impl<F: PackageNameFormatter> RemoteEndpointConfig<F> {
     /// Create a new endpoint config service.
     ///
     /// # Arguments
@@ -53,333 +56,101 @@ impl RemoteEndpointConfig {
         device_id: ArcStr,
         sync_storage: SyncCompactDataStorage,
         client: C,
-        notifier: Option<EventNotifier>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
-        let filename = uri_to_filename(&uri);
-        let refresh_interval = Duration::from_secs(60);
-
-        let config_client = RemoteConfigClient {
-            uri,
-            token,
-            device_id,
-            filename,
-            refresh_interval,
+        let (config, trigger_refresh) = remote_resource::try_new(
+            guard,
             sync_storage,
             client,
-        };
-
-        let (endpoint_config, e_tag) = match config_client.load_cached_config().await {
-            Ok(Some(cached_info)) => {
-                tracing::debug!(
-                    "create new remote endpoint config (uri: {}) with cached config",
-                    config_client.uri
-                );
-                cached_info
-            }
-            Ok(None) => {
-                tracing::debug!(
-                    "no cached config found for remote endpoint (uri: {}); download fresh config",
-                    config_client.uri
-                );
-
-                config_client
-                    .download_config(None)
-                    .await
-                    .context("download new endpoint config")?
-                    .context("new endpoint config not available")?
-            }
-            Err(err) => {
-                tracing::warn!(
-                    "failed to load cached config for remote endpoint (uri: {}); download fresh config; err = {err}",
-                    config_client.uri
-                );
-
-                config_client
-                    .download_config(None)
-                    .await
-                    .context("download new endpoint config")?
-                    .context("new endpoint config not available")?
-            }
-        };
-
-        // Notify the daemon of the initial permissions on startup
-        if let Some(ref notifier) = notifier {
-            notifier.notify_permissions_updated(endpoint_config.clone());
-        }
-
-        let shared_config = Arc::new(ArcSwap::new(Arc::new(endpoint_config)));
-        let trigger_notify = Arc::new(tokio::sync::Notify::new());
-
-        tokio::spawn(config_update_loop(
-            guard,
-            config_client,
-            e_tag,
-            shared_config.clone(),
-            trigger_notify.clone(),
-            notifier,
-        ));
+            EndpointConfigRemoteResource::<F> {
+                uri,
+                token,
+                device_id,
+                _phantom: PhantomData,
+            },
+        )
+        .await
+        .context("create new remote endpoint config")?;
 
         Ok(Self {
-            config: shared_config,
-            trigger_notify,
+            config,
+            trigger_refresh,
         })
     }
 
-    pub fn get(&self) -> Arc<EndpointConfig> {
-        self.config.load_full()
-    }
-
-    pub fn get_ecosystem_config<'a>(&self, ecosystem: &'a str) -> EcosystemConfigResult<'a> {
-        let guard = self.config.load();
-        EcosystemConfigResult { ecosystem, guard }
+    pub fn map_ecosystem_config<T>(
+        &self,
+        ecosystem: &EcosystemKey,
+        map: impl FnOnce(&EcosystemConfig<F>) -> T,
+    ) -> Option<T> {
+        self.config
+            .get()
+            .as_ref()
+            .and_then(|state| state.ecosystems.get(ecosystem).map(map))
     }
 
     /// Trigger an immediate config refresh check.
     pub fn trigger_refresh(&self) {
-        self.trigger_notify.notify_one();
+        self.trigger_refresh.trigger_refresh();
     }
 }
 
-pub struct EcosystemConfigResult<'a> {
-    ecosystem: &'a str,
-    guard: Guard<Arc<EndpointConfig>>,
-}
-
-impl EcosystemConfigResult<'_> {
-    pub fn config(&self) -> Option<&EcosystemConfig> {
-        self.guard.ecosystems.get(self.ecosystem)
-    }
-}
-
-struct RemoteConfigClient<C> {
+struct EndpointConfigRemoteResource<F: PackageNameFormatter> {
     uri: Uri,
     token: ArcStr,
     device_id: ArcStr,
-    filename: ArcStr,
-    refresh_interval: Duration,
-    sync_storage: SyncCompactDataStorage,
-    client: C,
+    _phantom: PhantomData<F>,
 }
 
-impl<C> RemoteConfigClient<C>
-where
-    C: Service<Request, Output = Response, Error = OpaqueError>,
-{
-    async fn download_config(
-        &self,
-        e_tag: Option<&str>,
-    ) -> Result<Option<(EndpointConfig, Option<ArcStr>)>, BoxError> {
-        let Some((config, new_e_tag)) = self.fetch_remote_config_and_e_tag(e_tag).await? else {
-            return Ok(None);
-        };
+impl<F: PackageNameFormatter> Clone for EndpointConfigRemoteResource<F> {
+    fn clone(&self) -> Self {
+        Self {
+            uri: self.uri.clone(),
+            token: self.token.clone(),
+            device_id: self.device_id.clone(),
+            _phantom: self._phantom,
+        }
+    }
+}
 
-        self.spawn_config_caching_task(config.clone(), new_e_tag.clone());
+impl<F: PackageNameFormatter> RemoteResourceSpec for EndpointConfigRemoteResource<F> {
+    type Payload = EndpointConfig<F>;
+    type State = Option<EndpointConfig<F>>;
 
+    fn refresh_interval(&self) -> Duration {
+        Duration::from_secs(60)
+    }
+
+    fn build_request(&self) -> Result<Request, BoxError> {
+        let mut req = Request::builder()
+            .uri(self.uri.clone())
+            .body(Body::empty())
+            .context("build endpoint protection config http request")?;
+        req.headers_mut().insert(
+            "authorization",
+            self.token
+                .as_str()
+                .try_into()
+                .context("convert endpoint token into authorization header value")?,
+        );
+        req.headers_mut().insert(
+            "x-device-id",
+            self.device_id
+                .as_str()
+                .try_into()
+                .context("convert endpoint device_id into x-device-id header value")?,
+        );
+        Ok(req)
+    }
+
+    fn build_state(&self, payload: Self::Payload) -> Result<Self::State, BoxError> {
         tracing::debug!(
-            "endpoint config refreshed from remote endpoint '{}'",
+            "decoded endpoint config from '{}' (permission_group_id: {})",
             self.uri,
+            payload.permission_group.id,
         );
-
-        Ok(Some((config, new_e_tag)))
+        Ok(Some(payload))
     }
-
-    async fn fetch_remote_config_and_e_tag(
-        &self,
-        previous_e_tag: Option<&str>,
-    ) -> Result<Option<(EndpointConfig, Option<ArcStr>)>, BoxError> {
-        let start = Instant::now();
-
-        let req_builder = self.client.get(self.uri.clone());
-
-        let req_builder = req_builder.header("Authorization", self.token.as_str());
-        let req_builder = req_builder.header("X-Device-Id", self.device_id.as_str());
-
-        let req_builder = if let Some(e_tag) = previous_e_tag {
-            req_builder.header("if-none-match", e_tag)
-        } else {
-            req_builder
-        };
-
-        let resp = req_builder
-            .send()
-            .await
-            .context("fetch endpoint config from remote endpoint")
-            .context_debug_field("tt", start.elapsed())
-            .with_context_field("uri", || self.uri.clone())?;
-
-        if resp.status() == StatusCode::NOT_MODIFIED {
-            tracing::debug!(
-                "endpoint config endpoint '{}' reported config is not modified; (tt: {:?})",
-                self.uri,
-                start.elapsed()
-            );
-            return Ok(None);
-        }
-
-        if !resp.status().is_success() {
-            let http_status_code = resp.status();
-            let maybe_error_msg = resp.try_into_string().await.unwrap_or_default();
-            return Err(
-                BoxError::from("failed to download reported config from remote endpoint")
-                    .with_context_field("uri", || self.uri.clone())
-                    .context_field("status", http_status_code)
-                    .context_field("message", maybe_error_msg),
-            );
-        }
-
-        let e_tag: Option<ArcStr> = resp
-            .headers()
-            .get("etag")
-            .and_then(|v| v.as_bytes().try_into().ok());
-
-        let config: EndpointConfig = resp
-            .try_into_json()
-            .await
-            .context("collect and json-decode endpoint config response payload")
-            .with_context_field("uri", || self.uri.clone())
-            .with_context_debug_field("tt", || start.elapsed())?;
-
-        tracing::debug!(
-            "fetched and decoded new endpoint config from '{}' (permission_group_id: {}) (tt: {:?})",
-            self.uri,
-            config.permission_group.id,
-            start.elapsed(),
-        );
-
-        Ok(Some((config, e_tag)))
-    }
-
-    fn spawn_config_caching_task(&self, config: EndpointConfig, e_tag: Option<ArcStr>) {
-        let storage = self.sync_storage.clone();
-        let filename = self.filename.clone();
-
-        tokio::task::spawn_blocking(move || {
-            if let Err(err) = storage.store(
-                &filename,
-                &CachedEndpointConfig {
-                    e_tag: e_tag.clone(),
-                    config,
-                },
-            ) {
-                tracing::error!("failed to backup downloaded endpoint config @ '{filename}': {err}")
-            }
-        });
-    }
-
-    async fn load_cached_config(
-        &self,
-    ) -> Result<Option<(EndpointConfig, Option<ArcStr>)>, BoxError> {
-        tokio::task::spawn_blocking({
-            let storage = self.sync_storage.clone();
-            let filename = self.filename.clone();
-            move || load_cached_config_sync_inner(storage, filename)
-        })
-        .await
-        .context("wait for blocking task to load cached config")
-        .with_context_field("uri", || self.uri.clone())?
-    }
-}
-
-fn load_cached_config_sync_inner(
-    storage: SyncCompactDataStorage,
-    filename: ArcStr,
-) -> Result<Option<(EndpointConfig, Option<ArcStr>)>, BoxError> {
-    let cached_config: Option<CachedEndpointConfig> =
-        storage.load(&filename).context("storage failure")?;
-
-    let Some(cached_config) = cached_config else {
-        return Ok(None);
-    };
-
-    Ok(Some((cached_config.config, cached_config.e_tag)))
-}
-
-async fn config_update_loop<C>(
-    guard: ShutdownGuard,
-    client: RemoteConfigClient<C>,
-    e_tag: Option<ArcStr>,
-    shared_config: Arc<ArcSwap<EndpointConfig>>,
-    trigger_notify: Arc<tokio::sync::Notify>,
-    notifier: Option<EventNotifier>,
-) where
-    C: Service<Request, Output = Response, Error = OpaqueError>,
-{
-    tracing::debug!(
-        "remote endpoint config (uri = {}), update loop task up and running",
-        client.uri
-    );
-
-    let mut sleep_for = with_jitter(client.refresh_interval);
-    let mut latest_e_tag = e_tag;
-
-    loop {
-        tracing::debug!(
-            "remote endpoint config (uri = {}), sleep for: {sleep_for:?}",
-            client.uri
-        );
-
-        tokio::select! {
-            _ = tokio::time::sleep(sleep_for) => {
-                tracing::debug!(
-                    "remote endpoint config (uri = {}), timer triggered refresh",
-                    client.uri
-                );
-            },
-            _ = trigger_notify.notified() => {
-                tracing::debug!(
-                    "remote endpoint config (uri = {}), manual trigger received",
-                    client.uri
-                );
-            },
-            _ = guard.cancelled() => {
-                tracing::debug!(
-                    "remote endpoint config (uri = {}), guard cancelled; exit",
-                    client.uri
-                );
-                return;
-            }
-        }
-
-        match client.download_config(latest_e_tag.as_deref()).await {
-            Ok(Some((fresh_config, fresh_e_tag))) => {
-                tracing::debug!(
-                    "remote endpoint config (uri = {}), config updated",
-                    client.uri
-                );
-                if let Some(ref notifier) = notifier {
-                    notifier.notify_permissions_updated(fresh_config.clone());
-                }
-                shared_config.store(Arc::new(fresh_config));
-                sleep_for = with_jitter(client.refresh_interval);
-                latest_e_tag = fresh_e_tag;
-            }
-            Ok(None) => {
-                tracing::debug!("endpoint config was unmodified, preserve current one...");
-                sleep_for = with_jitter(client.refresh_interval);
-            }
-            Err(err) => {
-                tracing::error!(
-                    "remote endpoint config (uri = {}), failed to update (err = {err}), try again in shorter interval...",
-                    client.uri
-                );
-                let fail_interval = Duration::from_secs(std::cmp::max(sleep_for.as_secs() / 2, 60));
-                sleep_for = with_jitter(fail_interval);
-            }
-        }
-    }
-}
-
-fn with_jitter(refresh: Duration) -> Duration {
-    let max_jitter = std::cmp::min(refresh, Duration::from_secs(60));
-    let jitter_secs = rand::rng().random_range(0.0..=max_jitter.as_secs_f64());
-    refresh + Duration::from_secs_f64(jitter_secs)
-}
-
-#[derive(Serialize, Deserialize)]
-struct CachedEndpointConfig {
-    pub e_tag: Option<ArcStr>,
-    pub config: EndpointConfig,
 }
