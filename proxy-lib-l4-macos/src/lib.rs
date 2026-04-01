@@ -4,7 +4,7 @@ use std::net::IpAddr;
 
 use rama::{
     net::{
-        address::Host,
+        address::{Host, HostWithPort},
         apple::networkextension::{
             self as apple_ne,
             tproxy::{
@@ -15,6 +15,7 @@ use rama::{
         },
     },
     telemetry::tracing,
+    utils::str::any_starts_with_ignore_ascii_case,
 };
 
 #[global_allocator]
@@ -68,13 +69,13 @@ fn flow_action(meta: &TransparentProxyFlowMeta) -> TransparentProxyFlowAction {
         "flow intercept decision: evaluating (rust callback entered)"
     );
 
-    if is_ip_remote_host_passthrough(meta) {
+    let Some(remote_host) = is_ip_remote_host_passthrough(meta) else {
         return TransparentProxyFlowAction::Passthrough;
-    }
+    };
 
     match meta.protocol {
         TransparentProxyFlowProtocol::Tcp => flow_action_tcp(meta),
-        TransparentProxyFlowProtocol::Udp => flow_action_udp(meta),
+        TransparentProxyFlowProtocol::Udp => flow_action_udp(meta, remote_host),
     }
 }
 
@@ -90,19 +91,82 @@ fn flow_action_tcp(meta: &TransparentProxyFlowMeta) -> TransparentProxyFlowActio
     TransparentProxyFlowAction::Intercept
 }
 
-fn flow_action_udp(meta: &TransparentProxyFlowMeta) -> TransparentProxyFlowAction {
+fn flow_action_udp(
+    meta: &TransparentProxyFlowMeta,
+    remote_host: HostWithPort,
+) -> TransparentProxyFlowAction {
+    if remote_host.port != 443 {
+        tracing::debug!(
+            protocol = ?meta.protocol,
+            remote = ?meta.remote_endpoint,
+            local = ?meta.local_endpoint,
+            app_bundle_id = ?meta.source_app_bundle_identifier,
+            app_sign_id = ?meta.source_app_signing_identifier,
+            "flow action: udp traffic w/ port != 443: pass through"
+        );
+        return TransparentProxyFlowAction::Passthrough;
+    }
+
+    if meta
+        .source_app_bundle_identifier
+        .as_deref()
+        .map(|identifier| {
+            any_starts_with_ignore_ascii_case(
+                identifier,
+                [
+                    // Google Chrome
+                    "com.google.chrome",
+                    // Chromium and forks that reuse upstream id
+                    "org.chromium",
+                    // Microsoft Edge
+                    "com.microsoft.edgemac",
+                    "com.microsoft.msedge",
+                    // Brave
+                    "com.brave.browser",
+                    "com.brave.ios",
+                    // Opera
+                    "com.operasoftware.opera",
+                    // Vivaldi
+                    "com.vivaldi",
+                    // Arc
+                    "company.thebrowser",
+                    // Yandex
+                    "ru.yandex",
+                    // Common alt Chromium builds
+                    "com.github.eloston", // ungoogled chromium
+                ],
+            )
+        })
+        .unwrap_or_default()
+    {
+        tracing::debug!(
+            protocol = ?meta.protocol,
+            remote = ?meta.remote_endpoint,
+            local = ?meta.local_endpoint,
+            app_bundle_id = ?meta.source_app_bundle_identifier,
+            app_sign_id = ?meta.source_app_signing_identifier,
+            "flow action: udp traffic @ port 443: chromium browser detected via source app bundle id: block"
+        );
+        return TransparentProxyFlowAction::Blocked;
+    }
+
+    // NOTE: if we bundle id turns out to not be reliable,
+    // we can also start to check the source app's FS path (location),
+    // based on the audit token... this has however a bundle syscall cost...
+    // so hopefully we can avoid it
+
     tracing::debug!(
         protocol = ?meta.protocol,
         remote = ?meta.remote_endpoint,
         local = ?meta.local_endpoint,
         app_bundle_id = ?meta.source_app_bundle_identifier,
         app_sign_id = ?meta.source_app_signing_identifier,
-        "flow action: udp traffic: pass through"
+        "flow action: udp traffic @ port 443: pass through, chrome not detected"
     );
     TransparentProxyFlowAction::Passthrough
 }
 
-fn is_ip_remote_host_passthrough(meta: &TransparentProxyFlowMeta) -> bool {
+fn is_ip_remote_host_passthrough(meta: &TransparentProxyFlowMeta) -> Option<HostWithPort> {
     let Some(target) = meta.remote_endpoint.as_ref() else {
         tracing::debug!(
             protocol = ?meta.protocol,
@@ -112,14 +176,40 @@ fn is_ip_remote_host_passthrough(meta: &TransparentProxyFlowMeta) -> bool {
             app_sign_id = ?meta.source_app_signing_identifier,
             "remote host is missing: passthrough traffic"
         );
-        return true;
+        return None;
     };
 
     match &target.host {
-        Host::Name(_) => true,
-        Host::Address(IpAddr::V4(addr)) => addr.is_loopback() || addr.is_private(),
-        Host::Address(IpAddr::V6(addr)) => addr.is_loopback() || addr.is_unique_local(),
+        Host::Name(_) => return None,
+        Host::Address(IpAddr::V4(addr)) => {
+            if addr.is_loopback() || addr.is_private() {
+                tracing::debug!(
+                    protocol = ?meta.protocol,
+                    remote = ?meta.remote_endpoint,
+                    local = ?meta.local_endpoint,
+                    app_bundle_id = ?meta.source_app_bundle_identifier,
+                    app_sign_id = ?meta.source_app_signing_identifier,
+                    "remote host is within passthrough IPv4 range: passthrough traffic"
+                );
+                return None;
+            }
+        }
+        Host::Address(IpAddr::V6(addr)) => {
+            if addr.is_loopback() || addr.is_unique_local() {
+                tracing::debug!(
+                    protocol = ?meta.protocol,
+                    remote = ?meta.remote_endpoint,
+                    local = ?meta.local_endpoint,
+                    app_bundle_id = ?meta.source_app_bundle_identifier,
+                    app_sign_id = ?meta.source_app_signing_identifier,
+                    "remote host is within passthrough IPv6 range: passthrough traffic"
+                );
+                return None;
+            }
+        }
     }
+
+    Some(target.clone())
 }
 
 apple_ne::transparent_proxy_ffi! {
