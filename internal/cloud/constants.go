@@ -5,4 +5,5 @@ const (
 	HeartbeatEndpoint                  = "api/endpoint_protection/callbacks/reportDeviceHeartbeat"
 	SBOMEndpoint                       = "api/endpoint_protection/callbacks/reportInstalledPackages"
 	RequestPackageInstallationEndpoint = "api/endpoint_protection/callbacks/requestPackageInstallation"
+	FetchPermissionsEndpoint           = "api/endpoint_protection/callbacks/fetchPermissions"
 )

@@ -162,6 +162,11 @@ func (m *UIManager) NotifyTlsTerminationFailed(ev any) {
 	m.Client.NotifyTlsTerminationFailed(ev)
 }
 
+// NotifyPermissionsUpdated sends the latest permissions to the UI.
+func (m *UIManager) NotifyPermissionsUpdated(perms any) {
+	m.Client.NotifyPermissionsUpdated(perms)
+}
+
 // NotifyProxyStatusIfChanged sends a proxy-status update to the UI only when
 // the running state has changed (or on the very first call).
 func (m *UIManager) NotifyProxyStatusIfChanged(running bool, stdoutMessage string) {
