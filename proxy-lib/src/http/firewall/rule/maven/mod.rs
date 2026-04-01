@@ -174,7 +174,7 @@ impl Rule for RuleMaven {
             tracing::info!(
                 http.url.path = %path,
                 package = %artifact.fully_qualified_name,
-                "blocked maven install: package released less than 24h ago"
+                "blocked maven install: package released too recently"
             );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
@@ -222,7 +222,7 @@ impl RuleMaven {
         }
     }
 
-    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 24 * 3600;
+    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 48 * 3600;
 
     fn get_package_age_cutoff_secs(&self) -> i64 {
         let maybe_ts = self.remote_endpoint_config.as_ref().and_then(|c| {
