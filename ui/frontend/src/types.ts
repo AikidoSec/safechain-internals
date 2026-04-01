@@ -1,6 +1,6 @@
 export type BlockReason = "malware" | "rejected" | "block_all" | "request_install" | "new_package";
 
-export type EventStatus = "" | "blocked" | "request_pending" | "request_approved";
+export type EventStatus = "" | "blocked" | "request_pending" | "request_approved" | "request_rejected";
 
 export interface Artifact {
   product: string;
@@ -15,23 +15,6 @@ export interface BlockEvent {
   artifact: Artifact;
   block_reason: BlockReason;
   status?: EventStatus;
-}
-
-export interface EcosystemExceptions {
-  allowed_packages: string[];
-  rejected_packages: string[];
-}
-
-export interface EcosystemPermissions {
-  block_all_installs: boolean;
-  request_installs: boolean;
-  minimum_allowed_age_timestamp: number;
-  exceptions: EcosystemExceptions;
-}
-
-export interface PermissionsResponse {
-  permission_group: { id: number; name: string };
-  ecosystems: Record<string, EcosystemPermissions>;
 }
 
 export interface TlsTerminationFailedEvent {
