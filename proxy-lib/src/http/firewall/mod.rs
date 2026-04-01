@@ -135,7 +135,7 @@ impl Firewall {
         )
         .await;
 
-        let (_, skill_sh_policy_evaluator) = new_policy_evaluator(
+        let (skill_sh_policy_config, skill_sh_policy_evaluator) = new_policy_evaluator(
             agent_identity.clone(),
             guard.clone(),
             endpoint_config_uri.clone(),
@@ -225,7 +225,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     lowercase_policy_evaluator,
-                    lowercase_remote_endpoint_config.clone(),
+                    lowercase_remote_endpoint_config,
                 )
                 .await
                 .context("create block rule: open vsx")?
@@ -235,6 +235,7 @@ impl Firewall {
                     layered_client,
                     data,
                     skill_sh_policy_evaluator,
+                    skill_sh_policy_config,
                 )
                 .await
                 .context("create block rule: skills.sh")?
