@@ -2,7 +2,7 @@ use std::{fmt, str::FromStr};
 
 use rama::{
     Service,
-    error::{BoxError, ErrorContext as _},
+    error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
@@ -45,7 +45,7 @@ impl RuleMaven {
         policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = BoxError>,
+        C: Service<Request, Output = Response, Error = OpaqueError>,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
@@ -80,11 +80,6 @@ impl fmt::Debug for RuleMaven {
 
 impl Rule for RuleMaven {
     #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        "Maven"
-    }
-
-    #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
     }
@@ -97,10 +92,6 @@ impl Rule for RuleMaven {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        Ok(resp)
-    }
-
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
         let domain = match crate::http::try_get_domain_for_req(&req) {
             Some(domain) => domain,
@@ -109,10 +100,6 @@ impl Rule for RuleMaven {
                 return Ok(RequestAction::Allow(req));
             }
         };
-
-        if !self.match_domain(&domain) {
-            return Ok(RequestAction::Allow(req));
-        }
 
         let domain_str = domain.as_str();
         let path = req.uri().path().trim_start_matches('/');

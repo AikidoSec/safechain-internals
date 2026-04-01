@@ -87,7 +87,56 @@ lipo -create \
     target/x86_64-apple-darwin/release/safechain-l7-proxy \
     target/aarch64-apple-darwin/release/safechain-l7-proxy \
     -output bin/safechain-l7-proxy-darwin-universal
-echo "✓ Proxy built: bin/safechain-l7-proxy-darwin-universal"
+echo "✓ L7 Proxy built: bin/safechain-l7-proxy-darwin-universal"
+
+if ! command -v xcodegen &> /dev/null; then
+    echo "xcodegen could not be found. Please install it using:"
+    echo "   brew install xcodegen"
+    echo "Then run this script again."
+    exit 1
+fi
+
+echo "Building L4 proxy Rust static library for x86_64-apple-darwin..."
+cargo build --release -p safechain-lib-l4-proxy-macos --target x86_64-apple-darwin
+
+echo "Building L4 proxy Rust static library for aarch64-apple-darwin..."
+cargo build --release -p safechain-lib-l4-proxy-macos --target aarch64-apple-darwin
+
+echo "Creating universal L4 proxy static library with lipo..."
+mkdir -p target/universal
+lipo -create \
+    target/x86_64-apple-darwin/release/libsafechain_lib_l4_proxy_macos.a \
+    target/aarch64-apple-darwin/release/libsafechain_lib_l4_proxy_macos.a \
+    -output target/universal/libsafechain_lib_l4_proxy_macos.a
+echo "✓ L4 proxy static library built"
+
+echo "Generating L4 proxy Xcode project..."
+cd "$PROJECT_DIR/packaging/macos/xcode/l4-proxy"
+xcodegen generate --spec Project.dev.yml
+
+L4_DERIVED_DATA="$PROJECT_DIR/.aikido/xcode/safechain-l4-proxy-release"
+
+echo "Building L4 proxy macOS app..."
+xcodebuild \
+    -project AikidoEndpointL4Proxy.xcodeproj \
+    -scheme AikidoEndpointL4ProxyHost \
+    -configuration Release \
+    -derivedDataPath "$L4_DERIVED_DATA" \
+    -allowProvisioningUpdates \
+    -allowProvisioningDeviceRegistration \
+    clean build
+
+cd "$PROJECT_DIR"
+
+L4_APP_SRC="$L4_DERIVED_DATA/Build/Products/Release/AikidoEndpointL4ProxyHost.app"
+if [ ! -d "$L4_APP_SRC" ]; then
+    echo "✗ L4 proxy app build failed — app bundle not found at $L4_APP_SRC"
+    exit 1
+fi
+
+rm -rf "bin/AikidoEndpointL4ProxyHost.app"
+ditto "$L4_APP_SRC" "bin/AikidoEndpointL4ProxyHost.app"
+echo "✓ L4 Proxy app built: bin/AikidoEndpointL4ProxyHost.app"
 
 lipo -info bin/endpoint-protection-darwin-universal
 lipo -info "bin/endpoint-protection-ui-darwin-universal.app/Contents/MacOS/$APP_BINARY_NAME"
@@ -134,7 +183,7 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
              --timestamp \
              --options runtime \
              "$PROJECT_DIR/bin/safechain-l7-proxy-darwin-universal"
-    echo "✓ Proxy signed"
+    echo "✓ L7 Proxy signed"
     echo ""
 
     echo "Verifying binary signatures..."
@@ -142,6 +191,10 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
     codesign --verify --verbose "$PROJECT_DIR/bin/endpoint-protection-ui-darwin-universal.app"
     codesign --verify --verbose "$PROJECT_DIR/bin/safechain-l7-proxy-darwin-universal"
     echo "✓ Binary signatures verified"
+
+    echo "Verifying L4 proxy app signature (signed by Xcode)..."
+    codesign --verify --verbose --deep "$PROJECT_DIR/bin/AikidoEndpointL4ProxyHost.app"
+    echo "✓ L4 Proxy app signature verified"
     echo ""
 else
     echo "⚠ No Developer ID Application certificate found"

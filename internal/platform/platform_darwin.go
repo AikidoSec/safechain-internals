@@ -27,6 +27,7 @@ const (
 	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
 	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
 	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
+	SafeChainL4ProxyHostPath     = "/Applications/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost"
 	SafeChainSbomJSONName        = "endpoint-protection-sbom.json"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
@@ -290,6 +291,26 @@ func showCAInstallDialog(ctx context.Context) error {
 	return nil
 }
 
+func ShowErrorDialog(ctx context.Context, message string) error {
+	script := `
+on run argv
+	button returned of (display dialog (item 1 of argv) ¬
+		with title "Aikido Endpoint Protection" ¬
+		buttons {"OK"} default button "OK" with icon stop)
+end run
+`
+
+	_, err := RunInAuditSessionOfCurrentUser(
+		ctx,
+		"osascript",
+		[]string{"-e", script, "--", message},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to show error dialog: %w", err)
+	}
+	return nil
+}
+
 func InstallProxyCA(ctx context.Context, certPath string) error {
 	// Show a dialog so the user understands the upcoming admin prompt is from SafeChain.
 	if err := showCAInstallDialog(ctx); err != nil {
@@ -440,6 +461,52 @@ func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ..
 	pathEnv = pathEnv + string(os.PathListSeparator) + os.Getenv("PATH")
 	env := []string{"PATH=" + pathEnv}
 	return RunAsCurrentUserWithEnv(ctx, env, binaryPath, args)
+}
+
+// CommandAsCurrentUserWithPathEnv builds a long-lived command that should run
+// as the current console user with a PATH that includes the binary's location.
+func CommandAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ...string) (*exec.Cmd, error) {
+	if !filepath.IsAbs(binaryPath) {
+		return nil, fmt.Errorf("binaryPath must be absolute, got %q", binaryPath)
+	}
+
+	binDir := filepath.Dir(binaryPath)
+	pathEnv := binDir
+
+	resolved, err := filepath.EvalSymlinks(binaryPath)
+	if err == nil {
+		resolvedDir := filepath.Dir(resolved)
+		if resolvedDir != binDir {
+			pathEnv = binDir + string(os.PathListSeparator) + resolvedDir
+		}
+	}
+
+	pathEnv = pathEnv + string(os.PathListSeparator) + os.Getenv("PATH")
+	env := []string{"PATH=" + pathEnv}
+
+	if !RunningAsRoot() {
+		// Use exec.CommandContext to avoid shell interpretation of arguments,
+		// preventing injection when passing user-controlled values through sudo.
+		cmd := exec.CommandContext(ctx, binaryPath, args...)
+		cmd.Env = append(os.Environ(), env...)
+		return cmd, nil
+	}
+
+	username, _, _, _, err := GetCurrentUser(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get console user: %v", err)
+	}
+
+	suArgs := []string{"-u", username}
+	if len(env) > 0 {
+		suArgs = append(suArgs, "env")
+		suArgs = append(suArgs, env...)
+	}
+	suArgs = append(suArgs, binaryPath)
+	suArgs = append(suArgs, args...)
+	// Use exec.CommandContext to avoid shell interpretation of arguments,
+	// preventing injection when passing user-controlled values through sudo.
+	return exec.CommandContext(ctx, "sudo", suArgs...), nil
 }
 
 func RunAsCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
@@ -602,4 +669,9 @@ func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 		return fmt.Errorf("failed to run uninstall script: %w", err)
 	}
 	return nil
+}
+
+// IsProcessAlive reports whether a process with the given PID is still running.
+func IsProcessAlive(pid int) bool {
+	return unix.Kill(pid, 0) == nil
 }

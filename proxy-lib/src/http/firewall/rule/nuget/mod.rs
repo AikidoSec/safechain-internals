@@ -2,9 +2,12 @@ use std::fmt;
 
 use rama::{
     Service,
-    error::{BoxError, ErrorContext as _},
+    error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
-    http::{Request, Response, Uri},
+    http::{
+        Request, Response, Uri,
+        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
+    },
     net::address::Domain,
     telemetry::tracing,
     utils::str::arcstr::{ArcStr, arcstr},
@@ -41,7 +44,7 @@ impl RuleNuget {
         policy_evaluator: Option<PolicyEvaluator>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = BoxError>,
+        C: Service<Request, Output = Response, Error = OpaqueError>,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard,
@@ -69,13 +72,13 @@ impl fmt::Debug for RuleNuget {
 
 impl Rule for RuleNuget {
     #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        "Nuget"
+    fn match_domain(&self, domain: &Domain) -> bool {
+        self.target_domains.is_match(domain)
     }
 
     #[inline(always)]
-    fn match_domain(&self, domain: &Domain) -> bool {
-        self.target_domains.is_match(domain)
+    fn match_ws_handshake<'a>(&self, _: super::WebSocketHandshakeInfo<'a>) -> bool {
+        false
     }
 
     #[cfg(feature = "pac")]
@@ -86,18 +89,7 @@ impl Rule for RuleNuget {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        Ok(resp)
-    }
-
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
-        if !crate::http::try_get_domain_for_req(&req)
-            .map(|domain| self.match_domain(&domain))
-            .unwrap_or_default()
-        {
-            return Ok(RequestAction::Allow(req));
-        }
-
         let path = req.uri().path();
 
         let Some(nuget_package) = Self::parse_package_from_path(path) else {
@@ -147,6 +139,20 @@ impl Rule for RuleNuget {
             );
             Ok(RequestAction::Allow(req))
         }
+    }
+
+    #[inline(always)]
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
+        Ok(resp)
+    }
+
+    #[inline(always)]
+    async fn evaluate_ws_relay_msg(
+        &self,
+        _: WebSocketRelayDirection,
+        data: WebSocketRelayOutput,
+    ) -> Result<WebSocketRelayOutput, BoxError> {
+        Ok(data)
     }
 }
 

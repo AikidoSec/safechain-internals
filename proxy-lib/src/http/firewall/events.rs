@@ -1,4 +1,8 @@
-use rama::utils::{str::arcstr::ArcStr, time::now_unix_ms};
+use rama::net::address::Domain;
+use rama::utils::{
+    str::{arcstr::ArcStr, smol_str::SmolStr},
+    time::now_unix_ms,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::package::version::PackageVersion;
@@ -57,6 +61,15 @@ pub struct MinPackageAgeEvent {
     pub ts_ms: i64,
     pub artifact: Artifact,
     pub suppressed_versions: Vec<PackageVersion>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TlsTerminationFailedEvent {
+    pub ts_ms: i64,
+    pub sni: Domain,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub app: Option<SmolStr>,
+    pub error: String,
 }
 
 #[cfg(test)]

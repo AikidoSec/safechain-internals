@@ -36,7 +36,7 @@ use crate::{
     utils::env::{compute_concurrent_request_count, network_service_identifier},
 };
 
-use super::events::{BlockReason, BlockedEvent};
+use super::events::{BlockReason, BlockedEvent, TlsTerminationFailedEvent};
 
 const EVENT_DEDUP_WINDOW: Duration = Duration::from_secs(30);
 const MAX_EVENTS: u64 = 10_000;
@@ -72,7 +72,7 @@ impl From<&BlockedEvent> for DedupKey {
 pub struct EventNotifier {
     exec: Executor,
     client: BoxService<Request, Response, OpaqueError>,
-    reporting_endpoint: Uri,
+    reporting_endpoint: String,
     limit: Arc<Semaphore>,
     dedup: DedupCache,
 }
@@ -94,6 +94,10 @@ impl EventNotifier {
         let dedup = moka::sync::CacheBuilder::new(MAX_EVENTS)
             .time_to_live(EVENT_DEDUP_WINDOW)
             .build();
+        let reporting_endpoint = reporting_endpoint
+            .to_string()
+            .trim_end_matches('/')
+            .to_owned();
         Ok(Self {
             exec,
             client,
@@ -126,9 +130,15 @@ impl EventNotifier {
         });
     }
 
+    pub fn notify_tls_termination_failed(&self, event: TlsTerminationFailedEvent) {
+        self.spawn_event_task(|client, reporting_endpoint| {
+            send_tls_termination_failed_event(client, reporting_endpoint, event)
+        });
+    }
+
     fn spawn_event_task<F, Fut>(&self, f: F)
     where
-        F: FnOnce(BoxService<Request, Response, OpaqueError>, Uri) -> Fut + Send + 'static,
+        F: FnOnce(BoxService<Request, Response, OpaqueError>, String) -> Fut + Send + 'static,
         Fut: Future<Output = ()> + Send + 'static,
     {
         self.exec.spawn_task({
@@ -168,7 +178,7 @@ async fn acquire_concurrency_guard<'a>(
 
 async fn send_blocked_event(
     client: BoxService<Request, Response, OpaqueError>,
-    reporting_endpoint: Uri,
+    reporting_endpoint: String,
     event: BlockedEvent,
 ) {
     tracing::debug!(
@@ -177,17 +187,14 @@ async fn send_blocked_event(
         event.artifact
     );
 
-    let url = format!(
-        "{}/events/blocks",
-        reporting_endpoint.to_string().trim_end_matches('/')
-    );
+    let url = format!("{}/events/blocks", reporting_endpoint);
 
     send_event(client, reporting_endpoint, event, &url).await;
 }
 
 async fn send_min_package_age_event(
     client: BoxService<Request, Response, OpaqueError>,
-    reporting_endpoint: Uri,
+    reporting_endpoint: String,
     event: MinPackageAgeEvent,
 ) {
     tracing::debug!(
@@ -196,17 +203,24 @@ async fn send_min_package_age_event(
         event.artifact
     );
 
-    let url = format!(
-        "{}/events/min-package-age",
-        reporting_endpoint.to_string().trim_end_matches('/')
-    );
+    let url = format!("{}/events/min-package-age", reporting_endpoint);
+
+    send_event(client, reporting_endpoint, event, &url).await;
+}
+
+async fn send_tls_termination_failed_event(
+    client: BoxService<Request, Response, OpaqueError>,
+    reporting_endpoint: String,
+    event: TlsTerminationFailedEvent,
+) {
+    let url = format!("{}/events/tls-termination-failed", reporting_endpoint);
 
     send_event(client, reporting_endpoint, event, &url).await;
 }
 
 async fn send_event<T: serde::Serialize>(
     client: BoxService<Request, Response, OpaqueError>,
-    reporting_endpoint: Uri,
+    reporting_endpoint: String,
     event: T,
     url: &str,
 ) {

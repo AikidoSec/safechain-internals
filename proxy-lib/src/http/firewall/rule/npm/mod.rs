@@ -2,7 +2,7 @@ use std::fmt;
 
 use rama::{
     Service,
-    error::{BoxError, ErrorContext as _},
+    error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
@@ -47,7 +47,7 @@ impl RuleNpm {
         min_package_age: Option<MinPackageAge>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = BoxError>,
+        C: Service<Request, Output = Response, Error = OpaqueError>,
     {
         // NOTE: should you ever need to share a remote malware list between different rules,
         // you would simply create it outside of the rule, clone and pass it in.
@@ -87,13 +87,16 @@ impl fmt::Debug for RuleNpm {
 
 impl Rule for RuleNpm {
     #[inline(always)]
-    fn product_name(&self) -> &'static str {
-        "Npm"
+    fn match_domain(&self, domain: &Domain) -> bool {
+        self.target_domains.is_match(domain)
     }
 
     #[inline(always)]
-    fn match_domain(&self, domain: &Domain) -> bool {
-        self.target_domains.is_match(domain)
+    fn match_http_response_payload_inspection_request(
+        &self,
+        _: super::HttpRequestMatcherView<'_>,
+    ) -> bool {
+        self.maybe_min_package_age.is_some()
     }
 
     #[cfg(feature = "pac")]
@@ -104,22 +107,7 @@ impl Rule for RuleNpm {
         }
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        match &self.maybe_min_package_age {
-            Some(min_package_age) => min_package_age.remove_new_packages(resp).await,
-            None => Ok(resp),
-        }
-    }
-
     async fn evaluate_request(&self, mut req: Request) -> Result<RequestAction, BoxError> {
-        if !crate::http::try_get_domain_for_req(&req)
-            .map(|domain| self.match_domain(&domain))
-            .unwrap_or_default()
-        {
-            tracing::trace!("Npm rule did not match incoming request: passthrough");
-            return Ok(RequestAction::Allow(req));
-        }
-
         if self.is_tarball_download(&req) {
             return self.evaluate_tarball_request(req).await;
         }
@@ -129,6 +117,14 @@ impl Rule for RuleNpm {
         }
 
         Ok(RequestAction::Allow(req))
+    }
+
+    #[inline(always)]
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
+        match &self.maybe_min_package_age {
+            Some(min_package_age) => min_package_age.remove_new_packages(resp).await,
+            None => Ok(resp),
+        }
     }
 }
 

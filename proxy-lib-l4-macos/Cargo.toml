@@ -1,0 +1,38 @@
+[package]
+name = "safechain-lib-l4-proxy-macos"
+description = "Aikido SafeChain MITM MacOS l4 Proxy"
+version = { workspace = true }
+edition = { workspace = true }
+publish = false
+rust-version = { workspace = true }
+readme = "../docs/proxy.md"
+
+[lib]
+crate-type = ["staticlib"]
+
+[features]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+jemallocator = { workspace = true }
+moka = { workspace = true }
+rustls-platform-verifier = { workspace = true }
+safechain-proxy-lib = { workspace = true, features = ["apple-networkextension"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { version = "1.48", features = ["net", "io-std"] }
+tracing-oslog = { workspace = true }
+
+[dependencies.rama]
+workspace = true
+features = [
+    "net-apple-networkextension",
+    "tcp",
+    "udp",
+    "dns",
+    "socks5",
+    "ws",
+    "http-full",
+    "boring",
+    "rustls",
+    "aws-lc",
+]

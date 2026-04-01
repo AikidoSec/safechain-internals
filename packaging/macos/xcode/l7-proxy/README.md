@@ -16,4 +16,6 @@ just macos-l7-xcode-verify-signing
 just run-macos-l7-proxy-protected-xcode
 ```
 
-`xcodebuild` uses `-allowProvisioningUpdates` in the just recipe so Xcode can resolve/update signing assets automatically.
+`xcodebuild` uses `-allowProvisioningUpdates` and `allowProvisioningDeviceRegistration`
+in the just recipe so Xcode can resolve/update signing assets and register
+the device automatically.

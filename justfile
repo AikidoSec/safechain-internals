@@ -11,17 +11,35 @@ xcode_l7_project_file := xcode_l7_project_dir + "/AikidoEndpointL7Proxy.xcodepro
 xcode_l7_scheme := "AikidoEndpointL7Proxy"
 xcode_l7_derived_data := ".aikido/xcode/safechain-l7-proxy-wrapper"
 xcode_l7_app_exe := xcode_l7_derived_data + "/Build/Products/Debug/" + xcode_l7_scheme + ".app/Contents/MacOS/safechain-l7-proxy-bin"
+l4_team_id := "7VPF8GD6J4"
+l4_dev_host_bundle_id := "com.aikido.endpoint.proxy.l4.dev"
+l4_dev_extension_bundle_id := "com.aikido.endpoint.proxy.l4.dev.extension"
+l4_dist_host_bundle_id := "com.aikido.endpoint.proxy.l4.dist"
+l4_dist_extension_bundle_id := "com.aikido.endpoint.proxy.l4.dist.extension"
+xcode_l4_project_dir := "packaging/macos/xcode/l4-proxy"
+xcode_l4_project_spec_dev := xcode_l4_project_dir + "/Project.dev.yml"
+xcode_l4_project_file := xcode_l4_project_dir + "/AikidoEndpointL4Proxy.xcodeproj"
+xcode_l4_host_scheme := "AikidoEndpointL4ProxyHost"
+xcode_l4_derived_data := ".aikido/xcode/safechain-l4-proxy-wrapper"
+xcode_l4_app_name := "AikidoEndpointL4ProxyHost.app"
+xcode_l4_app := xcode_l4_derived_data + "/Build/Products/Debug/" + xcode_l4_app_name
+xcode_l4_app_exe := xcode_l4_app + "/Contents/MacOS/AikidoEndpointL4ProxyHost"
+xcode_l4_installed_app := "/Applications/" + xcode_l4_app_name
+xcode_l4_installed_app_exe := xcode_l4_installed_app + "/Contents/MacOS/AikidoEndpointL4ProxyHost"
+xcode_l4_installed_sysext := xcode_l4_installed_app + "/Contents/Library/SystemExtensions/" + l4_dev_extension_bundle_id + ".systemextension"
 
-rust-qa:
+rust-quick-qa:
     cargo fmt
     @cargo install cargo-sort
-    cargo sort --grouped
+    cargo sort --grouped --workspace
     cargo doc --all-features --workspace --no-deps
     cargo check --all-features --workspace --all-targets
     cargo clippy --all-features --workspace --all-targets
-    @cargo install cargo-nextest --locked
-    cargo nextest run --all-features --workspace
-    just rust-fuzz-check
+
+rust-test *ARGS:
+    cargo test --all-features --workspace {{ARGS}}
+
+rust-qa: rust-quick-qa rust-test rust-fuzz-check
 
 rust-fuzz-check:
     @cargo install cargo-fuzz
@@ -34,7 +52,7 @@ rust-fuzz *ARGS:
         cargo +nightly fuzz run --fuzz-dir ./proxy-fuzz -j 8 parse_pragmatic_semver_version -- -max_total_time=60
 
 rust-qa-full: rust-qa rust-fuzz
-    cargo nextest run --workspace --all-features --run-ignored=only
+    cargo test --all-features --workspace -- --ignored
 
 run-l4-proxy *ARGS:
     mkdir -p .aikido/safechain-l4-proxy
@@ -62,9 +80,21 @@ run-l7-proxy *ARGS:
 proxy-har-toggle:
     curl -v -XPOST http://127.0.0.1:8088/har/toggle
 
+clean-rust:
+    cargo clean
+
+clean-xcode:
+    rm -rf .aikido/xcode 2> /dev/null
+
+clean-packaging:
+    rm -rf bin 2> /dev/null
+    rm -rf dist 2> /dev/null
+
+clean: clean-rust clean-xcode clean-packaging
+
 rust-update-deps:
-    cargo upgrades
     cargo update
+    cargo outdated
 
 rust-detect-unused-deps:
     @cargo install cargo-machete
@@ -80,6 +110,7 @@ macos-l7-xcodegen-build-debug: macos-l7-xcodegen-generate
         -configuration Debug \
         -derivedDataPath "{{xcode_l7_derived_data}}" \
         -allowProvisioningUpdates \
+        -allowProvisioningDeviceRegistration \
         build
 
 macos-l7-xcode-verify-signing: macos-l7-xcodegen-build-debug
@@ -93,3 +124,87 @@ run-macos-l7-proxy-protected-xcode *ARGS: macos-l7-xcode-verify-signing
         --secrets "protected:access-group={{l7_access_group}}" \
         --pretty \
         {{ARGS}}
+
+macos-l4-build-rust:
+    MACOSX_DEPLOYMENT_TARGET=13.0 \
+    CMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+    CFLAGS_aarch64_apple_darwin="-mmacosx-version-min=13.0" \
+    CXXFLAGS_aarch64_apple_darwin="-mmacosx-version-min=13.0" \
+    cargo build --target aarch64-apple-darwin -p safechain-lib-l4-proxy-macos
+    MACOSX_DEPLOYMENT_TARGET=13.0 \
+    CMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+    CFLAGS_x86_64_apple_darwin="-mmacosx-version-min=13.0" \
+    CXXFLAGS_x86_64_apple_darwin="-mmacosx-version-min=13.0" \
+    cargo build --target x86_64-apple-darwin -p safechain-lib-l4-proxy-macos
+    mkdir -p target/universal
+    lipo -create \
+        -output target/universal/libsafechain_lib_l4_proxy_macos.a \
+        target/aarch64-apple-darwin/debug/libsafechain_lib_l4_proxy_macos.a \
+        target/x86_64-apple-darwin/debug/libsafechain_lib_l4_proxy_macos.a
+
+macos-l4-xcodegen-generate:
+    xcodegen generate --spec "{{xcode_l4_project_spec_dev}}"
+
+macos-l4-xcodegen-build-debug-signed: macos-l4-build-rust macos-l4-xcodegen-generate
+    xcodebuild \
+        -project "{{xcode_l4_project_file}}" \
+        -scheme "{{xcode_l4_host_scheme}}" \
+        -configuration Debug \
+        -derivedDataPath "{{xcode_l4_derived_data}}" \
+        -allowProvisioningUpdates \
+        -allowProvisioningDeviceRegistration \
+        clean \
+        build
+
+macos-l4-install-signed: macos-l4-xcodegen-build-debug-signed
+    rm -rf "{{xcode_l4_installed_app}}"
+    ditto "{{xcode_l4_app}}" "{{xcode_l4_installed_app}}"
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "{{xcode_l4_app}}" || true
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "{{xcode_l4_installed_app}}"
+    echo "Installed Development system extension bundle at {{xcode_l4_installed_sysext}}"
+
+macos-l4-status:
+    "{{xcode_l4_installed_app_exe}}" status
+
+macos-l4-log-stream:
+    log stream --style compact --level debug \
+        --predicate 'subsystem == "com.aikido.endpoint.proxy.l4" \
+        OR process == "AikidoEndpointL4ProxyExtension" \
+        OR process == "AikidoEndpointL4ProxyHost"'
+
+macos-l4-start *ARGS:
+    "{{xcode_l4_installed_app_exe}}" start {{ARGS}}
+    @for i in $(seq 1 120); do \
+        status="$("{{xcode_l4_installed_app_exe}}" status | sed -n 's/^status: //p')"; \
+        echo "$i) status: $status"; \
+        case "$status" in \
+            connected) \
+                echo "Dev proxy enabled, have fun!"; \
+                exit 0; \
+                ;; \
+        esac; \
+        sleep 0.5; \
+    done; \
+    echo "timed out waiting for macOS L4 proxy to become active" >&2; \
+    "{{xcode_l4_installed_app_exe}}" status; \
+    exit 1
+
+macos-l4-stop:
+    "{{xcode_l4_installed_app_exe}}" stop
+    @for i in $(seq 1 120); do \
+        status="$("{{xcode_l4_installed_app_exe}}" status | sed -n 's/^status: //p')"; \
+        echo "$i) status: $status"; \
+        case "$status" in \
+            disconnected) \
+                echo "Dev proxy disabled, bye!"; \
+                exit 0; \
+                ;; \
+        esac; \
+        sleep 0.5; \
+    done; \
+    echo "timed out waiting for macOS L4 proxy to stop" >&2; \
+    "{{xcode_l4_installed_app_exe}}" status; \
+    exit 1
+
+run-macos-l4-proxy *ARGS: macos-l4-install-signed
+    just macos-l4-start {{ARGS}}

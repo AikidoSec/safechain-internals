@@ -34,24 +34,29 @@ pub mod layer;
 pub mod notifier;
 pub mod rule;
 
+mod matched_rules;
+pub use self::matched_rules::{
+    FirewallDecompressionMatcher, FirewallHttpRules, FirewallWebSocketRules,
+};
+
 #[cfg(feature = "pac")]
 mod pac;
 
 use crate::{
     endpoint_protection::{PolicyEvaluator, RemoteEndpointConfig},
-    http::firewall::rule::npm::min_package_age::MinPackageAge,
+    http::firewall::rule::{DynRule, npm::min_package_age::MinPackageAge},
     storage::SyncCompactDataStorage,
     utils::{env::network_service_identifier, token::AgentIdentity},
 };
 
-use self::rule::{RequestAction, Rule};
+use self::rule::Rule;
 
 #[derive(Debug, Clone)]
 pub struct Firewall {
     // NOTE: if we ever want to update these rules on the fly,
     // e.g. removing/adding them, we can ArcSwap these and have
     // a background task update these when needed..
-    block_rules: Arc<Vec<self::rule::DynRule>>,
+    block_rules: Arc<[self::rule::DynRule]>,
     notifier: Option<self::notifier::EventNotifier>,
 }
 
@@ -71,15 +76,15 @@ impl Firewall {
         guard: ShutdownGuard,
         client: impl Service<Request, Output = Response, Error = OpaqueError> + Clone,
         data: SyncCompactDataStorage,
-        reporting_endpoint: Option<rama::http::Uri>,
+        reporting_endpoint: Option<Uri>,
         agent_identity: Option<AgentIdentity>,
         aikido_url: Uri,
     ) -> Result<Self, BoxError> {
         let layered_client = (
             MapResponseBodyLayer::new_boxed_streaming_body(),
+            MapErrLayer::into_opaque_error(),
             DecompressionLayer::new(),
-            MapErrLayer::into_box_error(),
-            TimeoutLayer::new(Duration::from_secs(60)), // NOTE: if you have slow servers this might need to be more
+            TimeoutLayer::new(Duration::from_secs(60)),
             RetryLayer::new(
                 ManagedPolicy::default().with_backoff(
                     ExponentialBackoff::new(
@@ -146,7 +151,7 @@ impl Firewall {
         let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
 
         Ok(Self {
-            block_rules: Arc::new(vec![
+            block_rules: Arc::from([
                 self::rule::vscode::RuleVSCode::try_new(
                     guard.clone(),
                     layered_client.clone(),
@@ -165,6 +170,7 @@ impl Firewall {
                 .await
                 .context("create block rule: nuget")?
                 .into_dyn(),
+                #[cfg(any(not(feature = "apple-networkextension"), feature = "test-utils", test))]
                 self::rule::chrome::RuleChrome::try_new(
                     guard.clone(),
                     layered_client.clone(),
@@ -220,6 +226,7 @@ impl Firewall {
                 .await
                 .context("create block rule: skills.sh")?
                 .into_dyn(),
+                self::rule::hijack::RuleHijack::new().into_dyn(),
             ]),
             notifier,
         })
@@ -233,6 +240,7 @@ impl Firewall {
         }
     }
 
+<<<<<<< feat/suppress-vscode-update-block-events
     pub fn match_domain(&self, domain: &Domain) -> bool {
         self.block_rules
             .iter()
@@ -260,20 +268,27 @@ impl Firewall {
                     return Ok(RequestAction::Block(blocked));
                 }
             }
+=======
+    pub fn record_tls_termination_failed(&self, event: self::events::TlsTerminationFailedEvent) {
+        if let Some(notifier) = self.notifier.as_ref() {
+            notifier.notify_tls_termination_failed(event);
+>>>>>>> main
         }
-
-        Ok(RequestAction::Allow(mod_req))
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        let mut mod_resp = resp;
+    pub fn match_http_rules(&self, domain: &Domain) -> Option<FirewallHttpRules> {
+        let matched_rules: Arc<[DynRule]> = self
+            .block_rules
+            .iter()
+            .filter(|rule| rule.match_domain(domain))
+            .cloned()
+            .collect();
 
-        // Iterate rules in reverse order for symmetry with request evaluation
-        for rule in self.block_rules.iter().rev() {
-            mod_resp = rule.evaluate_response(mod_resp).await?;
+        if matched_rules.is_empty() {
+            None
+        } else {
+            Some(FirewallHttpRules(matched_rules))
         }
-
-        Ok(mod_resp)
     }
 
     #[cfg(feature = "pac")]

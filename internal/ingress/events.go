@@ -15,3 +15,12 @@ type BlockEvent struct {
 	BlockReason string   `json:"block_reason"`
 	Status      string   `json:"status,omitempty"`
 }
+
+// TlsTerminationFailedEvent represents a TLS MITM handshake failure from the proxy.
+type TlsTerminationFailedEvent struct {
+	ID    string `json:"id,omitempty"`
+	TsMs  int64  `json:"ts_ms"`
+	SNI   string `json:"sni"`
+	App   string `json:"app,omitempty"`
+	Error string `json:"error"`
+}
