@@ -8,6 +8,8 @@ INSTALL_DIR="/Library/Application Support/AikidoSecurity/EndpointProtection"
 LOGS_DIR="/Library/Logs/AikidoSecurity/EndpointProtection"
 RUN_DIR="$INSTALL_DIR/run"
 LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.endpointprotection.plist"
+CHROME_MANAGED_PREFS_DIR="/Library/Managed Preferences"
+CHROME_MANAGED_PREFS_PLIST="$CHROME_MANAGED_PREFS_DIR/com.google.Chrome.plist"
 
 # Ensure logs directory exists and has proper permissions
 echo "Setting up logs directory..."
@@ -27,6 +29,14 @@ else
     echo "Warning: UI app bundle not found at $INSTALL_DIR/bin/endpoint-protection-ui.app"
 fi
 chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
+
+# Disable QUIC in Chrome via managed preferences so Chrome traffic stays on
+# transports the proxy can reliably inspect.
+echo "Configuring Chrome managed policies..."
+mkdir -p "$CHROME_MANAGED_PREFS_DIR"
+/usr/bin/defaults write "$CHROME_MANAGED_PREFS_PLIST" QuicAllowed -bool false
+/usr/sbin/chown root:wheel "$CHROME_MANAGED_PREFS_PLIST"
+/bin/chmod 644 "$CHROME_MANAGED_PREFS_PLIST"
 
 # Register L4 proxy extension
 if [ -d "$L4_APP" ]; then
