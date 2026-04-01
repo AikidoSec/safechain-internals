@@ -18,9 +18,7 @@ use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
 use crate::{
-    package::version::PackageVersion,
-    storage::SyncCompactDataStorage,
-    utils::uri::uri_to_filename,
+    package::version::PackageVersion, storage::SyncCompactDataStorage, utils::uri::uri_to_filename,
 };
 
 /// How long to keep entries in the trie (7 days).
@@ -151,10 +149,9 @@ impl RemoteReleasedPackagesList {
         let Some(entries) = guard.get(&key) else {
             return false;
         };
-        entries.iter().any(|e| {
-            e.released_on_epoch_s > cutoff_secs
-                && version.is_none_or(|v| *v == e.version)
-        })
+        entries
+            .iter()
+            .any(|e| e.released_on_epoch_s > cutoff_secs && version.is_none_or(|v| *v == e.version))
     }
 }
 

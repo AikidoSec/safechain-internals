@@ -8,11 +8,7 @@ fn pv(s: &str) -> PackageVersion {
     s.parse().unwrap()
 }
 
-fn make_list(
-    package_name: &str,
-    version: &str,
-    released_on: i64,
-) -> RemoteReleasedPackagesList {
+fn make_list(package_name: &str, version: &str, released_on: i64) -> RemoteReleasedPackagesList {
     let trie = trie_from_released_packages_list(
         vec![ReleasedPackageData {
             package_name: package_name.to_owned(),
