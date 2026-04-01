@@ -77,7 +77,7 @@ impl RuleVSCode {
             Uri::from_static("https://malware-list.aikido.dev/malware_vscode.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            LowerCasePackageNameFormatter,
+            VSCodePackageNameFormatter::new(),
         )
         .await
         .context("create remote malware list for vscode block rule")?;
@@ -87,7 +87,7 @@ impl RuleVSCode {
             Uri::from_static("https://malware-list.aikido.dev/releases/vscode.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCasePackageNameFormatter,
+            VSCodePackageNameFormatter::new(),
         )
         .await
         .context("create remote released packages list for vscode block rule")?;
@@ -221,19 +221,12 @@ impl RuleVSCode {
     const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(1);
 
     fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
-        let maybe_ts = self
-            .remote_endpoint_config
+        self.remote_endpoint_config
             .as_ref()
-            .and_then(|c| {
-                c.map_ecosystem_config(&VSCODE_ECOSYSTEM_KEY, |ecosystem_cfg| {
-                    ecosystem_cfg.minimum_allowed_age_timestamp
-                })
+            .map(|c| {
+                c.get_package_age_cutoff_ts(&VSCODE_ECOSYSTEM_KEY, Self::DEFAULT_MIN_PACKAGE_AGE)
             })
-            .flatten();
-        if let Some(ts_secs) = maybe_ts {
-            return ts_secs;
-        }
-        SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE
+            .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 
     fn blocked_artifact(vscode_extension: &VsCodeExtensionId) -> Artifact {

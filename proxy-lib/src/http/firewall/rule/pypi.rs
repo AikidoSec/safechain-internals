@@ -16,7 +16,9 @@ use rama::{
 use rama::utils::str::arcstr::arcstr;
 
 use crate::{
-    endpoint_protection::{EcosystemKey, PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::{
+        EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
+    },
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
@@ -24,9 +26,11 @@ use crate::{
     package::{
         malware_list::{MalwareEntry, RemoteMalwareList},
         name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
+        released_packages_list::RemoteReleasedPackagesList,
         version::PackageVersion,
     },
     storage::SyncCompactDataStorage,
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
 #[cfg(feature = "pac")]
@@ -38,6 +42,8 @@ type PyPIPackageNameFormatter = LowerCasePackageNameFormatter;
 type PyPIPackageName = LowerCasePackageName;
 
 type PyPIRemoteMalwareList = RemoteMalwareList<PyPIPackageNameFormatter>;
+type PyPIRemoteReleasedPackagesList = RemoteReleasedPackagesList<PyPIPackageNameFormatter>;
+type PyPIRemoteEndpointConfig = RemoteEndpointConfig<PyPIPackageNameFormatter>;
 type PyPIPolicyEvaluator = PolicyEvaluator<PyPIPackageNameFormatter>;
 
 const PYPI_PRODUCT_KEY: ArcStr = arcstr!("pypi");
@@ -62,11 +68,23 @@ impl PackageInfo {
     fn matches(&self, entry: &MalwareEntry) -> bool {
         entry.version == self.version
     }
+
+    fn into_blocked_artifact(self) -> Artifact {
+        let Self { name, version } = self;
+        Artifact {
+            product: PYPI_PRODUCT_KEY,
+            identifier: name.into_arcstr(),
+            display_name: None,
+            version: Some(version),
+        }
+    }
 }
 
 pub(in crate::http::firewall) struct RulePyPI {
     target_domains: DomainMatcher,
     remote_malware_list: PyPIRemoteMalwareList,
+    remote_released_packages_list: PyPIRemoteReleasedPackagesList,
+    remote_endpoint_config: Option<PyPIRemoteEndpointConfig>,
     policy_evaluator: Option<PyPIPolicyEvaluator>,
 }
 
@@ -76,19 +94,30 @@ impl RulePyPI {
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<PyPIPolicyEvaluator>,
+        remote_endpoint_config: Option<PyPIRemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_pypi.json"),
-            sync_storage,
-            remote_malware_list_https_client,
-            LowerCasePackageNameFormatter,
+            sync_storage.clone(),
+            remote_malware_list_https_client.clone(),
+            PyPIPackageNameFormatter::new(),
         )
         .await
         .context("create remote malware list for pypi block rule")?;
+
+        let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
+            guard.clone(),
+            Uri::from_static("https://malware-list.aikido.dev/releases/pypi.json"),
+            sync_storage,
+            remote_malware_list_https_client,
+            PyPIPackageNameFormatter::new(),
+        )
+        .await
+        .context("create remote released packages list for pypi block rule")?;
 
         let target_domains = ["pypi.org", "files.pythonhosted.org", "pypi.python.org"]
             .into_iter()
@@ -97,8 +126,21 @@ impl RulePyPI {
         Ok(Self {
             target_domains,
             remote_malware_list,
+            remote_released_packages_list,
+            remote_endpoint_config,
             policy_evaluator,
         })
+    }
+
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::hours(48);
+
+    fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
+        self.remote_endpoint_config
+            .as_ref()
+            .map(|c| {
+                c.get_package_age_cutoff_ts(&PYPI_ECOSYSTEM_KEY, Self::DEFAULT_MIN_PACKAGE_AGE)
+            })
+            .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 
     fn is_blocked(&self, package_info: &PackageInfo) -> Result<bool, BoxError> {
@@ -108,15 +150,6 @@ impl RulePyPI {
         };
 
         Ok(entries.iter().any(|entry| package_info.matches(entry)))
-    }
-
-    fn blocked_artifact(package_info: &PackageInfo) -> Artifact {
-        Artifact {
-            product: PYPI_PRODUCT_KEY,
-            identifier: package_info.name.as_arcstr(),
-            display_name: None,
-            version: Some(package_info.version.clone()),
-        }
     }
 
     /// Extracts package name and version from a PyPI request.
@@ -201,7 +234,7 @@ impl Rule for RulePyPI {
                 decision => {
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        Self::blocked_artifact(&package_info),
+                        package_info.into_blocked_artifact(),
                         super::block_reason_for(decision),
                     )));
                 }
@@ -216,8 +249,26 @@ impl Rule for RulePyPI {
             );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&package_info),
+                package_info.into_blocked_artifact(),
                 BlockReason::Malware,
+            )));
+        }
+
+        let cutoff_ts = self.get_package_age_cutoff_ts();
+        if self.remote_released_packages_list.is_recently_released(
+            &package_info.name,
+            Some(&package_info.version),
+            cutoff_ts,
+        ) {
+            tracing::info!(
+                package = %package_info.name,
+                version = ?package_info.version,
+                "blocked PyPI package download: package released too recently"
+            );
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
+                req,
+                package_info.into_blocked_artifact(),
+                BlockReason::NewPackage,
             )));
         }
 

@@ -192,8 +192,9 @@ impl Firewall {
                     lowercase_policy_evaluator.clone(),
                     Some(MinPackageAge::new(
                         notifier.clone(),
-                        lowercase_remote_endpoint_config,
+                        lowercase_remote_endpoint_config.clone(),
                     )),
+                    lowercase_remote_endpoint_config.clone(),
                 )
                 .await
                 .context("create block rule: npm")?
@@ -203,6 +204,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     lowercase_policy_evaluator.clone(),
+                    lowercase_remote_endpoint_config.clone(),
                 )
                 .await
                 .context("create block rule: pypi")?

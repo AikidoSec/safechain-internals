@@ -11,7 +11,9 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::{EcosystemKey, PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::{
+        EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
+    },
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
@@ -20,9 +22,11 @@ use crate::{
     package::{
         malware_list::RemoteMalwareList,
         name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
+        released_packages_list::RemoteReleasedPackagesList,
         version::{PackageVersion, PragmaticSemver},
     },
     storage::SyncCompactDataStorage,
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
 #[cfg(feature = "pac")]
@@ -36,6 +40,8 @@ type NpmPackageNameFormatter = LowerCasePackageNameFormatter;
 type NpmPackageName = LowerCasePackageName;
 
 type NpmRemoteMalwareList = RemoteMalwareList<NpmPackageNameFormatter>;
+type NpmRemoteReleasedPackagesList = RemoteReleasedPackagesList<NpmPackageNameFormatter>;
+type NpmRemoteEndpointConfig = RemoteEndpointConfig<NpmPackageNameFormatter>;
 type NpmPolicyEvaluator = PolicyEvaluator<NpmPackageNameFormatter>;
 
 const NPM_PRODUCT_KEY: ArcStr = arcstr!("npm");
@@ -44,6 +50,8 @@ const NPM_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("npm");
 pub(in crate::http::firewall) struct RuleNpm {
     target_domains: DomainMatcher,
     remote_malware_list: NpmRemoteMalwareList,
+    remote_released_packages_list: NpmRemoteReleasedPackagesList,
+    remote_endpoint_config: Option<NpmRemoteEndpointConfig>,
     maybe_min_package_age: Option<MinPackageAge>,
     policy_evaluator: Option<NpmPolicyEvaluator>,
 }
@@ -55,6 +63,7 @@ impl RuleNpm {
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<NpmPolicyEvaluator>,
         min_package_age: Option<MinPackageAge>,
+        remote_endpoint_config: Option<NpmRemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
@@ -64,14 +73,24 @@ impl RuleNpm {
         // These remoter malware list resources are cloneable and will share the list,
         // so it only gets updated once
         let remote_malware_list = RemoteMalwareList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_predictions.json"),
-            sync_storage,
-            remote_malware_list_https_client,
-            LowerCasePackageNameFormatter,
+            sync_storage.clone(),
+            remote_malware_list_https_client.clone(),
+            NpmPackageNameFormatter::new(),
         )
         .await
         .context("create remote malware list for npm block rule")?;
+
+        let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
+            guard.clone(),
+            Uri::from_static("https://malware-list.aikido.dev/releases/npm.json"),
+            sync_storage,
+            remote_malware_list_https_client,
+            NpmPackageNameFormatter::new(),
+        )
+        .await
+        .context("create remote released packages list for npm block rule")?;
 
         Ok(Self {
             // NOTE: should you ever make this list dynamic we would stop hardcoding these target domains here...
@@ -83,6 +102,8 @@ impl RuleNpm {
             .into_iter()
             .collect(),
             remote_malware_list,
+            remote_released_packages_list,
+            remote_endpoint_config,
             maybe_min_package_age: min_package_age,
             policy_evaluator,
         })
@@ -139,6 +160,15 @@ impl Rule for RuleNpm {
 }
 
 impl RuleNpm {
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::hours(48);
+
+    fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
+        self.remote_endpoint_config
+            .as_ref()
+            .map(|c| c.get_package_age_cutoff_ts(&NPM_ECOSYSTEM_KEY, Self::DEFAULT_MIN_PACKAGE_AGE))
+            .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
+    }
+
     fn is_tarball_download(&self, req: &Request) -> bool {
         let path = req.uri().path();
         path.ends_with(".tgz") && path.contains("/-/")
@@ -161,7 +191,9 @@ impl RuleNpm {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Defer => {}
-                decision => {
+                PackagePolicyDecision::BlockAll
+                | PackagePolicyDecision::Rejected
+                | PackagePolicyDecision::RequestInstall => {
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         package.into_blocked_artifact(),
@@ -177,15 +209,32 @@ impl RuleNpm {
                 version = %package.version,
                 "Blocked malware",
             );
-            Ok(RequestAction::Block(BlockedRequest::blocked(
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
                 package.into_blocked_artifact(),
                 BlockReason::Malware,
-            )))
-        } else {
-            tracing::debug!("Npm url: {path} does not contain malware: passthrough");
-            Ok(RequestAction::Allow(req))
+            )));
         }
+
+        let cutoff_ts = self.get_package_age_cutoff_ts();
+        if self.remote_released_packages_list.is_recently_released(
+            &package.fully_qualified_name,
+            Some(&PackageVersion::Semver(package.version.clone())),
+            cutoff_ts,
+        ) {
+            tracing::info!(
+                package = %package.fully_qualified_name,
+                "blocked npm tarball download: package released too recently"
+            );
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
+                req,
+                package.into_blocked_artifact(),
+                BlockReason::NewPackage,
+            )));
+        }
+
+        tracing::debug!("Npm url: {path} does not contain malware: passthrough");
+        Ok(RequestAction::Allow(req))
     }
 
     fn is_package_listed_as_malware(&self, npm_package: &NpmPackage) -> bool {

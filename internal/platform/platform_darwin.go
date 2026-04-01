@@ -291,6 +291,19 @@ func showCAInstallDialog(ctx context.Context) error {
 	return nil
 }
 
+func ShowPostInstallNotification(ctx context.Context) error {
+	script := `button returned of (display dialog ` +
+		`"Aikido Endpoint Protection has been installed successfully.\n\n` +
+		`If you experience connection issues in any running application, restarting it will resolve the problem." ` +
+		`with title "Aikido Endpoint Protection" ` +
+		`buttons {"OK"} default button "OK" with icon note)`
+	_, err := RunInAuditSessionOfCurrentUser(ctx, "osascript", []string{"-e", script})
+	if err != nil {
+		return fmt.Errorf("failed to show post-install notification: %w", err)
+	}
+	return nil
+}
+
 func ShowErrorDialog(ctx context.Context, message string) error {
 	script := `
 on run argv

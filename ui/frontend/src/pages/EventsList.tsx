@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import type { BlockEvent, PermissionsResponse } from "../types";
+import type { BlockEvent } from "../types";
 import { Events } from "@wailsio/runtime";
 import { listEvents } from "../api";
 import { getToolIcon } from "../constants";
@@ -11,7 +11,6 @@ export function EventsList() {
   const [events, setEvents] = useState<BlockEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [permissions, setPermissions] = useState<PermissionsResponse | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,11 +31,11 @@ export function EventsList() {
 
   useEffect(() => {
     const unsub = Events.On("permissions_updated", (ev: unknown) => {
-      const perms = (ev as { data?: PermissionsResponse }).data;
-      if (perms) setPermissions(perms);
+      // refresh the events list
+      load();
     });
     return () => { unsub(); };
-  }, []);
+  }, [load]);
 
   useEffect(() => {
     const unsub = Events.On("blocked", (ev: unknown) => {
@@ -109,11 +108,12 @@ export function EventsList() {
                     {ev.artifact.display_name ?? ev.artifact.identifier}
                   </td>
                   <td>
-                    {ev.status === "request_pending" &&
-                      permissions?.ecosystems[ev.artifact.product]?.exceptions.allowed_packages.includes(ev.artifact.identifier) ? (
+                    {ev.status === "request_approved" ? (
                       <span className="status status-approved">approved</span>
                     ) : ev.status === "request_pending" ? (
                       <span className="status status-pending">requested</span>
+                    ) : ev.status === "request_rejected" ? (
+                      <span className="status status-rejected">rejected</span>
                     ) : (
                       <span className="status status-blocked">blocked</span>
                     )}

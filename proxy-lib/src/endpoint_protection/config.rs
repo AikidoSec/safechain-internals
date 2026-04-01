@@ -13,7 +13,10 @@ use crate::{
     endpoint_protection::EcosystemKey,
     package::name_formatter::PackageNameFormatter,
     storage::SyncCompactDataStorage,
-    utils::remote_resource::{self, RefreshHandle, RemoteResource, RemoteResourceSpec},
+    utils::{
+        remote_resource::{self, RefreshHandle, RemoteResource, RemoteResourceSpec},
+        time::{SystemDuration, SystemTimestampMilliseconds},
+    },
 };
 
 use super::types::{EcosystemConfig, EndpointConfig};
@@ -89,6 +92,23 @@ impl<F: PackageNameFormatter> RemoteEndpointConfig<F> {
             .get()
             .as_ref()
             .and_then(|state| state.ecosystems.get(ecosystem).map(map))
+    }
+
+    pub fn get_package_age_cutoff_ts(
+        &self,
+        name: &EcosystemKey,
+        default_cutoff_age: SystemDuration,
+    ) -> SystemTimestampMilliseconds {
+        let maybe_ts = self
+            .config
+            .get()
+            .as_ref()
+            .and_then(|cfg| cfg.ecosystems.get(name))
+            .and_then(|ecosystem_cfg| ecosystem_cfg.minimum_allowed_age_timestamp);
+        if let Some(ts_secs) = maybe_ts {
+            return ts_secs;
+        }
+        SystemTimestampMilliseconds::now() - default_cutoff_age
     }
 
     /// Trigger an immediate config refresh check.

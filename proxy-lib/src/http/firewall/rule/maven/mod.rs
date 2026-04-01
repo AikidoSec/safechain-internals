@@ -62,7 +62,7 @@ impl RuleMaven {
             Uri::from_static("https://malware-list.aikido.dev/malware_maven.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCasePackageNameFormatter,
+            MavenPackageNameFormatter::new(),
         )
         .await
         .context("create remote malware list for maven block rule")?;

@@ -61,7 +61,7 @@ impl RuleNuget {
             Uri::from_static("https://malware-list.aikido.dev/malware_nuget.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCasePackageNameFormatter,
+            NugetPackageNameFormatter::new(),
         )
         .await
         .context("create remote malware list for nuget block rule")?;

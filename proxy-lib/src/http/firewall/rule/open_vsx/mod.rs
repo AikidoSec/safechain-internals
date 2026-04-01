@@ -62,7 +62,7 @@ impl RuleOpenVsx {
             Uri::from_static("https://malware-list.aikido.dev/malware_open_vsx.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCasePackageNameFormatter,
+            OpenVsxPackageNameFormatter::new(),
         )
         .await
         .context("create remote malware list for open vsx block rule")?;
