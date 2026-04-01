@@ -49,6 +49,7 @@ pub(crate) fn block_reason_for(decision: PackagePolicyDecision) -> BlockReason {
 #[cfg(feature = "pac")]
 pub use super::pac::PacScriptGenerator;
 
+pub mod chrome;
 pub mod hijack;
 pub mod maven;
 pub mod npm;
@@ -57,8 +58,6 @@ pub mod open_vsx;
 pub mod pypi;
 pub mod skills_sh;
 pub mod vscode;
-
-pub mod chrome;
 
 /// Action determined by a [`Rule`] when evaluating an http [`Request`]
 /// in its [`Rule::evaluate_request`] request.

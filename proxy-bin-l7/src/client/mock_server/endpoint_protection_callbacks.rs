@@ -224,6 +224,16 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": []
             }
         }),
+        "policy-bypass-new-package-maven" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            // year ~2286 > released_on year ~2255 → is_recently_released returns false → not blocked
+            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
         _ => default_ecosystem_policy.clone(),
     };
 
@@ -259,6 +269,16 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
             "block_all_installs": false,
             "request_installs": true,
             "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
+        "policy-bypass-new-package-nuget" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
+            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
             "exceptions": {
                 "allowed_packages": [],
                 "rejected_packages": []
@@ -344,6 +364,20 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": []
             }
         }),
+        _ => default_ecosystem_policy.clone(),
+    };
+
+    let skills_sh_policy = match token {
+        "policy-bypass-new-package-skills-sh" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
+            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
         _ => default_ecosystem_policy,
     };
 
@@ -359,7 +393,8 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
             "maven": maven_policy,
             "nuget": nuget_policy,
             "chrome": chrome_policy,
-            "open_vsx": open_vsx_policy
+            "open_vsx": open_vsx_policy,
+            "skills_sh": skills_sh_policy
         }
     }))
     .into_response()

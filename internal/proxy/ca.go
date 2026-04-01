@@ -75,6 +75,11 @@ func installDownloadedProxyCA(ctx context.Context) error {
 	}
 
 	log.Println("Installed CA cert successfully")
+
+	if err := platform.ShowPostInstallNotification(ctx); err != nil {
+		log.Printf("failed to show post-install notification: %v\n", err)
+	}
+
 	return nil
 }
 
