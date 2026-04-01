@@ -165,7 +165,7 @@ impl Rule for RuleOpenVsx {
 
         let cutoff_secs = self.get_package_age_cutoff_secs();
         let version: Option<PackageVersion> =
-            extension.version.as_deref().map(|v| v.parse().unwrap());
+            extension.version.as_deref().and_then(|v| v.parse().ok());
         if self.remote_released_packages_list.is_recently_released(
             &extension.extension_id,
             version.as_ref(),
