@@ -39,6 +39,7 @@ type Server struct {
 	onStatusUpdate         func(ev ProxyStatusBody)
 	onBlocked              func(ev daemon.BlockEvent)
 	onTlsTerminationFailed func(ev daemon.TlsTerminationFailedEvent)
+	onPermissionsUpdated   func(ev daemon.PermissionsResponse)
 }
 
 func New() *Server {
@@ -49,12 +50,14 @@ func (s *Server) SetHandlers(
 	onStatus func(ev ProxyStatusBody),
 	onBlocked func(daemon.BlockEvent),
 	onTlsTerminationFailed func(daemon.TlsTerminationFailedEvent),
+	onPermissionsUpdated func(daemon.PermissionsResponse),
 ) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onStatusUpdate = onStatus
 	s.onBlocked = onBlocked
 	s.onTlsTerminationFailed = onTlsTerminationFailed
+	s.onPermissionsUpdated = onPermissionsUpdated
 }
 
 // Start launches the HTTP server in a background goroutine.
@@ -63,6 +66,7 @@ func (s *Server) Start() {
 	mux.HandleFunc("POST /v1/proxy-status", s.handleProxyStatus)
 	mux.HandleFunc("POST /v1/blocked", s.handleBlocked)
 	mux.HandleFunc("POST /v1/tls-termination-failed", s.handleTlsTerminationFailed)
+	mux.HandleFunc("POST /v1/permissions", s.handlePermissionsUpdated)
 
 	go func() {
 		if err := http.ListenAndServe(ListenAddr, mux); err != nil && err != http.ErrServerClosed {
@@ -106,6 +110,24 @@ func (s *Server) handleBlocked(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	cb := s.onBlocked
+	s.mu.Unlock()
+	if cb != nil {
+		cb(ev)
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) handlePermissionsUpdated(w http.ResponseWriter, r *http.Request) {
+	if !validateToken(w, r) {
+		return
+	}
+	var ev daemon.PermissionsResponse
+	if err := json.NewDecoder(r.Body).Decode(&ev); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	cb := s.onPermissionsUpdated
 	s.mu.Unlock()
 	if cb != nil {
 		cb(ev)

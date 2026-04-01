@@ -31,6 +31,7 @@ use rama::{
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::{
+    endpoint_protection::types::EndpointConfig,
     http::firewall::events::MinPackageAgeEvent,
     package::version::{PackageVersion, PackageVersionKey},
     utils::env::{compute_concurrent_request_count, network_service_identifier},
@@ -136,6 +137,12 @@ impl EventNotifier {
         });
     }
 
+    pub fn notify_permissions_updated(&self, config: EndpointConfig) {
+        self.spawn_event_task(|client, reporting_endpoint| {
+            send_permissions_updated_event(client, reporting_endpoint, config)
+        });
+    }
+
     fn spawn_event_task<F, Fut>(&self, f: F)
     where
         F: FnOnce(BoxService<Request, Response, OpaqueError>, String) -> Fut + Send + 'static,
@@ -216,6 +223,21 @@ async fn send_tls_termination_failed_event(
     let url = format!("{}/events/tls-termination-failed", reporting_endpoint);
 
     send_event(client, reporting_endpoint, event, &url).await;
+}
+
+async fn send_permissions_updated_event(
+    client: BoxService<Request, Response, OpaqueError>,
+    reporting_endpoint: String,
+    config: EndpointConfig,
+) {
+    tracing::debug!(
+        "sending permissions update notification (permission_group_id={})",
+        config.permission_group.id,
+    );
+
+    let url = format!("{}/events/permissions", reporting_endpoint);
+
+    send_event(client, reporting_endpoint, config, &url).await;
 }
 
 async fn send_event<T: serde::Serialize>(

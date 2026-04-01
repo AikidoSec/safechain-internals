@@ -16,7 +16,10 @@ use rand::RngExt as _;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
-use crate::{storage::SyncCompactDataStorage, utils::uri::uri_to_filename};
+use crate::{
+    http::firewall::notifier::EventNotifier, storage::SyncCompactDataStorage,
+    utils::uri::uri_to_filename,
+};
 
 use super::types::{EcosystemConfig, EndpointConfig};
 
@@ -50,6 +53,7 @@ impl RemoteEndpointConfig {
         device_id: ArcStr,
         sync_storage: SyncCompactDataStorage,
         client: C,
+        notifier: Option<EventNotifier>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError>,
@@ -101,6 +105,11 @@ impl RemoteEndpointConfig {
             }
         };
 
+        // Notify the daemon of the initial permissions on startup
+        if let Some(ref notifier) = notifier {
+            notifier.notify_permissions_updated(endpoint_config.clone());
+        }
+
         let shared_config = Arc::new(ArcSwap::new(Arc::new(endpoint_config)));
         let trigger_notify = Arc::new(tokio::sync::Notify::new());
 
@@ -110,6 +119,7 @@ impl RemoteEndpointConfig {
             e_tag,
             shared_config.clone(),
             trigger_notify.clone(),
+            notifier,
         ));
 
         Ok(Self {
@@ -293,6 +303,7 @@ async fn config_update_loop<C>(
     e_tag: Option<ArcStr>,
     shared_config: Arc<ArcSwap<EndpointConfig>>,
     trigger_notify: Arc<tokio::sync::Notify>,
+    notifier: Option<EventNotifier>,
 ) where
     C: Service<Request, Output = Response, Error = OpaqueError>,
 {
@@ -338,6 +349,9 @@ async fn config_update_loop<C>(
                     "remote endpoint config (uri = {}), config updated",
                     client.uri
                 );
+                if let Some(ref notifier) = notifier {
+                    notifier.notify_permissions_updated(fresh_config.clone());
+                }
                 shared_config.store(Arc::new(fresh_config));
                 sleep_for = with_jitter(client.refresh_interval);
                 latest_e_tag = fresh_e_tag;

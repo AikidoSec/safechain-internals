@@ -212,6 +212,11 @@ body {
   color: #92400e;
 }
 
+.status-approved {
+  background: #dcfce7;
+  color: #166534;
+}
+
 
 .events-list .error,
 .events-list p {
@@ -510,6 +515,10 @@ body {
 .request-success-icon {
   color: #16a34a;
   margin-bottom: 20px;
+}
+
+.request-approved-icon {
+  color: #16a34a;
 }
 
 .request-success h2 {

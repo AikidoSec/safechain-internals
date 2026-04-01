@@ -133,6 +133,7 @@ impl Firewall {
                     ArcStr::from(identity.device_id.as_ref()),
                     data.clone(),
                     layered_client.clone(),
+                    notifier.clone(),
                 )
                 .await
                 {

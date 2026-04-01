@@ -157,6 +157,13 @@ func (c *Client) NotifyTlsTerminationFailed(ev any) {
 	}
 }
 
+// NotifyPermissionsUpdated sends the latest permissions to the UI.
+func (c *Client) NotifyPermissionsUpdated(perms any) {
+	if err := c.post("/v1/permissions", perms); err != nil {
+		log.Printf("Failed to notify UI of permissions update: %v (UI may not be running)", err)
+	}
+}
+
 type proxyStatusBody struct {
 	Running       bool   `json:"running"`
 	StdoutMessage string `json:"stdout_message"`

@@ -45,6 +45,26 @@ type TlsTerminationFailedEvent struct {
 	Error string `json:"error"`
 }
 
+type EcosystemExceptions struct {
+	AllowedPackages  []string `json:"allowed_packages"`
+	RejectedPackages []string `json:"rejected_packages"`
+}
+
+type EcosystemPermissions struct {
+	BlockAllInstalls           bool                `json:"block_all_installs"`
+	RequestInstalls            bool                `json:"request_installs"`
+	MinimumAllowedAgeTimestamp int64               `json:"minimum_allowed_age_timestamp"`
+	Exceptions                 EcosystemExceptions `json:"exceptions"`
+}
+
+type PermissionsResponse struct {
+	PermissionGroup struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	} `json:"permission_group"`
+	Ecosystems map[string]EcosystemPermissions `json:"ecosystems"`
+}
+
 func (e *TlsTerminationFailedEvent) Validate() error {
 	if e.ID == "" {
 		return fmt.Errorf("missing or empty required field: id")

@@ -24,6 +24,7 @@ type UIProvider interface {
 	Token() string
 	NotifyBlocked(ev any)
 	NotifyTlsTerminationFailed(ev any)
+	NotifyPermissionsUpdated(ev any)
 }
 
 type Server struct {
@@ -57,6 +58,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /events/blocks", s.handleBlock)
 	mux.HandleFunc("POST /events/tls-termination-failed", s.handleTlsTerminationFailed)
+	mux.HandleFunc("POST /events/permissions", s.handlePermissionsUpdated)
 	mux.HandleFunc("GET /ping", s.handlePing)
 
 	mux.HandleFunc("POST /v1/events/{id}/request-access", s.handleRequestBypass)
