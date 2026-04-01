@@ -1,10 +1,10 @@
 use rama::{
     Service,
-    http::{StatusCode, service::client::HttpClientExt as _},
+    http::{BodyExtractExt as _, StatusCode, service::client::HttpClientExt as _},
     telemetry::tracing,
 };
 
-use crate::test::e2e;
+use crate::{client::mock_server::malware_list::FRESH_CHROME_EXTENSION_ID, test::e2e};
 
 #[tokio::test]
 #[tracing_test::traced_test]
@@ -237,4 +237,49 @@ async fn test_chrome_extension_blocked_by_endpoint_policy_request_installs() {
         .unwrap();
 
     assert_eq!(StatusCode::FORBIDDEN, resp.status());
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_chrome_new_extension_blocked() {
+    let runtime = e2e::runtime::get().await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // freshchromeextensionabcdefg is in the released packages list (released far in the future
+    // relative to a 48h cutoff) and is NOT in the malware list — should be blocked as new package.
+    let url = format!(
+        "https://clients2.googleusercontent.com/crx/blobs/somehash/{FRESH_CHROME_EXTENSION_ID}_1_0_0_0.crx"
+    );
+    let resp = client.get(url).send().await.unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+
+    let payload = resp.try_into_string().await.unwrap();
+    assert!(
+        payload.to_lowercase().contains("vetted")
+            || payload.to_lowercase().contains("minimum package"),
+        "expected blocked response to mention vetting or minimum package age, got: {payload}"
+    );
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_chrome_new_extension_not_blocked_via_policy_cutoff() {
+    // The policy sets minimum_allowed_age_timestamp far in the future (year ~2286), making the
+    // cutoff larger than our test entry's released_on (year ~2255) — so the extension is no
+    // longer considered "recent" and is allowed through.
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-bypass-new-package-chrome",
+        "mock_device",
+        &[],
+    )
+    .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    let url = format!(
+        "https://clients2.googleusercontent.com/crx/blobs/somehash/{FRESH_CHROME_EXTENSION_ID}_1_0_0_0.crx"
+    );
+    let resp = client.get(url).send().await.unwrap();
+
+    assert_eq!(StatusCode::OK, resp.status());
 }
