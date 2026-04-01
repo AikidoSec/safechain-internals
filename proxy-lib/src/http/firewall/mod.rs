@@ -35,7 +35,9 @@ pub mod notifier;
 pub mod rule;
 
 mod matched_rules;
-pub use self::matched_rules::{FirewallHttpRules, FirewallWebSocketRules};
+pub use self::matched_rules::{
+    FirewallDecompressionMatcher, FirewallHttpRules, FirewallWebSocketRules,
+};
 
 #[cfg(feature = "pac")]
 mod pac;
@@ -80,8 +82,8 @@ impl Firewall {
     ) -> Result<Self, BoxError> {
         let layered_client = (
             MapResponseBodyLayer::new_boxed_streaming_body(),
-            DecompressionLayer::new(),
             MapErrLayer::into_opaque_error(),
+            DecompressionLayer::new(),
             TimeoutLayer::new(Duration::from_secs(60)),
             RetryLayer::new(
                 ManagedPolicy::default().with_backoff(
@@ -168,6 +170,7 @@ impl Firewall {
                 .await
                 .context("create block rule: nuget")?
                 .into_dyn(),
+                #[cfg(any(not(feature = "apple-networkextension"), feature = "test-utils", test))]
                 self::rule::chrome::RuleChrome::try_new(
                     guard.clone(),
                     layered_client.clone(),
@@ -234,6 +237,12 @@ impl Firewall {
         if let Some(notifier) = self.notifier.as_ref() {
             let event = self::events::BlockedEvent::from_info(info);
             notifier.notify_blocked(event).await;
+        }
+    }
+
+    pub fn record_tls_termination_failed(&self, event: self::events::TlsTerminationFailedEvent) {
+        if let Some(notifier) = self.notifier.as_ref() {
+            notifier.notify_tls_termination_failed(event);
         }
     }
 

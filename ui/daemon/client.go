@@ -127,6 +127,68 @@ func GetEvent(eventID string) (BlockEvent, error) {
 	return out, nil
 }
 
+// ListTlsEvents fetches GET /v1/tls-events?limit=N.
+func ListTlsEvents(limit int) ([]TlsTerminationFailedEvent, error) {
+	if limit <= 0 {
+		limit = 50 // default limit of 50
+	}
+	resp, err := doRequest(http.MethodGet, fmt.Sprintf("/v1/tls-events?limit=%d", limit), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("list tls events: %s", resp.Status)
+	}
+	var out []TlsTerminationFailedEvent
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].TsMs > out[j].TsMs
+	})
+	return out, nil
+}
+
+// GetTlsEvent fetches GET /v1/tls-events/:id.
+func GetTlsEvent(eventID string) (TlsTerminationFailedEvent, error) {
+	var out TlsTerminationFailedEvent
+	if err := validateEventID(eventID); err != nil {
+		return out, err
+	}
+	resp, err := doRequest(http.MethodGet, "/v1/tls-events/"+eventID, nil)
+	if err != nil {
+		return out, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return out, fmt.Errorf("get tls event: %s", resp.Status)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
+// GetVersion fetches GET /v1/version.
+func GetVersion() (string, error) {
+	resp, err := doRequest(http.MethodGet, "/v1/version", nil)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("get version: %s", resp.Status)
+	}
+	var out struct {
+		Version string `json:"version"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", err
+	}
+	return out.Version, nil
+}
+
 // RequestAccess sends POST /v1/events/:id/request-access
 func RequestAccess(eventID string) error {
 	if err := validateEventID(eventID); err != nil {

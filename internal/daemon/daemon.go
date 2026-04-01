@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AikidoSec/safechain-internals/internal/certconfig"
 	"github.com/AikidoSec/safechain-internals/internal/cloud"
 	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
@@ -47,8 +48,7 @@ type Daemon struct {
 	logRotator *utils.LogRotator
 	logReaper  *utils.LogReaper
 
-	proxyRetryCount    int
-	proxyLastRetryTime time.Time
+	proxyRetryCount int
 
 	daemonLastStatusLogTime  time.Time
 	daemonLastSBOMReportTime time.Time
@@ -192,19 +192,7 @@ func (d *Daemon) startProxy(ctx context.Context) error {
 	}
 
 	if err := d.proxy.Start(ctx, opts); err != nil {
-		return fmt.Errorf("failed to start proxy: %v", err)
-	}
-
-	if !proxy.ProxyCAInstalled() {
-		var err error
-		if d.config.GetProxyMode() == config.ProxyModeL4 {
-			err = proxy.InstallL4ProxyCA(ctx)
-		} else {
-			err = proxy.InstallL7ProxyCA(ctx)
-		}
-		if err != nil {
-			return fmt.Errorf("failed to install proxy CA: %v", err)
-		}
+		log.Printf("failed to start proxy: %v", err)
 	}
 	return nil
 }
@@ -247,7 +235,7 @@ func (d *Daemon) run(ctx context.Context) error {
 	}
 
 	if err := setup.Install(ctx, d.config.GetProxyMode()); err != nil {
-    platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to install setup: %v", err))
+		platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to install setup: %v", err))
 		return fmt.Errorf("failed to install setup: %v", err)
 	}
 
@@ -369,13 +357,7 @@ func (d *Daemon) handleProxy() (shouldRetry bool, err error) {
 		return false, fmt.Errorf("proxy start retry limit reached (%d attempts), not retrying", d.proxyRetryCount)
 	}
 
-	if !d.proxyLastRetryTime.IsZero() && time.Since(d.proxyLastRetryTime) < constants.ProxyStartRetryInterval {
-		log.Printf("Proxy is not running, waiting for retry interval (%s) before next attempt", constants.ProxyStartRetryInterval)
-		return true, nil
-	}
-
 	d.proxyRetryCount++
-	d.proxyLastRetryTime = time.Now()
 	log.Printf("Proxy is not running, starting it... (attempt %d/%d)", d.proxyRetryCount, constants.ProxyStartMaxRetries)
 
 	if err := d.startProxy(d.ctx); err != nil {
@@ -386,7 +368,6 @@ func (d *Daemon) handleProxy() (shouldRetry bool, err error) {
 	if d.proxy.IsRunning() {
 		log.Println("Proxy started successfully")
 		d.proxyRetryCount = 0
-		d.proxyLastRetryTime = time.Time{}
 	} else {
 		log.Printf("Failed to start proxy, will try again later")
 	}
@@ -428,10 +409,20 @@ func (d *Daemon) heartbeat() error {
 		log.Printf("Failed to start proxy: %v", err)
 	}
 
+	if d.proxy.IsRunning() && !proxy.ProxyCAInstalled() {
+		if err := d.proxy.InstallCA(d.ctx); err != nil {
+			return fmt.Errorf("failed to install proxy CA: %v", err)
+		}
+
+		// Once the proxy is recovered and the CA is installed, re-run certconfig
+		// so ecosystem trust is correctly configured.
+		certconfig.Install(d.ctx)
+	}
+
 	// Ensure the UI is running, if not, relaunch it
 	d.uiManager.EnsureRunning()
 
-	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.IsRunning())
+	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.GetStatus())
 
 	d.runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() error {
 		d.printDaemonStatus()

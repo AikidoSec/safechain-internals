@@ -23,6 +23,7 @@ const (
 type UIProvider interface {
 	Token() string
 	NotifyBlocked(ev any)
+	NotifyTlsTerminationFailed(ev any)
 }
 
 type Server struct {
@@ -32,15 +33,17 @@ type Server struct {
 	config   *config.ConfigInfo
 	ui       UIProvider
 
-	eventStore *eventStore
-	mu         sync.RWMutex
+	eventStore    *eventStore
+	tlsEventStore *tlsEventStore
+	mu            sync.RWMutex
 }
 
 func New(cfg *config.ConfigInfo, ui UIProvider) *Server {
 	return &Server{
-		config:     cfg,
-		ui:         ui,
-		eventStore: &eventStore{},
+		config:        cfg,
+		ui:            ui,
+		eventStore:    &eventStore{},
+		tlsEventStore: &tlsEventStore{},
 	}
 }
 
@@ -53,11 +56,17 @@ func (s *Server) Addr() string {
 func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /events/blocks", s.handleBlock)
+	mux.HandleFunc("POST /events/tls-termination-failed", s.handleTlsTerminationFailed)
 	mux.HandleFunc("GET /ping", s.handlePing)
 
 	mux.HandleFunc("POST /v1/events/{id}/request-access", s.handleRequestBypass)
 	mux.HandleFunc("GET /v1/events", s.handleEvents)
 	mux.HandleFunc("GET /v1/events/{id}", s.handleGetEventByID)
+
+	mux.HandleFunc("GET /v1/tls-events", s.handleTlsEvents)
+	mux.HandleFunc("GET /v1/tls-events/{id}", s.handleGetTlsEventByID)
+
+	mux.HandleFunc("GET /v1/version", s.handleVersion)
 
 	listener, err := net.Listen("tcp", DefaultBind)
 	if err != nil {

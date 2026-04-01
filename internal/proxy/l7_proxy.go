@@ -122,6 +122,10 @@ func (p *L7Proxy) IsRunning() bool {
 	return IsProxyRunning()
 }
 
+func (p *L7Proxy) InstallCA(ctx context.Context) error {
+	return InstallL7ProxyCA(ctx)
+}
+
 func (p *L7Proxy) Stop() error {
 	log.Println("Stopping SafeChain Proxy...")
 	if p.cancel != nil {
@@ -142,4 +146,12 @@ func (p *L7Proxy) Stop() error {
 
 	log.Println("SafeChain Proxy stopped successfully!")
 	return nil
+}
+
+func (p *L7Proxy) GetStatus() (bool, string) {
+	isRunning := IsProxyRunning()
+	if isRunning {
+		return isRunning, "connected"
+	}
+	return isRunning, "disconnected"
 }

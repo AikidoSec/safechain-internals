@@ -189,8 +189,8 @@ ifeq ($(DETECTED_OS),darwin)
 		-scheme AikidoEndpointL4ProxyHost \
 		-configuration Release \
 		-derivedDataPath "$(CURDIR)/$(L4_DERIVED_DATA)" \
-		-allowProvisioningUpdates \
-		-allowProvisioningDeviceRegistration \
+		"ARCHS=x86_64 arm64" \
+		ONLY_ACTIVE_ARCH=NO \
 		clean build
 	@mkdir -p $(BIN_DIR)
 	@rm -rf $(BIN_DIR)/$(L4_APP_NAME)

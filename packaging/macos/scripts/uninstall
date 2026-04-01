@@ -26,15 +26,14 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-L4_APP="$INSTALL_DIR/bin/AikidoEndpointL4ProxyHost.app"
+L4_APP="/Applications/AikidoEndpointL4ProxyHost.app"
 L4_HOST="$L4_APP/Contents/MacOS/AikidoEndpointL4ProxyHost"
 
 echo "Stopping Aikido Endpoint Protection processes..."
 
-# Stop the L4 transparent proxy first
 if [ -x "$L4_HOST" ]; then
     echo "  Stopping L4 transparent proxy..."
-    "$L4_HOST" stop --remove-profile --clean-secrets 2>/dev/null && echo "  ✓ L4 Proxy stopped" || echo "  L4 Proxy not running"
+    "$L4_HOST" stop --remove-profile --clean-secrets --deactivate-extension 2>/dev/null && echo "  ✓ L4 Proxy stopped" || echo "  L4 Proxy not running"
 fi
 
 if launchctl list | grep -q "$DAEMON_LABEL"; then
@@ -70,6 +69,11 @@ echo "Removing installed files..."
 if [ -f "$LAUNCHDAEMON_PLIST" ]; then
     rm -f "$LAUNCHDAEMON_PLIST"
     echo "  ✓ Removed LaunchDaemon plist"
+fi
+
+if [ -d "$L4_APP" ]; then
+    rm -rf "$L4_APP"
+    echo "  ✓ Removed L4 proxy app"
 fi
 
 if [ -d "$INSTALL_DIR" ]; then
