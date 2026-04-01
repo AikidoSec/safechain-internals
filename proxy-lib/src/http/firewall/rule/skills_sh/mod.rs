@@ -7,17 +7,23 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
-    utils::str::arcstr::{ArcStr, arcstr},
+    utils::{
+        str::arcstr::{ArcStr, arcstr},
+        time::now_unix_ms,
+    },
 };
 
 use crate::{
-    endpoint_protection::PolicyEvaluator,
+    endpoint_protection::{PolicyEvaluator, RemoteEndpointConfig},
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
         rule::{BlockedRequest, RequestAction, Rule},
     },
-    package::malware_list::{ListDataEntry, MalwareListEntryFormatter, RemoteMalwareList},
+    package::{
+        malware_list::{ListDataEntry, MalwareListEntryFormatter, RemoteMalwareList},
+        released_packages_list::{LowerCaseReleasedPackageFormatter, RemoteReleasedPackagesList},
+    },
     storage::SyncCompactDataStorage,
 };
 
@@ -50,6 +56,11 @@ impl MalwareListEntryFormatter for SkillsShEntryFormatter {
 pub(in crate::http::firewall) struct RuleSkillsSh {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    remote_released_packages_list: RemoteReleasedPackagesList,
+    remote_endpoint_config: Option<RemoteEndpointConfig>,
+    // Policy evaluator is not used for skills_sh: policy decisions like
+    // BlockAll / RequestInstall / Allow / Reject would affect all GitHub git
+    // operations, not just skills.sh repositories.
     #[allow(dead_code)]
     policy_evaluator: Option<PolicyEvaluator>,
 }
@@ -60,23 +71,36 @@ impl RuleSkillsSh {
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<PolicyEvaluator>,
+        remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_skills_sh.json"),
-            sync_storage,
-            remote_malware_list_https_client,
+            sync_storage.clone(),
+            remote_malware_list_https_client.clone(),
             SkillsShEntryFormatter,
         )
         .await
         .context("create remote malware list for skills.sh block rule")?;
 
+        let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
+            guard,
+            Uri::from_static("https://malware-list.aikido.dev/releases/skills_sh.json"),
+            sync_storage,
+            remote_malware_list_https_client,
+            LowerCaseReleasedPackageFormatter,
+        )
+        .await
+        .context("create remote released packages list for skills.sh block rule")?;
+
         Ok(Self {
             target_domains: ["github.com"].into_iter().collect(),
             remote_malware_list,
+            remote_released_packages_list,
+            remote_endpoint_config,
             policy_evaluator,
         })
     }
@@ -127,22 +151,53 @@ impl Rule for RuleSkillsSh {
                 repo.name = %repo_name,
                 "blocked Skills.sh repository git operation"
             );
-            Ok(RequestAction::Block(BlockedRequest::blocked(
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
                 Self::blocked_artifact(&repo_name),
                 BlockReason::Malware,
-            )))
-        } else {
+            )));
+        }
+
+        let cutoff_secs = self.get_package_age_cutoff_secs();
+        if self
+            .remote_released_packages_list
+            .is_recently_released(&repo_name, None, cutoff_secs)
+        {
             tracing::debug!(
                 http.url.path = %path,
-                "Skills.sh repository is not listed as malware: passthrough"
+                repo.name = %repo_name,
+                "blocked Skills.sh repository git operation: repo released too recently"
             );
-            Ok(RequestAction::Allow(req))
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
+                req,
+                Self::blocked_artifact(&repo_name),
+                BlockReason::NewPackage,
+            )));
         }
+
+        tracing::debug!(
+            http.url.path = %path,
+            "Skills.sh repository is not listed as malware: passthrough"
+        );
+        Ok(RequestAction::Allow(req))
     }
 }
 
 impl RuleSkillsSh {
+    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 48 * 3600;
+
+    fn get_package_age_cutoff_secs(&self) -> i64 {
+        let maybe_ts = self.remote_endpoint_config.as_ref().and_then(|c| {
+            c.get_ecosystem_config("skills_sh")
+                .config()
+                .and_then(|cfg| cfg.minimum_allowed_age_timestamp)
+        });
+        if let Some(ts_secs) = maybe_ts {
+            return ts_secs;
+        }
+        (now_unix_ms()) / 1000 - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
+    }
+
     fn blocked_artifact(repo_name: &str) -> Artifact {
         Artifact {
             product: arcstr!("skills_sh"),

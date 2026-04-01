@@ -232,6 +232,7 @@ impl Firewall {
                     layered_client,
                     data,
                     policy_evaluator,
+                    remote_endpoint_config,
                 )
                 .await
                 .context("create block rule: skills.sh")?
