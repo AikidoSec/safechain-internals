@@ -44,7 +44,7 @@ use crate::utils::PEEK_TIMEOUT;
 
 mod assert_endpoint;
 mod endpoint_protection_callbacks;
-mod malware_list;
+pub mod malware_list;
 mod npm_registry;
 mod vscode_marketplace;
 

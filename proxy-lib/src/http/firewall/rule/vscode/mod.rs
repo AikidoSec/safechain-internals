@@ -7,19 +7,26 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
-    utils::str::{
-        self as str_utils,
-        arcstr::{ArcStr, arcstr},
+    utils::{
+        str::{
+            self as str_utils,
+            arcstr::{ArcStr, arcstr},
+        },
+        time::now_unix_ms,
     },
 };
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator},
+    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig},
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
     },
-    package::malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
+    package::{
+        malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
+        released_packages_list::{LowerCaseReleasedPackageFormatter, RemoteReleasedPackagesList},
+        version::PackageVersion,
+    },
     storage::SyncCompactDataStorage,
 };
 
@@ -31,6 +38,8 @@ use super::{BlockedRequest, RequestAction, Rule};
 pub(in crate::http::firewall) struct RuleVSCode {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
+    remote_released_packages_list: RemoteReleasedPackagesList,
+    remote_endpoint_config: Option<RemoteEndpointConfig>,
     policy_evaluator: Option<PolicyEvaluator>,
 }
 
@@ -40,19 +49,30 @@ impl RuleVSCode {
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<PolicyEvaluator>,
+        remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_vscode.json"),
-            sync_storage,
-            remote_malware_list_https_client,
+            sync_storage.clone(),
+            remote_malware_list_https_client.clone(),
             LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for vscode block rule")?;
+
+        let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
+            guard.clone(),
+            Uri::from_static("https://malware-list.aikido.dev/releases/vscode.json"),
+            sync_storage,
+            remote_malware_list_https_client,
+            LowerCaseReleasedPackageFormatter,
+        )
+        .await
+        .context("create remote released packages list for vscode block rule")?;
 
         Ok(Self {
             target_domains: [
@@ -65,6 +85,8 @@ impl RuleVSCode {
             .into_iter()
             .collect(),
             remote_malware_list,
+            remote_released_packages_list,
+            remote_endpoint_config,
             policy_evaluator,
         })
     }
@@ -149,6 +171,28 @@ impl Rule for RuleVSCode {
             )));
         }
 
+        let cutoff_secs = self.get_package_age_cutoff_secs();
+        let version: Option<PackageVersion> = vscode_extension
+            .version
+            .as_deref()
+            .map(|v| v.parse().unwrap());
+        if self.remote_released_packages_list.is_recently_released(
+            &vscode_extension.extension_id,
+            version.as_ref(),
+            cutoff_secs,
+        ) {
+            tracing::debug!(
+                http.url.path = %path,
+                package = %vscode_extension,
+                "blocked VSCode extension install: package released too recently"
+            );
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
+                req,
+                Self::blocked_artifact(&vscode_extension),
+                BlockReason::NewPackage,
+            )));
+        }
+
         tracing::trace!(
             http.url.path = %path,
             package = %vscode_extension,
@@ -160,6 +204,20 @@ impl Rule for RuleVSCode {
 }
 
 impl RuleVSCode {
+    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 24 * 3600;
+
+    fn get_package_age_cutoff_secs(&self) -> i64 {
+        let maybe_ts = self.remote_endpoint_config.as_ref().and_then(|c| {
+            c.get_ecosystem_config("vscode")
+                .config()
+                .and_then(|cfg| cfg.minimum_allowed_age_timestamp)
+        });
+        if let Some(ts_secs) = maybe_ts {
+            return ts_secs;
+        }
+        (now_unix_ms()) / 1000 - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
+    }
+
     fn blocked_artifact(vscode_extension: &VsCodeExtensionId) -> Artifact {
         Artifact {
             product: arcstr!("vscode"),
@@ -199,15 +257,16 @@ impl RuleVSCode {
         if first.eq_ignore_ascii_case("files") {
             let publisher = it.next()?;
             let extension = it.next()?;
-            let _ = it.next()?; // we require at least a fourth path
-            return Some(VsCodeExtensionId::new(publisher, extension));
+            let version = it.next()?; // we require at least a fourth path segment
+            return Some(VsCodeExtensionId::new(publisher, extension, Some(version)));
         }
 
-        // Pattern: extensions/<publisher>/<extension>/...
+        // Pattern: extensions/<publisher>/<extension>[/<version>/...]
         if first.eq_ignore_ascii_case("extensions") {
             let publisher = it.next()?;
             let extension = it.next()?;
-            return Some(VsCodeExtensionId::new(publisher, extension));
+            let version = it.next();
+            return Some(VsCodeExtensionId::new(publisher, extension, version));
         }
 
         // Pattern: _apis/public/gallery/publishers/<publisher>/vsextensions/<extension>/...
@@ -226,12 +285,13 @@ impl RuleVSCode {
                     || fifth.eq_ignore_ascii_case("extensions")
                 {
                     let extension = it.next()?;
-                    return Some(VsCodeExtensionId::new(publisher, extension));
+                    let version = it.next();
+                    return Some(VsCodeExtensionId::new(publisher, extension, version));
                 }
             }
 
-            // Pattern: _apis/public/gallery/publisher/<publisher>/<extension>/...
-            // Pattern: _apis/public/gallery/publisher/<publisher>/extension/<extension>/...
+            // Pattern: _apis/public/gallery/publisher/<publisher>/<extension>/<version>/...
+            // Pattern: _apis/public/gallery/publisher/<publisher>/extension/<extension>/<version>/...
             if second.eq_ignore_ascii_case("public")
                 && third.eq_ignore_ascii_case("gallery")
                 && fourth.eq_ignore_ascii_case("publisher")
@@ -241,10 +301,13 @@ impl RuleVSCode {
 
                 if next.eq_ignore_ascii_case("extension") {
                     let extension = it.next()?;
-                    return Some(VsCodeExtensionId::new(publisher, extension));
+                    let version = it.next();
+                    return Some(VsCodeExtensionId::new(publisher, extension, version));
                 }
 
-                return Some(VsCodeExtensionId::new(publisher, next));
+                // next is the extension name; the following segment (if any) is the version
+                let version = it.next();
+                return Some(VsCodeExtensionId::new(publisher, next, version));
             }
         }
 
@@ -254,12 +317,14 @@ impl RuleVSCode {
 
 struct VsCodeExtensionId {
     extension_id: String,
+    version: Option<String>,
 }
 
 impl VsCodeExtensionId {
-    fn new(publisher: &str, extension: &str) -> VsCodeExtensionId {
+    fn new(publisher: &str, extension: &str, version: Option<&str>) -> VsCodeExtensionId {
         Self {
             extension_id: format!("{publisher}.{extension}").to_lowercase(),
+            version: version.map(|v| v.to_lowercase()),
         }
     }
 }

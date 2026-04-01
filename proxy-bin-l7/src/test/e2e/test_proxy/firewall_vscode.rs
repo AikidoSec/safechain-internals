@@ -3,7 +3,12 @@ use rama::{
     telemetry::tracing,
 };
 
-use crate::test::e2e;
+use crate::{
+    client::mock_server::malware_list::{
+        FRESH_EXTENSION_NAME, FRESH_EXTENSION_PUBLISHER, FRESH_EXTENSION_VERSION,
+    },
+    test::e2e,
+};
 
 const SAFE_EXTENSION_URL: &str = "https://gallerycdn.vsassets.io/_apis/public/gallery/publishers/python/vsextensions/python/1.0.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage";
 
@@ -247,4 +252,53 @@ async fn test_vscode_https_install_asset_subdomain_gallery_api_malware_blocked()
         payload.to_lowercase().contains("malware"),
         "expected blocked response to mention malware, got: {payload}"
     );
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_vscode_https_install_asset_new_package_blocked() {
+    let runtime = e2e::runtime::get().await;
+    let client = runtime.client_with_http_proxy().await;
+
+    // newpublisher.freshextension is in the released packages list (released far in the future
+    // relative to a 24h cutoff) and is NOT in the malware list — should be blocked as new package.
+    let url = format!(
+        "https://gallerycdn.vsassets.io/_apis/public/gallery/publishers/{FRESH_EXTENSION_PUBLISHER}/vsextensions/{FRESH_EXTENSION_NAME}/{FRESH_EXTENSION_VERSION}/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage"
+    );
+    let resp = client
+        .get(url)
+        .typed_header(Accept::json())
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(StatusCode::FORBIDDEN, resp.status());
+
+    let payload = resp.try_into_string().await.unwrap();
+    assert!(
+        payload.to_lowercase().contains("24 hours") || payload.to_lowercase().contains("vetted"),
+        "expected blocked response to mention 24-hour vetting, got: {payload}"
+    );
+}
+
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_vscode_https_install_asset_new_package_not_blocked_via_policy_cutoff() {
+    // The policy sets minimum_allowed_age_timestamp far in the future (year ~2286), making the
+    // cutoff larger than our test entry's released_on (year ~2255) — so the extension is no
+    // longer considered "recent" and is allowed through.
+    let runtime = e2e::runtime::spawn_with_agent_identity(
+        "policy-bypass-new-package-vscode",
+        "mock_device",
+        &[],
+    )
+    .await;
+    let client = runtime.client_with_http_proxy().await;
+
+    let url = format!(
+        "https://gallerycdn.vsassets.io/_apis/public/gallery/publishers/{FRESH_EXTENSION_PUBLISHER}/vsextensions/{FRESH_EXTENSION_NAME}/{FRESH_EXTENSION_VERSION}/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage"
+    );
+    let resp = client.get(url).send().await.unwrap();
+
+    assert_eq!(StatusCode::OK, resp.status());
 }

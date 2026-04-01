@@ -18,7 +18,7 @@ use rama::{
 };
 
 #[cfg(test)]
-mod mock_server;
+pub mod mock_server;
 
 #[cfg(test)]
 #[inline(always)]
