@@ -7,9 +7,7 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
-    utils::str::{
-        arcstr::{ArcStr, arcstr},
-    },
+    utils::str::arcstr::{ArcStr, arcstr},
 };
 
 use crate::{
@@ -64,7 +62,7 @@ impl RuleChrome {
                 "play.google.com",
                 "chromewebstore.google.com",
                 "chromewebstore.googleapis.com",
-                "com.google.Chrome.helper"
+                "com.google.Chrome.helper",
             ]
             .into_iter()
             .collect(),

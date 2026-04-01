@@ -19,7 +19,10 @@ pub(super) fn parse_crx_download_url(req: &Request) -> Option<(ArcStr, PackageVe
     let path = req.uri().path();
 
     let Some((_, filename)) = path.rsplit_once('/') else {
-        tracing::debug!(http.url.path = path, "Chrome CRX parse failed: missing filename");
+        tracing::debug!(
+            http.url.path = path,
+            "Chrome CRX parse failed: missing filename"
+        );
         return None;
     };
     let Some(base) = filename.strip_suffix(".crx") else {
