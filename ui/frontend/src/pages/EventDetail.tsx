@@ -98,8 +98,8 @@ export function EventDetail() {
     const unsub = Events.On("permissions_updated", (ev: unknown) => {
       const perms = (ev as { data?: PermissionsResponse }).data;
       if (!perms || !event) return;
-      const eco = perms.ecosystems[event.artifact.product];
-      if (eco?.exceptions.allowed_packages.includes(event.artifact.identifier)) {
+      const ecosystem = perms.ecosystems[event.artifact.product];
+      if (ecosystem?.exceptions.allowed_packages.includes(event.artifact.identifier)) {
         setApproved(true);
       }
     });
