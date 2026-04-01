@@ -29,6 +29,7 @@ type FocusEventPayload struct {
 func init() {
 	application.RegisterEvent[daemon.BlockEvent]("blocked")
 	application.RegisterEvent[daemon.TlsTerminationFailedEvent]("tls_termination_failed")
+	application.RegisterEvent[daemon.PermissionsResponse]("permissions_updated")
 	application.RegisterEvent[FocusEventPayload]("focus_event")
 }
 
@@ -262,6 +263,10 @@ func startAppServer(app *application.App, statusCh chan<- appserver.ProxyStatusB
 					Data:       map[string]interface{}{"eventId": ev.ID, "eventType": "tls"},
 				})
 			}
+		},
+		func(ev daemon.PermissionsResponse) {
+			log.Println("Permissions updated")
+			app.Event.Emit("permissions_updated", ev)
 		},
 	)
 	srv.Start()
