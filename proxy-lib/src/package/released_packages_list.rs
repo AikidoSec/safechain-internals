@@ -17,10 +17,14 @@ use rand::RngExt as _;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
-use crate::{storage::SyncCompactDataStorage, utils::uri::uri_to_filename};
+use crate::{
+    package::version::PackageVersion,
+    storage::SyncCompactDataStorage,
+    utils::uri::uri_to_filename,
+};
 
 /// How long to keep entries in the trie (7 days).
-/// Entries older than this are irrelevant to the 24h blocking window.
+/// Entries older than this are irrelevant to the configured blocking window.
 const MAX_ENTRY_AGE_SECS: i64 = 7 * 24 * 3600;
 
 pub trait ReleasedPackageEntryFormatter: Send + Sync {
@@ -139,7 +143,7 @@ impl RemoteReleasedPackagesList {
     pub fn is_recently_released(
         &self,
         package_name: &str,
-        version: Option<&str>,
+        version: Option<&PackageVersion>,
         cutoff_secs: i64,
     ) -> bool {
         let key = package_name;
@@ -148,8 +152,8 @@ impl RemoteReleasedPackagesList {
             return false;
         };
         entries.iter().any(|e| {
-            e.released_on > cutoff_secs
-                && version.is_none_or(|v| v.trim().to_ascii_lowercase() == e.version)
+            e.released_on_epoch_s > cutoff_secs
+                && version.is_none_or(|v| *v == e.version)
         })
     }
 }
@@ -400,8 +404,8 @@ where
         }
         let key = formatter.format(&item);
         let entry = ReleasedEntry {
-            version: item.version.trim().to_ascii_lowercase(),
-            released_on: item.released_on,
+            version: item.version,
+            released_on_epoch_s: item.released_on,
         };
         match trie.get_mut(key.as_str()) {
             Some(entries) => entries.push(entry),
@@ -421,15 +425,15 @@ where
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ReleasedPackageData {
     pub package_name: String,
-    pub version: String,
+    pub version: PackageVersion,
     pub released_on: i64,
 }
 
 /// Stored in the trie (version + timestamp; package_name is the key)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleasedEntry {
-    pub version: String,
-    pub released_on: i64,
+    pub version: PackageVersion,
+    pub released_on_epoch_s: i64,
 }
 
 #[cfg(test)]
@@ -440,6 +444,10 @@ mod tests {
         trie_from_released_packages_list(entries, now_secs, LowerCaseReleasedPackageFormatter)
     }
 
+    fn pv(s: &str) -> PackageVersion {
+        s.parse().unwrap()
+    }
+
     fn make_list(
         package_name: &str,
         version: &str,
@@ -448,7 +456,7 @@ mod tests {
         let trie = trie_from_released_packages_list(
             vec![ReleasedPackageData {
                 package_name: package_name.to_owned(),
-                version: version.to_owned(),
+                version: pv(version),
                 released_on,
             }],
             released_on + 3600, // now = 1h after release
@@ -465,7 +473,7 @@ mod tests {
         let released_on = 1_000_000_i64;
         let list = make_list("my-ext", "1.0.0", released_on);
         let cutoff = released_on - 7200; // 2h before release
-        assert!(list.is_recently_released("my-ext", Some("1.0.0"), cutoff));
+        assert!(list.is_recently_released("my-ext", Some(&pv("1.0.0")), cutoff));
     }
 
     #[test]
@@ -473,7 +481,7 @@ mod tests {
         let released_on = 1_000_000_i64;
         let list = make_list("my-ext", "1.0.0", released_on);
         let cutoff = released_on - 7200;
-        assert!(!list.is_recently_released("my-ext", Some("2.0.0"), cutoff));
+        assert!(!list.is_recently_released("my-ext", Some(&pv("2.0.0")), cutoff));
     }
 
     #[test]
@@ -490,7 +498,7 @@ mod tests {
         let released_on = 1_000_000_i64;
         let list = make_list("my-ext", "1.0.0", released_on);
         let cutoff = released_on + 3600; // cutoff is 1h AFTER release
-        assert!(!list.is_recently_released("my-ext", Some("1.0.0"), cutoff));
+        assert!(!list.is_recently_released("my-ext", Some(&pv("1.0.0")), cutoff));
     }
 
     #[test]
@@ -508,12 +516,12 @@ mod tests {
         let entries = vec![
             ReleasedPackageData {
                 package_name: "old-pkg".to_owned(),
-                version: "1.0.0".to_owned(),
+                version: pv("1.0.0"),
                 released_on: cutoff - 1, // older than max age
             },
             ReleasedPackageData {
                 package_name: "new-pkg".to_owned(),
-                version: "1.0.0".to_owned(),
+                version: pv("1.0.0"),
                 released_on: cutoff + 1, // within max age
             },
         ];
@@ -527,6 +535,8 @@ mod tests {
         let released_on = 1_000_000_i64;
         let list = make_list("My-Ext", "1.0.0", released_on);
         let cutoff = released_on - 7200;
-        assert!(list.is_recently_released("MY-EXT", Some("1.0.0"), cutoff));
+        // Name normalization is the caller's responsibility (LowerCaseReleasedPackageFormatter
+        // lowercases keys at trie-build time), so the lookup key must already be lowercase.
+        assert!(list.is_recently_released("my-ext", Some(&pv("1.0.0")), cutoff));
     }
 }

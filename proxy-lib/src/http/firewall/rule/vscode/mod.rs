@@ -25,6 +25,7 @@ use crate::{
     package::{
         malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
         released_packages_list::{LowerCaseReleasedPackageFormatter, RemoteReleasedPackagesList},
+        version::PackageVersion,
     },
     storage::SyncCompactDataStorage,
 };
@@ -171,12 +172,16 @@ impl Rule for RuleVSCode {
         }
 
         let cutoff_secs = self.get_package_age_cutoff_secs();
+        let version: Option<PackageVersion> = vscode_extension
+            .version
+            .as_deref()
+            .map(|v| v.parse().unwrap());
         if self.remote_released_packages_list.is_recently_released(
             &vscode_extension.extension_id,
-            vscode_extension.version.as_deref(),
+            version.as_ref(),
             cutoff_secs,
         ) {
-            tracing::info!(
+            tracing::debug!(
                 http.url.path = %path,
                 package = %vscode_extension,
                 "blocked VSCode extension install: package released too recently"
