@@ -1,4 +1,4 @@
-use std::{fmt, str::FromStr};
+use std::fmt;
 
 use rama::{
     Service,
@@ -8,10 +8,7 @@ use rama::{
     net::address::Domain,
     telemetry::tracing,
     utils::{
-        str::{
-            arcstr::{ArcStr, arcstr},
-            smol_str::StrExt,
-        },
+        str::arcstr::{ArcStr, arcstr},
         time::now_unix_ms,
     },
 };
@@ -36,6 +33,7 @@ use crate::http::firewall::pac::PacScriptGenerator;
 use super::{BlockedRequest, RequestAction, Rule};
 
 mod malware_key;
+mod parser;
 
 pub(in crate::http::firewall) struct RuleChrome {
     target_domains: DomainMatcher,
@@ -81,6 +79,10 @@ impl RuleChrome {
                 "clients2.google.com",
                 "update.googleapis.com",
                 "clients2.googleusercontent.com",
+                "play.google.com",
+                "chromewebstore.google.com",
+                "chromewebstore.googleapis.com",
+                "com.google.Chrome.helper",
             ]
             .into_iter()
             .collect(),
@@ -119,6 +121,11 @@ impl Rule for RuleChrome {
 
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
         let Some((extension_id, version)) = Self::parse_crx_download_url(&req) else {
+            tracing::debug!(
+                http.url.full = %req.uri(),
+                http.request.method = %req.method(),
+                "Chrome-target request did not match known CRX download URL format"
+            );
             return Ok(RequestAction::Allow(req));
         };
 
@@ -220,25 +227,7 @@ impl RuleChrome {
     }
 
     fn parse_crx_download_url(req: &Request) -> Option<(ArcStr, PackageVersion)> {
-        // Example CRX download URL path (after redirect):
-        //   /crx/lajondecmobodlejlcjllhojikagldgd_1_2_3_4.crx
-        let path = req.uri().path();
-
-        let (_, filename) = path.rsplit_once('/')?;
-        let base = filename.strip_suffix(".crx")?;
-
-        let (extension_id, version_raw) = base.split_once('_')?;
-
-        if extension_id.is_empty() || version_raw.is_empty() {
-            return None;
-        }
-
-        let version_string = version_raw.replace_smolstr("_", ".");
-
-        let version =
-            PackageVersion::from_str(version_string.as_str()).unwrap_or(PackageVersion::None);
-
-        Some((ArcStr::from(extension_id), version))
+        self::parser::parse_crx_download_url(req)
     }
 }
 
