@@ -71,6 +71,8 @@ directly to the target services.
 
 ### Docker builds with the L4 proxy
 
+> See also: [CA Certificates](../ca-certs.md) for a full overview of how Aikido Endpoint configures certificate trust across all supported tools.
+
 Aikido Endpoint attempts to install its CA automatically into supported
 Docker containers that are already running or that start after the agent is active.
 
@@ -142,6 +144,10 @@ If the build still fails after the CA is trusted, inspect the package-manager
 output carefully. The proxy can still block packages that are flagged by policy,
 including packages that require approval. In that case, the failure is expected
 proxy behavior rather than a certificate trust problem.
+
+### JetBrains IDEs
+
+JetBrains IDEs read from the OS trust store but only load certificates at startup. If you see certificate errors after installing Aikido Endpoint, restart the IDE. See [CA Certificates: JetBrains IDEs](../ca-certs.md#jetbrains-ides) for more details.
 
 ### Verbose Logging
 

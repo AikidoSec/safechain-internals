@@ -41,6 +41,12 @@ msiexec /x EndpointProtection.msi /qn /norestart
 A security-focused SOCKS5/HTTP(S) system proxy built with <https://ramaproxy.org/>.
 Read more in the proxy readme: [./docs/proxy.md](./docs/proxy.md).
 
+## CA Certificates
+
+Aikido Endpoint installs a proxy CA certificate into the OS trust store and configures trust for tools that maintain their own certificate stores (Node.js, pip, Firefox, Docker). JetBrains IDEs use the OS trust store automatically but require a restart.
+
+See [CA Certificates](./docs/ca-certs.md) for details on each supported tool.
+
 ## Contributing
 
 See our [Contribution docs](.github/CONTRIBUTING.md).
