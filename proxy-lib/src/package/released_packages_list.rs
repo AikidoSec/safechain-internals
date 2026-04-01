@@ -148,7 +148,7 @@ impl RemoteReleasedPackagesList {
     ) -> bool {
         let key = package_name.trim().to_ascii_lowercase();
         let guard = self.trie.load();
-        let Some(entries) = guard.get(key) else {
+        let Some(entries) = guard.get(&key) else {
             return false;
         };
         entries.iter().any(|e| {
