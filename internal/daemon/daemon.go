@@ -323,7 +323,7 @@ func (d *Daemon) runDockerCALoop(ctx context.Context) {
 func runDockerCACycle(ctx context.Context) error {
 	if !proxy.ProxyCAInstalled() {
 		// The Docker CA flow depends on the proxy CA file being installed first.
-		// On first startup that happens later in the daemon heartbeat, so wait for next cycle.
+		// Wait for next cycle.
 		return nil
 	}
 
