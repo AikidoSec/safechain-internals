@@ -5,6 +5,7 @@ import { EventsList } from "./pages/EventsList";
 import { EventDetail } from "./pages/EventDetail";
 import { TlsEventsList } from "./pages/TlsEventsList";
 import { TlsEventDetail } from "./pages/TlsEventDetail";
+import { ProtectedEcosystems } from "./pages/ProtectedEcosystems";
 import { getVersion } from "./api";
 import logoUrl from "../assets/logo.svg";
 import "./App.css";
@@ -42,6 +43,7 @@ function AppRoutes() {
         <Route path="/events/:id" element={<EventDetail />} />
         <Route path="/tls-events" element={<TlsEventsList />} />
         <Route path="/tls-events/:id" element={<TlsEventDetail />} />
+        <Route path="/protected-ecosystems" element={<ProtectedEcosystems />} />
       </Routes>
     </>
   );
@@ -66,6 +68,12 @@ function App() {
           </NavLink>
           <NavLink to="/tls-events" className={({ isActive }) => `app-tab${isActive ? " app-tab--active" : ""}`}>
             TLS Failures
+          </NavLink>
+          <NavLink
+            to="/protected-ecosystems"
+            className={({ isActive }) => `app-tab${isActive ? " app-tab--active" : ""}`}
+          >
+            Protected ecosystems
           </NavLink>
         </nav>
         <main className="dashboard">
