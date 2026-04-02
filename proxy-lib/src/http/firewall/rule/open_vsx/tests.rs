@@ -34,7 +34,7 @@ fn test_is_extension_install_asset_path() {
 #[test]
 fn test_parse_extension_id_from_path() {
     let test_cases = vec![
-        // open-vsx.org pattern
+        // open-vsx.org pattern with /vscode/asset
         (
             "/vscode/asset/oxc/oxc-vscode/1.47.0/Microsoft.VisualStudio.Services.VSIXPackage",
             Some("oxc/oxc-vscode"),
@@ -46,6 +46,11 @@ fn test_parse_extension_id_from_path() {
         (
             "vscode/asset/redhat/java/1.30.0/Microsoft.VisualStudio.Services.VSIXPackage",
             Some("redhat/java"),
+        ),
+        // open-vsx.org pattern with /api
+        (
+            "api/AikidoSecurity/safe-chain-test/0.0.2/file/AikidoSecurity.safe-chain-test-0.0.2.vsix",
+            Some("aikidosecurity/safe-chain-test"),
         ),
         // marketplace.cursorapi.com pattern
         (
