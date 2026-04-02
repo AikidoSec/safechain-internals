@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use moka::Equivalent;
+use moka::{Equivalent, policy::EvictionPolicy};
 use rama::{
     Layer, Service,
     error::{BoxError, ErrorContext as _, ErrorExt as _},
@@ -55,8 +55,10 @@ pub struct TlsMitmRelayPolicyLayer {
 impl TlsMitmRelayPolicyLayer {
     #[inline(always)]
     pub fn new(firewall: Firewall) -> Self {
-        let cache = moka::sync::CacheBuilder::new(4096)
-            .time_to_live(Duration::from_mins(5))
+        let cache = moka::sync::CacheBuilder::new(8_192)
+            .time_to_live(Duration::from_mins(10))
+            .time_to_idle(Duration::from_mins(5))
+            .eviction_policy(EvictionPolicy::lru())
             .build();
         Self {
             cache,
