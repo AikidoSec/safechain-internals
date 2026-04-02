@@ -34,26 +34,30 @@ use super::{BlockedRequest, RequestAction, Rule};
 
 mod malware_key;
 mod parser;
+mod webstore;
 
-pub(in crate::http::firewall) struct RuleChrome {
+use webstore::ChromeWebStore;
+
+pub(in crate::http::firewall) struct RuleChrome<C> {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
     remote_released_packages_list: RemoteReleasedPackagesList,
     remote_endpoint_config: Option<RemoteEndpointConfig>,
     policy_evaluator: Option<PolicyEvaluator>,
+    https_client: C,
 }
 
-impl RuleChrome {
-    pub(in crate::http::firewall) async fn try_new<C>(
+impl<C> RuleChrome<C>
+where
+    C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
+{
+    pub(in crate::http::firewall) async fn try_new(
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<PolicyEvaluator>,
         remote_endpoint_config: Option<RemoteEndpointConfig>,
-    ) -> Result<Self, BoxError>
-    where
-        C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
-    {
+    ) -> Result<Self, BoxError> {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_chrome.json"),
@@ -68,7 +72,7 @@ impl RuleChrome {
             guard,
             Uri::from_static("https://malware-list.aikido.dev/releases/chrome.json"),
             sync_storage,
-            remote_malware_list_https_client,
+            remote_malware_list_https_client.clone(),
             LowerCaseReleasedPackageFormatter,
         )
         .await
@@ -88,17 +92,21 @@ impl RuleChrome {
             remote_released_packages_list,
             remote_endpoint_config,
             policy_evaluator,
+            https_client: remote_malware_list_https_client,
         })
     }
 }
 
-impl fmt::Debug for RuleChrome {
+impl<C> fmt::Debug for RuleChrome<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RuleChrome").finish()
     }
 }
 
-impl Rule for RuleChrome {
+impl<C> Rule for RuleChrome<C>
+where
+    C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + Sync + 'static,
+{
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
@@ -144,9 +152,10 @@ impl Rule for RuleChrome {
                 }
                 PackagePolicyDecision::Defer => {}
                 decision => {
+                    let display_name = self.lookup_display_name(&extension_id).await;
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        Self::blocked_artifact(&extension_id, &version),
+                        Self::blocked_artifact(&extension_id, &version, display_name),
                         super::block_reason_for(decision),
                     )));
                 }
@@ -161,9 +170,10 @@ impl Rule for RuleChrome {
                 version
             );
 
+            let display_name = self.lookup_display_name(&extension_id).await;
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&extension_id, &version),
+                Self::blocked_artifact(&extension_id, &version, display_name),
                 BlockReason::Malware,
             )));
         }
@@ -179,9 +189,10 @@ impl Rule for RuleChrome {
                 http.url.full = %req.uri(),
                 "blocked Chrome extension: released too recently: {extension_id}"
             );
+            let display_name = self.lookup_display_name(&extension_id).await;
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&extension_id, &version),
+                Self::blocked_artifact(&extension_id, &version, display_name),
                 BlockReason::NewPackage,
             )));
         }
@@ -190,7 +201,10 @@ impl Rule for RuleChrome {
     }
 }
 
-impl RuleChrome {
+impl<C> RuleChrome<C>
+where
+    C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
+{
     const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 48 * 3600;
 
     fn get_package_age_cutoff_secs(&self) -> i64 {
@@ -205,11 +219,30 @@ impl RuleChrome {
         (now_unix_ms()) / 1000 - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
     }
 
-    fn blocked_artifact(extension_id: &ArcStr, version: &PackageVersion) -> Artifact {
+    async fn lookup_display_name(&self, extension_id: &ArcStr) -> Option<ArcStr> {
+        let normalized_id = extension_id.to_ascii_lowercase();
+        match ChromeWebStore::get_extension_name(&self.https_client, &normalized_id).await {
+            Ok(display_name) => display_name.map(ArcStr::from),
+            Err(err) => {
+                tracing::warn!(
+                    extension_id = extension_id.as_str(),
+                    error = %err,
+                    "failed to look up Chrome extension name; using extension id instead"
+                );
+                None
+            }
+        }
+    }
+
+    fn blocked_artifact(
+        extension_id: &ArcStr,
+        version: &PackageVersion,
+        display_name: Option<ArcStr>,
+    ) -> Artifact {
         Artifact {
             product: arcstr!("chrome"),
             identifier: extension_id.clone(),
-            display_name: None,
+            display_name,
             version: Some(version.clone()),
         }
     }
@@ -231,3 +264,5 @@ impl RuleChrome {
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod webstore_test;
