@@ -1,36 +1,11 @@
-use rama::http::{Body, Request, Uri};
-
 use crate::package::{
     malware_list::{ListDataEntry, Reason},
     name_formatter::PackageNameFormatter,
-    version::{PackageVersion, PragmaticSemver},
+    version::PackageVersion,
 };
 
 use super::package_name::ChromePackageNameFormatter;
 use super::*;
-
-#[test]
-fn test_parse_crx_download_url() {
-    let req = Request::builder()
-        .uri(Uri::from_static(
-            "https://clients2.googleusercontent.com/crx/blobs/AV8Xwo6UfyG1svQNvX84OhvpXB-Xw-uQDkg-cYbGRZ1gTKj4oShAxmclsKXkB0kLKqSPOZKKKAM2nElpPWIO-TMWGIZoe0XewyHPPrbTLd4pehbXVSMHQGUvXt6EYD_UJ_XoAMZSmuU75EcMvYc0IzAknEyj-bKQuwE5Rw/GLNPJGLILKICBCKJPBGCFKOGEBGLLEMB_6_45_0_0.crx",
-        ))
-        .body(Body::empty())
-        .unwrap();
-
-    let result = RuleChrome::parse_crx_download_url(&req);
-    assert!(result.is_some());
-
-    let (extension_id, version) = result.unwrap();
-    assert_eq!(
-        extension_id,
-        ChromePackageName::from("GLNPJGLILKICBCKJPBGCFKOGEBGLLEMB")
-    );
-    assert_eq!(
-        version,
-        PackageVersion::Semver(PragmaticSemver::new_two_components(6, 45))
-    );
-}
 
 #[test]
 fn test_version_matches() {

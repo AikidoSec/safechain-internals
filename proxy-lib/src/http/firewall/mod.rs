@@ -82,29 +82,7 @@ impl Firewall {
         agent_identity: Option<AgentIdentity>,
         aikido_url: Uri,
     ) -> Result<Self, BoxError> {
-        let layered_client = (
-            MapResponseBodyLayer::new_boxed_streaming_body(),
-            MapErrLayer::into_opaque_error(),
-            DecompressionLayer::new(),
-            TimeoutLayer::new(Duration::from_secs(60)),
-            RetryLayer::new(
-                ManagedPolicy::default().with_backoff(
-                    ExponentialBackoff::new(
-                        Duration::from_millis(100),
-                        Duration::from_secs(30),
-                        0.01,
-                        HasherRng::default,
-                    )
-                    .context("create exponential backoff impl")?,
-                ),
-            ),
-            AddRequiredRequestHeadersLayer::new().with_user_agent_header_value(
-                HeaderValue::from_static(network_service_identifier()),
-            ),
-            MapRequestBodyLayer::new_boxed_streaming_body(),
-        )
-            .into_layer(client.clone())
-            .boxed();
+        let layered_client = try_new_layered_client(client.clone())?;
 
         let notifier = match reporting_endpoint {
             Some(endpoint) => match self::notifier::EventNotifier::try_new(
@@ -144,7 +122,7 @@ impl Firewall {
         )
         .await;
 
-        let (_, chrome_policy_evaluator) = new_policy_evaluator(
+        let (chrome_policy_config, chrome_policy_evaluator) = new_policy_evaluator(
             agent_identity.clone(),
             guard.clone(),
             endpoint_config_uri.clone(),
@@ -180,6 +158,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     chrome_policy_evaluator,
+                    chrome_policy_config,
                 )
                 .await
                 .context("create block rule: chrome")?
@@ -304,6 +283,33 @@ impl Firewall {
         )
             .into_response()
     }
+}
+
+fn try_new_layered_client(
+    client: impl Service<Request, Output = Response, Error = OpaqueError> + Clone,
+) -> Result<BoxService<Request, Response, OpaqueError>, BoxError> {
+    Ok((
+        MapResponseBodyLayer::new_boxed_streaming_body(),
+        MapErrLayer::into_opaque_error(),
+        DecompressionLayer::new(),
+        TimeoutLayer::new(Duration::from_secs(60)),
+        RetryLayer::new(
+            ManagedPolicy::default().with_backoff(
+                ExponentialBackoff::new(
+                    Duration::from_millis(100),
+                    Duration::from_secs(30),
+                    0.01,
+                    HasherRng::default,
+                )
+                .context("create exponential backoff impl")?,
+            ),
+        ),
+        AddRequiredRequestHeadersLayer::new()
+            .with_user_agent_header_value(HeaderValue::from_static(network_service_identifier())),
+        MapRequestBodyLayer::new_boxed_streaming_body(),
+    )
+        .into_layer(client.clone())
+        .boxed())
 }
 
 async fn new_policy_evaluator<F: PackageNameFormatter>(
