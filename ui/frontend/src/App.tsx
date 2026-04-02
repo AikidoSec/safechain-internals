@@ -65,7 +65,7 @@ function App() {
             Blocked Events
           </NavLink>
           <NavLink to="/tls-events" className={({ isActive }) => `app-tab${isActive ? " app-tab--active" : ""}`}>
-            TLS Failures
+            Logs
           </NavLink>
         </nav>
         <main className="dashboard">
