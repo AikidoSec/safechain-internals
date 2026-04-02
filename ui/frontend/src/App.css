@@ -172,7 +172,7 @@ body {
 .events-list .event-time { white-space: nowrap; }
 .events-list .event-product { vertical-align: middle; }
 .events-list .event-product-icon {
-  height: 20px;
+  height: 16px;
   width: auto;
   display: block;
   vertical-align: middle;
@@ -889,8 +889,8 @@ body {
 }
 
 .protected-ecosystems-table__icon {
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   object-fit: contain;
   display: block;
   margin: 0 auto;

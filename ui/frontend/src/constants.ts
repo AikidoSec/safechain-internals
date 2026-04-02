@@ -1,10 +1,10 @@
-import npmIcon from "../assets/npm.svg";
-import pypiIcon from "../assets/pypi.svg";
+import npmIcon from "../assets/npm.png";
+import pypiIcon from "../assets/pypi.png";
 import vscodeIcon from "../assets/vscode.png";
 import defaultIcon from "../assets/package-outline.svg";
 import mavenIcon from "../assets/maven.svg";
 import nugetIcon from "../assets/nuget.svg";
-import chromeIcon from "../assets/chrome.svg";
+import chromeIcon from "../assets/chrome.png";
 import openVsxIcon from "../assets/open_vsx.png";
 import skillsShIcon from "../assets/skills-sh.svg";
 
