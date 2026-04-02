@@ -79,10 +79,8 @@ impl RuleChrome {
                 "clients2.google.com",
                 "update.googleapis.com",
                 "clients2.googleusercontent.com",
-                "play.google.com",
                 "chromewebstore.google.com",
                 "chromewebstore.googleapis.com",
-                "com.google.Chrome.helper",
             ]
             .into_iter()
             .collect(),
