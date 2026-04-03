@@ -230,14 +230,15 @@ impl RuleOpenVsx {
 
         str_utils::any_ends_with_ignore_ascii_case(
             path,
-            ["/Microsoft.VisualStudio.Services.VSIXPackage"],
+            ["/Microsoft.VisualStudio.Services.VSIXPackage", ".vsix"],
         )
     }
 
     /// Parse extension ID (`publisher.extension`) from an Open VSX download URL path.
     ///
-    /// Handles two URL patterns:
+    /// Handles three URL patterns:
     /// - `open-vsx.org`: `/vscode/asset/{publisher}/{extension}/{version}/...`
+    /// - `open-vsx.org` API: `/api/{publisher}/{extension}/{version}/file/{filename}`
     /// - `marketplace.cursorapi.com`: `/open-vsx-mirror/vscode/asset/{publisher}/{extension}/{version}/...`
     fn parse_extension_id_from_path(path: &str) -> Option<OpenVsxExtensionId> {
         let mut it = path.trim_start_matches('/').split('/');
@@ -253,6 +254,14 @@ impl RuleOpenVsx {
                 let version = it.next();
                 return Some(OpenVsxExtensionId::new(publisher, extension, version));
             }
+        }
+
+        // Pattern: api/{publisher}/{extension}/{version}/file/{filename}
+        if first.eq_ignore_ascii_case("api") {
+            let publisher = it.next()?;
+            let extension = it.next()?;
+            let version = it.next();
+            return Some(OpenVsxExtensionId::new(publisher, extension, version));
         }
 
         // Pattern: open-vsx-mirror/vscode/asset/{publisher}/{extension}/{version}/...

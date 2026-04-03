@@ -172,7 +172,7 @@ body {
 .events-list .event-time { white-space: nowrap; }
 .events-list .event-product { vertical-align: middle; }
 .events-list .event-product-icon {
-  height: 20px;
+  height: 16px;
   width: auto;
   display: block;
   vertical-align: middle;
@@ -816,4 +816,104 @@ body {
 
 .tls-detail-error-block code {
   font-family: inherit;
+}
+
+/* ── Protected ecosystems ── */
+
+.protected-ecosystems {
+  padding: 24px 24px 32px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.protected-ecosystems-table-wrap {
+  overflow-x: auto;
+  width: 100%;
+  border: 1px solid var(--carbon-20);
+  border-radius: 6px;
+  background: var(--white);
+}
+
+.protected-ecosystems-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+
+.protected-ecosystems-table thead tr {
+  background: var(--carbon-5);
+  border-bottom: 1px solid var(--carbon-20);
+}
+
+.protected-ecosystems-table th {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--primary-aik-140);
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--carbon-20);
+  vertical-align: middle;
+}
+
+.protected-ecosystems-table th:first-child {
+  border-right: 1px solid var(--carbon-20);
+}
+
+.protected-ecosystems-table__icon-col {
+  width: 48px;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.protected-ecosystems-table tbody tr {
+  border-bottom: 1px solid var(--carbon-20);
+}
+
+.protected-ecosystems-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.protected-ecosystems-table td {
+  padding: 7px 12px;
+  vertical-align: middle;
+  border-right: none;
+}
+
+.protected-ecosystems-table td:first-child {
+  border-right: 1px solid var(--carbon-20);
+  text-align: center;
+  width: 48px;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.protected-ecosystems-table__icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+}
+
+.protected-ecosystems-table__label-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  min-height: 22px;
+}
+
+.protected-ecosystems-table__name {
+  font-weight: 500;
+  color: var(--primary-aik-140);
+  line-height: 1.35;
+}
+
+.protected-ecosystems-table__subtitle {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  line-height: 1.35;
 }

@@ -42,7 +42,7 @@ export function TlsEventsList() {
 
   return (
     <div className="events-list">
-      <h1>TLS Termination Failures</h1>
+      <h1>Logs</h1>
       {loading && <p className="events-list-loading">Loading…</p>}
       {error && !connectionFailed && (
         <div className="events-list-error-inline">
@@ -102,9 +102,9 @@ export function TlsEventsList() {
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
-          <h2 className="events-list-empty-state-title">No TLS Failures</h2>
+          <h2 className="events-list-empty-state-title">No Logs</h2>
           <p className="events-list-empty-state-subtitle">
-            When a TLS MITM handshake fails (e.g. due to certificate pinning), it will appear here.
+            When a TLS MITM handshake fails (e.g. due to certificate pinning) or other network-related issues occur, it will appear here.
           </p>
         </div>
       )}
