@@ -30,6 +30,7 @@ windows-native-keyring-store = { workspace = true }
 arc-swap = { workspace = true }
 humantime = { workspace = true }
 keyring-core = { workspace = true }
+lol_html = "2"
 lz4_flex = { workspace = true }
 moka = { workspace = true }
 parking_lot = { workspace = true }
