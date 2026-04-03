@@ -165,6 +165,27 @@ impl RemoteReleasedPackagesList {
             .iter()
             .any(|e| e.released_on_epoch_s > cutoff_secs && version.is_none_or(|v| *v == e.version))
     }
+
+    #[cfg(test)]
+    pub(crate) fn from_trie_for_tests(trie: ReleasedPackagesTrie) -> Self {
+        Self {
+            trie: Arc::new(ArcSwap::new(Arc::new(trie))),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_entries_for_tests<F>(
+        entries: Vec<ReleasedPackageData>,
+        now_secs: i64,
+        formatter: F,
+    ) -> Self
+    where
+        F: ReleasedPackageEntryFormatter,
+    {
+        Self::from_trie_for_tests(trie_from_released_packages_list(
+            entries, now_secs, formatter,
+        ))
+    }
 }
 
 struct RemoteReleasedPackagesListClient<C, F> {
