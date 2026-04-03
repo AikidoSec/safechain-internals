@@ -1,11 +1,12 @@
-<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-<circle cx="10" cy="10" r="8" fill="black"/>
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<!-- Keep the artwork tight to the 16x16 box so it matches the other ecosystem icons -->
+<circle cx="8" cy="8" r="8" fill="black"/>
 <g clip-path="url(#clip0_13_23)">
-<path fill-rule="evenodd" clip-rule="evenodd" d="M10 5.5L14 12.5H6L10 5.5Z" fill="white"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M8 3.5L12 10.5H4L8 3.5Z" fill="white"/>
 </g>
 <defs>
 <clipPath id="clip0_13_23">
-<rect width="8" height="8" fill="white" transform="translate(6 5)"/>
+<rect width="8" height="8" fill="white" transform="translate(4 3)"/>
 </clipPath>
 </defs>
 </svg>
