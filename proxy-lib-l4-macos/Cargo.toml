@@ -13,8 +13,10 @@ crate-type = ["staticlib"]
 [features]
 
 [target.'cfg(target_os = "macos")'.dependencies]
+arc-swap = { workspace = true }
 jemallocator = { workspace = true }
 moka = { workspace = true }
+rand = { workspace = true }
 rustls-platform-verifier = { workspace = true }
 safechain-proxy-lib = { workspace = true, features = ["apple-networkextension"] }
 serde = { workspace = true, features = ["derive"] }

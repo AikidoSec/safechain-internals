@@ -49,7 +49,7 @@ use safechain_proxy_lib::{
     utils::token::AgentIdentity,
 };
 
-use crate::config::ProxyConfig;
+use crate::{config::ProxyConfig, remote_app_passthrough_list::init_remote_app_passthrough_list};
 
 pub(super) async fn try_new_service(
     ctx: TransparentProxyServiceContext,
@@ -75,6 +75,9 @@ pub(super) async fn try_new_service(
         .guard()
         .cloned()
         .context("L4 engine runtime is expected to inject shutdown guard")?;
+
+    tracing::debug!("initializing remote app passthrough list");
+    init_remote_app_passthrough_list(guard.clone(), config.clone()).await;
 
     tracing::debug!("creating firewall state for transparent proxy extension");
     let firewall = create_firewall(

@@ -18,10 +18,13 @@ use rama::{
     utils::str::any_starts_with_ignore_ascii_case,
 };
 
+use crate::remote_app_passthrough_list::is_source_app_passthrough;
+
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 mod config;
+mod remote_app_passthrough_list;
 mod tcp;
 mod utils;
 
@@ -177,24 +180,6 @@ fn flow_action_udp(
         "flow action: udp traffic @ port 443: pass through, chrome not detected"
     );
     TransparentProxyFlowAction::Passthrough
-}
-
-fn is_source_app_passthrough(meta: &TransparentProxyFlowMeta) -> bool {
-    // NOTE: in future we can add support fetching this list dynamically,
-    // similar to all other remote resources we already support, that would mean
-    // we have a background task fetching lists at intervals,
-    // and have it here available as a "lazy" (local static) remote resource
-    const APP_SOURCE_BUNDLE_ID_PREFIXES_TO_IGNORE: &[&str] = &[
-        // Docker app and containers
-        "com.docker.docker",
-    ];
-
-    meta.source_app_bundle_identifier
-        .as_deref()
-        .map(|identifier| {
-            any_starts_with_ignore_ascii_case(identifier, APP_SOURCE_BUNDLE_ID_PREFIXES_TO_IGNORE)
-        })
-        .unwrap_or_default()
 }
 
 fn is_ip_remote_host_passthrough(meta: &TransparentProxyFlowMeta) -> Option<HostWithPort> {

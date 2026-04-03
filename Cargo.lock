@@ -2686,8 +2686,10 @@ dependencies = [
 name = "safechain-lib-l4-proxy-macos"
 version = "1.0.0"
 dependencies = [
+ "arc-swap",
  "moka",
  "rama",
+ "rand 0.10.0",
  "rustls-platform-verifier",
  "safechain-proxy-lib",
  "serde",
