@@ -13,9 +13,6 @@ fn timestamp_hours_ago(hours: u64) -> String {
     humantime::format_rfc3339(t).to_string()
 }
 
-fn empty_releases_list() -> RemoteReleasedPackagesList {
-    released(&[])
-}
 
 fn released(entries: &[(&str, &str, i64)]) -> RemoteReleasedPackagesList {
     let now_secs = now_unix_ms() / 1000;

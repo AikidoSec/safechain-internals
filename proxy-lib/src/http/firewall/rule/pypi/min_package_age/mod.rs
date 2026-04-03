@@ -88,8 +88,12 @@ impl MinPackageAgePyPI {
         let bytes = collected.to_bytes();
 
         let rewrite = match format {
-            PyPIResponseFormat::Json => json::rewrite_response(&bytes, cutoff_secs, released_packages),
-            PyPIResponseFormat::Html => html::rewrite_response(&bytes, cutoff_secs, released_packages),
+            PyPIResponseFormat::Json => {
+                json::rewrite_response(&bytes, cutoff_secs, released_packages)
+            }
+            PyPIResponseFormat::Html => {
+                html::rewrite_response(&bytes, cutoff_secs, released_packages)
+            }
         };
 
         let Some(rewrite) = rewrite else {
