@@ -105,7 +105,14 @@ export function EventsList() {
                   </td>
                   <td className="event-time">{formatEventTime(ev.ts_ms)}</td>
                   <td className="event-identifier" title={ev.artifact.identifier}>
-                    {ev.artifact.display_name ?? ev.artifact.identifier}
+                    <span className="event-identifier-content">
+                      {ev.count !== undefined && ev.count > 1 && (
+                        <span className="event-count-badge" aria-label={`${ev.count} blocked events`}>
+                          x{ev.count}
+                        </span>
+                      )}
+                      {ev.artifact.display_name ?? ev.artifact.identifier}
+                    </span>
                   </td>
                   <td>
                     {ev.status === "request_approved" ? (

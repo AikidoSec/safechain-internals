@@ -189,6 +189,13 @@ body {
   white-space: nowrap;
 }
 
+.events-list .event-identifier-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .events-list .row-clickable {
   cursor: pointer;
   transition: background 0.15s;
@@ -467,6 +474,22 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.event-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--surface-blue-20, #dbeafe);
+  color: var(--surface-blue-100, #1d4ed8);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .event-info-icon {

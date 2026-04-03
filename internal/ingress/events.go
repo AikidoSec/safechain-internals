@@ -14,6 +14,7 @@ type BlockEvent struct {
 	Artifact    Artifact `json:"artifact"`
 	BlockReason string   `json:"block_reason"`
 	Status      string   `json:"status,omitempty"`
+	Count       int      `json:"count,omitempty"`
 }
 
 // TlsTerminationFailedEvent represents a TLS MITM handshake failure from the proxy.
