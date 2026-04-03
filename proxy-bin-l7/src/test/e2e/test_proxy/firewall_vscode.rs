@@ -5,7 +5,8 @@ use rama::{
 
 use crate::{
     client::mock_server::malware_list::{
-        FRESH_EXTENSION_NAME, FRESH_EXTENSION_PUBLISHER, FRESH_EXTENSION_VERSION,
+        FRESH_VSCODE_EXTENSION_NAME, FRESH_VSCODE_EXTENSION_PUBLISHER,
+        FRESH_VSCODE_EXTENSION_VERSION,
     },
     test::e2e,
 };
@@ -263,7 +264,7 @@ async fn test_vscode_https_install_asset_new_package_blocked() {
     // newpublisher.freshextension is in the released packages list (released far in the future
     // relative to a 24h cutoff) and is NOT in the malware list — should be blocked as new package.
     let url = format!(
-        "https://gallerycdn.vsassets.io/_apis/public/gallery/publishers/{FRESH_EXTENSION_PUBLISHER}/vsextensions/{FRESH_EXTENSION_NAME}/{FRESH_EXTENSION_VERSION}/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage"
+        "https://gallerycdn.vsassets.io/_apis/public/gallery/publishers/{FRESH_VSCODE_EXTENSION_PUBLISHER}/vsextensions/{FRESH_VSCODE_EXTENSION_NAME}/{FRESH_VSCODE_EXTENSION_VERSION}/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage"
     );
     let resp = client
         .get(url)
@@ -296,7 +297,7 @@ async fn test_vscode_https_install_asset_new_package_not_blocked_via_policy_cuto
     let client = runtime.client_with_http_proxy().await;
 
     let url = format!(
-        "https://gallerycdn.vsassets.io/_apis/public/gallery/publishers/{FRESH_EXTENSION_PUBLISHER}/vsextensions/{FRESH_EXTENSION_NAME}/{FRESH_EXTENSION_VERSION}/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage"
+        "https://gallerycdn.vsassets.io/_apis/public/gallery/publishers/{FRESH_VSCODE_EXTENSION_PUBLISHER}/vsextensions/{FRESH_VSCODE_EXTENSION_NAME}/{FRESH_VSCODE_EXTENSION_VERSION}/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage"
     );
     let resp = client.get(url).send().await.unwrap();
 

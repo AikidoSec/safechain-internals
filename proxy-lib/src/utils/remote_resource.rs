@@ -115,11 +115,17 @@ where
                     "no cached remote resource found for endpoint (uri: {}); download fresh state",
                     uri
                 );
-                #[cfg(feature = "apple-networkextension")]
+
+                #[cfg(not(any(
+                    not(feature = "apple-networkextension"),
+                    feature = "test-utils",
+                    test
+                )))]
                 {
                     Default::default()
                 }
-                #[cfg(not(feature = "apple-networkextension"))]
+
+                #[cfg(any(not(feature = "apple-networkextension"), feature = "test-utils", test))]
                 {
                     fetch_and_build_state(
                         storage.clone(),
@@ -139,11 +145,17 @@ where
                     "failed to load cached remote resource for endpoint (uri: {}); err = {err}",
                     uri
                 );
-                #[cfg(feature = "apple-networkextension")]
+
+                #[cfg(not(any(
+                    not(feature = "apple-networkextension"),
+                    feature = "test-utils",
+                    test
+                )))]
                 {
                     Default::default()
                 }
-                #[cfg(not(feature = "apple-networkextension"))]
+
+                #[cfg(any(not(feature = "apple-networkextension"), feature = "test-utils", test))]
                 {
                     fetch_and_build_state(
                         storage.clone(),
