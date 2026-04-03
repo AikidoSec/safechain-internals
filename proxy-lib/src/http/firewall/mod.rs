@@ -45,7 +45,10 @@ mod pac;
 
 use crate::{
     endpoint_protection::{PolicyEvaluator, RemoteEndpointConfig},
-    http::firewall::rule::{DynRule, npm::min_package_age::MinPackageAge},
+    http::firewall::{
+        notifier::EventNotifier,
+        rule::{DynRule, npm::min_package_age::MinPackageAge},
+    },
     package::name_formatter::PackageNameFormatter,
     storage::SyncCompactDataStorage,
     utils::{env::network_service_identifier, token::AgentIdentity},
@@ -83,24 +86,7 @@ impl Firewall {
         aikido_url: Uri,
     ) -> Result<Self, BoxError> {
         let layered_client = try_new_layered_client(client.clone())?;
-
-        let notifier = match reporting_endpoint {
-            Some(endpoint) => match self::notifier::EventNotifier::try_new(
-                Executor::graceful(guard.clone()),
-                client,
-                endpoint,
-            ) {
-                Ok(notifier) => Some(notifier),
-                Err(err) => {
-                    tracing::warn!(
-                        error = %err,
-                        "failed to initialize blocked-event notifier; reporting disabled"
-                    );
-                    None
-                }
-            },
-            None => None,
-        };
+        let notifier = new_event_notifier(guard.clone(), client, reporting_endpoint);
 
         let endpoint_config_uri = Self::endpoint_config_uri(&aikido_url)?;
 
@@ -110,6 +96,7 @@ impl Firewall {
             endpoint_config_uri.clone(),
             data.clone(),
             layered_client.clone(),
+            notifier.clone(),
         )
         .await;
 
@@ -119,6 +106,7 @@ impl Firewall {
             endpoint_config_uri.clone(),
             data.clone(),
             layered_client.clone(),
+            notifier.clone(),
         )
         .await;
 
@@ -128,6 +116,7 @@ impl Firewall {
             endpoint_config_uri.clone(),
             data.clone(),
             layered_client.clone(),
+            notifier.clone(),
         )
         .await;
 
@@ -312,14 +301,39 @@ fn try_new_layered_client(
         .boxed())
 }
 
+fn new_event_notifier(
+    guard: ShutdownGuard,
+    client: impl Service<Request, Output = Response, Error = OpaqueError> + Clone,
+    reporting_endpoint: Option<Uri>,
+) -> Option<EventNotifier> {
+    match reporting_endpoint {
+        Some(endpoint) => match self::notifier::EventNotifier::try_new(
+            Executor::graceful(guard.clone()),
+            client,
+            endpoint,
+        ) {
+            Ok(notifier) => Some(notifier),
+            Err(err) => {
+                tracing::warn!(
+                    error = %err,
+                    "failed to initialize blocked-event notifier; reporting disabled"
+                );
+                None
+            }
+        },
+        None => None,
+    }
+}
+
 async fn new_policy_evaluator<F: PackageNameFormatter>(
     agent_identity: Option<AgentIdentity>,
     guard: ShutdownGuard,
     endpoint_config_uri: Uri,
     data: SyncCompactDataStorage,
     layered_client: BoxService<Request, Response, OpaqueError>,
+    notifier: Option<EventNotifier>,
 ) -> (Option<RemoteEndpointConfig<F>>, Option<PolicyEvaluator<F>>) {
-    let remote_endpoint_config = match agent_identity.as_ref() {
+    let remote_endpoint_config = match agent_identity {
         Some(identity) => {
             match RemoteEndpointConfig::try_new(
                 guard.clone(),
@@ -328,6 +342,7 @@ async fn new_policy_evaluator<F: PackageNameFormatter>(
                 ArcStr::from(identity.device_id.as_ref()),
                 data.clone(),
                 layered_client.clone(),
+                notifier,
             )
             .await
             {

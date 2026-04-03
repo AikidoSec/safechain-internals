@@ -1,4 +1,4 @@
-use std::{fmt, time::Duration};
+use std::{fmt, sync::Arc, time::Duration};
 
 use rama::{
     Service,
@@ -56,7 +56,7 @@ impl<F: PackageNameFormatter> RemoteReleasedPackagesList<F> {
             guard,
             sync_storage,
             client,
-            ReleasedPackagesRemoteResource { uri, formatter },
+            Arc::new(ReleasedPackagesRemoteResource { uri, formatter }),
         )
         .await
         .context("create new remote released packages list")?;
@@ -87,7 +87,6 @@ impl<F: PackageNameFormatter> RemoteReleasedPackagesList<F> {
     }
 }
 
-#[derive(Clone)]
 struct ReleasedPackagesRemoteResource<F> {
     uri: Uri,
     formatter: F,
@@ -108,13 +107,13 @@ impl<F: PackageNameFormatter> RemoteResourceSpec for ReleasedPackagesRemoteResou
             .context("build package list http request")
     }
 
-    fn build_state(&self, payload: Self::Payload) -> Result<Self::State, BoxError> {
+    fn build_state(&self, payload: Self::Payload) -> Result<Arc<Self::State>, BoxError> {
         let now_ts = SystemTimestampMilliseconds::now();
-        Ok(trie_from_released_packages_list(
+        Ok(Arc::new(trie_from_released_packages_list(
             payload,
             now_ts,
             &self.formatter,
-        ))
+        )))
     }
 }
 

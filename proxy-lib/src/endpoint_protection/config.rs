@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, time::Duration};
+use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 use rama::{
     Service,
@@ -11,6 +11,7 @@ use rama::{
 
 use crate::{
     endpoint_protection::EcosystemKey,
+    http::firewall::notifier::EventNotifier,
     package::name_formatter::PackageNameFormatter,
     storage::SyncCompactDataStorage,
     utils::{
@@ -23,14 +24,14 @@ use super::types::{EcosystemConfig, EndpointConfig};
 
 pub struct RemoteEndpointConfig<F: PackageNameFormatter> {
     config: RemoteResource<Option<EndpointConfig<F>>>,
-    trigger_refresh: RefreshHandle,
+    refresh_handle: RefreshHandle,
 }
 
 impl<F: PackageNameFormatter> Clone for RemoteEndpointConfig<F> {
     fn clone(&self) -> Self {
         Self {
             config: self.config.clone(),
-            trigger_refresh: self.trigger_refresh.clone(),
+            refresh_handle: self.refresh_handle.clone(),
         }
     }
 }
@@ -59,27 +60,29 @@ impl<F: PackageNameFormatter> RemoteEndpointConfig<F> {
         device_id: ArcStr,
         sync_storage: SyncCompactDataStorage,
         client: C,
+        notifier: Option<EventNotifier>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
-        let (config, trigger_refresh) = remote_resource::try_new(
+        let (config, refresh_handle) = remote_resource::try_new(
             guard,
             sync_storage,
             client,
-            EndpointConfigRemoteResource::<F> {
+            Arc::new(EndpointConfigRemoteResource::<F> {
                 uri,
                 token,
                 device_id,
+                notifier,
                 _phantom: PhantomData,
-            },
+            }),
         )
         .await
         .context("create new remote endpoint config")?;
 
         Ok(Self {
             config,
-            trigger_refresh,
+            refresh_handle,
         })
     }
 
@@ -113,7 +116,7 @@ impl<F: PackageNameFormatter> RemoteEndpointConfig<F> {
 
     /// Trigger an immediate config refresh check.
     pub fn trigger_refresh(&self) {
-        self.trigger_refresh.trigger_refresh();
+        self.refresh_handle.trigger_refresh();
     }
 }
 
@@ -121,18 +124,8 @@ struct EndpointConfigRemoteResource<F: PackageNameFormatter> {
     uri: Uri,
     token: ArcStr,
     device_id: ArcStr,
+    notifier: Option<EventNotifier>,
     _phantom: PhantomData<F>,
-}
-
-impl<F: PackageNameFormatter> Clone for EndpointConfigRemoteResource<F> {
-    fn clone(&self) -> Self {
-        Self {
-            uri: self.uri.clone(),
-            token: self.token.clone(),
-            device_id: self.device_id.clone(),
-            _phantom: self._phantom,
-        }
-    }
 }
 
 impl<F: PackageNameFormatter> RemoteResourceSpec for EndpointConfigRemoteResource<F> {
@@ -165,12 +158,19 @@ impl<F: PackageNameFormatter> RemoteResourceSpec for EndpointConfigRemoteResourc
         Ok(req)
     }
 
-    fn build_state(&self, payload: Self::Payload) -> Result<Self::State, BoxError> {
+    fn build_state(&self, payload: Self::Payload) -> Result<Arc<Self::State>, BoxError> {
         tracing::debug!(
             "decoded endpoint config from '{}' (permission_group_id: {})",
             self.uri,
             payload.permission_group.id,
         );
-        Ok(Some(payload))
+
+        let config = Arc::new(Some(payload));
+
+        if let Some(notifier) = self.notifier.as_ref() {
+            notifier.notify_permissions_updated(config.clone());
+        }
+
+        Ok(config)
     }
 }

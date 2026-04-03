@@ -15,7 +15,7 @@ use tokio::{sync::Notify, time::Instant};
 
 use crate::{storage::SyncCompactDataStorage, utils::uri::uri_to_filename};
 
-pub(crate) trait RemoteResourceSpec: Clone + Send + Sync + 'static {
+pub(crate) trait RemoteResourceSpec: Send + Sync + 'static {
     type Payload: Serialize + DeserializeOwned + Clone + Send + Sync + 'static;
     type State: Default + Send + Sync + 'static;
 
@@ -27,7 +27,27 @@ pub(crate) trait RemoteResourceSpec: Clone + Send + Sync + 'static {
     /// cache-validation headers like `If-None-Match`.
     fn build_request(&self) -> Result<Request, BoxError>;
 
-    fn build_state(&self, payload: Self::Payload) -> Result<Self::State, BoxError>;
+    fn build_state(&self, payload: Self::Payload) -> Result<Arc<Self::State>, BoxError>;
+}
+
+impl<T: RemoteResourceSpec> RemoteResourceSpec for Arc<T> {
+    type Payload = T::Payload;
+    type State = T::State;
+
+    #[inline(always)]
+    fn refresh_interval(&self) -> Duration {
+        (**self).refresh_interval()
+    }
+
+    #[inline(always)]
+    fn build_request(&self) -> Result<Request, BoxError> {
+        (**self).build_request()
+    }
+
+    #[inline(always)]
+    fn build_state(&self, payload: Self::Payload) -> Result<Arc<Self::State>, BoxError> {
+        (**self).build_state(payload)
+    }
 }
 
 pub(crate) struct RemoteResource<T> {
@@ -91,7 +111,7 @@ pub(crate) async fn try_new<S, C>(
     spec: S,
 ) -> Result<(RemoteResource<S::State>, RefreshHandle), BoxError>
 where
-    S: RemoteResourceSpec,
+    S: RemoteResourceSpec + Clone,
     C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
 {
     let uri = spec
@@ -172,7 +192,7 @@ where
             }
         };
 
-    let state = Arc::new(ArcSwap::new(Arc::new(initial_state)));
+    let state = Arc::new(ArcSwap::new(initial_state));
     let refresh_handle = RefreshHandle {
         notify: Arc::new(Notify::new()),
     };
@@ -204,7 +224,7 @@ async fn update_loop<S, C>(
     shared_state: Arc<ArcSwap<S::State>>,
     refresh_notify: Arc<Notify>,
 ) where
-    S: RemoteResourceSpec,
+    S: RemoteResourceSpec + Clone,
     C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
 {
     tracing::debug!(
@@ -246,7 +266,6 @@ async fn update_loop<S, C>(
         {
             Ok(Some((fresh_state, fresh_e_tag))) => {
                 tracing::debug!("remote resource (uri = {uri}), state updated");
-                let fresh_state = Arc::new(fresh_state);
                 shared_state.store(fresh_state);
                 sleep_for = with_jitter(spec.refresh_interval());
                 latest_e_tag = fresh_e_tag;
@@ -274,9 +293,9 @@ async fn fetch_and_build_state<S, C>(
     client: C,
     spec: S,
     previous_e_tag: Option<&str>,
-) -> Result<Option<(S::State, Option<ArcStr>)>, BoxError>
+) -> Result<Option<(Arc<S::State>, Option<ArcStr>)>, BoxError>
 where
-    S: RemoteResourceSpec,
+    S: RemoteResourceSpec + Clone,
     C: Service<Request, Output = Response, Error = OpaqueError>,
 {
     let Some((payload, new_e_tag)) = fetch_payload(spec.clone(), client, previous_e_tag).await?
@@ -368,7 +387,7 @@ async fn load_cached_state<S>(
     storage: SyncCompactDataStorage,
     filename: ArcStr,
     spec: S,
-) -> Result<Option<(S::State, Option<ArcStr>)>, BoxError>
+) -> Result<Option<(Arc<S::State>, Option<ArcStr>)>, BoxError>
 where
     S: RemoteResourceSpec,
 {

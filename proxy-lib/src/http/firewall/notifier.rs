@@ -142,7 +142,7 @@ impl EventNotifier {
 
     pub fn notify_permissions_updated<F: PackageNameFormatter>(
         &self,
-        config: Arc<EndpointConfig<F>>,
+        config: Arc<Option<EndpointConfig<F>>>,
     ) {
         self.spawn_event_task(|client, reporting_endpoint| {
             send_permissions_updated_event(client, reporting_endpoint, config)
@@ -234,8 +234,12 @@ async fn send_tls_termination_failed_event(
 async fn send_permissions_updated_event<F: PackageNameFormatter>(
     client: BoxService<Request, Response, OpaqueError>,
     reporting_endpoint: String,
-    config: Arc<EndpointConfig<F>>,
+    config: Arc<Option<EndpointConfig<F>>>,
 ) {
+    let Some(config) = config.as_ref() else {
+        return;
+    };
+
     tracing::debug!(
         "sending permissions update notification (permission_group_id={})",
         config.permission_group.id,
