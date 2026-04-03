@@ -167,7 +167,7 @@ impl AppConfig {
         if !self.app_name.eq_ignore_ascii_case(app_name) {
             return false;
         }
-        
+
         self.domains.matches(meta.local_endpoint.as_ref())
     }
 }
