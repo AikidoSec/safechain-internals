@@ -45,7 +45,6 @@ pub(in crate::http::firewall) struct RuleChrome {
     target_domains: DomainMatcher,
     remote_malware_list: ChromeRemoteMalwareList,
     remote_released_packages_list: ChromeRemoteReleasedPackageList,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
     policy_evaluator: Option<PolicyEvaluator<ChromePackageName>>,
 }
 
@@ -69,7 +68,7 @@ impl RuleChrome {
         .context("create remote malware list for chrome block rule")?;
 
         let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/releases/chrome.json"),
             sync_storage,
             remote_malware_list_https_client,
@@ -77,7 +76,9 @@ impl RuleChrome {
         .await
         .context("create remote released packages list for chrome block rule")?;
 
-        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
+        let policy_evaluator = remote_endpoint_config.map(|config| {
+            PolicyEvaluator::new(guard.clone(), CHROME_ECOSYSTEM_KEY.clone(), config)
+        });
 
         Ok(Self {
             target_domains: [
@@ -91,7 +92,6 @@ impl RuleChrome {
             .collect(),
             remote_malware_list,
             remote_released_packages_list,
-            remote_endpoint_config,
             policy_evaluator,
         })
     }
@@ -141,8 +141,7 @@ impl Rule for RuleChrome {
         );
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision = policy_evaluator
-                .evaluate_package_install(&CHROME_ECOSYSTEM_KEY, &package_info.extension_id);
+            let decision = policy_evaluator.evaluate_package_install(&package_info.extension_id);
 
             match decision {
                 PackagePolicyDecision::Allow => {
@@ -204,11 +203,9 @@ impl RuleChrome {
     const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 
     fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
-        self.remote_endpoint_config
+        self.policy_evaluator
             .as_ref()
-            .map(|c| {
-                c.get_package_age_cutoff_ts(&CHROME_ECOSYSTEM_KEY, Self::DEFAULT_MIN_PACKAGE_AGE)
-            })
+            .map(|c| c.package_age_cutoff_ts(Self::DEFAULT_MIN_PACKAGE_AGE))
             .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 

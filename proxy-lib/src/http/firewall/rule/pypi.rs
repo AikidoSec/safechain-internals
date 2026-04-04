@@ -80,7 +80,6 @@ pub(in crate::http::firewall) struct RulePyPI {
     target_domains: DomainMatcher,
     remote_malware_list: PyPIRemoteMalwareList,
     remote_released_packages_list: PyPIRemoteReleasedPackagesList,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
     policy_evaluator: Option<PolicyEvaluator<PyPIPackageName>>,
 }
 
@@ -115,13 +114,14 @@ impl RulePyPI {
         let target_domains = ["pypi.org", "files.pythonhosted.org", "pypi.python.org"]
             .into_iter()
             .collect();
-        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
+        let policy_evaluator = remote_endpoint_config
+            .clone()
+            .map(|config| PolicyEvaluator::new(guard.clone(), PYPI_ECOSYSTEM_KEY.clone(), config));
 
         Ok(Self {
             target_domains,
             remote_malware_list,
             remote_released_packages_list,
-            remote_endpoint_config,
             policy_evaluator,
         })
     }
@@ -129,11 +129,9 @@ impl RulePyPI {
     const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 
     fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
-        self.remote_endpoint_config
+        self.policy_evaluator
             .as_ref()
-            .map(|c| {
-                c.get_package_age_cutoff_ts(&PYPI_ECOSYSTEM_KEY, Self::DEFAULT_MIN_PACKAGE_AGE)
-            })
+            .map(|c| c.package_age_cutoff_ts(Self::DEFAULT_MIN_PACKAGE_AGE))
             .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 
@@ -217,8 +215,7 @@ impl Rule for RulePyPI {
 
         // Apply endpoint policy (rejected packages, allow exceptions, block_all_installs).
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision =
-                policy_evaluator.evaluate_package_install(&PYPI_ECOSYSTEM_KEY, &package_info.name);
+            let decision = policy_evaluator.evaluate_package_install(&package_info.name);
 
             match decision {
                 PackagePolicyDecision::Allow => {

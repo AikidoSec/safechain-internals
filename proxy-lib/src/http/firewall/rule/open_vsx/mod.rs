@@ -46,7 +46,6 @@ pub(in crate::http::firewall) struct RuleOpenVsx {
     target_domains: DomainMatcher,
     remote_malware_list: OpenVsxRemoteMalwareList,
     remote_released_packages_list: OpenVsxRemoteReleasedPackagesList,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
     policy_evaluator: Option<PolicyEvaluator<OpenVsxPackageName>>,
 }
 
@@ -78,7 +77,9 @@ impl RuleOpenVsx {
         .await
         .context("create remote released packages list for open vsx block rule")?;
 
-        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
+        let policy_evaluator = remote_endpoint_config.map(|config| {
+            PolicyEvaluator::new(guard.clone(), OPEN_VSX_ECOSYSTEM_KEY.clone(), config)
+        });
 
         Ok(Self {
             target_domains: ["open-vsx.org", "marketplace.cursorapi.com"]
@@ -86,7 +87,6 @@ impl RuleOpenVsx {
                 .collect(),
             remote_malware_list,
             remote_released_packages_list,
-            remote_endpoint_config,
             policy_evaluator,
         })
     }
@@ -138,8 +138,7 @@ impl Rule for RuleOpenVsx {
         );
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision = policy_evaluator
-                .evaluate_package_install(&OPEN_VSX_ECOSYSTEM_KEY, &extension.extension_id);
+            let decision = policy_evaluator.evaluate_package_install(&extension.extension_id);
 
             match decision {
                 PackagePolicyDecision::Allow => {
@@ -203,11 +202,9 @@ impl RuleOpenVsx {
     const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(1);
 
     fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
-        self.remote_endpoint_config
+        self.policy_evaluator
             .as_ref()
-            .map(|c| {
-                c.get_package_age_cutoff_ts(&OPEN_VSX_ECOSYSTEM_KEY, Self::DEFAULT_MIN_PACKAGE_AGE)
-            })
+            .map(|c| c.package_age_cutoff_ts(Self::DEFAULT_MIN_PACKAGE_AGE))
             .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 

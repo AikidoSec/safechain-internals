@@ -1,10 +1,4 @@
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use rama::{
     Service,
@@ -14,15 +8,13 @@ use rama::{
     telemetry::tracing,
     utils::str::arcstr::ArcStr,
 };
+use tokio::sync::broadcast;
 
 use crate::{
     endpoint_protection::EcosystemKey,
     http::firewall::notifier::EventNotifier,
     storage::SyncCompactDataStorage,
-    utils::{
-        remote_resource::{self, RefreshHandle, RemoteResource, RemoteResourceSpec},
-        time::{SystemDuration, SystemTimestampMilliseconds},
-    },
+    utils::remote_resource::{self, RefreshHandle, RemoteResource, RemoteResourceSpec},
 };
 
 use super::types::{EcosystemConfig, EndpointConfig};
@@ -30,7 +22,7 @@ use super::types::{EcosystemConfig, EndpointConfig};
 pub struct RemoteEndpointConfig {
     config: RemoteResource<Option<EndpointConfig>>,
     refresh_handle: RefreshHandle,
-    revision: Arc<AtomicU64>,
+    updates: broadcast::Sender<Arc<Option<EndpointConfig>>>,
 }
 
 impl Clone for RemoteEndpointConfig {
@@ -38,7 +30,7 @@ impl Clone for RemoteEndpointConfig {
         Self {
             config: self.config.clone(),
             refresh_handle: self.refresh_handle.clone(),
-            revision: self.revision.clone(),
+            updates: self.updates.clone(),
         }
     }
 }
@@ -72,7 +64,7 @@ impl RemoteEndpointConfig {
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
-        let revision = Arc::new(AtomicU64::new(0));
+        let (updates, _) = broadcast::channel(8);
         let (config, refresh_handle) = remote_resource::try_new(
             guard,
             sync_storage,
@@ -82,7 +74,7 @@ impl RemoteEndpointConfig {
                 token,
                 device_id,
                 notifier,
-                revision: revision.clone(),
+                updates: updates.clone(),
             }),
         )
         .await
@@ -91,7 +83,7 @@ impl RemoteEndpointConfig {
         Ok(Self {
             config,
             refresh_handle,
-            revision,
+            updates,
         })
     }
 
@@ -116,26 +108,18 @@ impl RemoteEndpointConfig {
             .map(|state| map(&state.ecosystems))
     }
 
-    pub fn get_package_age_cutoff_ts(
-        &self,
-        name: &EcosystemKey,
-        default_cutoff_age: SystemDuration,
-    ) -> SystemTimestampMilliseconds {
-        let maybe_ts = self
-            .config
-            .get()
-            .as_ref()
-            .and_then(|cfg| cfg.ecosystems.get(name))
-            .and_then(|ecosystem_cfg| ecosystem_cfg.minimum_allowed_age_timestamp);
-        if let Some(ts_secs) = maybe_ts {
-            return ts_secs;
-        }
-        SystemTimestampMilliseconds::now() - default_cutoff_age
+    #[inline(always)]
+    pub fn current(&self) -> Arc<Option<EndpointConfig>> {
+        self.config.get_owned()
     }
 
-    #[inline(always)]
-    pub fn revision(&self) -> u64 {
-        self.revision.load(Ordering::Acquire)
+    pub fn subscribe(
+        &self,
+    ) -> (
+        Arc<Option<EndpointConfig>>,
+        broadcast::Receiver<Arc<Option<EndpointConfig>>>,
+    ) {
+        (self.current(), self.updates.subscribe())
     }
 
     /// Trigger an immediate config refresh check.
@@ -149,7 +133,7 @@ struct EndpointConfigRemoteResource {
     token: ArcStr,
     device_id: ArcStr,
     notifier: Option<EventNotifier>,
-    revision: Arc<AtomicU64>,
+    updates: broadcast::Sender<Arc<Option<EndpointConfig>>>,
 }
 
 impl RemoteResourceSpec for EndpointConfigRemoteResource {
@@ -195,7 +179,7 @@ impl RemoteResourceSpec for EndpointConfigRemoteResource {
             notifier.notify_permissions_updated(config.clone());
         }
 
-        self.revision.fetch_add(1, Ordering::AcqRel);
+        let _ = self.updates.send(config.clone());
 
         Ok(config)
     }

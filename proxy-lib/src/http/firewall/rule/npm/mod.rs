@@ -47,7 +47,6 @@ pub(in crate::http::firewall) struct RuleNpm {
     target_domains: DomainMatcher,
     remote_malware_list: NpmRemoteMalwareList,
     remote_released_packages_list: NpmRemoteReleasedPackagesList,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
     maybe_min_package_age: Option<MinPackageAge>,
     policy_evaluator: Option<PolicyEvaluator<NpmPackageName>>,
 }
@@ -85,7 +84,9 @@ impl RuleNpm {
         .await
         .context("create remote released packages list for npm block rule")?;
 
-        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
+        let policy_evaluator = remote_endpoint_config
+            .clone()
+            .map(|config| PolicyEvaluator::new(guard.clone(), NPM_ECOSYSTEM_KEY.clone(), config));
 
         Ok(Self {
             // NOTE: should you ever make this list dynamic we would stop hardcoding these target domains here...
@@ -98,7 +99,6 @@ impl RuleNpm {
             .collect(),
             remote_malware_list,
             remote_released_packages_list,
-            remote_endpoint_config,
             maybe_min_package_age: min_package_age,
             policy_evaluator,
         })
@@ -158,9 +158,9 @@ impl RuleNpm {
     const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 
     fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
-        self.remote_endpoint_config
+        self.policy_evaluator
             .as_ref()
-            .map(|c| c.get_package_age_cutoff_ts(&NPM_ECOSYSTEM_KEY, Self::DEFAULT_MIN_PACKAGE_AGE))
+            .map(|c| c.package_age_cutoff_ts(Self::DEFAULT_MIN_PACKAGE_AGE))
             .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 
@@ -178,8 +178,7 @@ impl RuleNpm {
         };
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision = policy_evaluator
-                .evaluate_package_install(&NPM_ECOSYSTEM_KEY, &package.fully_qualified_name);
+            let decision = policy_evaluator.evaluate_package_install(&package.fully_qualified_name);
 
             match decision {
                 PackagePolicyDecision::Allow => {

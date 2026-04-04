@@ -46,7 +46,6 @@ pub(in crate::http::firewall) struct RuleNuget {
     target_domains: DomainMatcher,
     remote_malware_list: NugetRemoteMalwareList,
     remote_released_packages_list: NugetRemoteReleasedPackageList,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
     policy_evaluator: Option<PolicyEvaluator<NugetPackageName>>,
 }
 
@@ -70,7 +69,7 @@ impl RuleNuget {
         .context("create remote malware list for nuget block rule")?;
 
         let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/releases/nuget.json"),
             sync_storage,
             remote_malware_list_https_client,
@@ -78,13 +77,14 @@ impl RuleNuget {
         .await
         .context("create remote released packages list for nuget block rule")?;
 
-        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
+        let policy_evaluator = remote_endpoint_config
+            .clone()
+            .map(|config| PolicyEvaluator::new(guard.clone(), NUGET_ECOSYSTEM_KEY.clone(), config));
 
         Ok(Self {
             target_domains: ["api.nuget.org", "www.nuget.org"].into_iter().collect(),
             remote_malware_list,
             remote_released_packages_list,
-            remote_endpoint_config,
             policy_evaluator,
         })
     }
@@ -134,10 +134,8 @@ impl Rule for RuleNuget {
         );
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision = policy_evaluator.evaluate_package_install(
-                &NUGET_ECOSYSTEM_KEY,
-                &nuget_package.fully_qualified_name,
-            );
+            let decision =
+                policy_evaluator.evaluate_package_install(&nuget_package.fully_qualified_name);
 
             match decision {
                 PackagePolicyDecision::Allow => {
@@ -208,11 +206,9 @@ impl RuleNuget {
     const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(1);
 
     fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
-        self.remote_endpoint_config
+        self.policy_evaluator
             .as_ref()
-            .map(|c| {
-                c.get_package_age_cutoff_ts(&NUGET_ECOSYSTEM_KEY, Self::DEFAULT_MIN_PACKAGE_AGE)
-            })
+            .map(|c| c.package_age_cutoff_ts(Self::DEFAULT_MIN_PACKAGE_AGE))
             .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 

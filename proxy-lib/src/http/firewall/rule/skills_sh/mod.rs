@@ -40,7 +40,7 @@ pub(in crate::http::firewall) struct RuleSkillsSh {
     target_domains: DomainMatcher,
     remote_malware_list: SkillsShRemoteMalwareList,
     remote_released_packages_list: SkillsShRemoteReleasedPackageList,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
+    policy_evaluator: Option<crate::endpoint_protection::PolicyEvaluator<SkillsShPackageName>>,
 }
 
 impl RuleSkillsSh {
@@ -63,7 +63,7 @@ impl RuleSkillsSh {
         .context("create remote malware list for skills.sh block rule")?;
 
         let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/releases/skills_sh.json"),
             sync_storage,
             remote_malware_list_https_client,
@@ -71,11 +71,19 @@ impl RuleSkillsSh {
         .await
         .context("create remote released packages list for skills.sh block rule")?;
 
+        let policy_evaluator = remote_endpoint_config.map(|config| {
+            crate::endpoint_protection::PolicyEvaluator::new(
+                guard.clone(),
+                SKILLS_SH_ECOSYSTEM_KEY.clone(),
+                config,
+            )
+        });
+
         Ok(Self {
             target_domains: ["github.com"].into_iter().collect(),
             remote_malware_list,
             remote_released_packages_list,
-            remote_endpoint_config,
+            policy_evaluator,
         })
     }
 }
@@ -161,11 +169,9 @@ impl RuleSkillsSh {
     const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 
     fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
-        self.remote_endpoint_config
+        self.policy_evaluator
             .as_ref()
-            .map(|c| {
-                c.get_package_age_cutoff_ts(&SKILLS_SH_ECOSYSTEM_KEY, Self::DEFAULT_MIN_PACKAGE_AGE)
-            })
+            .map(|c| c.package_age_cutoff_ts(Self::DEFAULT_MIN_PACKAGE_AGE))
             .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 

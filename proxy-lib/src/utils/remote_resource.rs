@@ -80,6 +80,11 @@ impl<T> RemoteResource<T> {
     pub(crate) fn get(&self) -> RemoteResourceStateRef<T> {
         RemoteResourceStateRef(self.state.load())
     }
+
+    #[inline(always)]
+    pub(crate) fn get_owned(&self) -> Arc<T> {
+        self.state.load_full()
+    }
 }
 
 pub(crate) struct RemoteResourceStateRef<T>(Guard<Arc<T>>);
