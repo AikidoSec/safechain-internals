@@ -81,11 +81,11 @@ impl MinPackageAgePyPI {
         };
 
         let (mut parts, body) = resp.into_parts();
-        let collected = body
+        let bytes = body
             .collect()
             .await
-            .context("collect pypi info response body")?;
-        let bytes = collected.to_bytes();
+            .context("collect pypi info response body")?
+            .to_bytes();
 
         let rewrite = match format {
             PyPIResponseFormat::Json => {
@@ -106,34 +106,38 @@ impl MinPackageAgePyPI {
             "PyPI metadata rewritten: suppressed too-young versions"
         );
 
-        remove_cache_policy_headers(&mut parts.headers);
-        remove_cache_validation_response_headers(&mut parts.headers);
-        parts
-            .headers
-            .remove(HeaderName::from_static("content-length"));
-        parts
-            .headers
-            .typed_insert(CacheControl::new().with_no_cache());
-
-        if let Some(notifier) = &self.notifier {
-            let event = MinPackageAgeEvent {
-                ts_ms: now_unix_ms(),
-                artifact: Artifact {
-                    product: "pypi".into(),
-                    identifier: rewrite.package_name.clone(),
-                    display_name: Some(rewrite.package_name),
-                    version: None,
-                },
-                suppressed_versions: rewrite
-                    .suppressed_versions
-                    .iter()
-                    .filter_map(|version| version.parse().ok())
-                    .collect(),
-            };
-            notifier.notify_min_package_age(event).await;
-        }
+        Self::make_uncacheable(&mut parts.headers);
+        self.notify_rewrite(&rewrite).await;
 
         Ok(Response::from_parts(parts, Body::from(rewrite.bytes)))
+    }
+
+    fn make_uncacheable(headers: &mut rama::http::HeaderMap) {
+        remove_cache_policy_headers(headers);
+        remove_cache_validation_response_headers(headers);
+        headers.remove(HeaderName::from_static("content-length"));
+        headers.typed_insert(CacheControl::new().with_no_cache());
+    }
+
+    async fn notify_rewrite(&self, rewrite: &RewriteResult) {
+        let Some(notifier) = &self.notifier else {
+            return;
+        };
+        let event = MinPackageAgeEvent {
+            ts_ms: now_unix_ms(),
+            artifact: Artifact {
+                product: "pypi".into(),
+                identifier: rewrite.package_name.clone(),
+                display_name: Some(rewrite.package_name.clone()),
+                version: None,
+            },
+            suppressed_versions: rewrite
+                .suppressed_versions
+                .iter()
+                .filter_map(|version| version.parse().ok())
+                .collect(),
+        };
+        notifier.notify_min_package_age(event).await;
     }
 }
 

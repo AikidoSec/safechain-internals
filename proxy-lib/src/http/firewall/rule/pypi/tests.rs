@@ -100,20 +100,13 @@ fn test_parse_wheel_filename() {
 
     for (input, expected) in test_cases {
         let result = parse_wheel_filename(input);
-        match expected {
-            Some((expected_name, expected_version)) => {
-                let info = result.unwrap_or_else(|| panic!("Expected Some for: {}", input));
-                assert_eq!(info.name, expected_name, "Failed for input: {}", input);
-                assert_eq!(
-                    info.version, expected_version,
-                    "Failed for input: {}",
-                    input
-                );
-            }
-            None => {
-                assert!(result.is_none(), "Expected None for input: {}", input);
-            }
-        }
+        let Some((expected_name, expected_version)) = expected else {
+            assert!(result.is_none(), "Expected None for input: {input}");
+            continue;
+        };
+        let info = result.unwrap_or_else(|| panic!("Expected Some for: {input}"));
+        assert_eq!(info.name, expected_name, "Failed for input: {input}");
+        assert_eq!(info.version, expected_version, "Failed for input: {input}");
     }
 }
 
@@ -229,20 +222,13 @@ fn test_parse_sdist_filename() {
 
     for (input, expected) in test_cases {
         let result = parse_source_dist_filename(input);
-        match expected {
-            Some((expected_name, expected_version)) => {
-                let info = result.unwrap_or_else(|| panic!("Expected Some for: {}", input));
-                assert_eq!(info.name, expected_name, "Failed for input: {}", input);
-                assert_eq!(
-                    info.version, expected_version,
-                    "Failed for input: {}",
-                    input
-                );
-            }
-            None => {
-                assert!(result.is_none(), "Expected None for input: {}", input);
-            }
-        }
+        let Some((expected_name, expected_version)) = expected else {
+            assert!(result.is_none(), "Expected None for input: {input}");
+            continue;
+        };
+        let info = result.unwrap_or_else(|| panic!("Expected Some for: {input}"));
+        assert_eq!(info.name, expected_name, "Failed for input: {input}");
+        assert_eq!(info.version, expected_version, "Failed for input: {input}");
     }
 }
 
@@ -336,30 +322,19 @@ fn test_extract_package_info() {
 
         let result = parse_package_info_from_path(req.uri().path());
 
-        match expected {
-            Some((expected_name, is_metadata, maybe_semver)) => {
-                let info = result.unwrap_or_else(|| panic!("Expected Some for URI: {}", uri));
-                assert_eq!(info.name, expected_name, "Failed for URI: {}", uri);
-                assert_eq!(
-                    info.version.clone(),
-                    match maybe_semver {
-                        Some(semver) => PackageVersion::Semver(semver),
-                        None => PackageVersion::None,
-                    },
-                    "Failed for URI: {}",
-                    uri
-                );
-                assert_eq!(
-                    info.is_metadata_request(),
-                    is_metadata,
-                    "Failed metadata check for URI: {}",
-                    uri
-                );
-            }
-            None => {
-                assert!(result.is_none(), "Expected None for URI: {}", uri);
-            }
-        }
+        let Some((expected_name, is_metadata, maybe_semver)) = expected else {
+            assert!(result.is_none(), "Expected None for URI: {uri}");
+            continue;
+        };
+        let info = result.unwrap_or_else(|| panic!("Expected Some for URI: {uri}"));
+        let expected_version = maybe_semver.map_or(PackageVersion::None, PackageVersion::Semver);
+        assert_eq!(info.name, expected_name, "Failed for URI: {uri}");
+        assert_eq!(info.version, expected_version, "Failed for URI: {uri}");
+        assert_eq!(
+            info.is_metadata_request(),
+            is_metadata,
+            "Failed metadata check for URI: {uri}"
+        );
     }
 }
 

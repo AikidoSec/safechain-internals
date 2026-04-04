@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use lol_html::{RewriteStrSettings, element, rewrite_str};
+use lol_html::{RewriteStrSettings, element, html_content::Element, rewrite_str};
 use rama::utils::str::arcstr::ArcStr;
 
 use crate::package::released_packages_list::RemoteReleasedPackagesList;
@@ -33,24 +33,14 @@ pub(super) fn rewrite_response(
     let mut suppressed_versions = BTreeSet::new();
 
     let anchor_handler = element!("a[href]", |el| {
-        let Some(href) = el.get_attribute("href") else {
-            return Ok(());
-        };
-
-        let AnchorDecision::Remove {
-            package_name: removed_package_name,
-            version,
-        } = analyze_anchor_href(&href, cutoff_secs, released_packages)
-        else {
-            return Ok(());
-        };
-
-        modified = true;
-        package_name.get_or_insert(removed_package_name);
-        suppressed_versions.insert(version);
-        el.remove();
-
-        Ok(())
+        process_anchor(
+            el,
+            cutoff_secs,
+            released_packages,
+            &mut modified,
+            &mut package_name,
+            &mut suppressed_versions,
+        )
     });
 
     let settings = RewriteStrSettings {
@@ -71,6 +61,39 @@ pub(super) fn rewrite_response(
         package_name,
         suppressed_versions: suppressed_versions.into_iter().collect(),
     })
+}
+
+/// Processes a single `<a href>` element from the PyPI simple index.
+///
+/// Extracts the `href`, evaluates it against the age policy, and — if the
+/// linked file is too young — removes the element from the page and records
+/// the package name and version in the caller's accumulator state.
+fn process_anchor(
+    el: &mut Element,
+    cutoff_secs: i64,
+    released_packages: &RemoteReleasedPackagesList,
+    modified: &mut bool,
+    package_name: &mut Option<ArcStr>,
+    suppressed_versions: &mut BTreeSet<String>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let Some(href) = el.get_attribute("href") else {
+        return Ok(());
+    };
+
+    let AnchorDecision::Remove {
+        package_name: removed_package_name,
+        version,
+    } = analyze_anchor_href(&href, cutoff_secs, released_packages)
+    else {
+        return Ok(());
+    };
+
+    *modified = true;
+    package_name.get_or_insert(removed_package_name);
+    suppressed_versions.insert(version);
+    el.remove();
+
+    Ok(())
 }
 
 /// Decide whether a single simple-index anchor should be kept or removed.

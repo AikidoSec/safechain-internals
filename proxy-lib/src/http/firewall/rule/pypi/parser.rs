@@ -124,17 +124,9 @@ pub(super) fn parse_wheel_filename(filename: &str) -> Option<PackageInfo> {
         .or_else(|| filename.strip_suffix(".whl"))?;
 
     let (dist, rest) = base.split_once('-')?;
-
     let version = rest.split('-').next()?;
 
-    if version.eq_ignore_ascii_case("latest") || dist.is_empty() || version.is_empty() {
-        return None;
-    }
-
-    Some(PackageInfo {
-        name: normalize_package_name(dist),
-        version: PackageVersion::from_str(version).unwrap(),
-    })
+    make_package_info(dist, version)
 }
 
 /// Parse source distribution filename.
@@ -148,18 +140,27 @@ pub(super) fn parse_source_dist_filename(filename: &str) -> Option<PackageInfo> 
     const SDIST_EXTS: &[&str] = &[".tar.gz", ".zip", ".tar.bz2", ".tar.xz"];
 
     let working = filename.strip_suffix(".metadata").unwrap_or(filename);
-
     let base = SDIST_EXTS
         .iter()
         .find_map(|ext| working.strip_suffix(ext))?;
 
     let (dist, version) = base.rsplit_once('-')?;
-    if version.eq_ignore_ascii_case("latest") || dist.is_empty() || version.is_empty() {
+
+    make_package_info(dist, version)
+}
+
+/// Validate a parsed `(dist, version)` pair and construct a [`PackageInfo`].
+///
+/// Returns `None` if either component is empty or the version is the
+/// resolver-only token `"latest"`, which is never a published artifact version.
+fn make_package_info(dist: &str, version: &str) -> Option<PackageInfo> {
+    if dist.is_empty() || version.is_empty() || version.eq_ignore_ascii_case("latest") {
         return None;
     }
 
     Some(PackageInfo {
         name: normalize_package_name(dist),
-        version: PackageVersion::from_str(version).unwrap(),
+        version: PackageVersion::from_str(version)
+            .unwrap_or_else(|_| PackageVersion::Unknown(version.into())),
     })
 }

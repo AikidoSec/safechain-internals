@@ -3,7 +3,7 @@ use std::time::SystemTime;
 use rama::{
     error::{BoxError, ErrorContext as _},
     http::{
-        Body, HeaderName, Request, Response,
+        Body, Request, Response,
         body::util::BodyExt as _,
         headers::{Accept, CacheControl, ContentType, HeaderMapExt as _},
         layer::remove_header::{
@@ -105,9 +105,6 @@ impl MinPackageAge {
 
         remove_cache_policy_headers(&mut parts.headers);
         remove_cache_validation_response_headers(&mut parts.headers);
-        parts
-            .headers
-            .remove(HeaderName::from_static("content-length"));
         parts
             .headers
             .typed_insert(CacheControl::new().with_no_cache());
