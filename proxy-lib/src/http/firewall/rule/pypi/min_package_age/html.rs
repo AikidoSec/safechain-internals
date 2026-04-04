@@ -33,7 +33,7 @@ pub(super) fn rewrite_response(
     let mut suppressed_versions = BTreeSet::new();
 
     let anchor_handler = element!("a[href]", |el| {
-        process_anchor(
+        remove_if_too_young(
             el,
             cutoff_secs,
             released_packages,
@@ -63,12 +63,10 @@ pub(super) fn rewrite_response(
     })
 }
 
-/// Processes a single `<a href>` element from the PyPI simple index.
-///
-/// Extracts the `href`, evaluates it against the age policy, and — if the
-/// linked file is too young — removes the element from the page and records
-/// the package name and version in the caller's accumulator state.
-fn process_anchor(
+/// Removes the element and records its package name and version in the caller's
+/// accumulators if the linked file is newer than `cutoff_secs`. Anchors that
+/// cannot be parsed or that predate the cutoff are left untouched.
+fn remove_if_too_young(
     el: &mut Element,
     cutoff_secs: i64,
     released_packages: &RemoteReleasedPackagesList,
