@@ -69,9 +69,6 @@ impl<K> RemoteReleasedPackagesList<K> {
 
     /// Returns true if the package was released recently (after `cutoff_secs`).
     ///
-    /// NOTE: It is assumed that _package_name_ is pre-formatted by the callee,
-    /// using the same formatter used here to insert the data.
-    ///
     /// - `version = Some(v)`: only the specific version must be recent
     /// - `version = None`: true if ANY version of the package is recent
     pub fn is_recently_released(
