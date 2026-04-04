@@ -24,7 +24,7 @@ use crate::{
     },
     package::{
         malware_list::RemoteMalwareList,
-        name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
+        name_formatter::LowerCasePackageName,
         released_packages_list::RemoteReleasedPackagesList,
         version::{PackageVersion, PragmaticSemver},
     },
@@ -35,13 +35,9 @@ use crate::{
 #[cfg(feature = "pac")]
 use crate::http::firewall::pac::PacScriptGenerator;
 
-type NugetPackageNameFormatter = LowerCasePackageNameFormatter;
 type NugetPackageName = LowerCasePackageName;
-
-type NugetRemoteMalwareList = RemoteMalwareList<NugetPackageNameFormatter>;
-type NugetRemoteReleasedPackageList = RemoteReleasedPackagesList<NugetPackageNameFormatter>;
-type NugetRemoteEndpointConfig = RemoteEndpointConfig<NugetPackageNameFormatter>;
-type NugetPolicyEvaluator = PolicyEvaluator<NugetPackageNameFormatter>;
+type NugetRemoteMalwareList = RemoteMalwareList<NugetPackageName>;
+type NugetRemoteReleasedPackageList = RemoteReleasedPackagesList<NugetPackageName>;
 
 const NUGET_PRODUCT_KEY: ArcStr = arcstr!("nuget");
 const NUGET_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("nuget");
@@ -50,8 +46,8 @@ pub(in crate::http::firewall) struct RuleNuget {
     target_domains: DomainMatcher,
     remote_malware_list: NugetRemoteMalwareList,
     remote_released_packages_list: NugetRemoteReleasedPackageList,
-    remote_endpoint_config: Option<NugetRemoteEndpointConfig>,
-    policy_evaluator: Option<NugetPolicyEvaluator>,
+    remote_endpoint_config: Option<RemoteEndpointConfig>,
+    policy_evaluator: Option<PolicyEvaluator<NugetPackageName>>,
 }
 
 impl RuleNuget {
@@ -59,8 +55,7 @@ impl RuleNuget {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<NugetPolicyEvaluator>,
-        remote_endpoint_config: Option<NugetRemoteEndpointConfig>,
+        remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
@@ -70,7 +65,6 @@ impl RuleNuget {
             Uri::from_static("https://malware-list.aikido.dev/malware_nuget.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            NugetPackageNameFormatter::new(),
         )
         .await
         .context("create remote malware list for nuget block rule")?;
@@ -80,10 +74,11 @@ impl RuleNuget {
             Uri::from_static("https://malware-list.aikido.dev/releases/nuget.json"),
             sync_storage,
             remote_malware_list_https_client,
-            NugetPackageNameFormatter::new(),
         )
         .await
         .context("create remote released packages list for nuget block rule")?;
+
+        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
 
         Ok(Self {
             target_domains: ["api.nuget.org", "www.nuget.org"].into_iter().collect(),

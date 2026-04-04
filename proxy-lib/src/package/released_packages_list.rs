@@ -1,4 +1,4 @@
-use std::{fmt, sync::Arc, time::Duration};
+use std::{fmt, marker::PhantomData, sync::Arc, time::Duration};
 
 use rama::{
     Service,
@@ -11,7 +11,7 @@ use radix_trie::Trie;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    package::{name_formatter::PackageNameFormatter, version::PackageVersion},
+    package::{name_formatter::PackageName, version::PackageVersion},
     storage::SyncCompactDataStorage,
     utils::{
         remote_resource::{self, RemoteResource, RemoteResourceSpec},
@@ -23,11 +23,11 @@ use crate::{
 /// Entries older than this are irrelevant to the configured blocking window.
 const MAX_ENTRY_AGE: SystemDuration = SystemDuration::days(7);
 
-pub struct RemoteReleasedPackagesList<F: PackageNameFormatter> {
-    trie: RemoteResource<ReleasedPackagesTrie<F>>,
+pub struct RemoteReleasedPackagesList<K> {
+    trie: RemoteResource<ReleasedPackagesTrie<K>>,
 }
 
-impl<F: PackageNameFormatter> Clone for RemoteReleasedPackagesList<F> {
+impl<K> Clone for RemoteReleasedPackagesList<K> {
     fn clone(&self) -> Self {
         Self {
             trie: self.trie.clone(),
@@ -35,28 +35,31 @@ impl<F: PackageNameFormatter> Clone for RemoteReleasedPackagesList<F> {
     }
 }
 
-impl<F: PackageNameFormatter> fmt::Debug for RemoteReleasedPackagesList<F> {
+impl<K> fmt::Debug for RemoteReleasedPackagesList<K> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RemoteReleasedPackagesList").finish()
     }
 }
 
-impl<F: PackageNameFormatter> RemoteReleasedPackagesList<F> {
+impl<K> RemoteReleasedPackagesList<K> {
     pub async fn try_new<C>(
         guard: ShutdownGuard,
         uri: Uri,
         sync_storage: SyncCompactDataStorage,
         client: C,
-        formatter: F,
     ) -> Result<Self, BoxError>
     where
+        K: PackageName + radix_trie::TrieKey + Send + Sync + 'static,
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         let (trie, _refresh_handle) = remote_resource::try_new(
             guard,
             sync_storage,
             client,
-            Arc::new(ReleasedPackagesRemoteResource { uri, formatter }),
+            Arc::new(ReleasedPackagesRemoteResource::<K> {
+                uri,
+                _phantom: PhantomData,
+            }),
         )
         .await
         .context("create new remote released packages list")?;
@@ -73,10 +76,13 @@ impl<F: PackageNameFormatter> RemoteReleasedPackagesList<F> {
     /// - `version = None`: true if ANY version of the package is recent
     pub fn is_recently_released(
         &self,
-        package_name: &F::PackageName,
+        package_name: &K,
         version: Option<&PackageVersion>,
         cutoff_ts: SystemTimestampMilliseconds,
-    ) -> bool {
+    ) -> bool
+    where
+        K: radix_trie::TrieKey,
+    {
         let state_ref = self.trie.get();
         let Some(entries) = state_ref.get(package_name) else {
             return false;
@@ -87,14 +93,17 @@ impl<F: PackageNameFormatter> RemoteReleasedPackagesList<F> {
     }
 }
 
-struct ReleasedPackagesRemoteResource<F> {
+struct ReleasedPackagesRemoteResource<K> {
     uri: Uri,
-    formatter: F,
+    _phantom: PhantomData<K>,
 }
 
-impl<F: PackageNameFormatter> RemoteResourceSpec for ReleasedPackagesRemoteResource<F> {
+impl<K> RemoteResourceSpec for ReleasedPackagesRemoteResource<K>
+where
+    K: PackageName + radix_trie::TrieKey + Send + Sync + 'static,
+{
     type Payload = Vec<ReleasedPackageData>;
-    type State = ReleasedPackagesTrie<F>;
+    type State = ReleasedPackagesTrie<K>;
 
     fn refresh_interval(&self) -> Duration {
         Duration::from_mins(10)
@@ -109,26 +118,21 @@ impl<F: PackageNameFormatter> RemoteResourceSpec for ReleasedPackagesRemoteResou
 
     fn build_state(&self, payload: Self::Payload) -> Result<Arc<Self::State>, BoxError> {
         let now_ts = SystemTimestampMilliseconds::now();
-        Ok(Arc::new(trie_from_released_packages_list(
-            payload,
-            now_ts,
-            &self.formatter,
-        )))
+        Ok(Arc::new(trie_from_released_packages_list(payload, now_ts)))
     }
 }
 
-fn trie_from_released_packages_list<F: PackageNameFormatter>(
+fn trie_from_released_packages_list<K: PackageName + radix_trie::TrieKey>(
     list: Vec<ReleasedPackageData>,
     now_ts: SystemTimestampMilliseconds,
-    formatter: &F,
-) -> ReleasedPackagesTrie<F> {
+) -> ReleasedPackagesTrie<K> {
     let cutoff = now_ts - MAX_ENTRY_AGE;
-    let mut trie = ReleasedPackagesTrie::<F>::new();
+    let mut trie = ReleasedPackagesTrie::<K>::new();
     for item in list {
         if item.released_on < cutoff {
             continue;
         }
-        let key = formatter.format_package_name(&item.package_name);
+        let key = K::normalize(&item.package_name);
         let entry = ReleasedEntry {
             version: item.version,
             released_on: item.released_on,
@@ -156,8 +160,7 @@ pub struct ReleasedPackageData {
     pub released_on: SystemTimestampMilliseconds,
 }
 
-#[allow(type_alias_bounds)]
-pub type ReleasedPackagesTrie<F: PackageNameFormatter> = Trie<F::PackageName, Vec<ReleasedEntry>>;
+pub type ReleasedPackagesTrie<K> = Trie<K, Vec<ReleasedEntry>>;
 
 /// Stored in the trie (version + timestamp; package_name is the key)
 #[derive(Debug, Clone, PartialEq, Eq)]

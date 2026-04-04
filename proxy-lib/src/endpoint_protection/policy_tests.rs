@@ -1,26 +1,17 @@
 use super::*;
 use crate::{
     endpoint_protection::{EcosystemConfig, ExceptionLists},
-    package::name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
+    package::name_formatter::LowerCasePackageName,
 };
 
-fn exceptions(
-    allowed_packages: &[&str],
-    rejected_packages: &[&str],
-) -> ExceptionLists<LowerCasePackageNameFormatter> {
+fn exceptions(allowed_packages: &[&str], rejected_packages: &[&str]) -> ExceptionLists {
     ExceptionLists {
-        allowed_packages: allowed_packages
-            .iter()
-            .map(|v| LowerCasePackageName::from(*v))
-            .collect(),
-        rejected_packages: rejected_packages
-            .iter()
-            .map(|v| LowerCasePackageName::from(*v))
-            .collect(),
+        allowed_packages: allowed_packages.iter().map(|v| (*v).into()).collect(),
+        rejected_packages: rejected_packages.iter().map(|v| (*v).into()).collect(),
     }
 }
 
-type TestPolicyEvaluator = PolicyEvaluator<LowerCasePackageNameFormatter>;
+type TestPolicyEvaluator = PolicyEvaluator<LowerCasePackageName>;
 
 #[test]
 fn evaluate_package_install_request_installs_blocks_unmatched_package() {
@@ -32,7 +23,7 @@ fn evaluate_package_install_request_installs_blocks_unmatched_package() {
     };
 
     let decision = TestPolicyEvaluator::evaluate_package_install_for_ecosystem_config(
-        &cfg,
+        &super::TypedEcosystemConfig::from_raw(&cfg),
         &LowerCasePackageName::from("numpy"),
     );
     assert_eq!(PackagePolicyDecision::RequestInstall, decision);
@@ -48,7 +39,7 @@ fn evaluate_package_install_no_matching_rule_returns_defer() {
     };
 
     let decision = PolicyEvaluator::evaluate_package_install_for_ecosystem_config(
-        &cfg,
+        &super::TypedEcosystemConfig::from_raw(&cfg),
         &LowerCasePackageName::from("numpy"),
     );
     assert_eq!(PackagePolicyDecision::Defer, decision);
@@ -64,7 +55,7 @@ fn evaluate_package_install_allow_list_allows() {
     };
 
     let decision = PolicyEvaluator::evaluate_package_install_for_ecosystem_config(
-        &cfg,
+        &super::TypedEcosystemConfig::from_raw(&cfg),
         &LowerCasePackageName::from("safe-chain-pi-test"),
     );
     assert_eq!(PackagePolicyDecision::Allow, decision);
@@ -80,7 +71,7 @@ fn evaluate_package_install_block_all_blocks() {
     };
 
     let decision = PolicyEvaluator::evaluate_package_install_for_ecosystem_config(
-        &cfg,
+        &super::TypedEcosystemConfig::from_raw(&cfg),
         &LowerCasePackageName::from("numpy"),
     );
     assert_eq!(PackagePolicyDecision::BlockAll, decision);
@@ -96,7 +87,7 @@ fn evaluate_package_install_rejected_package_blocks() {
     };
 
     let decision = PolicyEvaluator::evaluate_package_install_for_ecosystem_config(
-        &cfg,
+        &super::TypedEcosystemConfig::from_raw(&cfg),
         &LowerCasePackageName::from("safe-chain-pi-test"),
     );
     assert_eq!(PackagePolicyDecision::Rejected, decision);
@@ -113,7 +104,7 @@ fn evaluate_package_install_rejected_takes_priority_over_allowed() {
     };
 
     let decision = PolicyEvaluator::evaluate_package_install_for_ecosystem_config(
-        &cfg,
+        &super::TypedEcosystemConfig::from_raw(&cfg),
         &LowerCasePackageName::from("requests"),
     );
     assert_eq!(PackagePolicyDecision::Rejected, decision);
@@ -129,7 +120,7 @@ fn evaluate_package_install_allow_list_takes_priority_over_block_all() {
     };
 
     let decision = PolicyEvaluator::evaluate_package_install_for_ecosystem_config(
-        &cfg,
+        &super::TypedEcosystemConfig::from_raw(&cfg),
         &LowerCasePackageName::from("requests"),
     );
     assert_eq!(PackagePolicyDecision::Allow, decision);

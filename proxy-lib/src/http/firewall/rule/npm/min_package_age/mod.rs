@@ -20,7 +20,7 @@ use crate::{
         firewall::{
             events::{Artifact, MinPackageAgeEvent},
             notifier::EventNotifier,
-            rule::npm::{NPM_ECOSYSTEM_KEY, NpmPackageNameFormatter},
+            rule::npm::NPM_ECOSYSTEM_KEY,
         },
     },
     utils::time::{SystemDuration, SystemTimestampMilliseconds},
@@ -28,7 +28,7 @@ use crate::{
 
 pub(in crate::http::firewall) struct MinPackageAge {
     notifier: Option<EventNotifier>,
-    config: Option<RemoteEndpointConfig<NpmPackageNameFormatter>>,
+    config: Option<RemoteEndpointConfig>,
 }
 
 const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
@@ -36,7 +36,7 @@ const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 impl MinPackageAge {
     pub(in crate::http::firewall) fn new(
         notifier: Option<EventNotifier>,
-        config: Option<RemoteEndpointConfig<NpmPackageNameFormatter>>,
+        config: Option<RemoteEndpointConfig>,
     ) -> Self {
         Self { notifier, config }
     }

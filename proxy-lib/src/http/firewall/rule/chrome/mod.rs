@@ -33,12 +33,10 @@ use super::{BlockedRequest, RequestAction, Rule};
 
 mod package_name;
 mod parser;
-use self::package_name::{ChromePackageName, ChromePackageNameFormatter};
+use self::package_name::ChromePackageName;
 
-type ChromeRemoteMalwareList = RemoteMalwareList<ChromePackageNameFormatter>;
-type ChromeRemoteReleasedPackageList = RemoteReleasedPackagesList<ChromePackageNameFormatter>;
-type ChromeRemoteEndpointConfig = RemoteEndpointConfig<ChromePackageNameFormatter>;
-type ChromePolicyEvaluator = PolicyEvaluator<ChromePackageNameFormatter>;
+type ChromeRemoteMalwareList = RemoteMalwareList<ChromePackageName>;
+type ChromeRemoteReleasedPackageList = RemoteReleasedPackagesList<ChromePackageName>;
 
 const CHROME_PRODUCT_KEY: ArcStr = arcstr!("chrome");
 const CHROME_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("chrome");
@@ -47,8 +45,8 @@ pub(in crate::http::firewall) struct RuleChrome {
     target_domains: DomainMatcher,
     remote_malware_list: ChromeRemoteMalwareList,
     remote_released_packages_list: ChromeRemoteReleasedPackageList,
-    remote_endpoint_config: Option<ChromeRemoteEndpointConfig>,
-    policy_evaluator: Option<ChromePolicyEvaluator>,
+    remote_endpoint_config: Option<RemoteEndpointConfig>,
+    policy_evaluator: Option<PolicyEvaluator<ChromePackageName>>,
 }
 
 impl RuleChrome {
@@ -56,8 +54,7 @@ impl RuleChrome {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<ChromePolicyEvaluator>,
-        remote_endpoint_config: Option<ChromeRemoteEndpointConfig>,
+        remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
@@ -67,7 +64,6 @@ impl RuleChrome {
             Uri::from_static("https://malware-list.aikido.dev/malware_chrome.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            package_name::ChromePackageNameFormatter::default(),
         )
         .await
         .context("create remote malware list for chrome block rule")?;
@@ -77,10 +73,11 @@ impl RuleChrome {
             Uri::from_static("https://malware-list.aikido.dev/releases/chrome.json"),
             sync_storage,
             remote_malware_list_https_client,
-            package_name::ChromePackageNameFormatter::default(),
         )
         .await
         .context("create remote released packages list for chrome block rule")?;
+
+        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
 
         Ok(Self {
             target_domains: [

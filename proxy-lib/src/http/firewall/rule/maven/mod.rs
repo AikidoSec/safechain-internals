@@ -20,7 +20,7 @@ use crate::{
     },
     package::{
         malware_list::RemoteMalwareList,
-        name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
+        name_formatter::LowerCasePackageName,
         released_packages_list::RemoteReleasedPackagesList,
         version::{PackageVersion, PragmaticSemver},
     },
@@ -36,13 +36,9 @@ use super::{BlockedRequest, RequestAction, Rule};
 #[cfg(test)]
 mod test;
 
-type MavenPackageNameFormatter = LowerCasePackageNameFormatter;
 type MavenPackageName = LowerCasePackageName;
-
-type MavenRemoteMalwareList = RemoteMalwareList<MavenPackageNameFormatter>;
-type MavenRemoteReleasedPackagesList = RemoteReleasedPackagesList<MavenPackageNameFormatter>;
-type MavenRemoteEndpointConfig = RemoteEndpointConfig<MavenPackageNameFormatter>;
-type MavenPolicyEvaluator = PolicyEvaluator<MavenPackageNameFormatter>;
+type MavenRemoteMalwareList = RemoteMalwareList<MavenPackageName>;
+type MavenRemoteReleasedPackagesList = RemoteReleasedPackagesList<MavenPackageName>;
 
 const MAVEN_PRODUCT_KEY: ArcStr = arcstr!("maven");
 const MAVEN_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("maven");
@@ -51,8 +47,8 @@ pub(in crate::http::firewall) struct RuleMaven {
     target_domains: DomainMatcher,
     remote_malware_list: MavenRemoteMalwareList,
     remote_released_packages_list: MavenRemoteReleasedPackagesList,
-    remote_endpoint_config: Option<MavenRemoteEndpointConfig>,
-    policy_evaluator: Option<MavenPolicyEvaluator>,
+    remote_endpoint_config: Option<RemoteEndpointConfig>,
+    policy_evaluator: Option<PolicyEvaluator<MavenPackageName>>,
 }
 
 impl RuleMaven {
@@ -60,8 +56,7 @@ impl RuleMaven {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<MavenPolicyEvaluator>,
-        remote_endpoint_config: Option<MavenRemoteEndpointConfig>,
+        remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
@@ -71,7 +66,6 @@ impl RuleMaven {
             Uri::from_static("https://malware-list.aikido.dev/malware_maven.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            MavenPackageNameFormatter::new(),
         )
         .await
         .context("create remote malware list for maven block rule")?;
@@ -81,10 +75,11 @@ impl RuleMaven {
             Uri::from_static("https://malware-list.aikido.dev/releases/maven.json"),
             sync_storage,
             remote_malware_list_https_client,
-            MavenPackageNameFormatter::new(),
         )
         .await
         .context("create remote released packages list for maven block rule")?;
+
+        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
 
         Ok(Self {
             target_domains: [
@@ -241,7 +236,7 @@ impl MavenArtifact {
 }
 
 impl RuleMaven {
-    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(1);
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 
     fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
         self.remote_endpoint_config

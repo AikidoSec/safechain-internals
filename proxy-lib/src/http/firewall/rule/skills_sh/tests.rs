@@ -1,34 +1,32 @@
 use super::*;
 
-use crate::package::name_formatter::PackageNameFormatter;
+use crate::package::name_formatter::PackageName;
 use crate::package::{malware_list::ListDataEntry, version::PackageVersion};
 
 // --- SkillsShEntryFormatter ---
 
 #[test]
 fn test_formatter_strips_skill_name() {
-    let formatter = SkillsShPackageNameFormatter;
     let entry = ListDataEntry {
         package_name: "asklokesh/claudeskill-loki-mode/loki-mode".to_owned(),
         version: PackageVersion::Unknown("commit-dde60807afea".into()),
         reason: crate::package::malware_list::Reason::Telemetry,
     };
     assert_eq!(
-        formatter.format_package_name(&entry.package_name),
+        SkillsShPackageName::normalize(&entry.package_name),
         SkillsShPackageName::from("asklokesh/claudeskill-loki-mode"),
     );
 }
 
 #[test]
 fn test_formatter_lowercases() {
-    let formatter = SkillsShPackageNameFormatter;
     let entry = ListDataEntry {
         package_name: "Owner/Repo/Skill".to_owned(),
         version: PackageVersion::None,
         reason: crate::package::malware_list::Reason::Malware,
     };
     assert_eq!(
-        formatter.format_package_name(&entry.package_name),
+        SkillsShPackageName::normalize(&entry.package_name),
         SkillsShPackageName::from("owner/repo")
     );
 }

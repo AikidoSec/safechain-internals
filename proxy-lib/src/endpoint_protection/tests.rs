@@ -1,7 +1,4 @@
-use crate::{
-    package::name_formatter::LowerCasePackageNameFormatter,
-    utils::time::{SystemDuration, SystemTimestampMilliseconds},
-};
+use crate::utils::time::{SystemDuration, SystemTimestampMilliseconds};
 
 use super::*;
 
@@ -25,7 +22,7 @@ fn test_parse_fetch_permissions_payload() {
         }
     }"#;
 
-    let config: EndpointConfig<LowerCasePackageNameFormatter> = serde_json::from_str(json).unwrap();
+    let config: EndpointConfig = serde_json::from_str(json).unwrap();
 
     assert_eq!(config.permission_group.id, 123);
     assert_eq!(config.permission_group.name.as_str(), "Development");
@@ -56,7 +53,7 @@ fn test_parse_fetch_permissions_defaults() {
         }
     }"#;
 
-    let config: EndpointConfig<LowerCasePackageNameFormatter> = serde_json::from_str(json).unwrap();
+    let config: EndpointConfig = serde_json::from_str(json).unwrap();
     let npm = config
         .ecosystems
         .get(&EcosystemKey::from_static("npm"))
@@ -83,8 +80,7 @@ fn test_parse_fetch_permissions_timestamp_true_is_invalid() {
         }
     }"#;
 
-    let err =
-        serde_json::from_str::<EndpointConfig<LowerCasePackageNameFormatter>>(json).unwrap_err();
+    let err = serde_json::from_str::<EndpointConfig>(json).unwrap_err();
     assert!(err.to_string().contains("invalid type: boolean `true`"));
 }
 
@@ -102,7 +98,6 @@ fn test_parse_fetch_permissions_timestamp_false_is_invalid() {
         }
     }"#;
 
-    let err =
-        serde_json::from_str::<EndpointConfig<LowerCasePackageNameFormatter>>(json).unwrap_err();
+    let err = serde_json::from_str::<EndpointConfig>(json).unwrap_err();
     assert!(err.to_string().contains("invalid type: boolean `false`"));
 }

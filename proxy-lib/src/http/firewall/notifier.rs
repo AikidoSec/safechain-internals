@@ -33,10 +33,7 @@ use tokio::sync::{Semaphore, SemaphorePermit};
 use crate::{
     endpoint_protection::types::EndpointConfig,
     http::firewall::events::MinPackageAgeEvent,
-    package::{
-        name_formatter::PackageNameFormatter,
-        version::{PackageVersion, PackageVersionKey},
-    },
+    package::version::{PackageVersion, PackageVersionKey},
     utils::env::{compute_concurrent_request_count, network_service_identifier},
 };
 
@@ -140,10 +137,7 @@ impl EventNotifier {
         });
     }
 
-    pub fn notify_permissions_updated<F: PackageNameFormatter>(
-        &self,
-        config: Arc<Option<EndpointConfig<F>>>,
-    ) {
+    pub fn notify_permissions_updated(&self, config: Arc<Option<EndpointConfig>>) {
         self.spawn_event_task(|client, reporting_endpoint| {
             send_permissions_updated_event(client, reporting_endpoint, config)
         });
@@ -231,10 +225,10 @@ async fn send_tls_termination_failed_event(
     send_event(client, reporting_endpoint, event, &url).await;
 }
 
-async fn send_permissions_updated_event<F: PackageNameFormatter>(
+async fn send_permissions_updated_event(
     client: BoxService<Request, Response, OpaqueError>,
     reporting_endpoint: String,
-    config: Arc<Option<EndpointConfig<F>>>,
+    config: Arc<Option<EndpointConfig>>,
 ) {
     let Some(config) = config.as_ref() else {
         return;

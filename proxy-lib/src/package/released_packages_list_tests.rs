@@ -1,14 +1,13 @@
 use super::*;
 use crate::{
-    package::name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
-    utils::remote_resource::RemoteResource,
+    package::name_formatter::LowerCasePackageName, utils::remote_resource::RemoteResource,
 };
 
 fn make_trie(
     entries: Vec<ReleasedPackageData>,
     now: SystemTimestampMilliseconds,
-) -> ReleasedPackagesTrie<LowerCasePackageNameFormatter> {
-    trie_from_released_packages_list(entries, now, &LowerCasePackageNameFormatter::new())
+) -> ReleasedPackagesTrie<LowerCasePackageName> {
+    trie_from_released_packages_list::<LowerCasePackageName>(entries, now)
 }
 
 fn pv(s: &str) -> PackageVersion {
@@ -19,7 +18,7 @@ fn make_list(
     package_name: &str,
     version: &str,
     released_on: SystemTimestampMilliseconds,
-) -> RemoteReleasedPackagesList<LowerCasePackageNameFormatter> {
+) -> RemoteReleasedPackagesList<LowerCasePackageName> {
     let trie = trie_from_released_packages_list(
         vec![ReleasedPackageData {
             package_name: package_name.to_owned(),
@@ -27,7 +26,6 @@ fn make_list(
             released_on,
         }],
         released_on + SystemDuration::hours(1),
-        &LowerCasePackageNameFormatter::new(),
     );
     RemoteReleasedPackagesList {
         trie: RemoteResource::from_state(trie),
@@ -114,7 +112,7 @@ fn test_is_recently_released_case_insensitive() {
     let released_on = SystemTimestampMilliseconds::EPOCH + SystemDuration::milliseconds(1_000_000);
     let list = make_list("My-Ext", "1.0.0", released_on);
     let cutoff = released_on - SystemDuration::hours(2);
-    // Name normalization is the caller's responsibility (LowerCasePackageNameFormatter
+    // Name normalization is the caller's responsibility (LowerCasePackageName
     // lowercases keys at trie-build time), so the lookup key must already be lowercase.
     assert!(list.is_recently_released(
         &LowerCasePackageName::from("my-ext"),

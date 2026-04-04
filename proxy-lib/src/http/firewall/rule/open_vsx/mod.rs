@@ -23,10 +23,8 @@ use crate::{
         events::{Artifact, BlockReason},
     },
     package::{
-        malware_list::RemoteMalwareList,
-        name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
-        released_packages_list::RemoteReleasedPackagesList,
-        version::PackageVersion,
+        malware_list::RemoteMalwareList, name_formatter::LowerCasePackageName,
+        released_packages_list::RemoteReleasedPackagesList, version::PackageVersion,
     },
     storage::SyncCompactDataStorage,
     utils::time::{SystemDuration, SystemTimestampMilliseconds},
@@ -37,13 +35,9 @@ use crate::http::firewall::pac::PacScriptGenerator;
 
 use super::{BlockedRequest, RequestAction, Rule};
 
-type OpenVsxPackageNameFormatter = LowerCasePackageNameFormatter;
 type OpenVsxPackageName = LowerCasePackageName;
-
-type OpenVsxRemoteMalwareList = RemoteMalwareList<OpenVsxPackageNameFormatter>;
-type OpenVsxRemoteReleasedPackagesList = RemoteReleasedPackagesList<OpenVsxPackageNameFormatter>;
-type OpenVsxRemoteEndpointConfig = RemoteEndpointConfig<OpenVsxPackageNameFormatter>;
-type OpenVsxPolicyEvaluator = PolicyEvaluator<OpenVsxPackageNameFormatter>;
+type OpenVsxRemoteMalwareList = RemoteMalwareList<OpenVsxPackageName>;
+type OpenVsxRemoteReleasedPackagesList = RemoteReleasedPackagesList<OpenVsxPackageName>;
 
 const OPEN_VSX_PRODUCT_KEY: ArcStr = arcstr!("open_vsx");
 const OPEN_VSX_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("open_vsx");
@@ -52,8 +46,8 @@ pub(in crate::http::firewall) struct RuleOpenVsx {
     target_domains: DomainMatcher,
     remote_malware_list: OpenVsxRemoteMalwareList,
     remote_released_packages_list: OpenVsxRemoteReleasedPackagesList,
-    remote_endpoint_config: Option<OpenVsxRemoteEndpointConfig>,
-    policy_evaluator: Option<OpenVsxPolicyEvaluator>,
+    remote_endpoint_config: Option<RemoteEndpointConfig>,
+    policy_evaluator: Option<PolicyEvaluator<OpenVsxPackageName>>,
 }
 
 impl RuleOpenVsx {
@@ -61,8 +55,7 @@ impl RuleOpenVsx {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<OpenVsxPolicyEvaluator>,
-        remote_endpoint_config: Option<OpenVsxRemoteEndpointConfig>,
+        remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
@@ -72,7 +65,6 @@ impl RuleOpenVsx {
             Uri::from_static("https://malware-list.aikido.dev/malware_open_vsx.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            OpenVsxPackageNameFormatter::new(),
         )
         .await
         .context("create remote malware list for open vsx block rule")?;
@@ -82,10 +74,11 @@ impl RuleOpenVsx {
             Uri::from_static("https://malware-list.aikido.dev/releases/open_vsx.json"),
             sync_storage,
             remote_malware_list_https_client,
-            OpenVsxPackageNameFormatter::new(),
         )
         .await
         .context("create remote released packages list for open vsx block rule")?;
+
+        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
 
         Ok(Self {
             target_domains: ["open-vsx.org", "marketplace.cursorapi.com"]

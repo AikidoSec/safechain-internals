@@ -1,28 +1,10 @@
-use std::fmt;
-
-use radix_trie::TrieKey;
-use serde::{Serialize, de::DeserializeOwned};
-
-pub trait PackageNameFormatter: Clone + Send + Sync + 'static {
-    type PackageName: Serialize
-        + fmt::Debug
-        + fmt::Display
-        + DeserializeOwned
-        + PartialEq
-        + Eq
-        + std::hash::Hash
-        + Clone
-        + TrieKey
-        + Send
-        + Sync
-        + 'static;
-
-    fn format_package_name(&self, raw_package_name: &str) -> Self::PackageName;
+pub trait PackageName {
+    fn normalize(raw_package_name: &str) -> Self;
 }
 
 mod lower_case;
 #[doc(inline)]
-pub use lower_case::{LowerCasePackageName, LowerCasePackageNameFormatter};
+pub use lower_case::LowerCasePackageName;
 
 #[doc(hidden)]
 #[macro_export]

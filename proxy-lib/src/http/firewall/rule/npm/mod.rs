@@ -21,7 +21,7 @@ use crate::{
     },
     package::{
         malware_list::RemoteMalwareList,
-        name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
+        name_formatter::LowerCasePackageName,
         released_packages_list::RemoteReleasedPackagesList,
         version::{PackageVersion, PragmaticSemver},
     },
@@ -36,13 +36,9 @@ use super::{BlockedRequest, RequestAction, Rule};
 
 pub mod min_package_age;
 
-type NpmPackageNameFormatter = LowerCasePackageNameFormatter;
 type NpmPackageName = LowerCasePackageName;
-
-type NpmRemoteMalwareList = RemoteMalwareList<NpmPackageNameFormatter>;
-type NpmRemoteReleasedPackagesList = RemoteReleasedPackagesList<NpmPackageNameFormatter>;
-type NpmRemoteEndpointConfig = RemoteEndpointConfig<NpmPackageNameFormatter>;
-type NpmPolicyEvaluator = PolicyEvaluator<NpmPackageNameFormatter>;
+type NpmRemoteMalwareList = RemoteMalwareList<NpmPackageName>;
+type NpmRemoteReleasedPackagesList = RemoteReleasedPackagesList<NpmPackageName>;
 
 const NPM_PRODUCT_KEY: ArcStr = arcstr!("npm");
 const NPM_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("npm");
@@ -51,9 +47,9 @@ pub(in crate::http::firewall) struct RuleNpm {
     target_domains: DomainMatcher,
     remote_malware_list: NpmRemoteMalwareList,
     remote_released_packages_list: NpmRemoteReleasedPackagesList,
-    remote_endpoint_config: Option<NpmRemoteEndpointConfig>,
+    remote_endpoint_config: Option<RemoteEndpointConfig>,
     maybe_min_package_age: Option<MinPackageAge>,
-    policy_evaluator: Option<NpmPolicyEvaluator>,
+    policy_evaluator: Option<PolicyEvaluator<NpmPackageName>>,
 }
 
 impl RuleNpm {
@@ -61,9 +57,8 @@ impl RuleNpm {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<NpmPolicyEvaluator>,
         min_package_age: Option<MinPackageAge>,
-        remote_endpoint_config: Option<NpmRemoteEndpointConfig>,
+        remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
@@ -77,7 +72,6 @@ impl RuleNpm {
             Uri::from_static("https://malware-list.aikido.dev/malware_predictions.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            NpmPackageNameFormatter::new(),
         )
         .await
         .context("create remote malware list for npm block rule")?;
@@ -87,10 +81,11 @@ impl RuleNpm {
             Uri::from_static("https://malware-list.aikido.dev/releases/npm.json"),
             sync_storage,
             remote_malware_list_https_client,
-            NpmPackageNameFormatter::new(),
         )
         .await
         .context("create remote released packages list for npm block rule")?;
+
+        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
 
         Ok(Self {
             // NOTE: should you ever make this list dynamic we would stop hardcoding these target domains here...

@@ -23,10 +23,8 @@ use crate::{
         events::{Artifact, BlockReason},
     },
     package::{
-        malware_list::RemoteMalwareList,
-        name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
-        released_packages_list::RemoteReleasedPackagesList,
-        version::PackageVersion,
+        malware_list::RemoteMalwareList, name_formatter::LowerCasePackageName,
+        released_packages_list::RemoteReleasedPackagesList, version::PackageVersion,
     },
     storage::SyncCompactDataStorage,
     utils::time::{SystemDuration, SystemTimestampMilliseconds},
@@ -37,13 +35,9 @@ use crate::http::firewall::pac::PacScriptGenerator;
 
 use super::{BlockedRequest, RequestAction, Rule};
 
-type VSCodePackageNameFormatter = LowerCasePackageNameFormatter;
 type VSCodePackageName = LowerCasePackageName;
-
-type VSCodeRemoteMalwareList = RemoteMalwareList<VSCodePackageNameFormatter>;
-type VSCodeRemoteReleasedPackageList = RemoteReleasedPackagesList<VSCodePackageNameFormatter>;
-type VSCodeRemoteEndpointConfig = RemoteEndpointConfig<VSCodePackageNameFormatter>;
-type VSCodePolicyEvaluator = PolicyEvaluator<VSCodePackageNameFormatter>;
+type VSCodeRemoteMalwareList = RemoteMalwareList<VSCodePackageName>;
+type VSCodeRemoteReleasedPackageList = RemoteReleasedPackagesList<VSCodePackageName>;
 
 const VSCODE_PRODUCT_KEY: ArcStr = arcstr!("vscode");
 const VSCODE_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("vscode");
@@ -57,8 +51,8 @@ pub(in crate::http::firewall) struct RuleVSCode {
     target_domains: DomainMatcher,
     remote_malware_list: VSCodeRemoteMalwareList,
     remote_released_packages_list: VSCodeRemoteReleasedPackageList,
-    remote_endpoint_config: Option<VSCodeRemoteEndpointConfig>,
-    policy_evaluator: Option<VSCodePolicyEvaluator>,
+    remote_endpoint_config: Option<RemoteEndpointConfig>,
+    policy_evaluator: Option<PolicyEvaluator<VSCodePackageName>>,
 }
 
 impl RuleVSCode {
@@ -66,8 +60,7 @@ impl RuleVSCode {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<VSCodePolicyEvaluator>,
-        remote_endpoint_config: Option<VSCodeRemoteEndpointConfig>,
+        remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
@@ -77,7 +70,6 @@ impl RuleVSCode {
             Uri::from_static("https://malware-list.aikido.dev/malware_vscode.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            VSCodePackageNameFormatter::new(),
         )
         .await
         .context("create remote malware list for vscode block rule")?;
@@ -87,10 +79,11 @@ impl RuleVSCode {
             Uri::from_static("https://malware-list.aikido.dev/releases/vscode.json"),
             sync_storage,
             remote_malware_list_https_client,
-            VSCodePackageNameFormatter::new(),
         )
         .await
         .context("create remote released packages list for vscode block rule")?;
+
+        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
 
         Ok(Self {
             target_domains: [

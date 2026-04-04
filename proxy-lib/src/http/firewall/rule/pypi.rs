@@ -25,7 +25,7 @@ use crate::{
     },
     package::{
         malware_list::{MalwareEntry, RemoteMalwareList},
-        name_formatter::{LowerCasePackageName, LowerCasePackageNameFormatter},
+        name_formatter::LowerCasePackageName,
         released_packages_list::RemoteReleasedPackagesList,
         version::PackageVersion,
     },
@@ -38,13 +38,9 @@ use crate::http::firewall::pac::PacScriptGenerator;
 
 use super::{BlockedRequest, RequestAction, Rule};
 
-type PyPIPackageNameFormatter = LowerCasePackageNameFormatter;
 type PyPIPackageName = LowerCasePackageName;
-
-type PyPIRemoteMalwareList = RemoteMalwareList<PyPIPackageNameFormatter>;
-type PyPIRemoteReleasedPackagesList = RemoteReleasedPackagesList<PyPIPackageNameFormatter>;
-type PyPIRemoteEndpointConfig = RemoteEndpointConfig<PyPIPackageNameFormatter>;
-type PyPIPolicyEvaluator = PolicyEvaluator<PyPIPackageNameFormatter>;
+type PyPIRemoteMalwareList = RemoteMalwareList<PyPIPackageName>;
+type PyPIRemoteReleasedPackagesList = RemoteReleasedPackagesList<PyPIPackageName>;
 
 const PYPI_PRODUCT_KEY: ArcStr = arcstr!("pypi");
 const PYPI_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("pypi");
@@ -84,8 +80,8 @@ pub(in crate::http::firewall) struct RulePyPI {
     target_domains: DomainMatcher,
     remote_malware_list: PyPIRemoteMalwareList,
     remote_released_packages_list: PyPIRemoteReleasedPackagesList,
-    remote_endpoint_config: Option<PyPIRemoteEndpointConfig>,
-    policy_evaluator: Option<PyPIPolicyEvaluator>,
+    remote_endpoint_config: Option<RemoteEndpointConfig>,
+    policy_evaluator: Option<PolicyEvaluator<PyPIPackageName>>,
 }
 
 impl RulePyPI {
@@ -93,8 +89,7 @@ impl RulePyPI {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<PyPIPolicyEvaluator>,
-        remote_endpoint_config: Option<PyPIRemoteEndpointConfig>,
+        remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
@@ -104,7 +99,6 @@ impl RulePyPI {
             Uri::from_static("https://malware-list.aikido.dev/malware_pypi.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            PyPIPackageNameFormatter::new(),
         )
         .await
         .context("create remote malware list for pypi block rule")?;
@@ -114,7 +108,6 @@ impl RulePyPI {
             Uri::from_static("https://malware-list.aikido.dev/releases/pypi.json"),
             sync_storage,
             remote_malware_list_https_client,
-            PyPIPackageNameFormatter::new(),
         )
         .await
         .context("create remote released packages list for pypi block rule")?;
@@ -122,6 +115,7 @@ impl RulePyPI {
         let target_domains = ["pypi.org", "files.pythonhosted.org", "pypi.python.org"]
             .into_iter()
             .collect();
+        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
 
         Ok(Self {
             target_domains,

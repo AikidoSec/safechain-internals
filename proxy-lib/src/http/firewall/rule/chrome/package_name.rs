@@ -1,19 +1,6 @@
 use rama::utils::str::arcstr::ArcStr;
 
-use crate::package::name_formatter::PackageNameFormatter;
-
-#[derive(Debug, Clone, Default)]
-#[non_exhaustive]
-pub(in crate::http::firewall) struct ChromePackageNameFormatter;
-
-impl PackageNameFormatter for ChromePackageNameFormatter {
-    type PackageName = ChromePackageName;
-
-    #[inline(always)]
-    fn format_package_name(&self, package_name: &str) -> Self::PackageName {
-        chrome_package_name_from_str(package_name)
-    }
-}
+use crate::package::name_formatter::PackageName;
 
 fn chrome_package_name_from_str(s: &str) -> ChromePackageName {
     // Example value from malware list:
@@ -24,7 +11,14 @@ fn chrome_package_name_from_str(s: &str) -> ChromePackageName {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(in crate::http::firewall) struct ChromePackageName(ArcStr);
+pub(super) struct ChromePackageName(ArcStr);
+
+impl PackageName for ChromePackageName {
+    #[inline(always)]
+    fn normalize(package_name: &str) -> Self {
+        chrome_package_name_from_str(package_name)
+    }
+}
 
 crate::package::name_formatter::decl_arc_str_package_name!(
     ChromePackageName,

@@ -7,38 +7,14 @@ use std::{
 use rama::utils::str::arcstr::ArcStr;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::{
-    package::name_formatter::PackageNameFormatter, utils::time::SystemTimestampMilliseconds,
-};
+use crate::utils::time::SystemTimestampMilliseconds;
 
-#[derive(Serialize, Deserialize)]
-#[serde(bound(
-    serialize = "F::PackageName: Serialize",
-    deserialize = "F::PackageName: Deserialize<'de> + Eq + std::hash::Hash",
-))]
-pub struct EndpointConfig<F: PackageNameFormatter> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EndpointConfig {
     pub permission_group: PermissionGroup,
     /// Per-ecosystem configurations (npm, maven, pypi, etc.).
     #[serde(default)]
-    pub ecosystems: HashMap<EcosystemKey, EcosystemConfig<F>>,
-}
-
-impl<F: PackageNameFormatter> fmt::Debug for EndpointConfig<F> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("EndpointConfig")
-            .field("permission_group", &self.permission_group)
-            .field("ecosystems", &self.ecosystems)
-            .finish()
-    }
-}
-
-impl<F: PackageNameFormatter> Clone for EndpointConfig<F> {
-    fn clone(&self) -> Self {
-        Self {
-            permission_group: self.permission_group.clone(),
-            ecosystems: self.ecosystems.clone(),
-        }
-    }
+    pub ecosystems: HashMap<EcosystemKey, EcosystemConfig>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -167,12 +143,8 @@ pub struct PermissionGroup {
 }
 
 /// Configuration for a specific package ecosystem.
-#[derive(Serialize, Deserialize)]
-#[serde(bound(
-    serialize = "F::PackageName: Serialize",
-    deserialize = "F::PackageName: Deserialize<'de> + Eq + std::hash::Hash",
-))]
-pub struct EcosystemConfig<F: PackageNameFormatter> {
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct EcosystemConfig {
     #[serde(default)]
     pub block_all_installs: bool,
     #[serde(default)]
@@ -180,77 +152,13 @@ pub struct EcosystemConfig<F: PackageNameFormatter> {
     #[serde(default, with = "crate::utils::time::option_system_time_serde_seconds")]
     pub minimum_allowed_age_timestamp: Option<SystemTimestampMilliseconds>,
     #[serde(default)]
-    pub exceptions: ExceptionLists<F>,
+    pub exceptions: ExceptionLists,
 }
 
-impl<F: PackageNameFormatter> fmt::Debug for EcosystemConfig<F> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("EcosystemConfig")
-            .field("block_all_installs", &self.block_all_installs)
-            .field("request_installs", &self.request_installs)
-            .field(
-                "minimum_allowed_age_timestamp",
-                &self.minimum_allowed_age_timestamp,
-            )
-            .field("exceptions", &self.exceptions)
-            .finish()
-    }
-}
-
-impl<F: PackageNameFormatter> Default for EcosystemConfig<F> {
-    fn default() -> Self {
-        Self {
-            block_all_installs: Default::default(),
-            request_installs: Default::default(),
-            minimum_allowed_age_timestamp: Default::default(),
-            exceptions: Default::default(),
-        }
-    }
-}
-
-impl<F: PackageNameFormatter> Clone for EcosystemConfig<F> {
-    fn clone(&self) -> Self {
-        Self {
-            block_all_installs: self.block_all_installs,
-            request_installs: self.request_installs,
-            minimum_allowed_age_timestamp: self.minimum_allowed_age_timestamp,
-            exceptions: self.exceptions.clone(),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(bound(
-    serialize = "F::PackageName: Serialize",
-    deserialize = "F::PackageName: Deserialize<'de> + Eq + std::hash::Hash",
-))]
-pub struct ExceptionLists<F: PackageNameFormatter> {
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ExceptionLists {
     #[serde(default)]
-    pub allowed_packages: HashSet<F::PackageName>,
+    pub allowed_packages: HashSet<ArcStr>,
     #[serde(default)]
-    pub rejected_packages: HashSet<F::PackageName>,
-}
-
-impl<F: PackageNameFormatter> Default for ExceptionLists<F> {
-    fn default() -> Self {
-        Self {
-            allowed_packages: Default::default(),
-            rejected_packages: Default::default(),
-        }
-    }
-}
-
-impl<F: PackageNameFormatter> fmt::Debug for ExceptionLists<F> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ExceptionLists").finish()
-    }
-}
-
-impl<F: PackageNameFormatter> Clone for ExceptionLists<F> {
-    fn clone(&self) -> Self {
-        Self {
-            allowed_packages: self.allowed_packages.clone(),
-            rejected_packages: self.rejected_packages.clone(),
-        }
-    }
+    pub rejected_packages: HashSet<ArcStr>,
 }

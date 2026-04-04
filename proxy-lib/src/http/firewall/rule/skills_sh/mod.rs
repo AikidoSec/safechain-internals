@@ -11,7 +11,7 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::{EcosystemKey, PolicyEvaluator, RemoteEndpointConfig},
+    endpoint_protection::{EcosystemKey, RemoteEndpointConfig},
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
@@ -28,12 +28,10 @@ use crate::{
 use crate::http::firewall::pac::PacScriptGenerator;
 
 mod package_name;
-use self::package_name::{SkillsShPackageName, SkillsShPackageNameFormatter};
+use self::package_name::SkillsShPackageName;
 
-type SkillsShRemoteMalwareList = RemoteMalwareList<SkillsShPackageNameFormatter>;
-type SkillsShRemoteReleasedPackageList = RemoteReleasedPackagesList<SkillsShPackageNameFormatter>;
-type SkillsShRemoteEndpointConfig = RemoteEndpointConfig<SkillsShPackageNameFormatter>;
-type SkillsShPolicyEvaluator = PolicyEvaluator<SkillsShPackageNameFormatter>;
+type SkillsShRemoteMalwareList = RemoteMalwareList<SkillsShPackageName>;
+type SkillsShRemoteReleasedPackageList = RemoteReleasedPackagesList<SkillsShPackageName>;
 
 const SKILLS_SH_PRODUCT_KEY: ArcStr = arcstr!("skills_sh");
 const SKILLS_SH_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("skills_sh");
@@ -42,12 +40,7 @@ pub(in crate::http::firewall) struct RuleSkillsSh {
     target_domains: DomainMatcher,
     remote_malware_list: SkillsShRemoteMalwareList,
     remote_released_packages_list: SkillsShRemoteReleasedPackageList,
-    remote_endpoint_config: Option<SkillsShRemoteEndpointConfig>,
-    // Policy evaluator is not used for skills_sh: policy decisions like
-    // BlockAll / RequestInstall / Allow / Reject would affect all GitHub git
-    // operations, not just skills.sh repositories.
-    #[expect(dead_code)]
-    policy_evaluator: Option<SkillsShPolicyEvaluator>,
+    remote_endpoint_config: Option<RemoteEndpointConfig>,
 }
 
 impl RuleSkillsSh {
@@ -55,8 +48,7 @@ impl RuleSkillsSh {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<SkillsShPolicyEvaluator>,
-        remote_endpoint_config: Option<SkillsShRemoteEndpointConfig>,
+        remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
@@ -66,7 +58,6 @@ impl RuleSkillsSh {
             Uri::from_static("https://malware-list.aikido.dev/malware_skills_sh.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            SkillsShPackageNameFormatter::default(),
         )
         .await
         .context("create remote malware list for skills.sh block rule")?;
@@ -76,7 +67,6 @@ impl RuleSkillsSh {
             Uri::from_static("https://malware-list.aikido.dev/releases/skills_sh.json"),
             sync_storage,
             remote_malware_list_https_client,
-            SkillsShPackageNameFormatter::default(),
         )
         .await
         .context("create remote released packages list for skills.sh block rule")?;
@@ -86,7 +76,6 @@ impl RuleSkillsSh {
             remote_malware_list,
             remote_released_packages_list,
             remote_endpoint_config,
-            policy_evaluator,
         })
     }
 }
