@@ -101,11 +101,20 @@ impl RemoteReleasedPackagesList {
                     "no cached released packages list found for remote endpoint (uri: {})",
                     client.uri
                 );
-                #[cfg(feature = "apple-networkextension")]
+
+                #[cfg(not(any(
+                    not(feature = "apple-networkextension"),
+                    feature = "test-utils",
+                    test
+                )))]
                 {
+                    // In a macOS L4 Network System Extension, heavy work during `startProxy`
+                    // can exhaust the stack and crash the extension. We therefore defer this
+                    // if not yet available, and perform the download later in a background task.
                     Default::default()
                 }
-                #[cfg(not(feature = "apple-networkextension"))]
+
+                #[cfg(any(not(feature = "apple-networkextension"), feature = "test-utils", test))]
                 {
                     client
                         .download_trie(None)
@@ -119,11 +128,20 @@ impl RemoteReleasedPackagesList {
                     "failed to load cached released packages list for remote endpoint (uri: {}); err = {err}",
                     client.uri
                 );
-                #[cfg(feature = "apple-networkextension")]
+
+                #[cfg(not(any(
+                    not(feature = "apple-networkextension"),
+                    feature = "test-utils",
+                    test
+                )))]
                 {
+                    // In a macOS L4 Network System Extension, heavy work during `startProxy`
+                    // can exhaust the stack and crash the extension. We therefore defer this
+                    // if not yet available, and perform the download later in a background task.
                     Default::default()
                 }
-                #[cfg(not(feature = "apple-networkextension"))]
+
+                #[cfg(any(not(feature = "apple-networkextension"), feature = "test-utils", test))]
                 {
                     client
                         .download_trie(None)
