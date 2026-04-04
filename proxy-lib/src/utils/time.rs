@@ -137,22 +137,32 @@ impl SystemDuration {
     }
 
     pub const fn seconds(n: u32) -> Self {
-        Self((n as i64) * 1_000)
+        Self((n as i64).saturating_mul(Self::SECOND_AS_MS))
     }
 
     pub const fn minutes(n: u16) -> Self {
-        Self::seconds((n as u32) * 60)
+        Self((n as i64).saturating_mul(Self::MINUTE_AS_MS))
     }
 
     pub const fn hours(n: u16) -> Self {
-        Self::seconds((n as u32) * 60 * 60)
+        Self((n as i64).saturating_mul(Self::HOUR_AS_MS))
     }
 
     pub const fn days(n: u8) -> Self {
-        Self::hours((n as u16) * 24)
+        Self((n as i64).saturating_mul(Self::DAY_AS_MS))
     }
 
     pub const fn weeks(n: u8) -> Self {
-        Self::days(n * 7)
+        Self((n as i64).saturating_mul(Self::WEEK_AS_MS))
     }
+
+    const SECOND_AS_MS: i64 = 1_000;
+    const MINUTE_AS_MS: i64 = Self::SECOND_AS_MS * 60;
+    const HOUR_AS_MS: i64 = Self::MINUTE_AS_MS * 60;
+    const DAY_AS_MS: i64 = Self::HOUR_AS_MS * 24;
+    const WEEK_AS_MS: i64 = Self::DAY_AS_MS * 7;
 }
+
+#[cfg(test)]
+#[path = "time_tests.rs"]
+mod tests;

@@ -4,7 +4,7 @@ use rama::{
     Service,
     error::{BoxError, ErrorContext, extra::OpaqueError},
     graceful::ShutdownGuard,
-    http::{Body, Request, Response, Uri},
+    http::{Body, Request, Response, Uri, header::AUTHORIZATION},
     telemetry::tracing,
     utils::str::arcstr::ArcStr,
 };
@@ -12,7 +12,7 @@ use tokio::sync::broadcast;
 
 use crate::{
     endpoint_protection::EcosystemKey,
-    http::firewall::notifier::EventNotifier,
+    http::{firewall::notifier::EventNotifier, headers::X_DEVICE_ID},
     storage::SyncCompactDataStorage,
     utils::remote_resource::{self, RefreshHandle, RemoteResource, RemoteResourceSpec},
 };
@@ -150,14 +150,14 @@ impl RemoteResourceSpec for EndpointConfigRemoteResource {
             .body(Body::empty())
             .context("build endpoint protection config http request")?;
         req.headers_mut().insert(
-            "authorization",
+            AUTHORIZATION,
             self.token
                 .as_str()
                 .try_into()
                 .context("convert endpoint token into authorization header value")?,
         );
         req.headers_mut().insert(
-            "x-device-id",
+            X_DEVICE_ID,
             self.device_id
                 .as_str()
                 .try_into()
