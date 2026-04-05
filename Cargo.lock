@@ -2657,6 +2657,7 @@ name = "safechain-l4-proxy"
 version = "1.0.0"
 dependencies = [
  "clap",
+ "libc",
  "mimalloc",
  "rama",
  "safechain-proxy-lib",

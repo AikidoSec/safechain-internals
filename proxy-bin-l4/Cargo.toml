@@ -8,10 +8,10 @@ rust-version = { workspace = true }
 readme = "../docs/proxy.md"
 
 [features]
-har = ["safechain-proxy-lib/har"]
 
 [target.'cfg(target_family = "unix")'.dependencies]
 jemallocator = { workspace = true }
+libc = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 mimalloc = { workspace = true }

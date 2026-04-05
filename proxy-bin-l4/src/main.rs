@@ -4,18 +4,26 @@
     deny(clippy::unwrap_used, clippy::expect_used)
 )]
 
-use std::{path::PathBuf, time::Duration};
+use std::{
+    net::{SocketAddrV4, SocketAddrV6},
+    path::PathBuf,
+    time::Duration,
+};
 
 use rama::{
     error::{BoxError, ErrorContext},
     graceful,
-    net::tls::ApplicationProtocol,
+    http::Uri,
+    rt::Executor,
     telemetry::tracing,
 };
 
 use clap::Parser;
 
-use safechain_proxy_lib::{storage, tls, utils as safechain_utils};
+use safechain_proxy_lib::{
+    storage,
+    utils::{self as safechain_utils, token::AgentIdentity},
+};
 
 #[cfg(target_family = "unix")]
 #[global_allocator]
@@ -25,7 +33,7 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 #[global_allocator]
 static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-pub mod platform;
+pub mod tcp;
 pub mod utils;
 
 /// CLI arguments for configuring proxy behavior.
@@ -34,22 +42,19 @@ pub mod utils;
 #[command(bin_name = "safechain-l4-proxy")]
 #[command(version, about, long_about = None)]
 pub struct Args {
+    /// network interface to bind the transparent proxy to
+    #[arg(long, default_value = "127.0.0.1:0")]
+    pub bind_v4: SocketAddrV4,
+
+    /// network interface to bind the transparent proxy to
+    #[arg(long, default_value = "[::1]:0")]
+    pub bind_v6: SocketAddrV6,
+
     /// secrets storage to use (e.g. for root CA)
-    #[cfg_attr(
-        target_os = "macos",
-        arg(
-            long,
-            value_name = "keyring | protected[:access-group=<group>][,cloud-sync=true|false] | memory | <dir>",
-            default_value = "memory"
-        )
-    )]
-    #[cfg_attr(
-        not(target_os = "macos"),
-        arg(
-            long,
-            value_name = "keyring | memory | <dir>",
-            default_value = "memory"
-        )
+    #[arg(
+        long,
+        value_name = "keyring | memory | <dir>",
+        default_value = "memory"
     )]
     pub secrets: storage::SecretStorageKind,
 
@@ -81,6 +86,24 @@ pub struct Args {
     #[arg(long, value_name = "SECONDS", default_value_t = 1.)]
     /// the graceful shutdown timeout (<= 0.0 = no timeout)
     pub graceful: f64,
+
+    /// Optional endpoint URL to POST blocked-event notifications to.
+    ///
+    /// If omitted, blocked events are still recorded locally but not reported.
+    #[arg(long = "reporting-endpoint", value_name = "URL")]
+    pub reporting_endpoint: Option<Uri>,
+
+    /// Aikido app base URL used to fetch endpoint protection config.
+    #[arg(
+        long = "aikido-url",
+        value_name = "URL",
+        default_value = "https://app.aikido.dev"
+    )]
+    pub aikido_url: Uri,
+
+    /// Peek duration in seconds (fractional).
+    #[arg(long, default_value_t = 0.5)]
+    pub peek_duration: f64,
 
     #[cfg(target_family = "unix")]
     /// Set the limit of max open file descriptors for this process and its children.
@@ -131,28 +154,23 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
         storage::SyncSecrets::try_new(self::utils::env::project_name(), args.secrets.clone())
             .context("create secrets storage")?;
 
-    let root_ca_key_pair = tls::load_or_create_root_ca_key_pair(&secret_storage, &data_storage)
-        .context("prepare proxy traffic CA crt/key pair")?;
-
-    let (_tls_acceptor, _root_ca) = tls::new_tls_acceptor_layer(
-        &root_ca_key_pair,
-        Some(vec![
-            ApplicationProtocol::HTTP_2,
-            ApplicationProtocol::HTTP_11,
-        ]),
-    )
-    .context("prepare TLS acceptor")?;
-
     let graceful = graceful::Shutdown::default();
 
-    #[cfg(feature = "har")]
-    let (_har_client, _har_export_layer) =
-        { safechain_proxy_lib::diagnostics::har::HarClient::new(&args.data, graceful.guard()) };
+    let agent_identity = AgentIdentity::load(&args.data);
 
-    // the actual proxy initialisation is platform-specific
-    self::platform::init_platform(args)
-        .await
-        .context("initialise platform")?;
+    self::tcp::start_tcp_servers(
+        args.bind_v4,
+        Some(args.bind_v6),
+        Executor::graceful(graceful.guard()),
+        Duration::from_secs_f64(args.peek_duration.max(0.05)),
+        agent_identity,
+        args.reporting_endpoint,
+        args.aikido_url,
+        data_storage,
+        secret_storage,
+    )
+    .await
+    .context("start tcp services")?;
 
     let delay = match graceful_timeout {
         Some(duration) => graceful.shutdown_with_limit(duration).await?,
