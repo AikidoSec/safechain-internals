@@ -21,6 +21,7 @@ humantime = "2.3"
 jemallocator = { package = "tikv-jemallocator", version = "0.6" }
 keyring-core = "0.7"
 libc = "0.2"
+lol_html = "2"
 libfuzzer-sys = "0.4"
 linux-keyutils-keyring-store = "0.2"
 lz4_flex = "0.13"

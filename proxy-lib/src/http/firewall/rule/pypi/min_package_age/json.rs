@@ -34,17 +34,17 @@ pub(super) fn rewrite_response(
     let json: serde_json::Value = serde_json::from_slice(bytes).ok()?;
 
     if json.get("releases").and_then(|r| r.as_object()).is_some() {
-        return rewrite_legacy_response(json, cutoff_secs, released_packages);
+        return rewrite_legacy(json, cutoff_secs, released_packages);
     }
 
-    rewrite_simple_response(json, cutoff_secs, released_packages)
+    rewrite_simple(json, cutoff_secs, released_packages)
 }
 
 /// Rewrite the legacy `/pypi/<package>/json` response shape.
 ///
 /// Too-young versions are removed from `releases`, then `info.version` and
 /// `urls` are downgraded to the newest remaining stable version.
-fn rewrite_legacy_response(
+fn rewrite_legacy(
     mut json: serde_json::Value,
     cutoff_secs: i64,
     released_packages: &RemoteReleasedPackagesList,
@@ -55,7 +55,7 @@ fn rewrite_legacy_response(
     json.get_mut("releases")?
         .as_object_mut()?
         .retain(|version, files| {
-            keep_release(
+            legacy_keep_release(
                 package_name.as_str(),
                 version,
                 files,
@@ -73,7 +73,7 @@ fn rewrite_legacy_response(
     build_rewrite_result(json, package_name, suppressed)
 }
 
-fn keep_release(
+fn legacy_keep_release(
     package_name: &str,
     version: &str,
     files: &serde_json::Value,
@@ -94,8 +94,16 @@ fn keep_release(
     !is_recent
 }
 
-/// Returns the earliest upload time (in seconds) across all files for a release.
-/// Uses the minimum so a version is only suppressed if all files postdate the cutoff.
+/// Returns the earliest upload time (in seconds) across all distribution files for a release.
+///
+/// A single PyPI release version ships multiple files: typically a platform-independent
+/// wheel (`.whl`) and a source distribution (`.tar.gz`), and sometimes additional
+/// platform-specific wheels for different OS/CPU combinations. Each file is uploaded
+/// separately and carries its own `upload_time_iso_8601` timestamp.
+///
+/// We take the minimum so that a version is only suppressed when *all* of its files
+/// postdate the cutoff — a freshly added platform wheel cannot slip through just because
+/// the source dist was uploaded days earlier.
 fn earliest_upload_secs(files: &serde_json::Value) -> Option<i64> {
     files
         .as_array()?
@@ -114,7 +122,7 @@ fn parse_upload_time_secs(file: &serde_json::Value, field: &str) -> Option<i64> 
 /// Rewrite the simple `/simple/<package>/` JSON response shape.
 ///
 /// Too-young distributions are removed from the `files` array.
-fn rewrite_simple_response(
+fn rewrite_simple(
     mut json: serde_json::Value,
     cutoff_secs: i64,
     released_packages: &RemoteReleasedPackagesList,
@@ -123,7 +131,7 @@ fn rewrite_simple_response(
     let mut package_name: Option<ArcStr> = None;
 
     json.get_mut("files")?.as_array_mut()?.retain(|file| {
-        match keep_file(file, cutoff_secs, released_packages) {
+        match simple_keep_file(file, cutoff_secs, released_packages) {
             FileDecision::Keep => true,
             FileDecision::Remove {
                 package_name: removed_package_name,
@@ -143,7 +151,7 @@ fn rewrite_simple_response(
     build_rewrite_result(json, package_name?, suppressed)
 }
 
-fn keep_file(
+fn simple_keep_file(
     file: &serde_json::Value,
     cutoff_secs: i64,
     released_packages: &RemoteReleasedPackagesList,
@@ -172,19 +180,17 @@ fn keep_file(
 
 /// Align `info.version` and `urls` with the newest remaining stable release after filtering.
 fn downgrade_info_version_and_urls(json: &mut serde_json::Value) {
-    let newest_stable = json
-        .get("releases")
-        .and_then(|r| r.as_object())
-        .and_then(|releases| {
-            releases
-                .iter()
-                .filter_map(|(version, files)| {
-                    let semver = PragmaticSemver::parse(version).ok()?;
-                    is_stable_version(version).then_some((semver, version.as_str(), files))
-                })
-                .max_by(|left, right| left.0.cmp(&right.0))
-                .map(|(_, version, files)| (version.to_owned(), files.clone()))
-        });
+    let newest_stable = (|| -> Option<_> {
+        let releases = json.get("releases")?.as_object()?;
+        releases
+            .iter()
+            .filter_map(|(version, files)| {
+                let semver = PragmaticSemver::parse(version).ok()?;
+                is_stable_version(version).then_some((semver, version.as_str(), files))
+            })
+            .max_by(|left, right| left.0.cmp(&right.0))
+            .map(|(_, version, files)| (version.to_owned(), files.clone()))
+    })();
 
     let (new_version, new_urls) = match newest_stable {
         Some((version, files)) => (Some(version), files),

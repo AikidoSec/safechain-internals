@@ -107,6 +107,9 @@ fn analyze_anchor_href(
         return AnchorDecision::Keep;
     };
 
+    // The HTML simple index only contains filenames and URLs — no upload timestamps.
+    // Unlike the JSON responses (which carry `upload_time_iso_8601` / `upload-time`),
+    // we can only consult the releases list here.
     if !released_packages.is_recently_released(
         package.name.as_str(),
         Some(&package.version),
