@@ -201,18 +201,26 @@ impl<K> TypedEcosystemConfig<K> {
     where
         K: PackageName + Eq + Hash,
     {
+        // destructure first, protects against future changes
+        // to struct (e.g. in case we add fields, this will fail to compile,
+        // forcing us to deal with it)
+        let EcosystemConfig {
+            block_all_installs,
+            request_installs,
+            minimum_allowed_age_timestamp,
+            exceptions,
+        } = raw;
+
         Self {
-            block_all_installs: raw.block_all_installs,
-            request_installs: raw.request_installs,
-            minimum_allowed_age_timestamp: raw.minimum_allowed_age_timestamp,
-            allowed_packages: raw
-                .exceptions
+            block_all_installs: *block_all_installs,
+            request_installs: *request_installs,
+            minimum_allowed_age_timestamp: *minimum_allowed_age_timestamp,
+            allowed_packages: exceptions
                 .allowed_packages
                 .iter()
                 .map(|package| K::normalize(package.as_str()))
                 .collect(),
-            rejected_packages: raw
-                .exceptions
+            rejected_packages: exceptions
                 .rejected_packages
                 .iter()
                 .map(|package| K::normalize(package.as_str()))
