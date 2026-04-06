@@ -4,11 +4,7 @@
     deny(clippy::unwrap_used, clippy::expect_used)
 )]
 
-use std::{
-    net::{SocketAddrV4, SocketAddrV6},
-    path::PathBuf,
-    time::Duration,
-};
+use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use rama::{
     error::{BoxError, ErrorContext},
@@ -44,11 +40,7 @@ pub mod utils;
 pub struct Args {
     /// network interface to bind the transparent proxy to
     #[arg(long, default_value = "127.0.0.1:0")]
-    pub bind_v4: SocketAddrV4,
-
-    /// network interface to bind the transparent proxy to
-    #[arg(long, default_value = "[::1]:0")]
-    pub bind_v6: SocketAddrV6,
+    pub bind: SocketAddr,
 
     /// secrets storage to use (e.g. for root CA)
     #[arg(
@@ -159,8 +151,7 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
     let agent_identity = AgentIdentity::load(&args.data);
 
     self::tcp::start_tcp_servers(
-        args.bind_v4,
-        Some(args.bind_v6),
+        args.bind,
         Executor::graceful(graceful.guard()),
         Duration::from_secs_f64(args.peek_duration.max(0.05)),
         agent_identity,

@@ -1,9 +1,4 @@
-use std::{
-    convert::Infallible,
-    net::{SocketAddrV4, SocketAddrV6},
-    sync::Arc,
-    time::Duration,
-};
+use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 
 use rama::{
     Layer, Service,
@@ -62,8 +57,7 @@ mod proxy_target;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn start_tcp_servers(
-    bind_v4: SocketAddrV4,
-    bind_v6: Option<SocketAddrV6>,
+    bind: SocketAddr,
     executor: Executor,
     peek_duration: Duration,
     agent_identity: Option<AgentIdentity>,
@@ -84,17 +78,10 @@ pub async fn start_tcp_servers(
     .await
     .context("create tcp service")?;
 
-    if let Some(bind_v6) = bind_v6 {
-        let tcp_listener_v6 = try_new_tcp_listener(executor.clone(), bind_v6.into())
-            .await
-            .context("create v6 tcp listener")?;
-        tokio::task::spawn(tcp_listener_v6.serve(tcp_svc.clone()));
-    }
-
-    let tcp_listener_v4 = try_new_tcp_listener(executor, bind_v4.into())
+    let tcp_listener = try_new_tcp_listener(executor, bind.into())
         .await
-        .context("create v4 tcp listener")?;
-    tokio::task::spawn(tcp_listener_v4.serve(tcp_svc));
+        .context("create tcp listener")?;
+    tokio::task::spawn(tcp_listener.serve(tcp_svc));
 
     Ok(())
 }
