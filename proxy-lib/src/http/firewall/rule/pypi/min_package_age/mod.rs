@@ -9,7 +9,7 @@ use rama::{
         },
     },
     telemetry::tracing,
-    utils::time::now_unix_ms,
+    utils::{str::arcstr::ArcStr, time::now_unix_ms},
 };
 
 use crate::{
@@ -56,7 +56,7 @@ pub(in crate::http::firewall) struct MinPackageAgePyPI {
 
 pub(super) struct RewriteResult {
     bytes: Vec<u8>,
-    package_name: rama::utils::str::arcstr::ArcStr,
+    package_name: ArcStr,
     suppressed_versions: Vec<String>,
 }
 
@@ -81,35 +81,70 @@ impl MinPackageAgePyPI {
         };
 
         let (mut parts, body) = resp.into_parts();
-        let bytes = body
-            .collect()
-            .await
-            .context("collect pypi info response body")?
-            .to_bytes();
 
-        let rewrite = match format {
+        match format {
             PyPIResponseFormat::Json => {
-                json::rewrite_response(&bytes, cutoff_secs, released_packages)
+                let bytes = body
+                    .collect()
+                    .await
+                    .context("collect pypi info response body")?
+                    .to_bytes();
+
+                let Some(rewrite) = json::rewrite_response(&bytes, cutoff_secs, released_packages)
+                else {
+                    return Ok(Response::from_parts(parts, Body::from(bytes)));
+                };
+
+                tracing::info!(
+                    package = %rewrite.package_name,
+                    suppressed_versions = ?rewrite.suppressed_versions,
+                    "PyPI metadata rewritten: suppressed too-young versions"
+                );
+
+                Self::make_uncacheable(&mut parts.headers);
+                self.notify_rewrite(&rewrite).await;
+
+                Ok(Response::from_parts(parts, Body::from(rewrite.bytes)))
             }
+
             PyPIResponseFormat::Html => {
-                html::rewrite_response(&bytes, cutoff_secs, released_packages)
+                // HTML is streamed through lol_html without buffering the full
+                // body. Cache headers are stripped upfront because
+                // we cannot know whether anything will be removed until the body
+                // is fully consumed.
+                Self::make_uncacheable(&mut parts.headers);
+
+                let notifier = self.notifier.clone();
+                let streaming_body = html::rewrite_body(
+                    body,
+                    cutoff_secs,
+                    released_packages.clone(),
+                    move |rewrite| {
+                        let Some(rewrite) = rewrite else {
+                            return;
+                        };
+
+                        tracing::info!(
+                            package = %rewrite.package_name,
+                            suppressed_versions = ?rewrite.suppressed_versions,
+                            "PyPI metadata rewritten: suppressed too-young versions"
+                        );
+
+                        if let Some(notifier) = notifier {
+                            let event = build_min_package_age_event(
+                                rewrite.package_name,
+                                rewrite.suppressed_versions,
+                            );
+                            tokio::spawn(async move {
+                                notifier.notify_min_package_age(event).await;
+                            });
+                        }
+                    },
+                );
+
+                Ok(Response::from_parts(parts, Body::new(streaming_body)))
             }
-        };
-
-        let Some(rewrite) = rewrite else {
-            return Ok(Response::from_parts(parts, Body::from(bytes)));
-        };
-
-        tracing::info!(
-            package = %rewrite.package_name,
-            suppressed_versions = ?rewrite.suppressed_versions,
-            "PyPI metadata rewritten: suppressed too-young versions"
-        );
-
-        Self::make_uncacheable(&mut parts.headers);
-        self.notify_rewrite(&rewrite).await;
-
-        Ok(Response::from_parts(parts, Body::from(rewrite.bytes)))
+        }
     }
 
     fn make_uncacheable(headers: &mut rama::http::HeaderMap) {
@@ -123,21 +158,30 @@ impl MinPackageAgePyPI {
         let Some(notifier) = &self.notifier else {
             return;
         };
-        let event = MinPackageAgeEvent {
-            ts_ms: now_unix_ms(),
-            artifact: Artifact {
-                product: "pypi".into(),
-                identifier: rewrite.package_name.clone(),
-                display_name: Some(rewrite.package_name.clone()),
-                version: None,
-            },
-            suppressed_versions: rewrite
-                .suppressed_versions
-                .iter()
-                .filter_map(|version| version.parse().ok())
-                .collect(),
-        };
+        let event = build_min_package_age_event(
+            rewrite.package_name.clone(),
+            rewrite.suppressed_versions.clone(),
+        );
         notifier.notify_min_package_age(event).await;
+    }
+}
+
+fn build_min_package_age_event(
+    package_name: ArcStr,
+    suppressed_versions: Vec<String>,
+) -> MinPackageAgeEvent {
+    MinPackageAgeEvent {
+        ts_ms: now_unix_ms(),
+        artifact: Artifact {
+            product: "pypi".into(),
+            identifier: package_name.clone(),
+            display_name: Some(package_name),
+            version: None,
+        },
+        suppressed_versions: suppressed_versions
+            .iter()
+            .filter_map(|v| v.parse().ok())
+            .collect(),
     }
 }
 

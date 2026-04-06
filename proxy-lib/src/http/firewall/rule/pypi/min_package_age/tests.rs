@@ -189,3 +189,60 @@ async fn does_not_strip_cache_headers_when_not_modified() {
         "max-age=3600"
     );
 }
+
+#[tokio::test]
+async fn removes_recent_links_from_simple_html() {
+    let body = r#"
+        <html><body>
+            <a href="https://files.pythonhosted.org/packages/source/m/my-package/my_package-1.0.0.tar.gz">old</a>
+            <a href="https://files.pythonhosted.org/packages/source/m/my-package/my_package-2.0.0.tar.gz">new</a>
+        </body></html>
+    "#;
+    let list = make_released_packages(&[("my-package", "2.0.0", 1), ("my-package", "1.0.0", 72)]);
+    let resp = Response::builder()
+        .header("content-type", "text/html")
+        .header("cache-control", "max-age=3600")
+        .body(Body::from(body.to_owned()))
+        .unwrap();
+
+    let result = MinPackageAgePyPI::new(None)
+        .remove_new_packages(resp, &list, default_cutoff_secs())
+        .await
+        .unwrap();
+
+    // Cache headers are always stripped for HTML (streaming — we can't defer headers).
+    assert_eq!(result.headers().get("cache-control").unwrap(), "no-cache");
+
+    let html = result.try_into_string().await.unwrap();
+    assert!(html.contains("my_package-1.0.0.tar.gz"));
+    assert!(!html.contains("my_package-2.0.0.tar.gz"));
+}
+
+#[tokio::test]
+async fn html_always_strips_cache_headers_even_when_unmodified() {
+    let body = r#"
+        <html><body>
+            <a href="https://files.pythonhosted.org/packages/source/m/my-package/my_package-1.0.0.tar.gz">old</a>
+        </body></html>
+    "#;
+    let list = make_released_packages(&[("my-package", "1.0.0", 72)]);
+    let resp = Response::builder()
+        .header("content-type", "text/html")
+        .header("etag", "abc123")
+        .header("cache-control", "max-age=3600")
+        .body(Body::from(body.to_owned()))
+        .unwrap();
+
+    let result = MinPackageAgePyPI::new(None)
+        .remove_new_packages(resp, &list, default_cutoff_secs())
+        .await
+        .unwrap();
+
+    // Even when nothing is filtered, HTML responses are always marked no-cache
+    // because the streaming path cannot defer header writes until body completion.
+    assert!(result.headers().get("etag").is_none());
+    assert_eq!(result.headers().get("cache-control").unwrap(), "no-cache");
+
+    let html = result.try_into_string().await.unwrap();
+    assert!(html.contains("my_package-1.0.0.tar.gz"));
+}
