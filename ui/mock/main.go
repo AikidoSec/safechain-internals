@@ -115,6 +115,13 @@ func seedData() ([]BlockEvent, []TlsEvent) {
 			Status:      "request_rejected",
 			Count:       1,
 		},
+		{
+			ID:          "block-5",
+			TsMs:        now - 90_000,
+			Artifact:    Artifact{Product: "npm", Identifier: "brand-new-lib", Version: "0.0.2", DisplayName: "brand-new-lib"},
+			BlockReason: "new_package",
+			Status:      "blocked",
+		},
 	}
 
 	tlsEvents := []TlsEvent{

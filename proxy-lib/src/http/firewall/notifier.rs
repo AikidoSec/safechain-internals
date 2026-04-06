@@ -230,6 +230,10 @@ async fn send_permissions_updated_event(
     reporting_endpoint: String,
     config: EndpointConfig,
 ) {
+    // NOTE: you are sending an entire cloned object here (EndpointConig),
+    // you probably want to instead send the arced (option version)
+    // instead in future... you can than still make it a `nop`-op in
+    // case the cfg is `None`.
     tracing::debug!(
         "sending permissions update notification (permission_group_id={})",
         config.permission_group.id,
