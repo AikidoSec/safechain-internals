@@ -121,6 +121,9 @@ async fn try_new_tcp_listener(
     .await
     .context("wait blocking socket (tcp) bind task")?
     .context("bind tcp socket")?;
+    socket
+        .listen(32_768)
+        .context("mark tcp socket ready for accepting connections")?;
 
     TcpListener::try_from_socket(socket, executor).context("create tcp listener from tcp socket")
 }
