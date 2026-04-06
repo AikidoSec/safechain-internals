@@ -56,7 +56,7 @@ use safechain_proxy_lib::{
 mod proxy_target;
 
 #[allow(clippy::too_many_arguments)]
-pub async fn start_tcp_servers(
+pub async fn start_tcp_server(
     bind: SocketAddr,
     executor: Executor,
     peek_duration: Duration,
@@ -65,7 +65,7 @@ pub async fn start_tcp_servers(
     aikido_url: Uri,
     data_storage: SyncCompactDataStorage,
     secret_storage: SyncSecrets,
-) -> Result<(), BoxError> {
+) -> Result<SocketAddress, BoxError> {
     let tcp_svc = try_new_tcp_service(
         executor.clone(),
         peek_duration,
@@ -81,9 +81,14 @@ pub async fn start_tcp_servers(
     let tcp_listener = try_new_tcp_listener(executor, bind.into())
         .await
         .context("create tcp listener")?;
+
+    let tcp_addr = tcp_listener
+        .local_addr()
+        .context("retrieve local socket addr of (tcp) server (listener)")?;
+
     tokio::task::spawn(tcp_listener.serve(tcp_svc));
 
-    Ok(())
+    Ok(tcp_addr.into())
 }
 
 async fn try_new_tcp_listener(

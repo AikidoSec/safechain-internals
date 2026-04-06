@@ -4,12 +4,17 @@
     deny(clippy::unwrap_used, clippy::expect_used)
 )]
 
-use std::{net::SocketAddr, path::PathBuf, time::Duration};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use rama::{
     error::{BoxError, ErrorContext},
     graceful,
     http::Uri,
+    net::address::SocketAddress,
     rt::Executor,
     telemetry::tracing,
 };
@@ -150,7 +155,7 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
 
     let agent_identity = AgentIdentity::load(&args.data);
 
-    self::tcp::start_tcp_servers(
+    let tcp_server_addr = self::tcp::start_tcp_server(
         args.bind,
         Executor::graceful(graceful.guard()),
         Duration::from_secs_f64(args.peek_duration.max(0.05)),
@@ -163,6 +168,16 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
     .await
     .context("start tcp services")?;
 
+    tracing::info!(
+        address = %tcp_server_addr,
+        "tcp server up and running",
+    );
+
+    write_server_socket_address_as_file(&args.data, tcp_server_addr)
+        .await
+        .context("write server addr to fs")
+        .context_debug_field("dir", args.data)?;
+
     let delay = match graceful_timeout {
         Some(duration) => graceful.shutdown_with_limit(duration).await?,
         None => graceful.shutdown().await,
@@ -170,4 +185,17 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
 
     tracing::info!("gracefully shutdown with a delay of: {delay:?}");
     Ok(())
+}
+
+async fn write_server_socket_address_as_file(
+    dir: &Path,
+    addr: SocketAddress,
+) -> Result<(), BoxError> {
+    let kind = if addr.ip_addr.is_ipv4() { "v4" } else { "v6" };
+    let path = dir.join(format!("l4_proxy.addr.{kind}.txt"));
+    tokio::fs::write(&path, addr.to_string())
+        .await
+        .context("write server's socket address to file")
+        .context_field("address", addr)
+        .with_context_debug_field("path", || path.to_owned())
 }
