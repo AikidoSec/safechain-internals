@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import type { BlockEvent, BlockReason } from "../types";
 import { getEvent, requestAccess } from "../api";
 import { Events } from "@wailsio/runtime";
-import { getToolIcon } from "../constants";
+import { BLOCK_REASON_LABEL, getToolIcon } from "../constants";
 import { formatEventTime, isConnectionError } from "../utils";
 
 const BLOCK_REASON_INFO: Record<BlockReason, { title: string; description: string }> = {
@@ -27,14 +27,6 @@ const BLOCK_REASON_INFO: Record<BlockReason, { title: string; description: strin
     title: "Package Too New",
     description: "This package was blocked because it was published too recently and hasn't met the minimum package age policy. New packages need time to be vetted by the community before they can be installed.",
   },
-};
-
-const BLOCK_REASON_LABEL: Record<BlockReason, string> = {
-  malware: "Malware",
-  rejected: "Rejected by policy",
-  block_all: "All Installs Blocked",
-  request_install: "Approval required",
-  new_package: "Too recently published",
 };
 
 function EventInfo({ event }: { event: BlockEvent }) {

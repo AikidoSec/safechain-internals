@@ -148,10 +148,10 @@ body {
   vertical-align: middle;
 }
 
-.events-list th:nth-child(1) { width: 50px; } 
+.events-list th:nth-child(1) { width: 40px; } 
 .events-list th:nth-child(2) { width: 140px; }
-.events-list th:nth-child(3) { width: 28%; }
-.events-list th:nth-child(4) { width: 88px; }
+.events-list th:nth-child(3) { width: 30%; }
+.events-list th:nth-child(4) { width: 150px; }
 
 .events-list thead tr {
   border-bottom: 1px solid var(--carbon-20);
@@ -170,6 +170,11 @@ body {
 }
 
 .events-list .event-time { white-space: nowrap; }
+
+.events-list td:nth-child(4) {
+  white-space: nowrap;
+  overflow: visible;
+}
 .events-list .event-product { vertical-align: middle; }
 .events-list .event-product-icon {
   height: 16px;
@@ -829,8 +834,6 @@ body {
 .protected-ecosystems-table-wrap {
   overflow-x: auto;
   width: 100%;
-  border: 1px solid var(--carbon-20);
-  border-radius: 6px;
   background: var(--white);
 }
 
@@ -839,31 +842,6 @@ body {
   border-collapse: collapse;
   font-size: 13px;
   table-layout: fixed;
-}
-
-.protected-ecosystems-table thead tr {
-  background: var(--carbon-5);
-  border-bottom: 1px solid var(--carbon-20);
-}
-
-.protected-ecosystems-table th {
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--primary-aik-140);
-  text-align: left;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--carbon-20);
-  vertical-align: middle;
-}
-
-.protected-ecosystems-table th:first-child {
-  border-right: 1px solid var(--carbon-20);
-}
-
-.protected-ecosystems-table__icon-col {
-  width: 48px;
-  padding-left: 0;
-  padding-right: 0;
 }
 
 .protected-ecosystems-table tbody tr {
@@ -881,7 +859,6 @@ body {
 }
 
 .protected-ecosystems-table td:first-child {
-  border-right: 1px solid var(--carbon-20);
   text-align: center;
   width: 48px;
   padding-left: 6px;

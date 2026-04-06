@@ -117,6 +117,9 @@ func mainWindowOpts() application.WebviewWindowOptions {
 			HiddenOnTaskbar: true,
 		},
 		HideOnEscape: true,
+		Mac: application.MacWindow{
+			CollectionBehavior: application.MacWindowCollectionBehaviorMoveToActiveSpace,
+		},
 	}
 }
 
