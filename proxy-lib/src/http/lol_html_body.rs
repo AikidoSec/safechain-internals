@@ -94,12 +94,11 @@ impl StreamingBody for LolHtmlBody {
                 Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),
 
                 Poll::Ready(Some(Ok(frame))) => match frame.into_data() {
-                    // The inner body produced another frame
                     Ok(data) => {
-                        let maybe_rewriter = this.rewriter.get_mut();
-                        if let Some(rewriter) = maybe_rewriter.as_mut()
-                            && let Err(e) = rewriter.write(&data)
-                        {
+                        let Some(rewriter) = this.rewriter.get_mut().as_mut() else {
+                            continue;
+                        };
+                        if let Err(e) = rewriter.write(&data) {
                             return Poll::Ready(Some(Err(e.into())));
                         }
                     }

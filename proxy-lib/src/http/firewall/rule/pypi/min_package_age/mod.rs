@@ -120,28 +120,7 @@ impl MinPackageAgePyPI {
                     body,
                     cutoff_secs,
                     released_packages.clone(),
-                    move |rewrite| {
-                        let Some(rewrite) = rewrite else {
-                            return;
-                        };
-
-                        tracing::info!(
-                            format = "simple-html",
-                            package = %rewrite.package_name,
-                            suppressed_versions = ?rewrite.suppressed_versions,
-                            "PyPI metadata rewritten: suppressed too-young versions"
-                        );
-
-                        if let Some(notifier) = notifier {
-                            let event = build_min_package_age_event(
-                                rewrite.package_name,
-                                rewrite.suppressed_versions,
-                            );
-                            tokio::spawn(async move {
-                                notifier.notify_min_package_age(event).await;
-                            });
-                        }
-                    },
+                    move |rewrite| on_html_rewrite_end(rewrite, notifier),
                 );
 
                 Ok(Response::from_parts(parts, Body::new(streaming_body)))
@@ -165,6 +144,26 @@ impl MinPackageAgePyPI {
             rewrite.suppressed_versions.clone(),
         );
         notifier.notify_min_package_age(event).await;
+    }
+}
+
+fn on_html_rewrite_end(rewrite: Option<html::HtmlRewriteOutcome>, notifier: Option<EventNotifier>) {
+    let Some(rewrite) = rewrite else {
+        return;
+    };
+
+    tracing::info!(
+        format = "simple-html",
+        package = %rewrite.package_name,
+        suppressed_versions = ?rewrite.suppressed_versions,
+        "PyPI metadata rewritten: suppressed too-young versions"
+    );
+
+    if let Some(notifier) = notifier {
+        let event = build_min_package_age_event(rewrite.package_name, rewrite.suppressed_versions);
+        tokio::spawn(async move {
+            notifier.notify_min_package_age(event).await;
+        });
     }
 }
 
