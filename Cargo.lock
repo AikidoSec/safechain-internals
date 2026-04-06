@@ -2659,7 +2659,6 @@ name = "safechain-l4-proxy"
 version = "1.0.0"
 dependencies = [
  "clap",
- "libc",
  "mimalloc",
  "postcard",
  "rama",
@@ -2742,7 +2741,6 @@ dependencies = [
 name = "safechain-proxy-lib-windows-core"
 version = "1.0.0"
 dependencies = [
- "postcard",
  "serde",
 ]
 

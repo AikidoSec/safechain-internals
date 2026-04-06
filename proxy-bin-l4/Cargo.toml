@@ -11,7 +11,6 @@ readme = "../docs/proxy.md"
 
 [target.'cfg(target_family = "unix")'.dependencies]
 jemallocator = { workspace = true }
-libc = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 mimalloc = { workspace = true }
