@@ -34,7 +34,7 @@ fn rewrite(json: serde_json::Value, entries: &[(&str, &str, i64)]) -> Option<ser
     let list = released(entries);
     let cutoff = now_unix_ms() / 1000 - 48 * 3600;
     let result = rewrite_response(&bytes, cutoff, &list)?;
-    serde_json::from_slice(&result.bytes).ok()
+    serde_json::from_slice(&result.1.bytes).ok()
 }
 
 // --- legacy JSON (/pypi/<pkg>/json) ---

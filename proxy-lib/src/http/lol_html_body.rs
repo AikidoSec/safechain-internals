@@ -20,7 +20,7 @@ use sync_wrapper::SyncWrapper;
 type Sink = Box<dyn FnMut(&[u8]) + Send>;
 type PendingFrames = Arc<Mutex<VecDeque<Frame<Bytes>>>>;
 
-/// A Rama:Body wrapper that feeds each incoming chunk through an htmlrewriter.
+/// A Rama Body wrapper that feeds each incoming chunk through an HTML rewriter.
 pub(crate) struct LolHtmlBody {
     inner: Body,
     rewriter: SyncWrapper<Option<HtmlRewriter<'static, Sink>>>,
@@ -77,7 +77,8 @@ impl StreamingBody for LolHtmlBody {
                 Poll::Pending => return Poll::Pending,
 
                 Poll::Ready(None) => {
-                    // The inner body reached EOF
+                    // The inner body reached EOF, so finalize the rewriter and
+                    // fire the completion callback once.
                     let maybe_rewriter = this.rewriter.get_mut();
                     if let Some(rewriter) = maybe_rewriter.take()
                         && let Err(e) = rewriter.end()

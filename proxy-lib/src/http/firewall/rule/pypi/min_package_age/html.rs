@@ -6,7 +6,7 @@ use rama::{http::Body, utils::str::arcstr::ArcStr};
 
 use crate::{http::LolHtmlBody, package::released_packages_list::RemoteReleasedPackagesList};
 
-use super::super::parser::parse_package_info_from_url;
+use crate::http::firewall::rule::pypi::parser::parse_package_info_from_url;
 
 pub(super) struct HtmlRewriteOutcome {
     pub package_name: ArcStr,

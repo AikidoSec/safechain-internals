@@ -13,6 +13,20 @@ use super::super::parser::{
 };
 use super::RewriteResult;
 
+pub(super) enum JsonRewriteKind {
+    Legacy,
+    Simple,
+}
+
+impl JsonRewriteKind {
+    pub(super) const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Legacy => "legacy-json",
+            Self::Simple => "simple-json",
+        }
+    }
+}
+
 enum FileDecision {
     Keep,
     Remove {
@@ -30,14 +44,16 @@ pub(super) fn rewrite_response(
     bytes: &[u8],
     cutoff_secs: i64,
     released_packages: &RemoteReleasedPackagesList,
-) -> Option<RewriteResult> {
+) -> Option<(JsonRewriteKind, RewriteResult)> {
     let json: serde_json::Value = serde_json::from_slice(bytes).ok()?;
 
     if json.get("releases").and_then(|r| r.as_object()).is_some() {
-        return rewrite_legacy(json, cutoff_secs, released_packages);
+        return rewrite_legacy(json, cutoff_secs, released_packages)
+            .map(|rewrite| (JsonRewriteKind::Legacy, rewrite));
     }
 
     rewrite_simple(json, cutoff_secs, released_packages)
+        .map(|rewrite| (JsonRewriteKind::Simple, rewrite))
 }
 
 /// Rewrite the legacy `/pypi/<package>/json` response shape.

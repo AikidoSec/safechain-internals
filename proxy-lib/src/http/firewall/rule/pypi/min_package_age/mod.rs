@@ -90,12 +90,14 @@ impl MinPackageAgePyPI {
                     .context("collect pypi info response body")?
                     .to_bytes();
 
-                let Some(rewrite) = json::rewrite_response(&bytes, cutoff_secs, released_packages)
+                let Some((rewrite_kind, rewrite)) =
+                    json::rewrite_response(&bytes, cutoff_secs, released_packages)
                 else {
                     return Ok(Response::from_parts(parts, Body::from(bytes)));
                 };
 
                 tracing::info!(
+                    format = rewrite_kind.as_str(),
                     package = %rewrite.package_name,
                     suppressed_versions = ?rewrite.suppressed_versions,
                     "PyPI metadata rewritten: suppressed too-young versions"
@@ -125,6 +127,7 @@ impl MinPackageAgePyPI {
                         };
 
                         tracing::info!(
+                            format = "simple-html",
                             package = %rewrite.package_name,
                             suppressed_versions = ?rewrite.suppressed_versions,
                             "PyPI metadata rewritten: suppressed too-young versions"
