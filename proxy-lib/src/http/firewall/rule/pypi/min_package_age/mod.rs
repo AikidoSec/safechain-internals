@@ -54,7 +54,7 @@ pub(in crate::http::firewall) struct MinPackageAgePyPI {
     notifier: Option<EventNotifier>,
 }
 
-pub(super) struct RewriteResult {
+pub(super) struct JsonRewriteResult {
     bytes: Vec<u8>,
     package_name: ArcStr,
     suppressed_versions: Vec<String>,
@@ -110,10 +110,9 @@ impl MinPackageAgePyPI {
             }
 
             PyPIResponseFormat::Html => {
-                // HTML is streamed through lol_html without buffering the full
-                // body. Cache headers are stripped upfront because
-                // we cannot know whether anything will be removed until the body
-                // is fully consumed.
+                // HTML is streamed through lol_html without buffering the full body.
+                // Cache headers are stripped upfront because we cannot defer
+                // header writes until the body is fully consumed.
                 Self::make_uncacheable(&mut parts.headers);
 
                 let notifier = self.notifier.clone();
@@ -157,7 +156,7 @@ impl MinPackageAgePyPI {
         headers.typed_insert(CacheControl::new().with_no_cache());
     }
 
-    async fn notify_rewrite(&self, rewrite: &RewriteResult) {
+    async fn notify_rewrite(&self, rewrite: &JsonRewriteResult) {
         let Some(notifier) = &self.notifier else {
             return;
         };

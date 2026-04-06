@@ -91,7 +91,7 @@ async fn rewrite_html(
 }
 
 #[tokio::test]
-async fn rewrite_response_removes_recent_links_from_simple_html() {
+async fn rewrite_body_removes_recent_links_from_simple_html() {
     let body = r#"
         <html><body>
             <a href="https://files.pythonhosted.org/packages/source/m/my-package/my_package-1.0.0.tar.gz">old</a>
@@ -109,7 +109,7 @@ async fn rewrite_response_removes_recent_links_from_simple_html() {
 }
 
 #[tokio::test]
-async fn rewrite_response_returns_none_when_html_is_unchanged() {
+async fn rewrite_body_returns_none_when_html_is_unchanged() {
     let body = r#"
         <html><body>
             <a href="https://files.pythonhosted.org/packages/source/m/my-package/my_package-1.0.0.tar.gz">old</a>

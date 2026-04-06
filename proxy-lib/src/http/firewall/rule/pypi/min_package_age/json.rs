@@ -11,7 +11,7 @@ use super::super::parser::{
     PackageInfo, normalize_package_name, parse_package_info_from_filename,
     parse_package_info_from_url,
 };
-use super::RewriteResult;
+use super::JsonRewriteResult;
 
 pub(super) enum JsonRewriteKind {
     Legacy,
@@ -44,7 +44,7 @@ pub(super) fn rewrite_response(
     bytes: &[u8],
     cutoff_secs: i64,
     released_packages: &RemoteReleasedPackagesList,
-) -> Option<(JsonRewriteKind, RewriteResult)> {
+) -> Option<(JsonRewriteKind, JsonRewriteResult)> {
     let json: serde_json::Value = serde_json::from_slice(bytes).ok()?;
 
     if json.get("releases").and_then(|r| r.as_object()).is_some() {
@@ -64,7 +64,7 @@ fn rewrite_legacy(
     mut json: serde_json::Value,
     cutoff_secs: i64,
     released_packages: &RemoteReleasedPackagesList,
-) -> Option<RewriteResult> {
+) -> Option<JsonRewriteResult> {
     let package_name = package_name_from_legacy_json(&json);
     let mut suppressed: BTreeSet<String> = BTreeSet::new();
 
@@ -142,7 +142,7 @@ fn rewrite_simple(
     mut json: serde_json::Value,
     cutoff_secs: i64,
     released_packages: &RemoteReleasedPackagesList,
-) -> Option<RewriteResult> {
+) -> Option<JsonRewriteResult> {
     let mut suppressed: BTreeSet<String> = BTreeSet::new();
     let mut package_name: Option<ArcStr> = None;
 
@@ -239,8 +239,8 @@ fn build_rewrite_result(
     json: serde_json::Value,
     package_name: ArcStr,
     suppressed: BTreeSet<String>,
-) -> Option<RewriteResult> {
-    Some(RewriteResult {
+) -> Option<JsonRewriteResult> {
+    Some(JsonRewriteResult {
         bytes: serde_json::to_vec(&json).ok()?,
         package_name,
         suppressed_versions: suppressed.into_iter().collect(),
