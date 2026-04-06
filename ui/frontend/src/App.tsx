@@ -73,7 +73,7 @@ function App() {
             to="/protected-ecosystems"
             className={({ isActive }) => `app-tab${isActive ? " app-tab--active" : ""}`}
           >
-            Protected ecosystems
+            Protected Ecosystems
           </NavLink>
         </nav>
         <main className="dashboard">
