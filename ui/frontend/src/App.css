@@ -834,8 +834,6 @@ body {
 .protected-ecosystems-table-wrap {
   overflow-x: auto;
   width: 100%;
-  border: 1px solid var(--carbon-20);
-  border-radius: 6px;
   background: var(--white);
 }
 
@@ -844,31 +842,6 @@ body {
   border-collapse: collapse;
   font-size: 13px;
   table-layout: fixed;
-}
-
-.protected-ecosystems-table thead tr {
-  background: var(--carbon-5);
-  border-bottom: 1px solid var(--carbon-20);
-}
-
-.protected-ecosystems-table th {
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--primary-aik-140);
-  text-align: left;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--carbon-20);
-  vertical-align: middle;
-}
-
-.protected-ecosystems-table th:first-child {
-  border-right: 1px solid var(--carbon-20);
-}
-
-.protected-ecosystems-table__icon-col {
-  width: 48px;
-  padding-left: 0;
-  padding-right: 0;
 }
 
 .protected-ecosystems-table tbody tr {
@@ -886,7 +859,6 @@ body {
 }
 
 .protected-ecosystems-table td:first-child {
-  border-right: 1px solid var(--carbon-20);
   text-align: center;
   width: 48px;
   padding-left: 6px;
