@@ -191,7 +191,7 @@ async fn try_new_tcp_service(
     Ok(Arc::new(
         (
             ConsumeErrLayer::trace_as_debug(),
-            self::proxy_target::ExtractProxyTargetFromTcpStreamLayer,
+            self::proxy_target::new_proxy_target_from_input_layer(),
             IoToProxyBridgeIoLayer::extension_proxy_target_with_connector(
                 new_tcp_connector_service_for_proxy(executor),
             ),
