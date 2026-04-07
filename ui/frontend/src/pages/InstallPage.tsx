@@ -28,7 +28,7 @@ export function InstallPage() {
 
   const done = phase === "done";
   const step1ButtonDisabled = phase === "working" || success === true;
-  const step1ButtonLabel = phase === "working" ? "Installing…" : success === true ? "Installed" : "Open";
+  const step1ButtonLabel = phase === "working" ? "Installing…" : success === true ? "Installed" : "Install";
 
   const showBottomBar = (wizardStep === 0 && success === true) || wizardStep === 1;
 
@@ -58,7 +58,7 @@ export function InstallPage() {
           ) : (
             <>
               <div className="install-page__main">
-                <h1 className="install-page__title">Allow us to install the endpoint certificate so we can help protect your system</h1>
+                <h1 className="install-page__title">Just a few more steps</h1>
                 <ol className="install-page__steps">
                   <li className={`install-page__step${success === true ? " install-page__step--done" : ""}`}>
                     <div className="install-page__step-badge" aria-hidden>
@@ -67,10 +67,9 @@ export function InstallPage() {
                     <div className="install-page__step-body">
                       <div className="install-page__step-row">
                         <div>
-                          <p className="install-page__step-title">Install the endpoint certificate.</p>
+                          <p className="install-page__step-title">Install the Aikido Endpoint certificate.</p>
                           <p className="install-page__step-hint">
-                            When you continue, macOS may show security prompts—complete them to add the certificate to the
-                            system keychain.
+                            Aikido Endpoint needs to install a certificate in the system keychain to verify installs secure your device. macOS will ask for your approval.
                           </p>
                         </div>
                         <button
