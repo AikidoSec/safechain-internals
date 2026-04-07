@@ -5,7 +5,7 @@ pub mod service;
 mod content_type;
 pub use content_type::KnownContentType;
 
-pub(crate) mod lol_html_body;
+mod lol_html_body;
 pub(crate) use lol_html_body::LolHtmlBody;
 
 mod req_info;
