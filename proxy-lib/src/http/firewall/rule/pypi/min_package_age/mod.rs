@@ -181,7 +181,10 @@ fn build_min_package_age_event(
         },
         suppressed_versions: suppressed_versions
             .iter()
-            .filter_map(|v| v.parse().ok())
+            .map(|v| {
+                let Ok(v) = v.parse();
+                v
+            })
             .collect(),
     }
 }
