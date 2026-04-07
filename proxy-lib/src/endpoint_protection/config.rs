@@ -25,7 +25,7 @@ use super::types::{EcosystemConfig, EndpointConfig};
 
 #[derive(Clone)]
 pub struct RemoteEndpointConfig {
-    config: Arc<ArcSwap<EndpointConfig>>,
+    config: Arc<ArcSwap<Option<EndpointConfig>>>,
     trigger_notify: Arc<tokio::sync::Notify>,
 }
 
@@ -72,12 +72,12 @@ impl RemoteEndpointConfig {
         };
 
         let (endpoint_config, e_tag) = match config_client.load_cached_config().await {
-            Ok(Some(cached_info)) => {
+            Ok(Some((endpoint_config, e_tag))) => {
                 tracing::debug!(
                     "create new remote endpoint config (uri: {}) with cached config",
                     config_client.uri
                 );
-                cached_info
+                (Some(endpoint_config), e_tag)
             }
             Ok(None) => {
                 tracing::debug!(
@@ -85,11 +85,27 @@ impl RemoteEndpointConfig {
                     config_client.uri
                 );
 
-                config_client
-                    .download_config(None)
-                    .await
-                    .context("download new endpoint config")?
-                    .context("new endpoint config not available")?
+                #[cfg(not(any(
+                    not(feature = "apple-networkextension"),
+                    feature = "test-utils",
+                    test
+                )))]
+                {
+                    // In a macOS L4 Network System Extension, heavy work during `startProxy`
+                    // can exhaust the stack and crash the extension. We therefore defer this
+                    // if not yet available, and perform the download later in a background task.
+                    Default::default()
+                }
+
+                #[cfg(any(not(feature = "apple-networkextension"), feature = "test-utils", test))]
+                {
+                    let (endpoint_config, e_tag) = config_client
+                        .download_config(None)
+                        .await
+                        .context("download new endpoint config")?
+                        .context("new endpoint config not available")?;
+                    (Some(endpoint_config), e_tag)
+                }
             }
             Err(err) => {
                 tracing::warn!(
@@ -97,16 +113,34 @@ impl RemoteEndpointConfig {
                     config_client.uri
                 );
 
-                config_client
-                    .download_config(None)
-                    .await
-                    .context("download new endpoint config")?
-                    .context("new endpoint config not available")?
+                #[cfg(not(any(
+                    not(feature = "apple-networkextension"),
+                    feature = "test-utils",
+                    test
+                )))]
+                {
+                    // In a macOS L4 Network System Extension, heavy work during `startProxy`
+                    // can exhaust the stack and crash the extension. We therefore defer this
+                    // if not yet available, and perform the download later in a background task.
+                    Default::default()
+                }
+
+                #[cfg(any(not(feature = "apple-networkextension"), feature = "test-utils", test))]
+                {
+                    let (endpoint_config, e_tag) = config_client
+                        .download_config(None)
+                        .await
+                        .context("download new endpoint config")?
+                        .context("new endpoint config not available")?;
+                    (Some(endpoint_config), e_tag)
+                }
             }
         };
 
         // Notify the daemon of the initial permissions on startup
-        if let Some(ref notifier) = notifier {
+        if let Some(ref notifier) = notifier
+            && let Some(endpoint_config) = endpoint_config.clone()
+        {
             notifier.notify_permissions_updated(endpoint_config.clone());
         }
 
@@ -128,10 +162,6 @@ impl RemoteEndpointConfig {
         })
     }
 
-    pub fn get(&self) -> Arc<EndpointConfig> {
-        self.config.load_full()
-    }
-
     pub fn get_ecosystem_config<'a>(&self, ecosystem: &'a str) -> EcosystemConfigResult<'a> {
         let guard = self.config.load();
         EcosystemConfigResult { ecosystem, guard }
@@ -145,12 +175,15 @@ impl RemoteEndpointConfig {
 
 pub struct EcosystemConfigResult<'a> {
     ecosystem: &'a str,
-    guard: Guard<Arc<EndpointConfig>>,
+    guard: Guard<Arc<Option<EndpointConfig>>>,
 }
 
 impl EcosystemConfigResult<'_> {
     pub fn config(&self) -> Option<&EcosystemConfig> {
-        self.guard.ecosystems.get(self.ecosystem)
+        self.guard
+            .as_ref()
+            .as_ref()
+            .and_then(|cfg| cfg.ecosystems.get(self.ecosystem))
     }
 }
 
@@ -301,7 +334,7 @@ async fn config_update_loop<C>(
     guard: ShutdownGuard,
     client: RemoteConfigClient<C>,
     e_tag: Option<ArcStr>,
-    shared_config: Arc<ArcSwap<EndpointConfig>>,
+    shared_config: Arc<ArcSwap<Option<EndpointConfig>>>,
     trigger_notify: Arc<tokio::sync::Notify>,
     notifier: Option<EventNotifier>,
 ) where
@@ -312,7 +345,11 @@ async fn config_update_loop<C>(
         client.uri
     );
 
-    let mut sleep_for = with_jitter(client.refresh_interval);
+    let mut sleep_for = if e_tag.is_some() {
+        with_jitter(client.refresh_interval)
+    } else {
+        Duration::ZERO
+    };
     let mut latest_e_tag = e_tag;
 
     loop {
@@ -352,7 +389,7 @@ async fn config_update_loop<C>(
                 if let Some(ref notifier) = notifier {
                     notifier.notify_permissions_updated(fresh_config.clone());
                 }
-                shared_config.store(Arc::new(fresh_config));
+                shared_config.store(Arc::new(Some(fresh_config)));
                 sleep_for = with_jitter(client.refresh_interval);
                 latest_e_tag = fresh_e_tag;
             }

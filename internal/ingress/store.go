@@ -23,14 +23,29 @@ func (e *eventStore) Add(ev BlockEvent) BlockEvent {
 		Artifact:    ev.Artifact,
 		BlockReason: ev.BlockReason,
 		Status:      "blocked",
+		Count:       1,
 	}
+
 	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.events = append(e.events, blocked)
 	if len(e.events) > maxEvents {
 		e.events = e.events[len(e.events)-maxEvents:]
 	}
-	e.mu.Unlock()
 	return blocked
+}
+
+func (e *eventStore) MergeChromeBlockIfDuplicate(ev BlockEvent) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for i := range e.events {
+		if e.events[i].Artifact == ev.Artifact {
+			e.events[i].Count++
+			e.events[i].TsMs = ev.TsMs
+			return true
+		}
+	}
+	return false
 }
 
 // Get returns the event with the given id and true, or zero value and false if not found.
