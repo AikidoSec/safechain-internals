@@ -27,7 +27,6 @@ fn flow<'a>(domain: &'a Domain, app_bundle_id: Option<&'a str>) -> IncomingFlowI
     }
 }
 
-
 #[test]
 fn test_matches_no_bundle_id_returns_false() {
     let app = wildcard_app("com.docker.docker");

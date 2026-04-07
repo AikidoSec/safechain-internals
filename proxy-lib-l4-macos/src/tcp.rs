@@ -76,8 +76,6 @@ pub(super) async fn try_new_service(
         .cloned()
         .context("L4 engine runtime is expected to inject shutdown guard")?;
 
-    tracing::debug!("initializing remote app passthrough list");
-
     tracing::debug!("creating firewall state for transparent proxy extension");
     let firewall = create_firewall(
         guard,
