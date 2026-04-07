@@ -208,12 +208,3 @@ macos-l4-stop:
 
 run-macos-l4-proxy *ARGS: macos-l4-install-signed
     just macos-l4-start {{ARGS}}
-
-[working-directory: './proxy-lib-l4-windows-driver']
-windows-driver-build profile="dev" *ARGS:
-   @cargo install cargo-wdk
-   @cargo install cargo-make
-   cargo wdk build --profile {{profile}} {{ARGS}}
-
-windows-driver-build-verify profile="dev" *ARGS:
-    just windows-driver-build {{profile}} --verify-signature {{ARGS}}
