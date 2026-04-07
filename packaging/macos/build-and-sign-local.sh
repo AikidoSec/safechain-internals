@@ -128,15 +128,15 @@ xcodebuild \
 
 cd "$PROJECT_DIR"
 
-L4_APP_SRC="$L4_DERIVED_DATA/Build/Products/Release/Aikido Proxy.app"
+L4_APP_SRC="$L4_DERIVED_DATA/Build/Products/Release/Aikido Network Extension.app"
 if [ ! -d "$L4_APP_SRC" ]; then
     echo "✗ L4 proxy app build failed — app bundle not found at $L4_APP_SRC"
     exit 1
 fi
 
-rm -rf "bin/Aikido Proxy.app"
-ditto "$L4_APP_SRC" "bin/Aikido Proxy.app"
-echo "✓ L4 Proxy app built: bin/Aikido Proxy.app"
+rm -rf "bin/Aikido Network Extension.app"
+ditto "$L4_APP_SRC" "bin/Aikido Network Extension.app"
+echo "✓ L4 Network Extension app built: bin/Aikido Network Extension.app"
 
 lipo -info bin/endpoint-protection-darwin-universal
 lipo -info "bin/endpoint-protection-ui-darwin-universal.app/Contents/MacOS/$APP_BINARY_NAME"
@@ -193,7 +193,7 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
     echo "✓ Binary signatures verified"
 
     echo "Verifying L4 proxy app signature (signed by Xcode)..."
-    codesign --verify --verbose --deep "$PROJECT_DIR/bin/Aikido Proxy.app"
+    codesign --verify --verbose --deep "$PROJECT_DIR/bin/Aikido Network Extension.app"
     echo "✓ L4 Proxy app signature verified"
     echo ""
 else

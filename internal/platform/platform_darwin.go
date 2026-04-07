@@ -27,7 +27,7 @@ const (
 	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
 	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
 	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
-	SafeChainL4ProxyHostPath     = "/Applications/Aikido Proxy.app/Contents/MacOS/Aikido Proxy"
+	SafeChainL4ProxyHostPath     = "/Applications/Aikido Network Extension.app/Contents/MacOS/Aikido Network Extension"
 	SafeChainSbomJSONName        = "endpoint-protection-sbom.json"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"

@@ -107,14 +107,14 @@ jobs:
 
       - name: Prepare L4 proxy app artifact
         run: |
-          ditto "${{ github.workspace }}/l4-derived-data/Build/Products/Release/Aikido Proxy.app" \
-            "Aikido Proxy.app"
+          ditto "${{ github.workspace }}/l4-derived-data/Build/Products/Release/Aikido Network Extension.app" \
+            "Aikido Network Extension.app"
 
       - name: Upload L4 proxy app artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Aikido Proxy.app
-          path: Aikido Proxy.app
+          name: Aikido Network Extension.app
+          path: Aikido Network Extension.app
 
   build-pkg:
     needs: [build-unix, build-l4-proxy-macos-app]
@@ -183,13 +183,13 @@ jobs:
       - name: Download L4 proxy macOS app artifact
         uses: actions/download-artifact@v4
         with:
-          name: Aikido Proxy.app
+          name: Aikido Network Extension.app
           path: bin/l4-app-download
 
       - name: Restore L4 proxy app bundle layout
         run: |
-          mkdir -p "bin/Aikido Proxy.app"
-          mv bin/l4-app-download/* "bin/Aikido Proxy.app/"
+          mkdir -p "bin/Aikido Network Extension.app"
+          mv bin/l4-app-download/* "bin/Aikido Network Extension.app/"
           rm -rf bin/l4-app-download
 
       - name: Create universal binaries
@@ -265,7 +265,7 @@ jobs:
           L4_HOST_PROVISION_PROFILE_B64: ${{ secrets.L4_HOST_PROVISION_PROFILE_B64 }}
           L4_EXT_PROVISION_PROFILE_B64: ${{ secrets.L4_EXT_PROVISION_PROFILE_B64 }}
         run: |
-          APP="bin/Aikido Proxy.app"
+          APP="bin/Aikido Network Extension.app"
           SYSEXT="$APP/Contents/Library/SystemExtensions/com.aikido.endpoint.proxy.l4.dist.extension.systemextension"
 
           if [ -z "$L4_HOST_PROVISION_PROFILE_B64" ] || [ -z "$L4_EXT_PROVISION_PROFILE_B64" ]; then
@@ -298,8 +298,8 @@ jobs:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          SYSEXT="bin/Aikido Proxy.app/Contents/Library/SystemExtensions/com.aikido.endpoint.proxy.l4.dist.extension.systemextension"
-          APP="bin/Aikido Proxy.app"
+          SYSEXT="bin/Aikido Network Extension.app/Contents/Library/SystemExtensions/com.aikido.endpoint.proxy.l4.dist.extension.systemextension"
+          APP="bin/Aikido Network Extension.app"
 
           echo "Signing L4 system extension..."
           codesign --force --sign "$DEV_ID_SHA" --timestamp --options runtime \

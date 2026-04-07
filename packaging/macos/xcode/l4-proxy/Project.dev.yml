@@ -21,7 +21,7 @@ targets:
         codeSign: true
     settings:
       base:
-        PRODUCT_NAME: "Aikido Proxy"
+        PRODUCT_NAME: "Aikido Network Extension"
         PRODUCT_BUNDLE_IDENTIFIER: com.aikido.endpoint.proxy.l4.dev
         CURRENT_PROJECT_VERSION: 1
         INFOPLIST_FILE: Host/Info.plist

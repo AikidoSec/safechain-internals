@@ -66,7 +66,7 @@ echo "  Project directory: $PROJECT_DIR"
 AGENT_BIN="$BIN_DIR/endpoint-protection-darwin-$ARCH"
 AGENT_UI_APP="$BIN_DIR/endpoint-protection-ui-darwin-$ARCH.app"
 PROXY_BIN="$BIN_DIR/safechain-l7-proxy-darwin-$ARCH"
-L4_PROXY_APP="$BIN_DIR/Aikido Proxy.app"
+L4_PROXY_APP="$BIN_DIR/Aikido Network Extension.app"
 
 if [ ! -f "$AGENT_BIN" ]; then
     echo "Error: endpoint-protection binary not found at $AGENT_BIN" >&2
@@ -131,10 +131,10 @@ mkdir -p "$EP_APP_DIR/Contents/Resources/scripts"
 cp "$SCRIPT_DIR/scripts/uninstall" "$EP_APP_DIR/Contents/Resources/scripts/uninstall"
 chmod 755 "$EP_APP_DIR/Contents/Resources/scripts/uninstall"
 
-echo "Copying Aikido Proxy app bundle..."
-ditto "$L4_PROXY_APP" "$APPS_INSTALL_DIR/Aikido Proxy.app"
-chmod 755 "$APPS_INSTALL_DIR/Aikido Proxy.app/Contents/MacOS/Aikido Proxy"
-L4_SYSEXT_DIR="$APPS_INSTALL_DIR/Aikido Proxy.app/Contents/Library/SystemExtensions"
+echo "Copying Aikido Network Extension app bundle..."
+ditto "$L4_PROXY_APP" "$APPS_INSTALL_DIR/Aikido Network Extension.app"
+chmod 755 "$APPS_INSTALL_DIR/Aikido Network Extension.app/Contents/MacOS/Aikido Network Extension"
+L4_SYSEXT_DIR="$APPS_INSTALL_DIR/Aikido Network Extension.app/Contents/Library/SystemExtensions"
 L4_SYSEXT=$(find "$L4_SYSEXT_DIR" -maxdepth 1 -name "*.systemextension" | head -1)
 if [ -n "$L4_SYSEXT" ]; then
     L4_SYSEXT_NAME=$(basename "$L4_SYSEXT" .systemextension)

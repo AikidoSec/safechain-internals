@@ -164,7 +164,7 @@ build-l4-proxy-universal:
 	@lipo -info $(BIN_DIR)/safechain-l4-proxy-darwin-universal
 
 L4_DERIVED_DATA=.aikido/xcode/safechain-l4-proxy-release
-L4_APP_NAME=Aikido Proxy.app
+L4_APP_NAME=Aikido Network Extension.app
 
 build-l4-proxy-macos:
 ifeq ($(DETECTED_OS),darwin)

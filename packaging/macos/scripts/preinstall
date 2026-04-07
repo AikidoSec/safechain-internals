@@ -4,7 +4,7 @@ set -e
 
 echo "Aikido Endpoint Protection Installer - Pre-installation"
 
-L4_HOST="/Applications/Aikido Proxy.app/Contents/MacOS/Aikido Proxy"
+L4_HOST="/Applications/Aikido Network Extension.app/Contents/MacOS/Aikido Network Extension"
 
 if [ -x "$L4_HOST" ]; then
     echo "Stopping L4 transparent proxy..."

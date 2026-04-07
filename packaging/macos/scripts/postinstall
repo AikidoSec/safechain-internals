@@ -11,7 +11,7 @@ RUN_DIR="/Library/Application Support/AikidoSecurity/EndpointProtection/run"
 LOGS_DIR="/Library/Logs/AikidoSecurity/EndpointProtection"
 LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.endpointprotection.plist"
 
-L4_APP="/Applications/Aikido Proxy.app"
+L4_APP="/Applications/Aikido Network Extension.app"
 
 echo "Setting up directories..."
 mkdir -p "$LOGS_DIR"

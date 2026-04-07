@@ -970,10 +970,10 @@ private final class TransparentProxyHostCLI {
     private static func usage() -> String {
         """
         Usage:
-          "Aikido Proxy" start [options]
-          "Aikido Proxy" stop [options]
-          "Aikido Proxy" status
-          "Aikido Proxy" clean-secrets
+          "Aikido Network Extension" start [options]
+          "Aikido Network Extension" stop [options]
+          "Aikido Network Extension" status
+          "Aikido Network Extension" clean-secrets
 
         Commands:
           start          Install or update the transparent proxy profile and request that it starts.

@@ -36,7 +36,7 @@ fi
 # Install using sudo installer (bypasses Gatekeeper)
 echo "Installing Aikido Endpoint Protection..."
 echo "This will:"
-echo "  - Install apps to /Applications/ (Aikido Endpoint Protection, Aikido Proxy)"
+echo "  - Install apps to /Applications/ (Aikido Endpoint Protection, Aikido Network Extension)"
 echo "  - Install LaunchDaemon to /Library/LaunchDaemons/"
 echo "  - Start the agent service"
 echo ""
