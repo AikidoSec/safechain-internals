@@ -226,6 +226,15 @@ func (s *server) handleRequestAccess(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
+func (s *server) handleCertificateStatus(w http.ResponseWriter, r *http.Request) {
+	// Mock: pretend CA is already installed so the install window stays hidden during UI dev.
+	s.writeJSON(w, map[string]bool{"needs_install": false, "installed": true})
+}
+
+func (s *server) handleCertificateInstall(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+
 func main() {
 	blocks, tlsEvents := seedData()
 	s := &server{blocks: blocks, tlsEvents: tlsEvents, permissions: seedPermissions()}
@@ -238,6 +247,8 @@ func main() {
 	mux.HandleFunc("GET /v1/tls-events/{id}", s.handleGetTlsEvent)
 	mux.HandleFunc("GET /v1/permissions", s.handlePermissions)
 	mux.HandleFunc("POST /v1/events/{id}/request-access", s.handleRequestAccess)
+	mux.HandleFunc("GET /v1/certificate/status", s.handleCertificateStatus)
+	mux.HandleFunc("POST /v1/certificate/install", s.handleCertificateInstall)
 
 	addr := "127.0.0.1:7878"
 	fmt.Printf("Mock daemon listening on %s\n", addr)

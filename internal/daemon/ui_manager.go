@@ -31,6 +31,9 @@ type UIManager struct {
 	lastProxyStatus        bool
 	proxyStatusInitialized bool
 	lastProxyStdoutMessage string
+
+	certPromptMu              sync.Mutex
+	lastCertificatePromptShow bool
 }
 
 func NewUIManager() *UIManager {
@@ -117,6 +120,7 @@ func (m *UIManager) EnsureRunning() {
 	}
 	m.waitForUIReady()
 	m.proxyStatusInitialized = false
+	m.lastCertificatePromptShow = false
 }
 
 // waitForUIReady polls the UI's HTTP port until it accepts TCP connections
@@ -165,6 +169,26 @@ func (m *UIManager) NotifyTlsTerminationFailed(ev any) {
 // NotifyPermissionsUpdated sends the latest permissions to the UI.
 func (m *UIManager) NotifyPermissionsUpdated(perms any) {
 	m.Client.NotifyPermissionsUpdated(perms)
+}
+
+// NotifyCertificateInstallPromptIfChanged notifies the tray UI to show the install
+// window when the CA is missing. It never requests a hide: the user closes the
+// window with Done after finishing the wizard.
+func (m *UIManager) NotifyCertificateInstallPromptIfChanged(needed bool) {
+	m.certPromptMu.Lock()
+	defer m.certPromptMu.Unlock()
+	if !needed {
+		m.lastCertificatePromptShow = false
+		return
+	}
+	if m.lastCertificatePromptShow {
+		return
+	}
+	log.Println("Proxy CA not installed; tray app will prompt the user to complete installation")
+	m.lastCertificatePromptShow = true
+	if err := m.Client.NotifyCertificateInstallPrompt(true); err != nil {
+		log.Printf("Failed to notify UI of certificate install prompt: %v", err)
+	}
 }
 
 // NotifyProxyStatusIfChanged sends a proxy-status update to the UI only when

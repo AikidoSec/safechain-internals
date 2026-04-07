@@ -894,3 +894,723 @@ body {
   color: var(--text-muted);
   line-height: 1.35;
 }
+
+/* --- Install (certificate) window ---------------------------------------- */
+
+.install-page {
+  min-height: 100vh;
+  background: #f8f9fb;
+  color: #111827;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.install-page__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.install-page--has-bottom-bar .install-page__scroll {
+  padding-bottom: 76px;
+}
+
+.install-page__dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px 4px;
+  flex-shrink: 0;
+}
+
+.install-page__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d1d5db;
+  flex-shrink: 0;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.install-page__dot--active {
+  background: var(--primary-aik-100);
+  transform: scale(1.15);
+}
+
+.install-page__header {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 20px 28px 0;
+  flex-shrink: 0;
+}
+
+.install-page__logo {
+  height: 26px;
+  width: auto;
+  display: block;
+}
+
+.install-page__body {
+  display: flex;
+  flex: 1;
+  gap: 40px;
+  padding: 28px 36px 24px;
+  max-width: 1080px;
+  margin: 0 auto;
+  width: 100%;
+  align-items: flex-start;
+}
+
+.install-page__body--followup {
+  flex-direction: column;
+  align-items: stretch;
+  max-width: 1080px;
+}
+
+.install-page__main {
+  flex: 1.1;
+  min-width: 0;
+}
+
+.install-page__title {
+  font-size: 1.65rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0 0 16px;
+  letter-spacing: -0.02em;
+  color: #000;
+}
+
+.install-page__lead {
+  margin: 0 0 28px;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: #4b5563;
+  max-width: 34rem;
+}
+
+.install-page__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.install-page__step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 18px 18px 18px 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.install-page__step--done {
+  border-color: var(--primary-aik-40);
+  background: var(--primary-aik-20);
+}
+
+.install-page__step--result {
+  align-items: flex-start;
+}
+
+.install-page__step--success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.install-page__step--success .install-page__step-badge--muted {
+  background: #bbf7d0;
+  color: #166534;
+}
+
+.install-page__step--failure {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.install-page__step--failure .install-page__step-badge--muted {
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.install-page__step-hint {
+  margin: 6px 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.install-page__step-title--result {
+  margin-bottom: 10px;
+}
+
+.install-page__result-success {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #374151;
+  text-align: left;
+}
+
+.install-page__result-success p {
+  margin: 0 0 10px;
+}
+
+.install-page__result-success p:last-child {
+  margin-bottom: 0;
+}
+
+.install-page__step-error--block {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.install-page__next-hint {
+  margin: 12px 0 0;
+  font-size: 0.8125rem;
+  color: #6b7280;
+  line-height: 1.45;
+}
+
+.install-page__followup-lead {
+  margin-bottom: 20px;
+}
+
+.install-page__finish-grid {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 40px 56px;
+  width: 100%;
+}
+
+.install-page__finish-col--left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.install-page__finish-hero--split {
+  text-align: left;
+  margin-bottom: 0;
+}
+
+.install-page__finish-status {
+  margin: 0 0 10px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--primary-aik-100);
+}
+
+.install-page__finish-hero--split .install-page__followup-lead {
+  margin-bottom: 0;
+}
+
+.install-page__finish-check-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 28px;
+  margin-bottom: 0;
+}
+
+.install-page__finish-check {
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  background: linear-gradient(155deg, #4ade80 0%, #22c55e 42%, #15803d 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow:
+    0 12px 32px rgba(21, 128, 61, 0.28),
+    0 4px 12px rgba(22, 163, 74, 0.2);
+}
+
+.install-page__finish-check-wrap .install-page__finish-check {
+  margin: 0;
+}
+
+.install-page__finish-check svg {
+  width: 30px;
+  height: 30px;
+}
+
+.install-page__title--finish {
+  margin-bottom: 14px;
+}
+
+.install-page__finish-hero--split .install-page__lead--finish {
+  margin-left: 0;
+  margin-right: 0;
+  margin-bottom: 0;
+  max-width: none;
+}
+
+.install-page__ecosystem-section--split {
+  flex: 0 0 auto;
+  margin: 0;
+  align-self: flex-start;
+  width: min(320px, 100%);
+}
+
+.install-page__ecosystem-section--split .install-page__ecosystem-timeline {
+  max-width: 100%;
+  margin: 0;
+  padding-top: 36px;
+}
+
+.install-page__ecosystem-heading {
+  margin: 0 0 22px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.install-page__ecosystem-section--split .install-page__ecosystem-heading {
+  margin-bottom: 16px;
+}
+
+.install-page__ecosystem-section--split .install-page__ecosystem-row {
+  min-height: 44px;
+}
+
+.install-page__ecosystem-section--split .install-page__ecosystem-cell--start,
+.install-page__ecosystem-section--split .install-page__ecosystem-cell--end,
+.install-page__ecosystem-section--split .install-page__ecosystem-cell--rail {
+  min-height: 44px;
+}
+
+.install-page__ecosystem-section--split .install-page__ecosystem-tile {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+}
+
+.install-page__ecosystem-section--split .install-page__ecosystem-tile img {
+  width: 26px;
+  height: 26px;
+}
+
+.install-page__ecosystem-section--split .install-page__ecosystem-tile--on-rail {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+}
+
+.install-page__ecosystem-section--split .install-page__ecosystem-tile--on-rail img {
+  width: 28px;
+  height: 28px;
+}
+
+.install-page__ecosystem-timeline {
+  position: relative;
+  max-width: 320px;
+  margin: 0 auto;
+  padding: 0 4px;
+}
+
+.install-page__ecosystem-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.install-page__ecosystem-row {
+  display: grid;
+  grid-template-columns: 1fr 56px 1fr;
+  align-items: center;
+  min-height: 54px;
+}
+
+.install-page__ecosystem-cell--start {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding-right: 14px;
+  min-height: 54px;
+}
+
+.install-page__ecosystem-cell--end {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding-left: 14px;
+  min-height: 54px;
+}
+
+.install-page__ecosystem-cell--rail {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  justify-self: center;
+  min-height: 54px;
+}
+
+.install-page__ecosystem-tile {
+  position: relative;
+  z-index: 2;
+  width: 50px;
+  height: 50px;
+  border-radius: 16px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 6px 20px rgba(99, 91, 255, 0.16),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(99, 91, 255, 0.1);
+}
+
+.install-page__ecosystem-tile img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.install-page__ecosystem-tile--on-rail {
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+}
+
+.install-page__ecosystem-tile--on-rail img {
+  width: 32px;
+  height: 32px;
+}
+
+.install-page__restart-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px 20px 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.install-page__restart-card--emphasized {
+  background: linear-gradient(180deg, #fffbeb 0%, #fff7ed 100%);
+  border: 1px solid #fcd34d;
+  border-left-width: 4px;
+  border-left-color: #ea580c;
+  border-radius: 12px;
+  padding: 18px 20px 18px 18px;
+  box-shadow:
+    0 4px 16px rgba(234, 88, 12, 0.14),
+    0 1px 4px rgba(0, 0, 0, 0.06);
+  margin-top: 44px;
+}
+
+@media (min-width: 801px) {
+  .install-page__finish-grid .install-page__restart-card--emphasized {
+    margin-top: auto;
+  }
+}
+
+.install-page__restart-card-title {
+  margin: 0 0 10px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.install-page__restart-card--emphasized .install-page__restart-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #9a3412;
+}
+
+.install-page__restart-card-body {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #4b5563;
+}
+
+.install-page__restart-card--emphasized .install-page__restart-card-body {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #431407;
+  line-height: 1.6;
+}
+
+.install-page__finish-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding: 12px 36px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid #e5e7eb;
+  background: #f8f9fb;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.install-page__finish-bar-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.install-page__action-btn {
+  flex-shrink: 0;
+}
+
+.install-page .button-brand:disabled {
+  opacity: 0.65;
+}
+
+.install-page__step-badge {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary-aik-40);
+  color: var(--primary-aik-120);
+  font-size: 0.9rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.install-page__step-badge--muted {
+  background: #e5e7eb;
+  color: #9ca3af;
+}
+
+.install-page__step-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.install-page__step-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.install-page__step-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.45;
+}
+
+.install-page__step-error {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  color: var(--surface-red-100);
+}
+
+.install-page__retry-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  justify-content: flex-start;
+}
+
+.install-page__preview {
+  flex: 0.85;
+  max-width: 340px;
+  margin-top: 4px;
+}
+
+.install-page__preview-backdrop {
+  padding: 12px 8px;
+  background: transparent;
+}
+
+.install-page__preview-sheet {
+  width: 100%;
+  max-width: 292px;
+  margin: 0 auto;
+  padding: 28px 24px 22px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 12px 32px rgba(0, 0, 0, 0.14),
+    0 24px 64px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.install-page__preview-icon-wrap {
+  position: relative;
+  width: fit-content;
+  margin: 0 0 14px;
+}
+
+.install-page__preview-lock {
+  display: block;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.12));
+}
+
+.install-page__preview-exec-badge {
+  position: absolute;
+  right: -2px;
+  bottom: 4px;
+  min-width: 30px;
+  height: 18px;
+  padding: 0 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0a0a0a;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.install-page__preview-exec-text {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #4ade80;
+  line-height: 1;
+}
+
+.install-page__preview-heading {
+  margin: 0 0 12px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: #111827;
+}
+
+.install-page__preview-blurb {
+  margin: 0 0 20px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #374151;
+  max-width: 240px;
+}
+
+.install-page__preview-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+  width: 100%;
+  align-self: stretch;
+}
+
+.install-page__preview-fields--sheet {
+  text-align: left;
+}
+
+.install-page__preview-field {
+  width: 100%;
+  padding: 11px 14px;
+  font-size: 0.8125rem;
+  border-radius: 10px;
+  background: #ececee;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: #111827;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.install-page__preview-field--password {
+  letter-spacing: 0.12em;
+  color: #4b5563;
+}
+
+.install-page__preview-field--focused {
+  border-color: rgba(74, 144, 226, 0.65);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 0 0 3px rgba(74, 144, 226, 0.28);
+}
+
+.install-page__preview-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  align-self: stretch;
+}
+
+.install-page__preview-mock-btn {
+  width: 100%;
+  pointer-events: none;
+  cursor: default;
+}
+
+/* macOS alert default action (system blue), decorative preview only */
+.install-page__preview-mock-btn--mac-blue.button-brand.button--primary {
+  background: #007aff;
+  color: #fff;
+}
+
+.install-page__preview-mock-btn--mac-blue.button-brand.button--primary:hover:not(:disabled) {
+  background: #0066d6;
+}
+
+@media (max-width: 800px) {
+  .install-page__body {
+    flex-direction: column;
+    padding: 20px 20px 28px;
+  }
+
+  .install-page__finish-grid {
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .install-page__ecosystem-section--split {
+    width: 100%;
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .install-page__preview {
+    max-width: none;
+    width: 100%;
+  }
+
+  .install-page__finish-bar {
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .install-page--has-bottom-bar .install-page__scroll {
+    padding-bottom: 72px;
+  }
+}

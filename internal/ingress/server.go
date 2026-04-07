@@ -37,6 +37,9 @@ type Server struct {
 	eventStore    *eventStore
 	tlsEventStore *tlsEventStore
 	mu            sync.RWMutex
+
+	certStatus  func() CertificateStatus
+	certInstall func(context.Context) error
 }
 
 func New(cfg *config.ConfigInfo, ui UIProvider) *Server {
@@ -69,6 +72,9 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("GET /v1/tls-events/{id}", s.handleGetTlsEventByID)
 
 	mux.HandleFunc("GET /v1/version", s.handleVersion)
+
+	mux.HandleFunc("GET /v1/certificate/status", s.handleCertificateStatus)
+	mux.HandleFunc("POST /v1/certificate/install", s.handleCertificateInstall)
 
 	listener, err := net.Listen("tcp", DefaultBind)
 	if err != nil {

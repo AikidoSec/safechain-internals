@@ -95,6 +95,23 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 		ingress:     ingress.New(cfg, uiMgr),
 	}
 
+	d.ingress.SetCertificateHandlers(
+		func() ingress.CertificateStatus {
+			installed := proxy.ProxyCAInstalled()
+			running := d.proxy != nil && d.proxy.IsRunning()
+			return ingress.CertificateStatus{
+				NeedsInstall: running && !installed,
+				Installed:    installed,
+			}
+		},
+		func(ctx context.Context) error {
+			if err := d.proxy.InstallCA(ctx); err != nil {
+				return err
+			}
+			return certconfig.Install(ctx)
+		},
+	)
+
 	d.initLogging(ctx)
 	return d, nil
 }
@@ -415,18 +432,11 @@ func (d *Daemon) heartbeat() error {
 		log.Printf("Failed to start proxy: %v", err)
 	}
 
-	if d.proxy.IsRunning() && !proxy.ProxyCAInstalled() {
-		if err := d.proxy.InstallCA(d.ctx); err != nil {
-			return fmt.Errorf("failed to install proxy CA: %v", err)
-		}
-
-		// Once the proxy is recovered and the CA is installed, re-run certconfig
-		// so ecosystem trust is correctly configured.
-		certconfig.Install(d.ctx)
-	}
-
 	// Ensure the UI is running, if not, relaunch it
 	d.uiManager.EnsureRunning()
+
+	needed := d.proxy.IsRunning() && !proxy.ProxyCAInstalled()
+	d.uiManager.NotifyCertificateInstallPromptIfChanged(needed)
 
 	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.GetStatus())
 
