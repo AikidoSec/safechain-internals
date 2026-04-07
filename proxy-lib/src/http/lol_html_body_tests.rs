@@ -1,64 +1,29 @@
 use lol_html::send::Settings;
 use rama::http::{
     Body,
-    body::{Frame, StreamingBody, util::BodyExt as _},
+    body::util::BodyExt as _,
     header::{HeaderMap, HeaderName, HeaderValue},
-};
-use std::{
-    collections::VecDeque,
-    pin::Pin,
-    task::{Context, Poll},
 };
 
 use super::LolHtmlBody;
 
-#[derive(Debug)]
-struct TestBody {
-    frames: VecDeque<Result<Frame<rama::bytes::Bytes>, rama::error::BoxError>>,
-}
-
-impl TestBody {
-    fn new(
-        frames: impl IntoIterator<Item = Result<Frame<rama::bytes::Bytes>, rama::error::BoxError>>,
-    ) -> Self {
-        Self {
-            frames: frames.into_iter().collect(),
-        }
-    }
-}
-
-impl StreamingBody for TestBody {
-    type Data = rama::bytes::Bytes;
-    type Error = rama::error::BoxError;
-
-    fn poll_frame(
-        mut self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        Poll::Ready(self.frames.pop_front())
-    }
-}
-
 fn body_with_trailers(html: &str, chunk_size: Option<usize>, trailers: HeaderMap) -> Body {
-    let mut frames = VecDeque::new();
-
-    match chunk_size {
+    let chunks: Vec<Result<rama::bytes::Bytes, rama::error::BoxError>> = match chunk_size {
         None => {
-            if !html.is_empty() {
-                frames.push_back(Ok(Frame::data(rama::bytes::Bytes::copy_from_slice(
-                    html.as_bytes(),
-                ))));
+            if html.is_empty() {
+                vec![]
+            } else {
+                vec![Ok(rama::bytes::Bytes::copy_from_slice(html.as_bytes()))]
             }
         }
-        Some(size) => {
-            for chunk in html.as_bytes().chunks(size) {
-                frames.push_back(Ok(Frame::data(rama::bytes::Bytes::copy_from_slice(chunk))));
-            }
-        }
-    }
+        Some(size) => html
+            .as_bytes()
+            .chunks(size)
+            .map(|c| Ok(rama::bytes::Bytes::copy_from_slice(c)))
+            .collect(),
+    };
 
-    frames.push_back(Ok(Frame::trailers(trailers)));
-    Body::new(TestBody { frames })
+    Body::from_stream(rama::futures::stream::iter(chunks)).with_trailer_headers(trailers)
 }
 
 fn removing_anchor_settings() -> Settings<'static, 'static> {
@@ -69,32 +34,6 @@ fn removing_anchor_settings() -> Settings<'static, 'static> {
         })],
         ..Settings::new_send()
     }
-}
-
-#[tokio::test]
-async fn rewrites_html_across_split_chunks() {
-    let body = Body::new(TestBody::new([
-        Ok::<_, rama::error::BoxError>(Frame::data(
-            "<html><body><a href=\"https://files.pythonhosted.org/packages/source/p/pkg/".into(),
-        )),
-        Ok(Frame::data(
-            "pkg-2.0.0.tar.gz\">new</a></body></html>".into(),
-        )),
-    ]));
-
-    let settings = Settings {
-        element_content_handlers: vec![lol_html::element!("a[href]", |el| {
-            el.remove();
-            Ok(())
-        })],
-        ..Settings::new_send()
-    };
-
-    let body = Body::new(LolHtmlBody::new(body, settings, || {}));
-    let rewritten = body.collect().await.unwrap().to_bytes();
-    let rewritten = String::from_utf8(rewritten.to_vec()).unwrap();
-
-    assert_eq!(rewritten, "<html><body></body></html>");
 }
 
 #[tokio::test]
