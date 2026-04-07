@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	ProxyModeL4 = "l4"
-	ProxyModeL7 = "l7"
+	ProxyModeL4         = "l4"
+	ProxyModeL7         = "l7"
+	ProxyModeL4ChromeL7 = "l4-chrome-l7"
 )
 
 type ConfigInfo struct {
@@ -25,10 +26,14 @@ type ConfigInfo struct {
 }
 
 func (c *ConfigInfo) GetProxyMode() string {
-	if c.ProxyMode == ProxyModeL7 {
+	switch c.ProxyMode {
+	case ProxyModeL7:
 		return ProxyModeL7
+	case ProxyModeL4ChromeL7:
+		return ProxyModeL4ChromeL7
+	default:
+		return ProxyModeL4
 	}
-	return ProxyModeL4
 }
 
 func (c *ConfigInfo) GetBaseURL() string {

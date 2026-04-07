@@ -22,6 +22,7 @@ func main() {
 		showVersion    = flag.Bool("version", false, "Show version information")
 		teardown       = flag.Bool("teardown", false, "Teardown Aikido Endpoint Protection")
 		removeScanners = flag.Bool("remove-scanners", false, "Remove all scanners on teardown")
+		proxyMode      = flag.String("proxy-mode", "", "Proxy mode to use (l4, l7, l4-chrome-l7); defaults to l4")
 	)
 	flag.Parse()
 
@@ -33,7 +34,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	d, err := daemon.New(ctx, cancel)
+	d, err := daemon.New(ctx, cancel, *proxyMode)
 	if err != nil {
 		log.Fatalf("Failed to create daemon: %v", err)
 	}

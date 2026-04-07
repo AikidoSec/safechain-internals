@@ -11,6 +11,7 @@ import (
 	set_system_proxy "github.com/AikidoSec/safechain-internals/internal/setup/steps/01_set_system_proxy"
 	configure_maven "github.com/AikidoSec/safechain-internals/internal/setup/steps/02_configure_maven"
 	configure_certificate_trust "github.com/AikidoSec/safechain-internals/internal/setup/steps/03_configure_certificate_trust"
+	configure_chrome_proxy "github.com/AikidoSec/safechain-internals/internal/setup/steps/04_configure_chrome_proxy"
 )
 
 type Runner struct {
@@ -19,11 +20,15 @@ type Runner struct {
 }
 
 func NewRunner(proxyMode string, uninstall bool) *Runner {
-	// L4: cert trust only
-	// L7: system proxy + maven + cert trust
+	// L4:        cert trust only
+	// L7:        system proxy + maven + cert trust
+	// L7-chrome: chrome proxy + cert trust
 	steps := []Step{configure_certificate_trust.New()}
-	if proxyMode == config.ProxyModeL7 {
+	switch proxyMode {
+	case config.ProxyModeL7:
 		steps = append([]Step{set_system_proxy.New(), configure_maven.New()}, steps...)
+	case config.ProxyModeL4ChromeL7:
+		steps = append([]Step{configure_chrome_proxy.New()}, steps...)
 	}
 	return &Runner{steps: steps, uninstall: uninstall}
 }

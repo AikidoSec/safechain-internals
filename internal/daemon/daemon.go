@@ -54,7 +54,7 @@ type Daemon struct {
 	daemonLastSBOMReportTime time.Time
 }
 
-func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
+func New(ctx context.Context, cancel context.CancelFunc, proxyMode string) (*Daemon, error) {
 	uiMgr := NewUIManager()
 
 	if err := platform.Init(); err != nil {
@@ -73,10 +73,17 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 		return nil, fmt.Errorf("failed to create config")
 	}
 
+	if proxyMode != "" {
+		cfg.ProxyMode = proxyMode
+	}
+
 	var proxyManager proxy.ProxyManager
-	if cfg.GetProxyMode() == config.ProxyModeL4 {
+	switch cfg.GetProxyMode() {
+	case config.ProxyModeL4:
 		proxyManager = proxy.NewL4()
-	} else {
+	case config.ProxyModeL4ChromeL7:
+		proxyManager = proxy.NewL4ChromeL7()
+	default:
 		proxyManager = proxy.NewL7()
 	}
 
