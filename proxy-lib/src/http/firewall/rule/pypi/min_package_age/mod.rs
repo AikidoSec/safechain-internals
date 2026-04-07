@@ -14,42 +14,18 @@ use rama::{
 };
 
 use crate::{
-    http::firewall::{
-        events::{Artifact, MinPackageAgeEvent},
-        notifier::EventNotifier,
+    http::{
+        KnownContentType,
+        firewall::{
+            events::{Artifact, MinPackageAgeEvent},
+            notifier::EventNotifier,
+        },
     },
     package::released_packages_list::RemoteReleasedPackagesList,
 };
 
 mod html;
 mod json;
-
-/// PyPI serves its simple index with vendor MIME types per PEP 629/691,
-/// using RFC 6839 structured syntax suffixes (`+json`, `+html`).
-/// This enum captures the two response formats we care about for rewriting.
-enum PyPIResponseFormat {
-    Json,
-    Html,
-}
-
-impl PyPIResponseFormat {
-    fn detect(ct: &rama::http::headers::ContentType) -> Option<Self> {
-        use rama::http::mime;
-        let mime = ct.mime();
-        // Check subtype first (e.g. `application/json`, `text/html`),
-        // then fall back to the structured syntax suffix
-        // (e.g. `application/vnd.pypi.simple.v1+json`).
-        let is_json = mime.subtype() == mime::JSON || mime.suffix() == Some(mime::JSON);
-        let is_html = mime.subtype() == mime::HTML || mime.suffix() == Some(mime::HTML);
-        if is_json {
-            Some(Self::Json)
-        } else if is_html {
-            Some(Self::Html)
-        } else {
-            None
-        }
-    }
-}
 
 pub(in crate::http::firewall) struct MinPackageAgePyPI {
     notifier: Option<EventNotifier>,
@@ -75,8 +51,7 @@ impl MinPackageAgePyPI {
         let Some(format) = resp
             .headers()
             .typed_get::<ContentType>()
-            .as_ref()
-            .and_then(PyPIResponseFormat::detect)
+            .and_then(KnownContentType::detect_from_content_type_header)
         else {
             return Ok(resp);
         };
@@ -84,7 +59,7 @@ impl MinPackageAgePyPI {
         let (mut parts, body) = resp.into_parts();
 
         match format {
-            PyPIResponseFormat::Json => {
+            KnownContentType::Json => {
                 let bytes = body
                     .collect()
                     .await
@@ -110,7 +85,9 @@ impl MinPackageAgePyPI {
                 Ok(Response::from_parts(parts, Body::from(rewrite.bytes)))
             }
 
-            PyPIResponseFormat::Html => {
+            KnownContentType::Txt | KnownContentType::Xml => Ok(Response::from_parts(parts, body)),
+
+            KnownContentType::Html => {
                 // HTML is streamed through lol_html without buffering the full body.
                 // Cache headers are stripped upfront because we cannot defer
                 // header writes until the body is fully consumed.

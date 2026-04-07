@@ -34,15 +34,20 @@ impl KnownContentType {
     }
 
     pub fn detect_from_content_type_header(ct: ContentType) -> Option<Self> {
-        let r#type = ct.mime().subtype();
+        let mime = ct.mime();
+        // Check subtype first (e.g. `application/json`, `text/html`),
+        // then fall back to the structured syntax suffix
+        // (e.g. `application/vnd.pypi.simple.v1+json`).
+        let subtype = mime.subtype();
+        let suffix = mime.suffix();
 
-        if r#type == mime::JSON {
+        if subtype == mime::JSON || suffix == Some(mime::JSON) {
             Some(Self::Json)
-        } else if r#type == mime::HTML {
+        } else if subtype == mime::HTML || suffix == Some(mime::HTML) {
             Some(Self::Html)
-        } else if r#type == mime::TEXT {
+        } else if subtype == mime::TEXT {
             Some(Self::Txt)
-        } else if r#type == mime::XML {
+        } else if subtype == mime::XML || suffix == Some(mime::XML) {
             Some(Self::Xml)
         } else {
             None
