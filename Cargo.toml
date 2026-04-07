@@ -5,6 +5,7 @@ members = [
     "proxy-fuzz",
     "proxy-lib",
     "proxy-lib-l4-macos",
+    "proxy-lib-windows-core",
 ]
 resolver = "3"
 
@@ -33,8 +34,9 @@ radix_trie = "0.3"
 rand = "0.10"
 rustls-platform-verifier = "0.6"
 safechain-proxy-lib = { path = "./proxy-lib" }
+safechain-proxy-lib-windows-core = { path = "./proxy-lib-windows-core" }
 secrecy = "0.10"
-serde = "1.0"
+serde = { version = "1.0", default-features = false }
 serde_html_form = "0.4"
 serde_json = "1"
 serde_test = "1"
@@ -48,7 +50,7 @@ windows-native-keyring-store = "0.5"
 
 [workspace.dependencies.rama]
 git = "https://github.com/plabayo/rama"
-rev = "3dc1b7922293a6edeb624dd2b0b561e2051ccb20"
+rev = "59f6863b01f4eeaf6afc32208a95081415ef3196"
 
 [profile.release]
 strip = true

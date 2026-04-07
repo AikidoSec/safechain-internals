@@ -34,6 +34,7 @@ type BlockEvent struct {
 	Artifact    Artifact `json:"artifact"`
 	BlockReason string   `json:"block_reason"`
 	Status      string   `json:"status"`
+	Count       int      `json:"count"`
 }
 
 type TlsEvent struct {
@@ -53,9 +54,10 @@ func seedData() ([]BlockEvent, []TlsEvent) {
 		{
 			ID:          "block-1",
 			TsMs:        now - 60_000,
-			Artifact:    Artifact{Product: "skills_sh", Identifier: "evil-package", Version: "1.0.0", DisplayName: "evil-package"},
+			Artifact:    Artifact{Product: "chrome", Identifier: "mgngmngjioknlgjjaiiamcdbahombpfb", Version: "1.0.0", DisplayName: ""},
 			BlockReason: "malware",
 			Status:      "blocked",
+			Count:       13,
 		},
 		{
 			ID:          "block-2",
@@ -63,6 +65,7 @@ func seedData() ([]BlockEvent, []TlsEvent) {
 			Artifact:    Artifact{Product: "pypi", Identifier: "shady-lib", Version: "0.3.1", DisplayName: "shady-lib"},
 			BlockReason: "rejected",
 			Status:      "blocked",
+			Count:       1,
 		},
 		{
 			ID:          "block-3",
@@ -70,6 +73,7 @@ func seedData() ([]BlockEvent, []TlsEvent) {
 			Artifact:    Artifact{Product: "vscode", Identifier: "typosquat-pkg", Version: "2.0.0", DisplayName: "typosquat-pkg"},
 			BlockReason: "block_all",
 			Status:      "blocked",
+			Count:       1,
 		},
 		{
 			ID:          "block-4",
@@ -77,6 +81,39 @@ func seedData() ([]BlockEvent, []TlsEvent) {
 			Artifact:    Artifact{Product: "maven", Identifier: "left-pad", Version: "1.3.0", DisplayName: "left-pad"},
 			BlockReason: "request_install",
 			Status:      "blocked",
+			Count:       1,
+		},
+		{
+			ID:          "block-5",
+			TsMs:        now - 90_000,
+			Artifact:    Artifact{Product: "npm", Identifier: "brand-new-lib", Version: "0.0.2", DisplayName: "brand-new-lib"},
+			BlockReason: "new_package",
+			Status:      "blocked",
+			Count:       1,
+		},
+		{
+			ID:          "block-6",
+			TsMs:        now - 15_000,
+			Artifact:    Artifact{Product: "nuget", Identifier: "Contoso.Analytics", Version: "3.1.0", DisplayName: "Contoso.Analytics"},
+			BlockReason: "request_install",
+			Status:      "request_pending",
+			Count:       1,
+		},
+		{
+			ID:          "block-7",
+			TsMs:        now - 360_000,
+			Artifact:    Artifact{Product: "chrome", Identifier: "pgojnojmmhpofjgdmaebadhbocahppod", Version: "", DisplayName: ""},
+			BlockReason: "request_install",
+			Status:      "request_approved",
+			Count:       32,
+		},
+		{
+			ID:          "block-8",
+			TsMs:        now - 400_000,
+			Artifact:    Artifact{Product: "open_vsx", Identifier: "ms-python.python", Version: "2024.0.0", DisplayName: "Python"},
+			BlockReason: "request_install",
+			Status:      "request_rejected",
+			Count:       1,
 		},
 		{
 			ID:          "block-5",

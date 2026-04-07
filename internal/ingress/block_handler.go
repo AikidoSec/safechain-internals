@@ -15,6 +15,13 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("Got block event:", event)
 
+	if event.Artifact.Product == "chrome" {
+		if s.eventStore.MergeChromeBlockIfDuplicate(event) {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+	}
+
 	blocked := s.eventStore.Add(event)
 	go s.ui.NotifyBlocked(blocked)
 

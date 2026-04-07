@@ -41,6 +41,11 @@ function EventInfo({ event }: { event: BlockEvent }) {
             className="event-info-icon"
           />
           {event.artifact.display_name ?? event.artifact.identifier}
+          {event.count !== undefined && event.count > 1 && (
+            <span className="event-count-badge" aria-label={`${event.count} blocked events`}>
+              x{event.count}
+            </span>
+          )}
         </dd>
       </div>
       {event.artifact.version && (
