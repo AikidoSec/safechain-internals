@@ -45,11 +45,13 @@ AIKIDO_TOKEN=""
 CONFIG_FILE="$RUN_DIR/config.json"
 TOKEN_STAGING_FILE="/tmp/aikido_endpoint_token.txt"
 
+# 1) Explicit token via staging file always wins (fresh install or re-provisioning)
 if [ -f "$TOKEN_STAGING_FILE" ]; then
     AIKIDO_TOKEN="$(cat "$TOKEN_STAGING_FILE" | tr -d '[:space:]')"
     rm -f "$TOKEN_STAGING_FILE"
 fi
 
+# 2) No staging file — check if this is an upgrade with an existing config
 if [ -z "$AIKIDO_TOKEN" ] && [ -f "$CONFIG_FILE" ]; then
     EXISTING_TOKEN="$(sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CONFIG_FILE" | tr -d '[:space:]')"
     if [ -n "$EXISTING_TOKEN" ]; then
@@ -57,6 +59,7 @@ if [ -z "$AIKIDO_TOKEN" ] && [ -f "$CONFIG_FILE" ]; then
     fi
 fi
 
+# 3) No token from file and no existing config — prompt user (fresh install)
 if [ -z "$AIKIDO_TOKEN" ] && [ -z "$EXISTING_TOKEN" ]; then
     echo "No token found, prompting user..."
     AIKIDO_TOKEN=$(osascript <<'APPLESCRIPT' 2>/dev/null
@@ -89,9 +92,11 @@ if [ -n "$AIKIDO_TOKEN" ]; then
     chown root:wheel "$CONFIG_FILE"
 fi
 
+# Load and start the LaunchDaemon
 if [ -f "$LAUNCHDAEMON_PLIST" ]; then
     echo "Loading LaunchDaemon..."
     launchctl bootstrap system "$LAUNCHDAEMON_PLIST" 2>/dev/null || {
+        # Fallback to launchctl load (old way of starting the daemon on older macOS versions)
         echo "LaunchDaemon bootstrap failed, trying load..."
         launchctl load "$LAUNCHDAEMON_PLIST" || true
     }
