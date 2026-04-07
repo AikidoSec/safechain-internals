@@ -21,7 +21,7 @@ export function InstallFinishPage() {
             <p className="install-page__finish-status">Certificate installed</p>
             <h1 className="install-page__title install-page__title--finish">You&apos;re all set</h1>
             <p className="install-page__lead install-page__followup-lead install-page__lead--finish">
-              This device now trusts the Aikido endpoint certificate. Endpoint Protection can secure traffic from your
+              This device now trusts the Aikido Endpoint certificate. Endpoint Protection can secure traffic from your
               browsers, editors, and package managers while you work.
             </p>
             <div className="install-page__finish-check-wrap">
