@@ -1,6 +1,9 @@
 use std::{collections::BTreeSet, str::FromStr, time::UNIX_EPOCH};
 
-use rama::utils::str::arcstr::{ArcStr, arcstr};
+use rama::{
+    telemetry::tracing,
+    utils::str::arcstr::{ArcStr, arcstr},
+};
 
 use crate::package::{
     released_packages_list::RemoteReleasedPackagesList,
@@ -241,7 +244,9 @@ fn build_rewrite_result(
     suppressed: BTreeSet<String>,
 ) -> Option<JsonRewriteResult> {
     Some(JsonRewriteResult {
-        bytes: serde_json::to_vec(&json).ok()?,
+        bytes: serde_json::to_vec(&json)
+            .inspect_err(|e| tracing::debug!("failed to serialize rewritten PyPI metadata: {e}"))
+            .ok()?,
         package_name,
         suppressed_versions: suppressed.into_iter().collect(),
     })
