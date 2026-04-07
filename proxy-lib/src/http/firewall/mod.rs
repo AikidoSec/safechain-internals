@@ -16,10 +16,10 @@ use rama::{
         },
     },
     layer::MapErrLayer,
-    net::address::Domain,
+    net::{address::Domain, apple::networkextension::tproxy::TransparentProxyFlowMeta},
     rt::Executor,
     telemetry::tracing,
-    utils::{backoff::ExponentialBackoff, rng::HasherRng, str::arcstr::ArcStr},
+    utils::{backoff::ExponentialBackoff, rng::HasherRng, str::{arcstr::ArcStr}},
 };
 
 #[cfg(feature = "pac")]
@@ -43,7 +43,7 @@ pub use self::matched_rules::{
 mod pac;
 
 use crate::{
-    endpoint_protection::{PolicyEvaluator, RemoteEndpointConfig},
+    endpoint_protection::{PolicyEvaluator, RemoteEndpointConfig, remote_app_passthrough_list::{self, RemoteAppPassthroughList}},
     http::firewall::rule::{DynRule, npm::min_package_age::MinPackageAge},
     storage::SyncCompactDataStorage,
     utils::{env::network_service_identifier, token::AgentIdentity},
@@ -58,6 +58,12 @@ pub struct Firewall {
     // a background task update these when needed..
     block_rules: Arc<[self::rule::DynRule]>,
     notifier: Option<self::notifier::EventNotifier>,
+    passthrough_list: Option<RemoteAppPassthroughList>,
+}
+
+pub struct IncomingFlowInfo<'a> {
+    pub domain: &'a Domain,
+    pub meta: Option<&'a TransparentProxyFlowMeta>,
 }
 
 impl Firewall {
@@ -123,7 +129,6 @@ impl Firewall {
         };
 
         let endpoint_config_uri = Self::endpoint_config_uri(&aikido_url)?;
-
         let remote_endpoint_config = match agent_identity.as_ref() {
             Some(identity) => {
                 match RemoteEndpointConfig::try_new(
@@ -150,6 +155,28 @@ impl Firewall {
             None => None,
         };
         let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
+
+        let passthrough_list = match agent_identity {
+            Some(identity) => {
+                match RemoteAppPassthroughList::try_new(
+                    guard.clone(), 
+                    identity, 
+                    aikido_url, 
+                    layered_client.clone(),
+                )
+                .await {
+                    Ok(passthrough_list) => Some(passthrough_list),
+                    Err(err) => {
+                        tracing::warn!(
+                            error = %err,
+                            "failed to initialize app passthrough list"
+                        );
+                        None
+                    }
+                }
+            },
+            None => None,
+        };
 
         Ok(Self {
             block_rules: Arc::from([
@@ -240,6 +267,7 @@ impl Firewall {
                 self::rule::hijack::RuleHijack::new().into_dyn(),
             ]),
             notifier,
+            passthrough_list
         })
     }
 
@@ -257,11 +285,15 @@ impl Firewall {
         }
     }
 
-    pub fn match_http_rules(&self, domain: &Domain) -> Option<FirewallHttpRules> {
+    pub fn match_http_rules(&self, incoming_flow_info: &IncomingFlowInfo) -> Option<FirewallHttpRules> {
+        if self.is_passthrough_traffic(incoming_flow_info) {
+            return None;
+        }
+
         let matched_rules: Arc<[DynRule]> = self
             .block_rules
             .iter()
-            .filter(|rule| rule.match_domain(domain))
+            .filter(|rule| rule.match_domain(incoming_flow_info.domain))
             .cloned()
             .collect();
 
@@ -302,5 +334,13 @@ impl Firewall {
             script_payload,
         )
             .into_response()
+    }
+
+    fn is_passthrough_traffic(&self, incoming_flow_info: &IncomingFlowInfo) -> bool {
+        let Some(ref passthrough_list) = self.passthrough_list else {
+            return false;
+        };
+
+        passthrough_list.is_source_app_passthrough(incoming_flow_info)
     }
 }

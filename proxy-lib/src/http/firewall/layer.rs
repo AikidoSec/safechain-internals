@@ -48,7 +48,7 @@ where
         let maybe_http_rules = match req.extensions().get().cloned() {
             Some(rules) => Some(rules),
             None => try_get_domain_for_req(&req)
-                .and_then(|domain| self.firewall.match_http_rules(&domain)),
+                .and_then(|domain| self.firewall.match_http_rules(&super::IncomingFlowInfo { domain: &domain, meta: None })),
         };
 
         if let Some(http_rules) = maybe_http_rules {

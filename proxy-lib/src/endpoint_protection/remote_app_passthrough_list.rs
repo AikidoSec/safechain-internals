@@ -1,119 +1,48 @@
 use std::{
-    sync::{Arc, OnceLock},
+    sync::{Arc},
     time::Duration,
 };
 
 use arc_swap::ArcSwap;
 use rama::{
-    Layer, Service,
+    Service,
     error::{BoxError, ErrorContext, ErrorExt, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{
-        BodyExtractExt, HeaderValue, Request, Response, Uri,
-        layer::{
-            decompression::DecompressionLayer,
-            map_request_body::MapRequestBodyLayer,
-            map_response_body::MapResponseBodyLayer,
-            required_header::AddRequiredRequestHeadersLayer,
-            retry::{ManagedPolicy, RetryLayer},
-            timeout::TimeoutLayer,
-        },
+        BodyExtractExt, Request, Response, Uri,
         service::client::HttpClientExt,
     },
-    layer::MapErrLayer,
-    net::{
-        address::{Domain, HostWithPort},
-        apple::networkextension::tproxy::TransparentProxyFlowMeta,
-    },
-    rt::Executor,
+    net::
+        address::Domain
+    ,
     telemetry::tracing,
-    utils::{backoff::ExponentialBackoff, rng::HasherRng},
 };
 use rand::RngExt as _;
-use safechain_proxy_lib::{
-    http::{client::new_http_client_for_internal, firewall::domain_matcher::DomainMatcher},
-    utils::{env::network_service_identifier, token::AgentIdentity},
-};
 use serde::Deserialize;
 
-use crate::config::ProxyConfig;
+use crate::{http::firewall::{IncomingFlowInfo, domain_matcher::DomainMatcher}, utils::token::AgentIdentity};
 
-static REMOTE_APP_PASSTHROUGH_LIST: OnceLock<Option<RemoteAppPassthroughList>> = OnceLock::new();
 
-pub async fn init_remote_app_passthrough_list(guard: ShutdownGuard, conf: ProxyConfig) {
-    if REMOTE_APP_PASSTHROUGH_LIST.get().is_some() {
-        return;
-    }
-
-    let list = if let Some(agent_identity) = conf.agent_identity {
-        match RemoteAppPassthroughList::try_new(guard, agent_identity, conf.aikido_url).await {
-            Ok(list) => Some(list),
-            Err(err) => {
-                tracing::error!("failed to initialize remote app passthrough list: {err}");
-                None
-            }
-        }
-    } else {
-        None
-    };
-
-    let _ = REMOTE_APP_PASSTHROUGH_LIST.set(list);
-}
-
-pub fn is_source_app_passthrough(meta: &TransparentProxyFlowMeta) -> bool {
-    let Some(remote_app_passthrough_list) =
-        REMOTE_APP_PASSTHROUGH_LIST.get().and_then(|v| v.as_ref())
-    else {
-        return false;
-    };
-
-    remote_app_passthrough_list.is_source_app_passthrough(meta)
-}
-
-struct RemoteAppPassthroughList {
+#[derive(Debug, Clone)]
+pub struct RemoteAppPassthroughList {
     list: Arc<ArcSwap<Option<PassthroughList>>>,
 }
 
 impl RemoteAppPassthroughList {
-    async fn try_new(
+    pub async fn try_new<C>(
         guard: ShutdownGuard,
         agent_identity: AgentIdentity,
         aikido_url: Uri,
-    ) -> Result<Self, BoxError> {
-        let executor = Executor::graceful(guard.clone());
-        let http_client = new_http_client_for_internal(executor)
-            .context("create http client for app passthrough list")?;
+        client: C,
+    ) -> Result<Self, BoxError>    
+    where
+        C: Service<Request, Output = Response, Error = OpaqueError>, {
 
         let uri = passthrough_list_uri(&aikido_url)?;
-
-        let layered_client = (
-            MapResponseBodyLayer::new_boxed_streaming_body(),
-            MapErrLayer::into_opaque_error(),
-            DecompressionLayer::new(),
-            TimeoutLayer::new(Duration::from_secs(60)),
-            RetryLayer::new(
-                ManagedPolicy::default().with_backoff(
-                    ExponentialBackoff::new(
-                        Duration::from_millis(100),
-                        Duration::from_secs(30),
-                        0.01,
-                        HasherRng::default,
-                    )
-                    .context("create exponential backoff impl")?,
-                ),
-            ),
-            AddRequiredRequestHeadersLayer::new().with_user_agent_header_value(
-                HeaderValue::from_static(network_service_identifier()),
-            ),
-            MapRequestBodyLayer::new_boxed_streaming_body(),
-        )
-            .into_layer(http_client)
-            .boxed();
-
         let client = RemoteAppPassthroughListClient {
             agent_identity,
             uri,
-            client: layered_client,
+            client,
         };
 
         let shared_list: Arc<ArcSwap<Option<PassthroughList>>> =
@@ -128,7 +57,7 @@ impl RemoteAppPassthroughList {
         Ok(Self { list: shared_list })
     }
 
-    fn is_source_app_passthrough(&self, meta: &TransparentProxyFlowMeta) -> bool {
+    pub fn is_source_app_passthrough(&self, meta: &IncomingFlowInfo) -> bool {
         let guard = self.list.load();
 
         let Some(list) = guard.as_ref().as_ref() else {
@@ -149,18 +78,20 @@ fn passthrough_list_uri(aikido_url: &Uri) -> Result<Uri, BoxError> {
         .context("construct passthrough list URI from aikido_url")
 }
 
+#[derive(Debug, Clone)]
 struct PassthroughList {
     apps: Vec<AppConfig>,
 }
 
+#[derive(Debug, Clone)]
 struct AppConfig {
     app_name: String,
     domains: Domains,
 }
 
 impl AppConfig {
-    fn matches(&self, meta: &TransparentProxyFlowMeta) -> bool {
-        let Some(app_name) = meta.source_app_bundle_identifier.as_deref() else {
+    fn matches(&self, meta: &IncomingFlowInfo) -> bool {
+        let Some(app_name) = meta.meta.and_then(|m| m.source_app_bundle_identifier.as_deref()) else {
             return false;
         };
 
@@ -168,27 +99,21 @@ impl AppConfig {
             return false;
         }
 
-        self.domains.matches(meta.local_endpoint.as_ref())
+        self.domains.matches(meta.domain)
     }
 }
 
+#[derive(Debug, Clone)]
 enum Domains {
     Wildcard,
     Allowlist(DomainMatcher),
 }
 
 impl Domains {
-    fn matches(&self, maybe_host: Option<&HostWithPort>) -> bool {
+    fn matches(&self, domain: &Domain) -> bool {
         match self {
             Self::Wildcard => true,
             Self::Allowlist(domains) => {
-                let Some(host_with_port) = maybe_host else {
-                    return false;
-                };
-                let Some(domain) = host_with_port.host.as_domain() else {
-                    return false;
-                };
-
                 domains.is_match(domain)
             }
         }

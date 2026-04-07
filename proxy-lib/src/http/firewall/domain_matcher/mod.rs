@@ -1,6 +1,6 @@
 use rama::net::address::{AsDomainRef, Domain, DomainParentMatch, DomainTrie};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DomainMatcher {
     trie: DomainTrie<DomainAllowMode>,
 }

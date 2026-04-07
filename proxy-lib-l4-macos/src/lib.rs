@@ -18,8 +18,6 @@ use rama::{
     utils::str::any_starts_with_ignore_ascii_case,
 };
 
-use crate::remote_app_passthrough_list::is_source_app_passthrough;
-
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
@@ -72,18 +70,6 @@ fn flow_action(meta: &TransparentProxyFlowMeta) -> TransparentProxyFlowAction {
         app_sign_id = ?meta.source_app_signing_identifier,
         "flow intercept decision: evaluating (rust callback entered)"
     );
-
-    if is_source_app_passthrough(meta) {
-        tracing::debug!(
-            protocol = ?meta.protocol,
-            remote = ?meta.remote_endpoint,
-            local = ?meta.local_endpoint,
-            app_bundle_id = ?meta.source_app_bundle_identifier,
-            app_sign_id = ?meta.source_app_signing_identifier,
-            "flow action: source app is configured for passthrough"
-        );
-        return TransparentProxyFlowAction::Passthrough;
-    }
 
     let Some(remote_host) = is_ip_remote_host_passthrough(meta) else {
         return TransparentProxyFlowAction::Passthrough;

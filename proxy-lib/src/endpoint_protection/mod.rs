@@ -1,6 +1,7 @@
 pub mod config;
 pub mod policy;
 pub mod types;
+pub mod remote_app_passthrough_list;
 
 #[cfg(test)]
 mod tests;
