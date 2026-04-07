@@ -97,8 +97,8 @@ jobs:
         run: |
           cd packaging/macos/xcode/l4-proxy
           xcodebuild \
-            -project AikidoEndpointL4Proxy.xcodeproj \
-            -scheme AikidoEndpointL4ProxyHost \
+            -project AikidoNetworkExtension.xcodeproj \
+            -scheme AikidoNetworkExtensionHost \
             -configuration Release \
             -derivedDataPath "${{ github.workspace }}/l4-derived-data" \
             ARCHS="x86_64 arm64" \

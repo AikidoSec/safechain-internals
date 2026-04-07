@@ -1,4 +1,4 @@
-name: AikidoEndpointL4Proxy
+name: AikidoNetworkExtension
 options:
   bundleIdPrefix: 7VPF8GD6J4
   deploymentTarget:
@@ -10,13 +10,13 @@ packages:
     revision: 3dc1b7922293a6edeb624dd2b0b561e2051ccb20
 
 targets:
-  AikidoEndpointL4ProxyHost:
+  AikidoNetworkExtensionHost:
     type: application
     platform: macOS
     sources:
       - path: Host
     dependencies:
-      - target: AikidoEndpointL4ProxyExtension
+      - target: AikidoNetworkExtensionSysext
         embed: true
         codeSign: true
     settings:
@@ -45,7 +45,7 @@ targets:
           - "--options=runtime"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
-  AikidoEndpointL4ProxyExtension:
+  AikidoNetworkExtensionSysext:
     type: system-extension
     platform: macOS
     sources:

@@ -118,8 +118,8 @@ L4_DERIVED_DATA="$PROJECT_DIR/.aikido/xcode/safechain-l4-proxy-release"
 
 echo "Building L4 proxy macOS app..."
 xcodebuild \
-    -project AikidoEndpointL4Proxy.xcodeproj \
-    -scheme AikidoEndpointL4ProxyHost \
+    -project AikidoNetworkExtension.xcodeproj \
+    -scheme AikidoNetworkExtensionHost \
     -configuration Release \
     -derivedDataPath "$L4_DERIVED_DATA" \
     -allowProvisioningUpdates \

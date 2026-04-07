@@ -18,8 +18,8 @@ l4_dist_host_bundle_id := "com.aikido.endpoint.proxy.l4.dist"
 l4_dist_extension_bundle_id := "com.aikido.endpoint.proxy.l4.dist.extension"
 xcode_l4_project_dir := "packaging/macos/xcode/l4-proxy"
 xcode_l4_project_spec_dev := xcode_l4_project_dir + "/Project.dev.yml"
-xcode_l4_project_file := xcode_l4_project_dir + "/AikidoEndpointL4Proxy.xcodeproj"
-xcode_l4_host_scheme := "AikidoEndpointL4ProxyHost"
+xcode_l4_project_file := xcode_l4_project_dir + "/AikidoNetworkExtension.xcodeproj"
+xcode_l4_host_scheme := "AikidoNetworkExtensionHost"
 xcode_l4_derived_data := ".aikido/xcode/safechain-l4-proxy-wrapper"
 xcode_l4_app_name := "Aikido Network Extension.app"
 xcode_l4_app := xcode_l4_derived_data + "/Build/Products/Debug/" + xcode_l4_app_name
@@ -169,7 +169,7 @@ macos-l4-status:
 macos-l4-log-stream:
     log stream --style compact --level debug \
         --predicate 'subsystem == "com.aikido.endpoint.proxy.l4" \
-        OR process == "AikidoEndpointL4ProxyExtension" \
+        OR process == "com.aikido.endpoint.proxy.l4.dev.extension" \
         OR process == "Aikido Network Extension"'
 
 macos-l4-start *ARGS:

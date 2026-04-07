@@ -228,7 +228,7 @@ Stream live logs from the host and extension:
 ```bash
 log stream --style compact --level debug \
 --predicate 'subsystem == "com.aikido.endpoint.proxy.l4"
-  OR process == "AikidoEndpointL4ProxyExtension"
+  OR process == "com.aikido.endpoint.proxy.l4.dev.extension"
   OR process == "Aikido Network Extension"'
 ```
 
@@ -237,7 +237,7 @@ Show recent logs from the last 5 minutes:
 ```bash
 log show --last 5m --style compact --debug --info \
 --predicate 'subsystem == "com.aikido.endpoint.proxy.l4"
-  OR process == "AikidoEndpointL4ProxyExtension"
+  OR process == "com.aikido.endpoint.proxy.l4.dev.extension"
   OR process == "Aikido Network Extension"'
 ```
 
@@ -247,7 +247,7 @@ Export recent logs to a file for sharing or later analysis:
 mkdir -p .aikido/logs
 log show --last 30m --style compact --debug --info \
 --predicate 'subsystem == "com.aikido.endpoint.proxy.l4"
-  OR process == "AikidoEndpointL4ProxyExtension"
+  OR process == "com.aikido.endpoint.proxy.l4.dev.extension"
   OR process == "Aikido Network Extension"' \
  > ".aikido/logs/aikido_l4_proxy_${ts}.log" 2>&1
 ```

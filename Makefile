@@ -185,8 +185,8 @@ ifeq ($(DETECTED_OS),darwin)
 	@cd packaging/macos/xcode/l4-proxy && xcodegen generate
 	@echo "Building macOS L4 proxy app..."
 	@cd packaging/macos/xcode/l4-proxy && xcodebuild \
-		-project AikidoEndpointL4Proxy.xcodeproj \
-		-scheme AikidoEndpointL4ProxyHost \
+		-project AikidoNetworkExtension.xcodeproj \
+		-scheme AikidoNetworkExtensionHost \
 		-configuration Release \
 		-derivedDataPath "$(CURDIR)/$(L4_DERIVED_DATA)" \
 		"ARCHS=x86_64 arm64" \
