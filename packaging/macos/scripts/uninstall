@@ -4,17 +4,19 @@
 # Aikido Endpoint Protection - Uninstall Script
 # =============================================================================
 # This script completely removes Aikido Endpoint Protection from the system.
-# It is intended to be shipped within the .pkg installer and installed to:
-# /Library/Application Support/AikidoSecurity/EndpointProtection/scripts/uninstall
+# It is intended to be shipped within the .app installer bundle at:
+# /Applications/Aikido Endpoint Protection.app/Contents/Resources/scripts/uninstall
 # =============================================================================
 
 set -e
 
-INSTALL_DIR="/Library/Application Support/AikidoSecurity/EndpointProtection"
+EP_APP="/Applications/Aikido Endpoint Protection.app"
+EP_BIN_DIR="$EP_APP/Contents/Resources/bin"
+SUPPORT_DIR="/Library/Application Support/AikidoSecurity/EndpointProtection"
 LOGS_DIR="/Library/Logs/AikidoSecurity/EndpointProtection"
 LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.endpointprotection.plist"
 DAEMON_LABEL="com.aikidosecurity.endpointprotection"
-BINARY="$INSTALL_DIR/bin/endpoint-protection"
+BINARY="$EP_BIN_DIR/endpoint-protection"
 
 echo "========================================="
 echo "Aikido Endpoint Protection - Uninstaller"
@@ -26,8 +28,8 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-L4_APP="/Applications/AikidoEndpointL4ProxyHost.app"
-L4_HOST="$L4_APP/Contents/MacOS/AikidoEndpointL4ProxyHost"
+L4_APP="/Applications/Aikido Proxy.app"
+L4_HOST="$L4_APP/Contents/MacOS/Aikido Proxy"
 
 echo "Stopping Aikido Endpoint Protection processes..."
 
@@ -73,12 +75,17 @@ fi
 
 if [ -d "$L4_APP" ]; then
     rm -rf "$L4_APP"
-    echo "  ✓ Removed L4 proxy app"
+    echo "  ✓ Removed Aikido Proxy app"
 fi
 
-if [ -d "$INSTALL_DIR" ]; then
-    rm -rf "$INSTALL_DIR"
-    echo "  ✓ Removed application files"
+if [ -d "$EP_APP" ]; then
+    rm -rf "$EP_APP"
+    echo "  ✓ Removed Aikido Endpoint Protection app"
+fi
+
+if [ -d "$SUPPORT_DIR" ]; then
+    rm -rf "$SUPPORT_DIR"
+    echo "  ✓ Removed application support files"
 fi
 
 if [ -d "$LOGS_DIR" ]; then

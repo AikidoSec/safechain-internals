@@ -164,7 +164,7 @@ build-l4-proxy-universal:
 	@lipo -info $(BIN_DIR)/safechain-l4-proxy-darwin-universal
 
 L4_DERIVED_DATA=.aikido/xcode/safechain-l4-proxy-release
-L4_APP_NAME=AikidoEndpointL4ProxyHost.app
+L4_APP_NAME=Aikido Proxy.app
 
 build-l4-proxy-macos:
 ifeq ($(DETECTED_OS),darwin)
@@ -193,7 +193,7 @@ ifeq ($(DETECTED_OS),darwin)
 		ONLY_ACTIVE_ARCH=NO \
 		clean build
 	@mkdir -p $(BIN_DIR)
-	@rm -rf $(BIN_DIR)/$(L4_APP_NAME)
+	@rm -rf "$(BIN_DIR)/$(L4_APP_NAME)"
 	@ditto "$(L4_DERIVED_DATA)/Build/Products/Release/$(L4_APP_NAME)" "$(BIN_DIR)/$(L4_APP_NAME)"
 	@echo "macOS L4 proxy app built: $(BIN_DIR)/$(L4_APP_NAME)"
 else
@@ -248,7 +248,7 @@ endif
 
 uninstall-pkg:
 ifeq ($(DETECTED_OS),darwin)
-	sudo "/Library/Application Support/AikidoSecurity/EndpointProtection/scripts/uninstall"
+	sudo "/Applications/Aikido Endpoint Protection.app/Contents/Resources/scripts/uninstall"
 else
 	@echo "Error: PKG uninstallation is only supported on macOS"
 	@exit 1

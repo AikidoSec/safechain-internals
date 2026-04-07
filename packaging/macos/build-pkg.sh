@@ -66,7 +66,7 @@ echo "  Project directory: $PROJECT_DIR"
 AGENT_BIN="$BIN_DIR/endpoint-protection-darwin-$ARCH"
 AGENT_UI_APP="$BIN_DIR/endpoint-protection-ui-darwin-$ARCH.app"
 PROXY_BIN="$BIN_DIR/safechain-l7-proxy-darwin-$ARCH"
-L4_PROXY_APP="$BIN_DIR/AikidoEndpointL4ProxyHost.app"
+L4_PROXY_APP="$BIN_DIR/Aikido Proxy.app"
 
 if [ ! -f "$AGENT_BIN" ]; then
     echo "Error: endpoint-protection binary not found at $AGENT_BIN" >&2
@@ -97,13 +97,14 @@ echo "Using temporary build directory: $BUILD_DIR"
 # Create package directory structure
 PKG_ROOT="$BUILD_DIR/pkg_root"
 PKG_SCRIPTS="$BUILD_DIR/scripts"
-INSTALL_DIR="$PKG_ROOT/Library/Application Support/AikidoSecurity/EndpointProtection"
-L4_APP_INSTALL_DIR="$PKG_ROOT/Applications"
+APPS_INSTALL_DIR="$PKG_ROOT/Applications"
+EP_APP_DIR="$APPS_INSTALL_DIR/Aikido Endpoint Protection.app"
+SUPPORT_DIR="$PKG_ROOT/Library/Application Support/AikidoSecurity/EndpointProtection"
 LAUNCHDAEMONS_DIR="$PKG_ROOT/Library/LaunchDaemons"
 LOGS_DIR="$PKG_ROOT/Library/Logs/AikidoSecurity/EndpointProtection"
 
-mkdir -p "$INSTALL_DIR/bin"
-mkdir -p "$L4_APP_INSTALL_DIR"
+mkdir -p "$APPS_INSTALL_DIR"
+mkdir -p "$SUPPORT_DIR"
 mkdir -p "$LAUNCHDAEMONS_DIR"
 mkdir -p "$LOGS_DIR"
 mkdir -p "$PKG_SCRIPTS"
@@ -112,18 +113,28 @@ mkdir -p "$PKG_SCRIPTS"
 touch "$LOGS_DIR/.keep"
 chmod 644 "$LOGS_DIR/.keep"
 
-# Copy binaries
-echo "Copying binaries..."
-cp "$AGENT_BIN" "$INSTALL_DIR/bin/endpoint-protection"
-cp -R "$AGENT_UI_APP" "$INSTALL_DIR/bin/endpoint-protection-ui.app"
-cp "$PROXY_BIN" "$INSTALL_DIR/bin/safechain-l7-proxy"
-chmod 755 "$INSTALL_DIR/bin/endpoint-protection"
-chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
+# Copy the UI app bundle as the main Aikido Endpoint Protection app
+echo "Copying Aikido Endpoint Protection app bundle..."
+cp -R "$AGENT_UI_APP" "$EP_APP_DIR"
 
-echo "Copying L4 proxy app bundle..."
-ditto "$L4_PROXY_APP" "$L4_APP_INSTALL_DIR/AikidoEndpointL4ProxyHost.app"
-chmod 755 "$L4_APP_INSTALL_DIR/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost"
-L4_SYSEXT_DIR="$L4_APP_INSTALL_DIR/AikidoEndpointL4ProxyHost.app/Contents/Library/SystemExtensions"
+# Embed daemon binary and L7 proxy inside the app bundle
+echo "Embedding binaries into app bundle..."
+mkdir -p "$EP_APP_DIR/Contents/Resources/bin"
+cp "$AGENT_BIN" "$EP_APP_DIR/Contents/Resources/bin/endpoint-protection"
+cp "$PROXY_BIN" "$EP_APP_DIR/Contents/Resources/bin/safechain-l7-proxy"
+chmod 755 "$EP_APP_DIR/Contents/Resources/bin/endpoint-protection"
+chmod 755 "$EP_APP_DIR/Contents/Resources/bin/safechain-l7-proxy"
+
+# Embed uninstall script into the app bundle
+echo "Embedding scripts into app bundle..."
+mkdir -p "$EP_APP_DIR/Contents/Resources/scripts"
+cp "$SCRIPT_DIR/scripts/uninstall" "$EP_APP_DIR/Contents/Resources/scripts/uninstall"
+chmod 755 "$EP_APP_DIR/Contents/Resources/scripts/uninstall"
+
+echo "Copying Aikido Proxy app bundle..."
+ditto "$L4_PROXY_APP" "$APPS_INSTALL_DIR/Aikido Proxy.app"
+chmod 755 "$APPS_INSTALL_DIR/Aikido Proxy.app/Contents/MacOS/Aikido Proxy"
+L4_SYSEXT_DIR="$APPS_INSTALL_DIR/Aikido Proxy.app/Contents/Library/SystemExtensions"
 L4_SYSEXT=$(find "$L4_SYSEXT_DIR" -maxdepth 1 -name "*.systemextension" | head -1)
 if [ -n "$L4_SYSEXT" ]; then
     L4_SYSEXT_NAME=$(basename "$L4_SYSEXT" .systemextension)
@@ -131,12 +142,6 @@ if [ -n "$L4_SYSEXT" ]; then
 else
     echo "Warning: No system extension found in $L4_SYSEXT_DIR"
 fi
-
-# Copy scripts
-echo "Copying scripts..."
-mkdir -p "$INSTALL_DIR/scripts"
-cp "$SCRIPT_DIR/scripts/uninstall" "$INSTALL_DIR/scripts/uninstall"
-chmod 755 "$INSTALL_DIR/scripts/uninstall"
 
 # Copy LaunchDaemon plist
 echo "Copying LaunchDaemon plist..."

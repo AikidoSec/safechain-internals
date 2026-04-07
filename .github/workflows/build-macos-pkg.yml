@@ -40,11 +40,21 @@ jobs:
         with:
           env-vars: "RUST_TOOLCHAIN=stable"
 
-      - name: Build L4 proxy Rust static library (x86_64)
-        run: cargo build --release -p safechain-lib-l4-proxy-macos --target x86_64-apple-darwin
-
       - name: Build L4 proxy Rust static library (aarch64)
-        run: cargo build --release -p safechain-lib-l4-proxy-macos --target aarch64-apple-darwin
+        run: |
+          MACOSX_DEPLOYMENT_TARGET=13.0 \
+          CMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+          CFLAGS_aarch64_apple_darwin="-mmacosx-version-min=13.0" \
+          CXXFLAGS_aarch64_apple_darwin="-mmacosx-version-min=13.0" \
+          cargo build --release --target aarch64-apple-darwin -p safechain-lib-l4-proxy-macos
+
+      - name: Build L4 proxy Rust static library (x86_64)
+        run: |
+          MACOSX_DEPLOYMENT_TARGET=13.0 \
+          CMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+          CFLAGS_x86_64_apple_darwin="-mmacosx-version-min=13.0" \
+          CXXFLAGS_x86_64_apple_darwin="-mmacosx-version-min=13.0" \
+          cargo build --release --target x86_64-apple-darwin -p safechain-lib-l4-proxy-macos
 
       - name: Create universal L4 proxy static library
         run: |
@@ -97,14 +107,14 @@ jobs:
 
       - name: Prepare L4 proxy app artifact
         run: |
-          ditto "${{ github.workspace }}/l4-derived-data/Build/Products/Release/AikidoEndpointL4ProxyHost.app" \
-            AikidoEndpointL4ProxyHost.app
+          ditto "${{ github.workspace }}/l4-derived-data/Build/Products/Release/Aikido Proxy.app" \
+            "Aikido Proxy.app"
 
       - name: Upload L4 proxy app artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AikidoEndpointL4ProxyHost.app
-          path: AikidoEndpointL4ProxyHost.app
+          name: Aikido Proxy.app
+          path: Aikido Proxy.app
 
   build-pkg:
     needs: [build-unix, build-l4-proxy-macos-app]
@@ -173,13 +183,13 @@ jobs:
       - name: Download L4 proxy macOS app artifact
         uses: actions/download-artifact@v4
         with:
-          name: AikidoEndpointL4ProxyHost.app
+          name: Aikido Proxy.app
           path: bin/l4-app-download
 
       - name: Restore L4 proxy app bundle layout
         run: |
-          mkdir -p "bin/AikidoEndpointL4ProxyHost.app"
-          mv bin/l4-app-download/* "bin/AikidoEndpointL4ProxyHost.app/"
+          mkdir -p "bin/Aikido Proxy.app"
+          mv bin/l4-app-download/* "bin/Aikido Proxy.app/"
           rm -rf bin/l4-app-download
 
       - name: Create universal binaries
@@ -255,7 +265,7 @@ jobs:
           L4_HOST_PROVISION_PROFILE_B64: ${{ secrets.L4_HOST_PROVISION_PROFILE_B64 }}
           L4_EXT_PROVISION_PROFILE_B64: ${{ secrets.L4_EXT_PROVISION_PROFILE_B64 }}
         run: |
-          APP="bin/AikidoEndpointL4ProxyHost.app"
+          APP="bin/Aikido Proxy.app"
           SYSEXT="$APP/Contents/Library/SystemExtensions/com.aikido.endpoint.proxy.l4.dist.extension.systemextension"
 
           if [ -z "$L4_HOST_PROVISION_PROFILE_B64" ] || [ -z "$L4_EXT_PROVISION_PROFILE_B64" ]; then
@@ -288,8 +298,8 @@ jobs:
           DEV_ID_SHA: ${{ env.DEV_ID_SHA }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          SYSEXT="bin/AikidoEndpointL4ProxyHost.app/Contents/Library/SystemExtensions/com.aikido.endpoint.proxy.l4.dist.extension.systemextension"
-          APP="bin/AikidoEndpointL4ProxyHost.app"
+          SYSEXT="bin/Aikido Proxy.app/Contents/Library/SystemExtensions/com.aikido.endpoint.proxy.l4.dist.extension.systemextension"
+          APP="bin/Aikido Proxy.app"
 
           echo "Signing L4 system extension..."
           codesign --force --sign "$DEV_ID_SHA" --timestamp --options runtime \
