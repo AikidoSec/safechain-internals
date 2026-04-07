@@ -205,7 +205,9 @@ fn downgrade_info_version_and_urls(json: &mut serde_json::Value) {
             .iter()
             .filter_map(|(version, files)| {
                 let semver = PragmaticSemver::parse(version).ok()?;
-                is_stable_version(version).then_some((semver, version.as_str(), files))
+                semver
+                    .is_stable()
+                    .then_some((semver, version.as_str(), files))
             })
             .max_by(|left, right| left.0.cmp(&right.0))
             .map(|(_, version, files)| (version.to_owned(), files.clone()))
@@ -261,23 +263,6 @@ fn parse_package_from_metadata_file(file: &serde_json::Value) -> Option<PackageI
                 .and_then(|url| url.as_str())
                 .and_then(parse_package_info_from_url)
         })
-}
-
-/// Returns whether a PyPI version should be treated as a final/stable release
-/// when downgrading `info.version`.
-///
-/// This intentionally excludes pre-release and development markers such as
-/// `a`, `b`, `rc`, and `dev`, while still allowing post releases like
-/// `1.2.3.post1`.
-fn is_stable_version(version: &str) -> bool {
-    if version.is_empty() || !version.starts_with(|c: char| c.is_ascii_digit()) {
-        return false;
-    }
-
-    version
-        .split(|ch: char| !ch.is_ascii_alphabetic())
-        .filter(|token| !token.is_empty())
-        .all(|token| token.eq_ignore_ascii_case("post"))
 }
 
 #[cfg(test)]

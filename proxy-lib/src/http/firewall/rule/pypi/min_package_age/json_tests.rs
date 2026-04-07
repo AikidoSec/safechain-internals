@@ -148,25 +148,6 @@ fn legacy_non_latest_version_filtered_leaves_info_version_unchanged() {
     assert!(out["releases"].get("1.0.0").is_none());
 }
 
-// --- is_stable_version ---
-
-#[test]
-fn stable_versions_accepted() {
-    assert!(is_stable_version("1.0.0"));
-    assert!(is_stable_version("2.31"));
-    assert!(is_stable_version("3"));
-    assert!(is_stable_version("1.0.0.post1"));
-}
-
-#[test]
-fn prerelease_versions_rejected() {
-    assert!(!is_stable_version("1.0.0a1"));
-    assert!(!is_stable_version("1.0.0b2"));
-    assert!(!is_stable_version("1.0.0rc1"));
-    assert!(!is_stable_version("1.0.0.dev0"));
-    assert!(!is_stable_version(""));
-}
-
 // --- parse_package_from_metadata_file ---
 
 #[test]
