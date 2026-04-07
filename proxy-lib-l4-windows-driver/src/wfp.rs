@@ -19,7 +19,7 @@
 use alloc::{string::String, vec::Vec};
 use core::{
     ffi::c_void,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
 };
 
 use safechain_proxy_lib_windows_core::redirect_ctx::ProxyRedirectContext;
@@ -29,12 +29,11 @@ use wdk_sys::{GUID, NTSTATUS, STATUS_SUCCESS};
 use crate::log;
 
 /// Minimal flow metadata for an outbound TCP connect classification.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct WfpFlowMeta {
     pub remote: SocketAddr,
     pub source_pid: Option<u32>,
     pub source_process_path: Option<String>,
-    pub source_original_process_path: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,8 +48,7 @@ pub enum TcpRedirectDecision {
 pub fn build_redirect_context(flow: &WfpFlowMeta) -> Result<Vec<u8>, postcard::Error> {
     let ctx = ProxyRedirectContext::new(flow.remote)
         .with_source_pid(flow.source_pid)
-        .with_source_process_path(flow.source_process_path.clone())
-        .with_source_original_process_path(flow.source_original_process_path.clone());
+        .with_source_process_path(flow.source_process_path.clone());
     postcard::to_allocvec(&ctx)
 }
 
@@ -237,10 +235,10 @@ const GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6: GUID = guid(
 
 const fn guid(data1: u32, data2: u16, data3: u16, data4: [u8; 8]) -> GUID {
     GUID {
-        data1: data1 as i32,
-        data2: data2 as i16,
-        data3: data3 as i16,
-        data4,
+        Data1: data1,
+        Data2: data2,
+        Data3: data3,
+        Data4: data4,
     }
 }
 
@@ -307,8 +305,8 @@ unsafe extern "system" {
 #[cfg(test)]
 mod tests {
     use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-
-    use super::{build_redirect_context, is_local_destination};
+    use super::{build_redirect_context, is_local_destination, WfpFlowMeta};
+    use alloc::string::String;
     use safechain_proxy_lib_windows_core::redirect_ctx::ProxyRedirectContext;
 
     #[test]
@@ -333,7 +331,6 @@ mod tests {
             remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
             source_pid: Some(123),
             source_process_path: Some(String::from("C:\\Windows\\System32\\curl.exe")),
-            source_original_process_path: None,
         };
         let encoded = build_redirect_context(&flow).expect("encoding failed");
         let decoded: ProxyRedirectContext =

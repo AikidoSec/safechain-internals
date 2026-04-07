@@ -63,7 +63,7 @@ pub mod ioctl {
         controller: &ProxyDriverController,
         ioctl_code: u32,
         input: &[u8],
-    ) -> (NTSTATUS, usize) {
+    ) -> (NTSTATUS, u64) {
         let update = match ioctl_code {
             IOCTL_SET_IPV4_PROXY => parse_ipv4_update(input),
             IOCTL_SET_IPV6_PROXY => parse_ipv6_update(input),
@@ -165,7 +165,7 @@ pub mod startup_config {
     use alloc::vec;
     use core::{iter, mem::size_of, ptr};
     use wdk_sys::{
-        KEY_READ, NTSTATUS, OBJ_CASE_INSENSITIVE, OBJECT_ATTRIBUTES, PCUNICODE_STRING, REG_BINARY,
+        KEY_READ,  OBJ_CASE_INSENSITIVE, OBJECT_ATTRIBUTES, PCUNICODE_STRING, REG_BINARY,
         STATUS_BUFFER_OVERFLOW, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, UNICODE_STRING,
         ntddk::{ZwClose, ZwOpenKey, ZwQueryValueKey},
     };
@@ -272,9 +272,12 @@ pub mod startup_config {
         }
 
         let result = query_startup_value_blob(key_handle);
-        unsafe {
+       let close_status =  unsafe {
             // SAFETY: handle returned by ZwOpenKey must be closed once no longer needed.
-            ZwClose(key_handle);
+            ZwClose(key_handle)
+        };
+        if close_status != STATUS_SUCCESS {
+            return None;
         }
         result
     }
@@ -360,7 +363,7 @@ pub mod startup_config {
             }
             let units = (us.Length as usize) / size_of::<u16>();
             let slice = core::slice::from_raw_parts(us.Buffer, units);
-            let mut v = slice.to_vec();
+            let v = slice.to_vec();
             let had_nul = v.last().copied() == Some(0);
             (v, had_nul)
         };

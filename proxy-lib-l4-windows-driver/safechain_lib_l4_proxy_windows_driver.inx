@@ -1,0 +1,51 @@
+;===================================================================
+; SafeChain L4 Proxy Windows Driver
+; Copyright (c) Aikido Security BV
+;===================================================================
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = System
+ClassGuid   = {4D36E97D-E325-11CE-BFC1-08002BE10318}
+Provider    = %ProviderString%
+PnpLockDown = 1
+
+[DestinationDirs]
+DefaultDestDir = 13
+
+[SourceDisksNames]
+1 = %DiskId1%,,,""
+
+[SourceDisksFiles]
+safechain_lib_l4_proxy_windows_driver.sys = 1,,
+
+[Manufacturer]
+%StdMfg%=Standard,NT$ARCH$.10.0...16299
+
+[Standard.NT$ARCH$.10.0...16299]
+%DeviceDesc%=SafeChainL4Proxy_Install, Root\SafeChainL4Proxy
+
+[SafeChainL4Proxy_Install.NT$ARCH$]
+CopyFiles = DriverCopyFiles
+
+[DriverCopyFiles]
+safechain_lib_l4_proxy_windows_driver.sys
+
+[SafeChainL4Proxy_Install.NT$ARCH$.Services]
+AddService = %ServiceName%, %SPSVCINST_ASSOCSERVICE%, SafeChainL4Proxy_Service_Install
+
+[SafeChainL4Proxy_Service_Install]
+DisplayName   = %ServiceDesc%
+ServiceType   = 1
+StartType     = 3
+ErrorControl  = 1
+ServiceBinary = %13%\safechain_lib_l4_proxy_windows_driver.sys
+
+[Strings]
+SPSVCINST_ASSOCSERVICE = 0x00000002
+ProviderString         = "Aikido Security BV"
+StdMfg                 = "Aikido Security BV"
+DiskId1                = "SafeChain L4 Proxy Driver Installation Disk"
+DeviceDesc             = "SafeChain L4 Proxy Windows Driver"
+ServiceName            = "SafeChainL4Proxy"
+ServiceDesc            = "SafeChain L4 Proxy Windows Driver"

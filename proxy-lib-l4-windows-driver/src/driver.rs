@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use core::net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use core::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 
 use spin::RwLock;
 
@@ -145,7 +145,6 @@ mod tests {
             remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)), 443),
             source_pid: Some(42),
             source_process_path: None,
-            source_original_process_path: None,
         };
 
         assert!(matches!(
@@ -163,7 +162,6 @@ mod tests {
             remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
             source_pid: Some(7),
             source_process_path: None,
-            source_original_process_path: None,
         };
 
         let decision = controller.classify_outbound_tcp_connect(flow);
@@ -182,7 +180,6 @@ mod tests {
             ),
             source_pid: Some(77),
             source_process_path: None,
-            source_original_process_path: None,
         };
 
         let decision = controller.classify_outbound_tcp_connect(flow);

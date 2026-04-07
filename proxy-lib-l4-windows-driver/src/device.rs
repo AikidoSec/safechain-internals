@@ -2,11 +2,11 @@ use alloc::vec::Vec;
 use core::{iter, mem::size_of, ptr};
 
 use wdk_sys::{
-    DRIVER_OBJECT, IO_NO_INCREMENT, IRP, IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_DEVICE_CONTROL,
+    DRIVER_OBJECT, IO_NO_INCREMENT, IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_DEVICE_CONTROL,
     NTSTATUS, PDEVICE_OBJECT, PIRP, STATUS_INVALID_DEVICE_REQUEST, STATUS_SUCCESS, UNICODE_STRING,
     ntddk::{
-        IoCompleteRequest, IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice,
-        IoDeleteSymbolicLink, IoGetCurrentIrpStackLocation,
+        IofCompleteRequest, IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice,
+        IoDeleteSymbolicLink,
     },
 };
 
@@ -70,7 +70,7 @@ pub fn cleanup(driver: *mut DRIVER_OBJECT) {
     let mut symlink = unicode_from_wide_mut(&mut symlink_w);
     unsafe {
         // SAFETY: symbolic link path points to static string bytes owned in this function scope.
-        IoDeleteSymbolicLink(&mut symlink);
+        let _ = IoDeleteSymbolicLink(&mut symlink);
         if !driver.is_null() && !(*driver).DeviceObject.is_null() {
             // SAFETY: DriverObject->DeviceObject was created by IoCreateDevice and may be null if init failed.
             IoDeleteDevice((*driver).DeviceObject);
@@ -79,15 +79,15 @@ pub fn cleanup(driver: *mut DRIVER_OBJECT) {
 }
 
 /// IRP dispatch handler for `IRP_MJ_CREATE` / `IRP_MJ_CLOSE`.
-extern "system" fn dispatch_create_close(_device: PDEVICE_OBJECT, irp: PIRP) -> NTSTATUS {
+extern "C" fn dispatch_create_close(_device: PDEVICE_OBJECT, irp: PIRP) -> NTSTATUS {
     complete_request(irp, STATUS_SUCCESS, 0)
 }
 
 /// IRP dispatch handler for `IRP_MJ_DEVICE_CONTROL`.
-extern "system" fn dispatch_device_control(_device: PDEVICE_OBJECT, irp: PIRP) -> NTSTATUS {
+extern "C" fn dispatch_device_control(_device: PDEVICE_OBJECT, irp: PIRP) -> NTSTATUS {
     let irp_sp = unsafe {
         // SAFETY: IRP is provided by I/O manager for dispatch callback.
-        IoGetCurrentIrpStackLocation(irp)
+        (*irp).Tail.Overlay.__bindgen_anon_2.__bindgen_anon_1.CurrentStackLocation
     };
     if irp_sp.is_null() {
         return complete_request(irp, STATUS_INVALID_DEVICE_REQUEST, 0);
@@ -121,12 +121,12 @@ extern "system" fn dispatch_device_control(_device: PDEVICE_OBJECT, irp: PIRP) -
 /// WDK references (`ntddk.h`):
 /// - `IoCompleteRequest`:
 ///   https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-iocompleterequest
-fn complete_request(irp: PIRP, status: NTSTATUS, info: usize) -> NTSTATUS {
+fn complete_request(irp: PIRP, status: NTSTATUS, info: u64) -> NTSTATUS {
     unsafe {
         // SAFETY: IRP is valid for this dispatch invocation and completion path.
         (*irp).IoStatus.__bindgen_anon_1.Status = status;
         (*irp).IoStatus.Information = info;
-        IoCompleteRequest(irp, IO_NO_INCREMENT as i8);
+        IofCompleteRequest(irp, IO_NO_INCREMENT as i8);
     }
     status
 }

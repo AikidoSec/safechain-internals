@@ -99,6 +99,6 @@ pub fn update_driver_config(update: ProxyDriverConfigUpdate) -> NTSTATUS {
     status
 }
 
-pub fn handle_device_control_ioctl(ioctl_code: u32, input: &[u8]) -> (NTSTATUS, usize) {
+pub fn handle_device_control_ioctl(ioctl_code: u32, input: &[u8]) -> (NTSTATUS, u64) {
     control::ioctl::handle_device_control_ioctl(&DRIVER, ioctl_code, input)
 }
