@@ -69,3 +69,11 @@ func GetSbomJSONPath() string {
 func GetConfigPath() string {
 	return filepath.Join(config.RunDir, "config.json")
 }
+
+func GetBlockEventsPath() string {
+	return filepath.Join(config.RunDir, "block-events.json")
+}
+
+func GetTlsEventsPath() string {
+	return filepath.Join(config.RunDir, "tls-events.json")
+}

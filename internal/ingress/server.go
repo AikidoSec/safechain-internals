@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/AikidoSec/safechain-internals/internal/config"
+	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
 
 const (
@@ -43,8 +44,8 @@ func New(cfg *config.ConfigInfo, ui UIProvider) *Server {
 	return &Server{
 		config:        cfg,
 		ui:            ui,
-		eventStore:    &eventStore{},
-		tlsEventStore: &tlsEventStore{},
+		eventStore:    newEventStore(platform.GetBlockEventsPath()),
+		tlsEventStore: newTlsEventStore(platform.GetTlsEventsPath()),
 	}
 }
 
