@@ -328,6 +328,9 @@ jobs:
           echo "L4 proxy app bundle signed successfully"
 
       - name: Build distribution .pkg installer
+        env:
+          CODESIGN_IDENTITY: ${{ env.DEV_ID_SHA }}
+          KEYCHAIN_PATH: ${{ env.KEYCHAIN_PATH }}
         run: |
           cd packaging/macos
           ./build-distribution-pkg.sh -v "${{ inputs.version || 'dev' }}" -a "universal" -b "../../bin" -o "../../dist"

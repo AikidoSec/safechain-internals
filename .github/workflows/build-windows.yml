@@ -172,12 +172,9 @@ jobs:
           AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "packaging/windows/scripts/StoreToken.ps1"
         shell: bash
 
-      - name: Install WiX Toolset
-        run: dotnet tool install -g wix
-
-      - name: Accept WiX EULA and add extensions
+      - name: Install WiX Toolset and extensions
         run: |
-          wix eula accept wix7
+          dotnet tool install -g wix --version 6.0.2
           wix extension add WixToolset.UI.wixext/6.0.2
           wix extension add WixToolset.Util.wixext/6.0.2
 

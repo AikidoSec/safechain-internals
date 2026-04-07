@@ -132,7 +132,15 @@ cp "$SCRIPT_DIR/scripts/uninstall" "$EP_APP_DIR/Contents/Resources/scripts/unins
 chmod 755 "$EP_APP_DIR/Contents/Resources/scripts/uninstall"
 
 echo "Re-signing Aikido Endpoint Protection app bundle..."
-codesign --force --deep --sign - "$EP_APP_DIR"
+if [ -n "$CODESIGN_IDENTITY" ]; then
+    SIGN_ARGS=(--force --deep --sign "$CODESIGN_IDENTITY" --timestamp --options runtime)
+    if [ -n "$KEYCHAIN_PATH" ]; then
+        SIGN_ARGS+=(--keychain "$KEYCHAIN_PATH")
+    fi
+    codesign "${SIGN_ARGS[@]}" "$EP_APP_DIR"
+else
+    codesign --force --deep --sign - "$EP_APP_DIR"
+fi
 
 echo "Copying Aikido Network Extension app bundle..."
 ditto "$L4_PROXY_APP" "$APPS_INSTALL_DIR/Aikido Network Extension.app"
