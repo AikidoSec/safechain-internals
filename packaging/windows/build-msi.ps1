@@ -70,6 +70,7 @@ wix build $WxsFile $CustomUIFile `
     -ext WixToolset.UI.wixext `
     -ext WixToolset.Util.wixext `
     -arch x64 `
+    -acceptEula wix7 `
     -o $OutputMsi
 
 if ($LASTEXITCODE -eq 0) {
