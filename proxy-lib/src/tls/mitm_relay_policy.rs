@@ -7,7 +7,9 @@ use rama::{
     extensions::{self, ExtensionsMut},
     io::{BridgeIo, Io},
     net::{
-        address::Domain, proxy::IoForwardService, tls::{client::ClientHelloExtension, server::InputWithClientHello}
+        address::Domain,
+        proxy::IoForwardService,
+        tls::{client::ClientHelloExtension, server::InputWithClientHello},
     },
     telemetry::tracing,
     tls::boring::{
@@ -19,7 +21,7 @@ use rama::{
 
 use crate::{
     http::firewall::{Firewall, IncomingFlowInfo, events::TlsTerminationFailedEvent},
-    utils::net::{get_app_source_bundle_id_from_ext, get_transparent_proxy_flow_meta_from_ext},
+    utils::net::get_app_source_bundle_id_from_ext,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -157,26 +159,9 @@ where
         }
 
         if let Some(server_name) = maybe_server_name {
-            if let Some(bundle_id) = source_app_bundle_id.clone()
-                && bundle_id.eq_ignore_ascii_case("com.docker.docker")
-            {
-                tracing::debug!(
-                    bundle_id = %bundle_id,
-                    domain = %server_name,
-                    "serving via fallback due to app in passthrough list"
-                );
-                return self
-                    .fallback
-                    .serve(bridge_io)
-                    .await
-                    .context("serve via fallback for app in passthrough list")
-                    .context_field("app_bundle_id", bundle_id);
-            }
-
-            let meta = get_transparent_proxy_flow_meta_from_ext(&bridge_io).map(|x| x.to_owned());
             let incoming_flow_info = IncomingFlowInfo {
                 domain: &server_name,
-                meta: meta.as_deref(),
+                app_bundle_id: source_app_bundle_id.as_deref(),
             };
 
             match self.firewall.match_http_rules(&incoming_flow_info) {

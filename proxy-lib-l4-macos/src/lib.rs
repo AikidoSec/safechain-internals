@@ -22,7 +22,6 @@ use rama::{
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 mod config;
-mod remote_app_passthrough_list;
 mod tcp;
 mod utils;
 

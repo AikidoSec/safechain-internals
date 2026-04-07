@@ -47,8 +47,12 @@ where
         // if not the case (e.g. insecure http traffic), we match here with match_http_rules (same function being used during tls handshake)
         let maybe_http_rules = match req.extensions().get().cloned() {
             Some(rules) => Some(rules),
-            None => try_get_domain_for_req(&req)
-                .and_then(|domain| self.firewall.match_http_rules(&super::IncomingFlowInfo { domain: &domain, meta: None })),
+            None => try_get_domain_for_req(&req).and_then(|domain| {
+                self.firewall.match_http_rules(&super::IncomingFlowInfo {
+                    domain: &domain,
+                    app_bundle_id: None,
+                })
+            }),
         };
 
         if let Some(http_rules) = maybe_http_rules {

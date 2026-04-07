@@ -16,10 +16,10 @@ use rama::{
         },
     },
     layer::MapErrLayer,
-    net::{address::Domain, apple::networkextension::tproxy::TransparentProxyFlowMeta},
+    net::address::Domain,
     rt::Executor,
     telemetry::tracing,
-    utils::{backoff::ExponentialBackoff, rng::HasherRng, str::{arcstr::ArcStr}},
+    utils::{backoff::ExponentialBackoff, rng::HasherRng, str::arcstr::ArcStr},
 };
 
 #[cfg(feature = "pac")]
@@ -43,7 +43,10 @@ pub use self::matched_rules::{
 mod pac;
 
 use crate::{
-    endpoint_protection::{PolicyEvaluator, RemoteEndpointConfig, remote_app_passthrough_list::{self, RemoteAppPassthroughList}},
+    endpoint_protection::{
+        PolicyEvaluator, RemoteEndpointConfig,
+        remote_app_passthrough_list::RemoteAppPassthroughList,
+    },
     http::firewall::rule::{DynRule, npm::min_package_age::MinPackageAge},
     storage::SyncCompactDataStorage,
     utils::{env::network_service_identifier, token::AgentIdentity},
@@ -63,7 +66,7 @@ pub struct Firewall {
 
 pub struct IncomingFlowInfo<'a> {
     pub domain: &'a Domain,
-    pub meta: Option<&'a TransparentProxyFlowMeta>,
+    pub app_bundle_id: Option<&'a str>,
 }
 
 impl Firewall {
@@ -159,12 +162,13 @@ impl Firewall {
         let passthrough_list = match agent_identity {
             Some(identity) => {
                 match RemoteAppPassthroughList::try_new(
-                    guard.clone(), 
-                    identity, 
-                    aikido_url, 
+                    guard.clone(),
+                    identity,
+                    aikido_url,
                     layered_client.clone(),
                 )
-                .await {
+                .await
+                {
                     Ok(passthrough_list) => Some(passthrough_list),
                     Err(err) => {
                         tracing::warn!(
@@ -174,7 +178,7 @@ impl Firewall {
                         None
                     }
                 }
-            },
+            }
             None => None,
         };
 
@@ -267,7 +271,7 @@ impl Firewall {
                 self::rule::hijack::RuleHijack::new().into_dyn(),
             ]),
             notifier,
-            passthrough_list
+            passthrough_list,
         })
     }
 
@@ -285,8 +289,16 @@ impl Firewall {
         }
     }
 
-    pub fn match_http_rules(&self, incoming_flow_info: &IncomingFlowInfo) -> Option<FirewallHttpRules> {
+    pub fn match_http_rules(
+        &self,
+        incoming_flow_info: &IncomingFlowInfo,
+    ) -> Option<FirewallHttpRules> {
         if self.is_passthrough_traffic(incoming_flow_info) {
+            tracing::debug!(
+                domain = %incoming_flow_info.domain,
+                bundle_id = %incoming_flow_info.app_bundle_id.unwrap_or("default"),
+                "skipping firewall for passthrough app and bundle"
+            );
             return None;
         }
 

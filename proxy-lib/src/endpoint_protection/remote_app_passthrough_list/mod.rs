@@ -1,27 +1,21 @@
-use std::{
-    sync::{Arc},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
 use rama::{
     Service,
     error::{BoxError, ErrorContext, ErrorExt, extra::OpaqueError},
     graceful::ShutdownGuard,
-    http::{
-        BodyExtractExt, Request, Response, Uri,
-        service::client::HttpClientExt,
-    },
-    net::
-        address::Domain
-    ,
+    http::{BodyExtractExt, Request, Response, Uri, service::client::HttpClientExt},
+    net::address::Domain,
     telemetry::tracing,
 };
 use rand::RngExt as _;
 use serde::Deserialize;
 
-use crate::{http::firewall::{IncomingFlowInfo, domain_matcher::DomainMatcher}, utils::token::AgentIdentity};
-
+use crate::{
+    http::firewall::{IncomingFlowInfo, domain_matcher::DomainMatcher},
+    utils::token::AgentIdentity,
+};
 
 #[derive(Debug, Clone)]
 pub struct RemoteAppPassthroughList {
@@ -34,10 +28,10 @@ impl RemoteAppPassthroughList {
         agent_identity: AgentIdentity,
         aikido_url: Uri,
         client: C,
-    ) -> Result<Self, BoxError>    
+    ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError>, {
-
+        C: Service<Request, Output = Response, Error = OpaqueError>,
+    {
         let uri = passthrough_list_uri(&aikido_url)?;
         let client = RemoteAppPassthroughListClient {
             agent_identity,
@@ -91,11 +85,11 @@ struct AppConfig {
 
 impl AppConfig {
     fn matches(&self, meta: &IncomingFlowInfo) -> bool {
-        let Some(app_name) = meta.meta.and_then(|m| m.source_app_bundle_identifier.as_deref()) else {
+        let Some(app_name) = meta.app_bundle_id else {
             return false;
         };
 
-        if !self.app_name.eq_ignore_ascii_case(app_name) {
+        if !app_name.starts_with(self.app_name.as_str()) {
             return false;
         }
 
@@ -106,16 +100,14 @@ impl AppConfig {
 #[derive(Debug, Clone)]
 enum Domains {
     Wildcard,
-    Allowlist(DomainMatcher),
+    Allowlist(Box<DomainMatcher>),
 }
 
 impl Domains {
     fn matches(&self, domain: &Domain) -> bool {
         match self {
             Self::Wildcard => true,
-            Self::Allowlist(domains) => {
-                domains.is_match(domain)
-            }
+            Self::Allowlist(domains) => domains.is_match(domain),
         }
     }
 }
@@ -181,12 +173,12 @@ where
                     domains: if a.domains == ["*"] {
                         Domains::Wildcard
                     } else {
-                        let domain_matcher = a
+                        let domain_matcher: DomainMatcher = a
                             .domains
                             .into_iter()
                             .filter_map(|d| d.parse::<Domain>().ok())
                             .collect();
-                        Domains::Allowlist(domain_matcher)
+                        Domains::Allowlist(Box::new(domain_matcher))
                     },
                 })
                 .collect(),

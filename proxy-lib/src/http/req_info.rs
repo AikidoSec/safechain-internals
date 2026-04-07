@@ -14,9 +14,7 @@ pub fn try_get_domain_for_req<Body>(req: &Request<Body>) -> Option<Cow<'_, Domai
     } else {
         RequestContext::try_from(req)
             .ok()
-            .map(|ctx| {
-                ctx.host_with_port()
-            })
+            .map(|ctx| ctx.host_with_port())
             .and_then(|v| v.host.into_domain())
             .map(Cow::Owned)
     }
