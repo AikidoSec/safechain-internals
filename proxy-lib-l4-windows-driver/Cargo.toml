@@ -1,0 +1,31 @@
+[package]
+name = "safechain-lib-l4-proxy-windows-driver"
+description = "SafeChain L4 Windows WFP redirect driver"
+version = { workspace = true }
+edition = { workspace = true }
+publish = false
+rust-version = { workspace = true }
+readme = "../docs/proxy.md"
+
+[package.metadata.wdk.driver-model]
+driver-type = "WDM"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+
+[dependencies]
+postcard = { workspace = true, features = ["alloc"] }
+safechain-proxy-lib-windows-core = { workspace = true }
+spin = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+wdk = { workspace = true }
+wdk-alloc = { workspace = true }
+wdk-panic = { workspace = true }
+wdk-sys = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.build-dependencies]
+wdk-build = { workspace = true }

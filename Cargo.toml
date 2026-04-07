@@ -5,6 +5,7 @@ members = [
     "proxy-fuzz",
     "proxy-lib",
     "proxy-lib-l4-macos",
+    "proxy-lib-l4-windows-driver",
     "proxy-lib-windows-core",
 ]
 resolver = "3"
@@ -39,11 +40,17 @@ serde = { version = "1.0", default-features = false }
 serde_html_form = "0.4"
 serde_json = "1"
 serde_test = "1"
+spin = "0.9"
 static_vcruntime = "3.0"
 sudo = "0.6"
 tokio = { version = "1.48" }
 tracing-oslog = "0.3"
 tracing-test = "0.2"
+wdk = "0.4.1"
+wdk-alloc = "0.4.1"
+wdk-build = "0.5.1"
+wdk-panic = "0.4.1"
+wdk-sys = "0.5.1"
 windows-native-keyring-store = "0.5"
 
 [workspace.dependencies.rama]

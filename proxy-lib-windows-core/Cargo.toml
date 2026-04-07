@@ -10,4 +10,4 @@ readme = "../docs/proxy.md"
 [features]
 
 [dependencies]
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true, features = ["derive", "alloc"] }

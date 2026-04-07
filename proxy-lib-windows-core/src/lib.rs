@@ -9,4 +9,6 @@
 )]
 #![no_std]
 
+extern crate alloc;
+
 pub mod redirect_ctx;
