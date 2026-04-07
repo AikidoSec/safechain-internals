@@ -2,7 +2,10 @@ use std::convert::Infallible;
 
 use rama::{
     Service,
-    http::{Request, Response, StatusCode, service::web::response::IntoResponse},
+    http::{
+        Request, Response, StatusCode,
+        service::web::response::{IntoResponse, Json},
+    },
     service::service_fn,
 };
 use serde_json::json;
@@ -54,10 +57,7 @@ async fn handle(req: Request) -> Result<Response, Infallible> {
             }]
         });
 
-        return Ok(Response::builder()
-            .header("content-type", "application/json")
-            .body(rama::http::Body::from(body.to_string()))
-            .unwrap());
+        return Ok(Json(body).into_response());
     }
 
     Ok(StatusCode::OK.into_response())
