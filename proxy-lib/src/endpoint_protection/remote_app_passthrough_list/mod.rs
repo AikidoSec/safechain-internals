@@ -240,3 +240,6 @@ fn with_jitter(refresh: Duration) -> Duration {
     let jitter_secs = rand::rng().random_range(0.0..=max_jitter.as_secs_f64());
     refresh + Duration::from_secs_f64(jitter_secs)
 }
+
+#[cfg(test)]
+mod tests;
