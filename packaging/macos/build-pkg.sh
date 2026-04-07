@@ -131,6 +131,9 @@ mkdir -p "$EP_APP_DIR/Contents/Resources/scripts"
 cp "$SCRIPT_DIR/scripts/uninstall" "$EP_APP_DIR/Contents/Resources/scripts/uninstall"
 chmod 755 "$EP_APP_DIR/Contents/Resources/scripts/uninstall"
 
+echo "Re-signing Aikido Endpoint Protection app bundle..."
+codesign --force --deep --sign - "$EP_APP_DIR"
+
 echo "Copying Aikido Network Extension app bundle..."
 ditto "$L4_PROXY_APP" "$APPS_INSTALL_DIR/Aikido Network Extension.app"
 chmod 755 "$APPS_INSTALL_DIR/Aikido Network Extension.app/Contents/MacOS/Aikido Network Extension"
