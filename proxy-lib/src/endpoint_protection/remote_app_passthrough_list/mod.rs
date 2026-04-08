@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
+use radix_trie::{Trie, TrieCommon};
 use rama::{
     Service,
     error::{BoxError, ErrorContext, ErrorExt, extra::OpaqueError},
@@ -58,7 +59,7 @@ impl RemoteAppPassthroughList {
             return false;
         };
 
-        list.apps.iter().any(|app| app.matches(meta))
+        list.is_match(meta)
     }
 }
 
@@ -74,27 +75,24 @@ fn passthrough_list_uri(aikido_url: &Uri) -> Result<Uri, BoxError> {
 
 #[derive(Debug, Clone)]
 struct PassthroughList {
-    apps: Vec<AppConfig>,
+    apps: Trie<String, Domains>,
 }
 
-#[derive(Debug, Clone)]
-struct AppConfig {
-    app_name: String,
-    domains: Domains,
-}
-
-impl AppConfig {
-    fn matches(&self, meta: &IncomingFlowInfo) -> bool {
-        let Some(app_name) = meta.app_bundle_id else {
+impl PassthroughList {
+    fn is_match(&self, meta: &IncomingFlowInfo) -> bool {
+        let Some(bundle_id) = meta.app_bundle_id else {
             return false;
         };
 
-        if !app_name.starts_with(self.app_name.as_str()) {
+        // get_ancestor returns the subtrie rooted at the longest stored key that
+        // is a prefix of `bundle_id`
+        let Some(domains) = self.apps.get_ancestor(bundle_id).and_then(|t| t.value()) else {
             return false;
-        }
+        };
 
-        self.domains.matches(meta.domain)
+        domains.matches(meta.domain)
     }
+
 }
 
 #[derive(Debug, Clone)]
@@ -164,25 +162,21 @@ where
             .await
             .context("parse app passthrough list response")?;
 
-        Ok(PassthroughList {
-            apps: api_response
-                .disabled_apps_mac
-                .into_iter()
-                .map(|a| AppConfig {
-                    app_name: a.app_id.to_owned(),
-                    domains: if a.domains == ["*"] {
-                        Domains::Wildcard
-                    } else {
-                        let domain_matcher: DomainMatcher = a
-                            .domains
-                            .into_iter()
-                            .filter_map(|d| d.parse::<Domain>().ok())
-                            .collect();
-                        Domains::Allowlist(Box::new(domain_matcher))
-                    },
-                })
-                .collect(),
-        })
+        let mut apps = Trie::new();
+        for app_config in api_response.disabled_apps_mac {
+            let domains = if app_config.domains == ["*"] {
+                Domains::Wildcard
+            } else {
+                let domain_matcher: DomainMatcher = app_config
+                    .domains
+                    .into_iter()
+                    .filter_map(|d| d.parse::<Domain>().ok())
+                    .collect();
+                Domains::Allowlist(Box::new(domain_matcher))
+            };
+            apps.insert(app_config.app_id, domains);
+        }
+        Ok(PassthroughList { apps })
     }
 }
 
