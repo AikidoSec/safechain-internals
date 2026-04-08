@@ -95,8 +95,29 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 		ingress:     ingress.New(cfg, uiMgr),
 	}
 
+	d.ingress.SetCertificateHandlers(d.certificateStatusForUI, d.installProxyCACertificate)
+
 	d.initLogging(ctx)
 	return d, nil
+}
+
+// certificateStatusForUI drives GET /v1/certificate/status for the tray install wizard.
+// We only prompt for install while the proxy is running but the MITM CA is not yet in the trust store.
+func (d *Daemon) certificateStatusForUI() ingress.CertificateStatus {
+	caTrusted := proxy.ProxyCAInstalled()
+	proxyRunning := d.proxy != nil && d.proxy.IsRunning()
+	return ingress.CertificateStatus{
+		NeedsInstall: proxyRunning && !caTrusted,
+		Installed:    caTrusted,
+	}
+}
+
+// installProxyCACertificate handles POST /v1/certificate/install: trust store + certconfig follow-up.
+func (d *Daemon) installProxyCACertificate(ctx context.Context) error {
+	if err := d.proxy.InstallCA(ctx); err != nil {
+		return err
+	}
+	return certconfig.Install(ctx)
 }
 
 func (d *Daemon) Start(ctx context.Context) error {
@@ -415,18 +436,11 @@ func (d *Daemon) heartbeat() error {
 		log.Printf("Failed to start proxy: %v", err)
 	}
 
-	if d.proxy.IsRunning() && !proxy.ProxyCAInstalled() {
-		if err := d.proxy.InstallCA(d.ctx); err != nil {
-			return fmt.Errorf("failed to install proxy CA: %v", err)
-		}
-
-		// Once the proxy is recovered and the CA is installed, re-run certconfig
-		// so ecosystem trust is correctly configured.
-		certconfig.Install(d.ctx)
-	}
-
 	// Ensure the UI is running, if not, relaunch it
 	d.uiManager.EnsureRunning()
+
+	needed := d.proxy.IsRunning() && !proxy.ProxyCAInstalled()
+	d.uiManager.NotifyCertificateInstallPromptIfChanged(needed)
 
 	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.GetStatus())
 

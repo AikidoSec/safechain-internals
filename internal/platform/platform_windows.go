@@ -28,6 +28,7 @@ const (
 	SafeChainL7ProxyBinaryName     = "SafeChainL7Proxy.exe"
 	SafeChainL7ProxyLogName        = "SafeChainL7Proxy.log"
 	SafeChainL7ProxyErrLogName     = "SafeChainL7Proxy.err"
+	SafeChainUIAppPath             = `C:\Program Files\AikidoSecurity\EndpointProtection\bin\EndpointProtectionUI.exe`
 	SafeChainSbomJSONName          = "EndpointProtectionSBOM.json"
 	SafeChainInstallScriptName     = "install-safe-chain.ps1"
 	SafeChainUninstallScriptName   = "uninstall-safe-chain.ps1"
@@ -434,10 +435,6 @@ func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 		SafeChainUninstallScriptName,
 		"uninstall-safe-chain-*.ps1",
 	)
-}
-
-func ShowPostInstallNotification(_ context.Context) error {
-	return nil
 }
 
 func ShowErrorDialog(_ context.Context, message string) error {
