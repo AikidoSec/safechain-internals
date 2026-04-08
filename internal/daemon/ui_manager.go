@@ -30,9 +30,6 @@ type UIManager struct {
 	lastProxyStatus        bool
 	proxyStatusInitialized bool
 	lastProxyStdoutMessage string
-
-	certPromptMu                        sync.Mutex
-	certificateInstallPromptAlreadySent bool
 }
 
 func NewUIManager() *UIManager {
@@ -118,7 +115,6 @@ func (m *UIManager) EnsureRunning() {
 	}
 	m.waitForUIReady()
 	m.proxyStatusInitialized = false
-	m.certificateInstallPromptAlreadySent = false
 }
 
 // waitForUIReady polls the UI's HTTP port until it accepts TCP connections
@@ -172,20 +168,14 @@ func (m *UIManager) NotifyPermissionsUpdated(perms any) {
 // StartSetupWizard notifies the tray UI to show the install
 // window when the CA is missing. It never requests a hide: the user closes the
 // window with Done after finishing the wizard.
-func (m *UIManager) StartSetupWizard(needed bool) {
-	m.certPromptMu.Lock()
-	defer m.certPromptMu.Unlock()
-	if !needed {
-		m.certificateInstallPromptAlreadySent = false
+func (m *UIManager) StartSetupWizard(steps []string) {
+	if len(steps) == 0 {
 		return
 	}
-	if m.certificateInstallPromptAlreadySent {
-		return
-	}
-	log.Println("Proxy CA not installed; tray app will prompt the user to complete installation")
-	m.certificateInstallPromptAlreadySent = true
-	if err := m.Client.NotifyCertificateInstallPrompt(true); err != nil {
-		log.Printf("Failed to notify UI of certificate install prompt: %v", err)
+
+	log.Printf("Starting setup wizard with steps: %v", steps)
+	if err := m.Client.StartSetupWizard(steps); err != nil {
+		log.Printf("Failed to start setup wizard: %v", err)
 	}
 }
 

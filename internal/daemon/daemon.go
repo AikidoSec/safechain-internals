@@ -407,6 +407,15 @@ func (d *Daemon) reportSBOM() error {
 	return nil
 }
 
+func (d *Daemon) setupWizardSteps() []string {
+	var steps []string
+
+	if !proxy.ProxyCAInstalled() {
+		steps = append(steps, "install-certificate")
+	}
+	return steps
+}
+
 func (d *Daemon) heartbeat() error {
 	if proxy.ProxyCAInstalled() {
 		shouldRetry, err := d.handleProxy()
@@ -423,7 +432,7 @@ func (d *Daemon) heartbeat() error {
 	// Ensure the UI is running, if not, relaunch it
 	d.uiManager.EnsureRunning()
 
-	d.uiManager.StartSetupWizard(!proxy.ProxyCAInstalled())
+	d.uiManager.StartSetupWizard(d.setupWizardSteps())
 
 	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.GetStatus())
 

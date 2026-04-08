@@ -79,6 +79,8 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("POST /v1/network-extension/activate", s.handleNetworkExtensionActivate)
 	mux.HandleFunc("POST /v1/network-extension/allow-vpn", s.handleNetworkExtensionAllowVpn)
 	mux.HandleFunc("POST /v1/network-extension/open-settings", s.handleNetworkExtensionOpenSettings)
+	mux.HandleFunc("GET /v1/network-extension/is-activated", s.handleIsExtensionActivated)
+	mux.HandleFunc("GET /v1/network-extension/is-vpn-allowed", s.handleIsVpnAllowed)
 
 	mux.HandleFunc("POST /v1/proxy/start", s.handleProxyStart)
 
