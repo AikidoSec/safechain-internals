@@ -28,7 +28,7 @@ xcode_l4_installed_app_exe := xcode_l4_installed_app + "/Contents/MacOS/AikidoEn
 xcode_l4_installed_sysext := xcode_l4_installed_app + "/Contents/Library/SystemExtensions/" + l4_dev_extension_bundle_id + ".systemextension"
 
 rust-quick-qa:
-    just _rust-quick-qa-{{ os() }}
+    @just _rust-quick-qa-{{ os() }}
 
 _rust-quick-qa-windows: rust-quick-qa-crossplatform windows-driver-quick-qa
 
@@ -48,7 +48,7 @@ rust-test $RUSTFLAGS="-D warnings" *ARGS:
     cargo test --all-features --workspace --exclude safechain-lib-l4-proxy-windows-driver {{ARGS}}
 
 rust-qa: rust-quick-qa rust-test rust-fuzz-check
-    just _rust-qa-{{ os() }}
+    @just _rust-qa-{{ os() }}
 
 _rust-qa-windows: windows-driver-build
 
@@ -56,14 +56,23 @@ _rust-qa-linux:
 
 _rust-qa-macos:
 
-rust-fuzz-check $CARGO_PROFILE_RELEASE_LTO="false":
+rust-fuzz-check:
+    @just _rust-fuzz-check-{{os_family()}}
+
+_rust-fuzz-check-unix $CARGO_PROFILE_RELEASE_LTO="false":
     @cargo install cargo-fuzz
     cargo +nightly fuzz check --fuzz-dir ./proxy-fuzz
 
-rust-fuzz *ARGS:
+_rust-fuzz-check-windows:
+
+rust-fuzz:
+    @just _rust-fuzz-{{os_family()}}
+
+_rust-fuzz-unix $CARGO_PROFILE_RELEASE_LTO="false" *ARGS:
     @cargo install cargo-fuzz
-    CARGO_PROFILE_RELEASE_LTO=false \
-        cargo +nightly fuzz run --fuzz-dir ./proxy-fuzz -j 8 parse_pragmatic_semver_version -- -max_total_time=60
+    cargo +nightly fuzz run --fuzz-dir ./proxy-fuzz -j 8 parse_pragmatic_semver_version -- -max_total_time=60
+
+_rust-fuzz-windows:
 
 rust-qa-full $RUSTFLAGS="-D warnings": rust-qa rust-fuzz
     cargo test --all-features --workspace --exclude safechain-lib-l4-proxy-windows-driver -- --ignored
