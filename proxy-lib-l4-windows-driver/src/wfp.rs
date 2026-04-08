@@ -14,6 +14,16 @@
 //!   https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsapplymodifiedlayerdata0
 //! - `FwpsRedirectHandleCreate0`:
 //!   https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsredirecthandlecreate0
+//! - `FwpsQueryConnectionRedirectState0`:
+//!   https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsqueryconnectionredirectstate0
+//!
+//! Header references used for the owned FFI/constants below:
+//! - `fwpsk.h` (`km`): callout registration, classify output, metadata flags,
+//!   redirect state, connect request structures
+//! - `fwpstypes.h` / `fwptypes.h` (`shared`): metadata helper structs and
+//!   generic WFP value types
+//! - `ws2def.h` / `ws2ipdef.h` (`shared`): socket address families and layouts
+//! - `wdm.h` / `ntstatus.h`: pool allocation and common `NTSTATUS` values
 
 use alloc::{string::String, vec::Vec};
 use core::{
@@ -208,7 +218,7 @@ unsafe extern "system" fn on_callout_flow_delete(
 /// WFP classify callback where redirect decisions are applied.
 unsafe extern "system" fn on_callout_classify(
     _in_fixed_values: *const FWPS_INCOMING_VALUES0,
-    _in_meta_values: *const c_void,
+    in_meta_values: *const c_void,
     _layer_data: *mut c_void,
     classify_context: *const c_void,
     filter: *const FWPS_FILTER1,
@@ -223,6 +233,16 @@ unsafe extern "system" fn on_callout_classify(
     let Some(registration) = registration else {
         return;
     };
+
+    if should_skip_self_redirect(in_meta_values, registration) {
+        if unsafe { ((*classify_out).rights & FWPS_RIGHT_ACTION_WRITE) != 0 } {
+            unsafe {
+                // SAFETY: classify_out is a valid WFP output buffer for this callback.
+                (*classify_out).actionType = FWP_ACTION_CONTINUE;
+            }
+        }
+        return;
+    }
 
     let mut classify_handle = 0_u64;
     let status = unsafe {
@@ -305,6 +325,44 @@ unsafe extern "system" fn on_callout_classify(
     }
 
     complete_writable_classify(classify_handle, writable_layer_data, classify_out);
+}
+
+fn should_skip_self_redirect(
+    in_meta_values: *const c_void,
+    registration: KernelCalloutRegistration,
+) -> bool {
+    if in_meta_values.is_null() {
+        return false;
+    }
+
+    let metadata = in_meta_values.cast::<FWPS_INCOMING_METADATA_VALUES0>();
+    let redirect_records_present = unsafe {
+        // SAFETY: `metadata` points to the WFP metadata values for this classify invocation.
+        ((*metadata).currentMetadataValues & FWPS_METADATA_FIELD_REDIRECT_RECORD_HANDLE) != 0
+            && !(*metadata).redirectRecords.is_null()
+    };
+
+    if !redirect_records_present {
+        return false;
+    }
+
+    let mut redirect_context = ptr::null_mut();
+    let redirect_state = unsafe {
+        // SAFETY:
+        // 1. `redirectRecords` originates from WFP metadata for this classify invocation.
+        // 2. `registration.redirect_handle` was created via `FwpsRedirectHandleCreate0`.
+        // 3. `redirect_context` is a valid optional out pointer.
+        FwpsQueryConnectionRedirectState0(
+            (*metadata).redirectRecords,
+            registration.redirect_handle as *mut c_void,
+            &mut redirect_context,
+        )
+    };
+
+    matches!(
+        redirect_state,
+        FWPS_CONNECTION_REDIRECTED_BY_SELF | FWPS_CONNECTION_PREVIOUSLY_REDIRECTED_BY_SELF
+    )
 }
 
 fn complete_writable_classify(
@@ -432,27 +490,82 @@ impl SocketAddrV6Ext for core::net::SocketAddrV6 {
     }
 }
 
+/// `STATUS_INVALID_PARAMETER` from `ntstatus.h`.
+///
+/// Used when callout registration is invoked with an invalid device object.
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/using-ntstatus-values
 const STATUS_INVALID_PARAMETER: NTSTATUS = -1_073_741_811_i32;
+/// `FWPS_RIGHT_ACTION_WRITE` from `fwpsk.h`.
+///
+/// Indicates the callout may still write `FWPS_CLASSIFY_OUT0.actionType`.
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/ns-fwpsk-fwps_classify_out0
 const FWPS_RIGHT_ACTION_WRITE: u32 = 0x0000_0001;
+/// `FWPS_METADATA_FIELD_REDIRECT_RECORD_HANDLE` from `fwpsk.h`.
+///
+/// Signals that `FWPS_INCOMING_METADATA_VALUES0.redirectRecords` is present.
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/ns-fwpsk-fwps_incoming_metadata_values0
+const FWPS_METADATA_FIELD_REDIRECT_RECORD_HANDLE: u32 = 0x4000_0000;
+/// `FWP_ACTION_PERMIT` from `fwptypes.h`.
+///
+/// Used after rewriting the connect request so WFP allows the redirected flow.
+/// Docs: https://learn.microsoft.com/en-us/windows/win32/api/fwptypes/ne-fwptypes-fwp_action_type
 const FWP_ACTION_PERMIT: u32 = 0x0000_0002;
+/// `FWP_ACTION_CONTINUE` from `fwptypes.h`.
+///
+/// Used when this callout leaves the decision unchanged.
+/// Docs: https://learn.microsoft.com/en-us/windows/win32/api/fwptypes/ne-fwptypes-fwp_action_type
 const FWP_ACTION_CONTINUE: u32 = 0x0000_0006;
+/// `NonPagedPool` / `POOL_TYPE = 0` from `wdm.h`.
+///
+/// Redirect context buffers must be non-paged kernel memory.
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ne-wdm-_pool_type
 const NON_PAGED_POOL: u32 = 0;
+/// Driver-owned pool tag for redirect context allocations made via
+/// `ExAllocatePoolWithTag`.
+///
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-exallocatepoolwithtag
 const SAFECHAIN_POOL_TAG: u32 = u32::from_ne_bytes(*b"4LCS");
+/// IPv4 address-family value from Winsock headers.
+///
+/// Docs: https://learn.microsoft.com/en-us/windows/win32/winsock/address-families
 const AF_INET: u16 = 2;
+/// IPv6 address-family value from Winsock headers.
+///
+/// Docs: https://learn.microsoft.com/en-us/windows/win32/winsock/address-families
 const AF_INET6: u16 = 23;
+/// `FWPS_CONNECTION_REDIRECTED_BY_SELF` enum value from
+/// `FWPS_CONNECTION_REDIRECT_STATE`.
+///
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsqueryconnectionredirectstate0
+const FWPS_CONNECTION_REDIRECTED_BY_SELF: u32 = 1;
+/// `FWPS_CONNECTION_PREVIOUSLY_REDIRECTED_BY_SELF` enum value from
+/// `FWPS_CONNECTION_REDIRECT_STATE`.
+///
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsqueryconnectionredirectstate0
+const FWPS_CONNECTION_PREVIOUSLY_REDIRECTED_BY_SELF: u32 = 3;
 
+/// Provider GUID for the SafeChain L4 redirector.
+///
+/// These GUIDs were generated once as stable random UUID-style identifiers and
+/// then committed so kernel mode and user mode can refer to the same provider
+/// and callouts consistently. This provider GUID is used for the redirect
+/// handle created by `FwpsRedirectHandleCreate0`; the callout GUIDs below are
+/// the identifiers that the user-mode `Fwpm*` management plane will register in
+/// the WFP engine for IPv4 and IPv6 connect-redirection.
 const GUID_PROVIDER_SAFECHAIN_L4_PROXY: GUID = guid(
     0x6a625bb6,
     0xf310,
     0x443e,
     [0x98, 0x50, 0x28, 0x0f, 0xac, 0xdc, 0x1a, 0x21],
 );
+/// Callout GUID for outbound IPv4 TCP connect redirection.
 const GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4: GUID = guid(
     0x5c6262c4,
     0x8ef6,
     0x43d8,
     [0xa8, 0xf9, 0x48, 0x63, 0x6b, 0x17, 0x2b, 0xb8],
 );
+/// Callout GUID for outbound IPv6 TCP connect redirection.
 const GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6: GUID = guid(
     0x4f05f1f8,
     0x9093,
@@ -460,6 +573,8 @@ const GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6: GUID = guid(
     [0xa8, 0xe7, 0x2d, 0x84, 0x1a, 0x3e, 0x2e, 0x5a],
 );
 
+/// Helper for building `GUID` literals without expanding the entire WDK type
+/// surface into this module.
 const fn guid(data1: u32, data2: u16, data3: u16, data4: [u8; 8]) -> GUID {
     GUID {
         Data1: data1,
@@ -469,6 +584,9 @@ const fn guid(data1: u32, data2: u16, data3: u16, data4: [u8; 8]) -> GUID {
     }
 }
 
+/// Function-pointer type matching `FWPS_CALLOUT_CLASSIFY_FN1`.
+///
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nc-fwpsk-fwps_callout_classify_fn1
 type FwpsCalloutClassifyFn1 = Option<
     unsafe extern "system" fn(
         in_fixed_values: *const FWPS_INCOMING_VALUES0,
@@ -481,6 +599,9 @@ type FwpsCalloutClassifyFn1 = Option<
     ),
 >;
 
+/// Function-pointer type matching `FWPS_CALLOUT_NOTIFY_FN1`.
+///
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nc-fwpsk-fwps_callout_notify_fn1
 type FwpsCalloutNotifyFn1 = Option<
     unsafe extern "system" fn(
         notify_type: u32,
@@ -489,11 +610,19 @@ type FwpsCalloutNotifyFn1 = Option<
     ) -> NTSTATUS,
 >;
 
+/// Function-pointer type matching `FWPS_CALLOUT_FLOW_DELETE_NOTIFY_FN0`.
+///
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nc-fwpsk-fwps_callout_flow_delete_notify_fn0
 type FwpsCalloutFlowDeleteNotifyFn0 =
     Option<unsafe extern "system" fn(layer_id: u16, callout_id: u32, flow_context: u64)>;
 
 #[repr(C)]
 #[allow(non_snake_case)]
+/// Minimal owned mirror of `FWPS_CALLOUT1`.
+///
+/// This binds a GUID to the classify/notify/delete callbacks registered with
+/// the WFP runtime.
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/ns-fwpsk-fwps_callout1
 struct FWPS_CALLOUT1 {
     calloutKey: GUID,
     flags: u32,
@@ -504,6 +633,11 @@ struct FWPS_CALLOUT1 {
 
 #[repr(C)]
 #[allow(non_snake_case)]
+/// Minimal header subset of `FWPS_INCOMING_VALUES0`.
+///
+/// The current implementation does not inspect the per-field `incomingValue`
+/// array, so only the leading fields are mirrored.
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/ns-fwpsk-fwps_incoming_values0
 struct FWPS_INCOMING_VALUES0 {
     layerId: u16,
     valueCount: u32,
@@ -512,12 +646,19 @@ struct FWPS_INCOMING_VALUES0 {
 
 #[repr(C)]
 #[allow(non_snake_case)]
+/// Minimal filter view containing the filter id used with
+/// `FwpsAcquireWritableLayerDataPointer0`.
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/ns-fwpsk-fwps_filter1
 struct FWPS_FILTER1 {
     filterId: u64,
 }
 
 #[repr(C)]
 #[allow(non_snake_case)]
+/// Owned mirror of `FWPS_CLASSIFY_OUT0`.
+///
+/// This is where the callout reads rights and reports the action it selected.
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/ns-fwpsk-fwps_classify_out0
 struct FWPS_CLASSIFY_OUT0 {
     actionType: u32,
     outContext: u64,
@@ -528,12 +669,105 @@ struct FWPS_CLASSIFY_OUT0 {
 }
 
 #[repr(C)]
+#[allow(non_snake_case)]
+/// `FWPS_DISCARD_METADATA0` from `fwpstypes.h`.
+///
+/// Present here because it is embedded in incoming metadata before the fields
+/// this callout currently reads.
+struct FWPS_DISCARD_METADATA0 {
+    discardModule: u32,
+    discardReason: u32,
+    filterId: u64,
+}
+
+#[repr(C)]
+#[allow(non_snake_case)]
+/// `FWP_BYTE_BLOB` from `fwptypes.h`, used for optional process-path metadata.
+///
+/// Docs: https://learn.microsoft.com/en-us/windows/win32/api/fwptypes/ns-fwptypes-fwp_byte_blob
+struct FWP_BYTE_BLOB {
+    size: u32,
+    data: *mut u8,
+}
+
+#[repr(C)]
+#[allow(non_snake_case)]
+/// `FWPS_INBOUND_FRAGMENT_METADATA0` from `fwpstypes.h`, included for layout
+/// compatibility with `FWPS_INCOMING_METADATA_VALUES0`.
+struct FWPS_INBOUND_FRAGMENT_METADATA0 {
+    fragmentIdentification: u32,
+    fragmentOffset: u16,
+    fragmentLength: u32,
+}
+
+#[repr(C)]
+#[allow(non_snake_case)]
+/// Layout-compatible subset of `IP_ADDRESS_PREFIX`.
+///
+/// Header reference: `netioapi.h`
+struct IP_ADDRESS_PREFIX {
+    prefix: [u8; 28],
+    prefixLength: u8,
+    padding: [u8; 3],
+}
+
+#[repr(C)]
+#[allow(non_snake_case)]
+/// Owned mirror of `FWPS_INCOMING_METADATA_VALUES0` up to `redirectRecords`.
+///
+/// The callout uses this to inspect redirect records and prevent loops. It also
+/// preserves nearby fields so the layout matches the WDK definition up to that
+/// point.
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/ns-fwpsk-fwps_incoming_metadata_values0
+struct FWPS_INCOMING_METADATA_VALUES0 {
+    currentMetadataValues: u32,
+    flags: u32,
+    reserved: u64,
+    discardMetadata: FWPS_DISCARD_METADATA0,
+    flowHandle: u64,
+    ipHeaderSize: u32,
+    transportHeaderSize: u32,
+    processPath: *mut FWP_BYTE_BLOB,
+    token: u64,
+    processId: u64,
+    sourceInterfaceIndex: u32,
+    destinationInterfaceIndex: u32,
+    compartmentId: u32,
+    fragmentMetadata: FWPS_INBOUND_FRAGMENT_METADATA0,
+    pathMtu: u32,
+    completionHandle: *mut c_void,
+    transportEndpointHandle: u64,
+    remoteScopeId: u32,
+    controlData: *mut c_void,
+    controlDataLength: u32,
+    packetDirection: i32,
+    headerIncludeHeader: *mut c_void,
+    headerIncludeHeaderLength: u32,
+    destinationPrefix: IP_ADDRESS_PREFIX,
+    frameLength: u16,
+    _padding0: u16,
+    parentEndpointHandle: u64,
+    icmpIdAndSequence: u32,
+    localRedirectTargetPID: u32,
+    originalDestination: *mut c_void,
+    redirectRecords: *mut c_void,
+}
+
+#[repr(C)]
+/// Raw `SOCKADDR_STORAGE`-sized buffer used for connect-request address fields.
+///
+/// Header reference: `ws2def.h`
 struct SockAddrStorage {
     bytes: [u8; 128],
 }
 
 #[repr(C)]
 #[allow(non_snake_case)]
+/// Owned mirror of `FWPS_CONNECT_REQUEST0`, the writable ALE connect request.
+///
+/// The driver rewrites the remote address, sets redirect context, and stamps
+/// the local redirect handle/PID on this structure.
+/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/ns-fwpsk-_fwps_connect_request0
 struct FWPS_CONNECT_REQUEST0 {
     localAddressAndPort: SockAddrStorage,
     remoteAddressAndPort: SockAddrStorage,
@@ -548,30 +782,54 @@ struct FWPS_CONNECT_REQUEST0 {
 
 #[link(name = "fwpkclnt")]
 unsafe extern "system" {
+    /// Registers a kernel callout under the provided GUID and callback set.
+    ///
+    /// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpscalloutregister1
     fn FwpsCalloutRegister1(
         device_object: *mut c_void,
         callout: *const FWPS_CALLOUT1,
         callout_id: *mut u32,
     ) -> NTSTATUS;
 
+    /// Unregisters a callout by GUID.
+    ///
+    /// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpscalloutunregisterbykey0
     fn FwpsCalloutUnregisterByKey0(callout_key: *const GUID) -> NTSTATUS;
 
+    /// Creates a redirect handle used to tag redirected flows for this
+    /// provider.
+    ///
+    /// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsredirecthandlecreate0
     fn FwpsRedirectHandleCreate0(
         provider_guid: *const GUID,
         flags: u32,
         redirect_handle: *mut *mut c_void,
     ) -> NTSTATUS;
 
+    /// Destroys a redirect handle created by `FwpsRedirectHandleCreate0`.
+    ///
+    /// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsredirecthandledestroy0
     fn FwpsRedirectHandleDestroy0(redirect_handle: *mut c_void);
 
+    /// Acquires a classify handle so the callout can later request writable
+    /// layer data.
+    ///
+    /// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsacquireclassifyhandle0
     fn FwpsAcquireClassifyHandle0(
         classify_context: *const c_void,
         flags: u32,
         classify_handle: *mut u64,
     ) -> NTSTATUS;
 
+    /// Releases a classify handle acquired earlier in the callback.
+    ///
+    /// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsreleaseclassifyhandle0
     fn FwpsReleaseClassifyHandle0(classify_handle: u64);
 
+    /// Returns writable layer data for the current classify operation.
+    ///
+    /// At ALE connect-redirect layers this points to a `FWPS_CONNECT_REQUEST0`.
+    /// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsacquirewritablelayerdatapointer0
     fn FwpsAcquireWritableLayerDataPointer0(
         classify_handle: u64,
         filter_id: u64,
@@ -580,58 +838,36 @@ unsafe extern "system" {
         classify_out: *mut FWPS_CLASSIFY_OUT0,
     ) -> NTSTATUS;
 
+    /// Applies any modifications made to writable layer data.
+    ///
+    /// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsapplymodifiedlayerdata0
     fn FwpsApplyModifiedLayerData0(
         classify_handle: u64,
         modified_layer_data: *mut c_void,
         flags: u32,
     );
+
+    /// Queries the redirect state for the connection represented by redirect
+    /// records.
+    ///
+    /// Used here to detect connections already redirected by this driver and
+    /// avoid redirect loops.
+    /// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsqueryconnectionredirectstate0
+    fn FwpsQueryConnectionRedirectState0(
+        redirect_records: *mut c_void,
+        redirect_handle: *mut c_void,
+        redirect_context: *mut *mut c_void,
+    ) -> u32;
 }
 
 #[link(name = "NtosKrnl")]
 unsafe extern "system" {
+    /// Allocates kernel pool memory tagged for later debugging/diagnostics.
+    ///
+    /// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-exallocatepoolwithtag
     fn ExAllocatePoolWithTag(pool_type: u32, number_of_bytes: usize, tag: u32) -> *mut c_void;
 }
 
 #[cfg(test)]
-mod tests {
-    use alloc::string::String;
-    use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-
-    use safechain_proxy_lib_windows_core::redirect_ctx::ProxyRedirectContext;
-
-    use super::{WfpFlowMeta, build_redirect_context, is_local_destination};
-
-    #[test]
-    fn local_destination_detection_covers_common_ranges() {
-        assert!(is_local_destination(SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            80
-        )));
-        assert!(is_local_destination(SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)),
-            80
-        )));
-        assert!(is_local_destination(SocketAddr::new(
-            IpAddr::V6(Ipv6Addr::LOCALHOST),
-            443
-        )));
-    }
-
-    #[test]
-    fn redirect_context_contains_destination_and_pid() {
-        let flow = WfpFlowMeta {
-            remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
-            source_pid: Some(123),
-            source_process_path: Some(String::from("C:\\Windows\\System32\\curl.exe")),
-        };
-        let encoded = build_redirect_context(&flow).expect("encoding failed");
-        let decoded: ProxyRedirectContext =
-            postcard::from_bytes(&encoded).expect("context decode failed");
-        assert_eq!(decoded.destination(), flow.remote);
-        assert_eq!(decoded.source_pid(), Some(123));
-        assert_eq!(
-            decoded.source_process_path(),
-            Some("C:\\Windows\\System32\\curl.exe")
-        );
-    }
-}
+#[path = "wfp_tests.rs"]
+mod tests;

@@ -2745,6 +2745,7 @@ dependencies = [
  "static_vcruntime",
  "tikv-jemallocator",
  "tokio",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

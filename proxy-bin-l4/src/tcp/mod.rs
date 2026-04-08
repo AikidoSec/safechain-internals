@@ -48,12 +48,19 @@ use safechain_proxy_lib::{
         ws_relay::WebSocketMitmRelayService,
     },
     storage::{SyncCompactDataStorage, SyncSecrets},
-    tcp::new_tcp_connector_service_for_proxy,
     tls::{self, mitm_relay_policy::TlsMitmRelayPolicyLayer},
     utils::token::AgentIdentity,
 };
 
+#[cfg(not(target_os = "windows"))]
+use safechain_proxy_lib::tcp::new_tcp_connector_service_for_proxy;
+
+#[cfg(target_os = "windows")]
+use self::windows::WfpRedirectRecordsLayer;
+
 mod proxy_target;
+#[cfg(target_os = "windows")]
+mod windows;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn start_tcp_server(
@@ -169,6 +176,28 @@ async fn try_new_tcp_service(
     .await?;
 
     tracing::debug!("creating middleware and other services");
+    let proxy_connector = {
+        #[cfg(target_os = "windows")]
+        let socket_options = Arc::new(SocketOptions {
+            keep_alive: Some(true),
+            tcp_keep_alive: Some(TcpKeepAlive {
+                time: Some(Duration::from_mins(2)),
+                interval: Some(Duration::from_secs(30)),
+                #[cfg(not(target_os = "windows"))]
+                retries: Some(5),
+            }),
+            ..SocketOptions::default_tcp()
+        });
+
+        #[cfg(target_os = "windows")]
+        let connector =
+            self::windows::new_tcp_connector_service_for_proxy(executor.clone(), socket_options);
+
+        #[cfg(not(target_os = "windows"))]
+        let connector = new_tcp_connector_service_for_proxy(executor.clone());
+
+        connector
+    };
 
     let tls_mitm_relay_policy = TlsMitmRelayPolicyLayer::new(firewall.clone());
     let tls_mitm_relay = TlsMitmRelay::new_cached_in_memory(ca_crt, ca_key);
@@ -186,10 +215,10 @@ async fn try_new_tcp_service(
     Ok(Arc::new(
         (
             ConsumeErrLayer::trace_as_debug(),
+            #[cfg(target_os = "windows")]
+            WfpRedirectRecordsLayer::new(),
             self::proxy_target::new_proxy_target_from_input_layer(),
-            IoToProxyBridgeIoLayer::extension_proxy_target_with_connector(
-                new_tcp_connector_service_for_proxy(executor),
-            ),
+            IoToProxyBridgeIoLayer::extension_proxy_target_with_connector(proxy_connector),
         )
             .into_layer(mitm_svc),
     ))

@@ -15,6 +15,7 @@ jemallocator = { workspace = true }
 [target.'cfg(target_os = "windows")'.dependencies]
 mimalloc = { workspace = true }
 postcard = { workspace = true }
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Networking_WinSock"] }
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }

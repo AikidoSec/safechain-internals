@@ -7,7 +7,7 @@ Kernel-mode WFP redirect driver for SafeChain L4 proxy on Windows.
 - [ ] Install/package the driver artifacts (`.sys`, INF, catalog/signing) in the Windows packaging flow.
 - [x] Add a small user-space driver controller CLI/service for `start`, `stop`, and `update`.
 - [ ] Provision the startup registry blob before driver start and keep runtime IOCTL updates in sync with persisted config.
-- [ ] Prevent proxy-loop redirection for the local proxy process and redirected/proxied follow-up connections.
+- [x] Prevent proxy-loop redirection for the local proxy process and redirected/proxied follow-up connections.
 - [ ] Add end-to-end verification on Windows for IPv4 redirect, IPv6 redirect, unload/reload, and runtime config updates.
 
 ## Requirements
