@@ -23,11 +23,12 @@ const (
 	EndpointProtectionLogName    = "endpoint-protection.log"
 	EndpointProtectionErrLogName = "endpoint-protection.err"
 	SafeChainUILogName           = "endpoint-protection-ui.log"
-	SafeChainUIAppName           = "endpoint-protection-ui.app"
+	SafeChainUIAppName           = "Aikido Endpoint Protection.app"
 	SafeChainL7ProxyBinaryName   = "safechain-l7-proxy"
 	SafeChainL7ProxyLogName      = "safechain-l7-proxy.log"
 	SafeChainL7ProxyErrLogName   = "safechain-l7-proxy.err"
-	SafeChainL4ProxyHostPath     = "/Applications/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost"
+	SafeChainL4ProxyHostPath     = "/Applications/Aikido Network Extension.app/Contents/MacOS/Aikido Network Extension"
+	SafeChainUIAppPath           = "/Applications/Aikido Endpoint Protection.app"
 	SafeChainSbomJSONName        = "endpoint-protection-sbom.json"
 	SafeChainInstallScriptName   = "install-safe-chain.sh"
 	SafeChainUninstallScriptName = "uninstall-safe-chain.sh"
@@ -51,7 +52,7 @@ func initConfig() error {
 		}
 	}
 	safeChainHomeDir := filepath.Join(config.HomeDir, ".safe-chain")
-	config.BinaryDir = "/Library/Application Support/AikidoSecurity/EndpointProtection/bin"
+	config.BinaryDir = "/Applications/Aikido Endpoint Protection.app/Contents/Resources/bin"
 	config.RunDir = "/Library/Application Support/AikidoSecurity/EndpointProtection/run"
 	config.LogDir = "/Library/Logs/AikidoSecurity/EndpointProtection"
 	config.SafeChainBinaryPath = filepath.Join(safeChainHomeDir, "bin", "safe-chain")
@@ -278,32 +279,6 @@ func UnsetSystemPAC(ctx context.Context, pacURL string) error {
 	return nil
 }
 
-func showCAInstallDialog(ctx context.Context) error {
-	script := `button returned of (display dialog "Aikido Endpoint Protection needs to install a trusted CA certificate.\nmacOS will prompt you for administrator credentials." ` +
-		`with title "Aikido Endpoint Protection Installation" buttons {"Cancel", "Install"} default button "Install" with icon caution)`
-	out, err := RunInAuditSessionOfCurrentUser(ctx, "osascript", []string{"-e", script})
-	if err != nil {
-		return fmt.Errorf("CA certificate installation cancelled")
-	}
-	if strings.TrimSpace(string(out)) != "Install" {
-		return fmt.Errorf("CA certificate installation cancelled")
-	}
-	return nil
-}
-
-func ShowPostInstallNotification(ctx context.Context) error {
-	script := `button returned of (display dialog ` +
-		`"Aikido Endpoint Protection has been installed successfully.\n\n` +
-		`If you experience connection issues in any running application, restarting it will resolve the problem." ` +
-		`with title "Aikido Endpoint Protection" ` +
-		`buttons {"OK"} default button "OK" with icon note)`
-	_, err := RunInAuditSessionOfCurrentUser(ctx, "osascript", []string{"-e", script})
-	if err != nil {
-		return fmt.Errorf("failed to show post-install notification: %w", err)
-	}
-	return nil
-}
-
 func ShowErrorDialog(ctx context.Context, message string) error {
 	script := `
 on run argv
@@ -325,11 +300,6 @@ end run
 }
 
 func InstallProxyCA(ctx context.Context, certPath string) error {
-	// Show a dialog so the user understands the upcoming admin prompt is from SafeChain.
-	if err := showCAInstallDialog(ctx); err != nil {
-		return err
-	}
-
 	// CA needs to be installed as current user, in order to be prompted for security permissions
 	_, err := RunInAuditSessionOfCurrentUser(ctx, "security", []string{"add-trusted-cert",
 		"-d", // Add to admin cert store; default is user

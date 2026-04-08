@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, NavLink, useNavigate } from "react-router-dom";
+import { HashRouter, Routes, Route, NavLink, useNavigate, Outlet, useLocation } from "react-router-dom";
 import { Events } from "@wailsio/runtime";
 import { EventsList } from "./pages/EventsList";
 import { EventDetail } from "./pages/EventDetail";
 import { TlsEventsList } from "./pages/TlsEventsList";
 import { TlsEventDetail } from "./pages/TlsEventDetail";
 import { ProtectedEcosystems } from "./pages/ProtectedEcosystems";
+import { InstallPage } from "./pages/InstallPage";
 import { getVersion } from "./api";
 import logoUrl from "../assets/logo.svg";
 import "./App.css";
@@ -33,54 +34,58 @@ function FocusHandler() {
   return null;
 }
 
-function AppRoutes() {
-  return (
-    <>
-      <FocusHandler />
-      <Routes>
-        <Route path="/" element={<EventsList />} />
-        <Route path="/events" element={<EventsList />} />
-        <Route path="/events/:id" element={<EventDetail />} />
-        <Route path="/tls-events" element={<TlsEventsList />} />
-        <Route path="/tls-events/:id" element={<TlsEventDetail />} />
-        <Route path="/protected-ecosystems" element={<ProtectedEcosystems />} />
-      </Routes>
-    </>
-  );
-}
-
-function App() {
+function DashboardLayout() {
+  const location = useLocation();
   const [version, setVersion] = useState("");
   useEffect(() => {
     getVersion().then(setVersion).catch(() => {});
   }, []);
 
+  const eventsTabActive = location.pathname === "/" || location.pathname.startsWith("/events");
+
   return (
-    <BrowserRouter>
-      <div className="container">
-        <header className="app-header">
-          <img src={logoUrl} alt="Aikido" className="app-logo-img" />
-          {version && <span className="app-version">v{version}</span>}
-        </header>
-        <nav className="app-tabs">
-          <NavLink to="/events" className={({ isActive }) => `app-tab${isActive || location.pathname === "/" ? " app-tab--active" : ""}`}>
-            Blocked Events
-          </NavLink>
-          <NavLink to="/tls-events" className={({ isActive }) => `app-tab${isActive ? " app-tab--active" : ""}`}>
-            Logs
-          </NavLink>
-          <NavLink
-            to="/protected-ecosystems"
-            className={({ isActive }) => `app-tab${isActive ? " app-tab--active" : ""}`}
-          >
-            Protected Ecosystems
-          </NavLink>
-        </nav>
-        <main className="dashboard">
-          <AppRoutes />
-        </main>
-      </div>
-    </BrowserRouter>
+    <div className="container">
+      <header className="app-header">
+        <img src={logoUrl} alt="Aikido" className="app-logo-img" />
+        {version && <span className="app-version">v{version}</span>}
+      </header>
+      <nav className="app-tabs">
+        <NavLink to="/events" className={() => `app-tab${eventsTabActive ? " app-tab--active" : ""}`}>
+          Blocked Events
+        </NavLink>
+        <NavLink to="/tls-events" className={({ isActive }) => `app-tab${isActive ? " app-tab--active" : ""}`}>
+          Logs
+        </NavLink>
+        <NavLink
+          to="/protected-ecosystems"
+          className={({ isActive }) => `app-tab${isActive ? " app-tab--active" : ""}`}
+        >
+          Protected Ecosystems
+        </NavLink>
+      </nav>
+      <main className="dashboard">
+        <FocusHandler />
+        <Outlet />
+      </main>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <HashRouter>
+      <Routes>
+        <Route path="/install" element={<InstallPage />} />
+        <Route element={<DashboardLayout />}>
+          <Route path="/" element={<EventsList />} />
+          <Route path="/events" element={<EventsList />} />
+          <Route path="/events/:id" element={<EventDetail />} />
+          <Route path="/tls-events" element={<TlsEventsList />} />
+          <Route path="/tls-events/:id" element={<TlsEventDetail />} />
+          <Route path="/protected-ecosystems" element={<ProtectedEcosystems />} />
+        </Route>
+      </Routes>
+    </HashRouter>
   );
 }
 
