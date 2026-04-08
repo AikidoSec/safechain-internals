@@ -410,9 +410,25 @@ func (d *Daemon) reportSBOM() error {
 func (d *Daemon) setupWizardSteps() []string {
 	var steps []string
 
-	if !proxy.ProxyCAInstalled() {
-		steps = append(steps, "install-certificate")
+	if d.config.Token == "" {
+		steps = append(steps, "token")
 	}
+
+	if activated, err := ingress.IsNetworkExtensionActivated(d.ctx); err != nil || !activated {
+		steps = append(steps, "activate-extension")
+	}
+
+	if allowed, err := ingress.IsNetworkExtensionVpnAllowed(d.ctx); err != nil || !allowed {
+		steps = append(steps, "allow-vpn")
+	}
+
+	if !proxy.ProxyCAInstalled() {
+		steps = append(steps, "start-proxy")
+		steps = append(steps, "install-ca")
+	} else if len(steps) > 0 {
+		steps = append(steps, "start-proxy")
+	}
+
 	return steps
 }
 

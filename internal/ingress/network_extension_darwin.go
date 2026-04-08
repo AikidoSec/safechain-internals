@@ -30,7 +30,7 @@ func openNetworkExtensionSettings(ctx context.Context) error {
 	return err
 }
 
-func isNetworkExtensionActivated(ctx context.Context) (bool, error) {
+func IsNetworkExtensionActivated(ctx context.Context) (bool, error) {
 	output, err := platform.RunInAuditSessionOfCurrentUser(ctx, platform.SafeChainL4ProxyHostPath, []string{"is-extension-activated"})
 	outputStr := strings.TrimSpace(output)
 	log.Printf("network extension is-extension-activated output: %s", outputStr)
@@ -47,7 +47,7 @@ func isNetworkExtensionActivated(ctx context.Context) (bool, error) {
 	return false, fmt.Errorf("unexpected is-extension-activated output: %s", outputStr)
 }
 
-func isNetworkExtensionVpnAllowed(ctx context.Context) (bool, error) {
+func IsNetworkExtensionVpnAllowed(ctx context.Context) (bool, error) {
 	output, err := platform.RunInAuditSessionOfCurrentUser(ctx, platform.SafeChainL4ProxyHostPath, []string{"is-vpn-allowed"})
 	outputStr := strings.TrimSpace(output)
 	log.Printf("network extension is-vpn-allowed output: %s", outputStr)

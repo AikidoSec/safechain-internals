@@ -58,7 +58,7 @@ func (s *Server) handleIsExtensionActivated(w http.ResponseWriter, r *http.Reque
 	if !s.validateUIToken(w, r) {
 		return
 	}
-	activated, err := isNetworkExtensionActivated(r.Context())
+	activated, err := IsNetworkExtensionActivated(r.Context())
 	if err != nil {
 		log.Printf("ingress: is-extension-activated: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -78,7 +78,7 @@ func (s *Server) handleIsVpnAllowed(w http.ResponseWriter, r *http.Request) {
 	if !s.validateUIToken(w, r) {
 		return
 	}
-	allowed, err := isNetworkExtensionVpnAllowed(r.Context())
+	allowed, err := IsNetworkExtensionVpnAllowed(r.Context())
 	if err != nil {
 		log.Printf("ingress: is-vpn-allowed: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
