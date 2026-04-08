@@ -83,6 +83,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("GET /v1/network-extension/is-vpn-allowed", s.handleIsVpnAllowed)
 
 	mux.HandleFunc("POST /v1/proxy/start", s.handleProxyStart)
+	mux.HandleFunc("POST /v1/token", s.handleSetToken)
 
 	listener, err := net.Listen("tcp", DefaultBind)
 	if err != nil {
