@@ -217,9 +217,9 @@ fn is_passthrough_ipv4(addr: Ipv4Addr) -> bool {
     if addr.is_loopback() || addr.is_private() {
         return true;
     }
-    // Tailscale peer IPs come from the IETF shared address space (RFC 6598).
+    // Some applications use IPs that come from the IETF shared address space (RFC 6598).
     // `is_private()` only covers RFC-1918, so this range needs an explicit check.
-    // https://tailscale.com/docs/concepts/tailscale-ip-addresses
+    // For instance, TailScale: https://tailscale.com/docs/concepts/tailscale-ip-addresses
     let [a, b, ..] = addr.octets();
     a == 100 && (64..=127).contains(&b)
 }
