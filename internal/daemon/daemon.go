@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AikidoSec/safechain-internals/internal/certconfig"
 	"github.com/AikidoSec/safechain-internals/internal/cloud"
 	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
@@ -92,32 +91,11 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 		logRotator:  utils.NewLogRotator(),
 		logReaper:   utils.NewLogReaper(),
 		uiManager:   uiMgr,
-		ingress:     ingress.New(cfg, uiMgr),
+		ingress:     ingress.New(cfg, uiMgr, proxyManager),
 	}
-
-	d.ingress.SetCertificateHandlers(d.certificateStatusForUI, d.installProxyCACertificate)
 
 	d.initLogging(ctx)
 	return d, nil
-}
-
-// certificateStatusForUI drives GET /v1/certificate/status for the tray install wizard.
-// We only prompt for install while the proxy is running but the MITM CA is not yet in the trust store.
-func (d *Daemon) certificateStatusForUI() ingress.CertificateStatus {
-	caTrusted := proxy.ProxyCAInstalled()
-	proxyRunning := d.proxy != nil && d.proxy.IsRunning()
-	return ingress.CertificateStatus{
-		NeedsInstall: proxyRunning && !caTrusted,
-		Installed:    caTrusted,
-	}
-}
-
-// installProxyCACertificate handles POST /v1/certificate/install: trust store + certconfig follow-up.
-func (d *Daemon) installProxyCACertificate(ctx context.Context) error {
-	if err := d.proxy.InstallCA(ctx); err != nil {
-		return err
-	}
-	return certconfig.Install(ctx)
 }
 
 func (d *Daemon) Start(ctx context.Context) error {
@@ -250,9 +228,11 @@ func (d *Daemon) run(ctx context.Context) error {
 		}
 	}()
 
-	if err := d.startProxy(ctx); err != nil {
-		platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to start proxy: %v", err))
-		return fmt.Errorf("failed to start proxy: %v", err)
+	if d.config.ProxyInitialSetup {
+		if err := d.startProxy(ctx); err != nil {
+			platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to start proxy: %v", err))
+			return fmt.Errorf("failed to start proxy: %v", err)
+		}
 	}
 
 	if err := setup.Install(ctx, d.config.GetProxyMode()); err != nil {
@@ -428,12 +408,16 @@ func (d *Daemon) reportSBOM() error {
 }
 
 func (d *Daemon) heartbeat() error {
-	shouldRetry, err := d.handleProxy()
-	if !shouldRetry {
-		return fmt.Errorf("failed to handle proxy: %v", err)
-	}
-	if err != nil {
-		log.Printf("Failed to start proxy: %v", err)
+	if d.config.ProxyInitialSetup {
+		shouldRetry, err := d.handleProxy()
+		if !shouldRetry {
+			return fmt.Errorf("failed to handle proxy: %v", err)
+		}
+		if err != nil {
+			log.Printf("Failed to start proxy: %v", err)
+		}
+	} else {
+		log.Println("Proxy initial setup is not enabled, skipping proxy start")
 	}
 
 	// Ensure the UI is running, if not, relaunch it

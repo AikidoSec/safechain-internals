@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/AikidoSec/safechain-internals/internal/config"
+	"github.com/AikidoSec/safechain-internals/internal/proxy"
 )
 
 const (
@@ -33,19 +34,18 @@ type Server struct {
 	server   *http.Server
 	config   *config.ConfigInfo
 	ui       UIProvider
+	proxy    proxy.ProxyManager
 
 	eventStore    *eventStore
 	tlsEventStore *tlsEventStore
 	mu            sync.RWMutex
-
-	certStatus  func() CertificateStatus
-	certInstall func(context.Context) error
 }
 
-func New(cfg *config.ConfigInfo, ui UIProvider) *Server {
+func New(cfg *config.ConfigInfo, ui UIProvider, proxy proxy.ProxyManager) *Server {
 	return &Server{
 		config:        cfg,
 		ui:            ui,
+		proxy:         proxy,
 		eventStore:    &eventStore{},
 		tlsEventStore: &tlsEventStore{},
 	}
@@ -75,6 +75,12 @@ func (s *Server) Start(ctx context.Context) error {
 
 	mux.HandleFunc("GET /v1/certificate/status", s.handleCertificateStatus)
 	mux.HandleFunc("POST /v1/certificate/install", s.handleCertificateInstall)
+
+	mux.HandleFunc("POST /v1/network-extension/activate", s.handleNetworkExtensionActivate)
+	mux.HandleFunc("POST /v1/network-extension/allow-vpn", s.handleNetworkExtensionAllowVpn)
+	mux.HandleFunc("POST /v1/network-extension/open-settings", s.handleNetworkExtensionOpenSettings)
+
+	mux.HandleFunc("POST /v1/proxy/start", s.handleProxyStart)
 
 	listener, err := net.Listen("tcp", DefaultBind)
 	if err != nil {
