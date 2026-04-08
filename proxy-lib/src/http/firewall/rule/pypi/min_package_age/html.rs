@@ -22,17 +22,20 @@ struct HtmlRewriteState {
 }
 
 impl HtmlRewriteState {
-    fn record_suppressed(&mut self, package_name: ArcStr, version: PackageVersion) {
+    fn set_package(&mut self, package_name: ArcStr) {
         self.package_name.get_or_insert(package_name);
+    }
+
+    fn record_version(&mut self, version: PackageVersion) {
         if !self.suppressed_versions.contains(&version) {
             self.suppressed_versions.push(version);
         }
     }
 
-    fn outcome(&self) -> Option<HtmlRewriteOutcome> {
+    fn outcome(&mut self) -> Option<HtmlRewriteOutcome> {
         Some(HtmlRewriteOutcome {
-            package_name: self.package_name.clone()?,
-            suppressed_versions: self.suppressed_versions.clone(),
+            package_name: self.package_name.take()?,
+            suppressed_versions: std::mem::take(&mut self.suppressed_versions),
         })
     }
 }
@@ -63,9 +66,9 @@ where
                 } => (removed_name, version),
             };
 
-        state_handler
-            .lock()
-            .record_suppressed(removed_name, version);
+        let mut state = state_handler.lock();
+        state.set_package(removed_name);
+        state.record_version(version);
         el.remove();
         Ok(())
     });
