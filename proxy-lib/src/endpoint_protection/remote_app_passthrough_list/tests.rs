@@ -2,24 +2,21 @@ use super::*;
 use crate::http::firewall::{IncomingFlowInfo, domain_matcher::DomainMatcher};
 use rama::net::address::Domain;
 
-fn make_list(apps: impl IntoIterator<Item = (String, Domains)>) -> PassthroughList {
+fn make_list(apps: impl IntoIterator<Item = (String, DomainMatcher)>) -> PassthroughList {
     let mut trie = Trie::new();
-    for (name, domains) in apps {
-        trie.insert(name, domains);
+    for (name, matcher) in apps {
+        trie.insert(name, matcher);
     }
     PassthroughList { apps: trie }
 }
 
 fn wildcard_list(app_name: &str) -> PassthroughList {
-    make_list([(app_name.to_owned(), Domains::Wildcard)])
+    allowlist_list(app_name, &["*"])
 }
 
-fn allowlist_list(app_name: &str, domains: &[&str]) -> PassthroughList {
-    let matcher: DomainMatcher = domains
-        .iter()
-        .filter_map(|d| d.parse::<Domain>().ok())
-        .collect();
-    make_list([(app_name.to_owned(), Domains::Allowlist(Box::new(matcher)))])
+fn allowlist_list(app_name: &str, domains: &[&'static str]) -> PassthroughList {
+    let matcher: DomainMatcher = domains.iter().copied().collect();
+    make_list([(app_name.to_owned(), matcher)])
 }
 
 fn flow<'a>(domain: &'a Domain, app_bundle_id: Option<&'a str>) -> IncomingFlowInfo<'a> {

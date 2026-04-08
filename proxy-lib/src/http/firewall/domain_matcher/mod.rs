@@ -1,12 +1,16 @@
-use rama::net::address::{AsDomainRef, Domain, DomainParentMatch, DomainTrie};
+use rama::net::address::{Domain, DomainParentMatch, DomainTrie};
 
 #[derive(Debug, Clone)]
 pub struct DomainMatcher {
     trie: DomainTrie<DomainAllowMode>,
+    match_all: bool,
 }
 
 impl DomainMatcher {
     pub fn is_match(&self, domain: &Domain) -> bool {
+        if self.match_all {
+            return true;
+        }
         match self.trie.match_parent(domain) {
             None => false,
             Some(DomainParentMatch {
@@ -26,10 +30,19 @@ impl DomainMatcher {
     }
 }
 
-impl<D: AsDomainRef> FromIterator<D> for DomainMatcher {
+impl<D: AsRef<str>> FromIterator<D> for DomainMatcher {
     fn from_iter<T: IntoIterator<Item = D>>(iter: T) -> Self {
         let mut trie = DomainTrie::new();
-        for domain in iter {
+        let mut match_all = false;
+        for item in iter {
+            let s = item.as_ref();
+            if s == "*" {
+                match_all = true;
+                continue;
+            }
+            let Ok(domain) = s.parse::<Domain>() else {
+                continue;
+            };
             if let Some(parent) = domain.as_wildcard_parent()
                 && let Ok(_) = parent.try_as_wildcard()
             {
@@ -49,7 +62,7 @@ impl<D: AsDomainRef> FromIterator<D> for DomainMatcher {
             trie.insert_domain(domain, DomainAllowMode::Exact);
         }
 
-        Self { trie }
+        Self { trie, match_all }
     }
 }
 

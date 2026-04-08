@@ -7,7 +7,6 @@ use rama::{
     error::{BoxError, ErrorContext, ErrorExt, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{BodyExtractExt, Request, Response, Uri, service::client::HttpClientExt},
-    net::address::Domain,
     telemetry::tracing,
 };
 use rand::RngExt as _;
@@ -75,7 +74,7 @@ fn passthrough_list_uri(aikido_url: &Uri) -> Result<Uri, BoxError> {
 
 #[derive(Debug, Clone)]
 struct PassthroughList {
-    apps: Trie<String, Domains>,
+    apps: Trie<String, DomainMatcher>,
 }
 
 impl PassthroughList {
@@ -86,27 +85,11 @@ impl PassthroughList {
 
         // get_ancestor returns the subtrie rooted at the longest stored key that
         // is a prefix of `bundle_id`
-        let Some(domains) = self.apps.get_ancestor(bundle_id).and_then(|t| t.value()) else {
+        let Some(matcher) = self.apps.get_ancestor(bundle_id).and_then(|t| t.value()) else {
             return false;
         };
 
-        domains.matches(meta.domain)
-    }
-
-}
-
-#[derive(Debug, Clone)]
-enum Domains {
-    Wildcard,
-    Allowlist(Box<DomainMatcher>),
-}
-
-impl Domains {
-    fn matches(&self, domain: &Domain) -> bool {
-        match self {
-            Self::Wildcard => true,
-            Self::Allowlist(domains) => domains.is_match(domain),
-        }
+        matcher.is_match(meta.domain)
     }
 }
 
@@ -164,17 +147,8 @@ where
 
         let mut apps = Trie::new();
         for app_config in api_response.disabled_apps_mac {
-            let domains = if app_config.domains == ["*"] {
-                Domains::Wildcard
-            } else {
-                let domain_matcher: DomainMatcher = app_config
-                    .domains
-                    .into_iter()
-                    .filter_map(|d| d.parse::<Domain>().ok())
-                    .collect();
-                Domains::Allowlist(Box::new(domain_matcher))
-            };
-            apps.insert(app_config.app_id, domains);
+            let matcher: DomainMatcher = app_config.domains.into_iter().collect();
+            apps.insert(app_config.app_id, matcher);
         }
         Ok(PassthroughList { apps })
     }
