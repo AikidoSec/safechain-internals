@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -87,13 +88,15 @@ func setupNotifications() (notifier *notifications.NotificationService, authoriz
 
 // --- Wails application ---------------------------------------------------
 
+var daemonSvc = &DaemonService{}
+
 func newApp(notifier *notifications.NotificationService) *application.App {
 	return application.New(application.Options{
 		Name:        "Aikido Endpoint Protection",
 		Description: "Aikido Endpoint Protection",
 		Services: []application.Service{
 			application.NewService(notifier),
-			application.NewService(&DaemonService{}),
+			application.NewService(daemonSvc),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -250,6 +253,16 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 		statusLines[i].SetHidden(true)
 	}
 	menu.AddSeparator()
+	setupItem := menu.Add("⚠ System Setup Required...")
+	setupItem.SetHidden(true)
+	setupItem.OnClick(func(_ *application.Context) {
+		go func() {
+			if err := daemon.SetupStart(); err != nil {
+				log.Printf("setup start: %v", err)
+			}
+		}()
+	})
+	menu.AddSeparator()
 	menu.Add("Open Dashboard").OnClick(func(_ *application.Context) {
 		app.Event.Emit("focus_event", FocusEventPayload{EventId: ""})
 		showDashboard()
@@ -258,6 +271,24 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 	if runtime.GOOS == "windows" {
 		systray.OnClick(systray.OpenMenu)
 	}
+
+	var setupHidden atomic.Bool
+	setupHidden.Store(true)
+	go func() {
+		for {
+			ok, err := daemon.SetupCheck()
+			if err != nil {
+				log.Printf("setup check: %v", err)
+			}
+			shouldHide := ok || err != nil
+			if shouldHide != setupHidden.Load() {
+				setupHidden.Store(shouldHide)
+				setupItem.SetHidden(shouldHide)
+				menu.Update()
+			}
+			time.Sleep(10 * time.Second)
+		}
+	}()
 
 	statusCh := make(chan appserver.ProxyStatusBody, 8)
 	go func() {
@@ -322,8 +353,9 @@ func startAppServer(app *application.App, wm *windowManager, statusCh chan<- app
 			log.Println("Permissions updated")
 			app.Event.Emit("permissions_updated", ev)
 		},
-		func(show bool) {
-			if show {
+		func(steps []string) {
+			if len(steps) > 0 {
+				daemonSvc.SetSetupSteps(steps)
 				wm.setCertificateInstallWindowVisible(true)
 			}
 		},

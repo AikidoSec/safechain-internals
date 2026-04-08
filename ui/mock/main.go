@@ -187,10 +187,13 @@ func seedPermissions() PermissionsResponse {
 // ── server ───────────────────────────────────────────────────────────
 
 type server struct {
-	mu          sync.RWMutex
-	blocks      []BlockEvent
-	tlsEvents   []TlsEvent
-	permissions PermissionsResponse
+	mu                   sync.RWMutex
+	blocks               []BlockEvent
+	tlsEvents            []TlsEvent
+	permissions          PermissionsResponse
+	extensionActivated   bool
+	vpnAllowed           bool
+	token                string
 }
 
 func (s *server) writeJSON(w http.ResponseWriter, v any) {
@@ -269,7 +272,109 @@ func (s *server) handleCertificateStatus(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *server) handleCertificateInstall(w http.ResponseWriter, r *http.Request) {
+	log.Println("mock: certificate install (simulated 2s delay)")
+	time.Sleep(2 * time.Second)
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *server) handleNetworkExtensionActivate(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.extensionActivated = true
+	s.mu.Unlock()
+	log.Println("mock: network extension activated")
+	s.writeJSON(w, map[string]string{"status": "activated"})
+}
+
+func (s *server) handleNetworkExtensionAllowVpn(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.vpnAllowed = true
+	s.mu.Unlock()
+	log.Println("mock: vpn allowed")
+	s.writeJSON(w, map[string]string{"status": "allowed"})
+}
+
+func (s *server) handleNetworkExtensionOpenSettings(w http.ResponseWriter, r *http.Request) {
+	log.Println("mock: open network extension settings (no-op)")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *server) handleIsExtensionActivated(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	activated := s.extensionActivated
+	s.mu.RUnlock()
+	s.writeJSON(w, map[string]bool{"result": activated})
+}
+
+func (s *server) handleIsVpnAllowed(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	allowed := s.vpnAllowed
+	s.mu.RUnlock()
+	s.writeJSON(w, map[string]bool{"result": allowed})
+}
+
+func (s *server) handleProxyStart(w http.ResponseWriter, r *http.Request) {
+	log.Println("mock: proxy started")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *server) handleSetToken(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	s.token = body.Token
+	s.mu.Unlock()
+	log.Printf("mock: token set to %q", body.Token)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *server) handleSetupCheck(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var steps []string
+	if s.token == "" {
+		steps = append(steps, "token")
+	}
+	if !s.extensionActivated {
+		steps = append(steps, "activate-extension")
+	}
+	if !s.vpnAllowed {
+		steps = append(steps, "allow-vpn")
+	}
+	if len(steps) > 0 {
+		steps = append(steps, "start-proxy", "install-ca")
+	}
+	if len(steps) == 0 {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusConflict)
+	json.NewEncoder(w).Encode(map[string][]string{"steps": steps})
+}
+
+func (s *server) handleSetupStart(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var steps []string
+	if s.token == "" {
+		steps = append(steps, "token")
+	}
+	if !s.extensionActivated {
+		steps = append(steps, "activate-extension")
+	}
+	if !s.vpnAllowed {
+		steps = append(steps, "allow-vpn")
+	}
+	if len(steps) > 0 {
+		steps = append(steps, "start-proxy", "install-ca")
+	}
+	log.Printf("mock: setup start → steps=%v", steps)
+	s.writeJSON(w, map[string][]string{"steps": steps})
 }
 
 func main() {
@@ -286,6 +391,18 @@ func main() {
 	mux.HandleFunc("POST /v1/events/{id}/request-access", s.handleRequestAccess)
 	mux.HandleFunc("GET /v1/certificate/status", s.handleCertificateStatus)
 	mux.HandleFunc("POST /v1/certificate/install", s.handleCertificateInstall)
+
+	mux.HandleFunc("POST /v1/network-extension/activate", s.handleNetworkExtensionActivate)
+	mux.HandleFunc("POST /v1/network-extension/allow-vpn", s.handleNetworkExtensionAllowVpn)
+	mux.HandleFunc("POST /v1/network-extension/open-settings", s.handleNetworkExtensionOpenSettings)
+	mux.HandleFunc("GET /v1/network-extension/is-activated", s.handleIsExtensionActivated)
+	mux.HandleFunc("GET /v1/network-extension/is-vpn-allowed", s.handleIsVpnAllowed)
+
+	mux.HandleFunc("POST /v1/proxy/start", s.handleProxyStart)
+	mux.HandleFunc("POST /v1/token", s.handleSetToken)
+
+	mux.HandleFunc("GET /v1/setup/check", s.handleSetupCheck)
+	mux.HandleFunc("POST /v1/setup/start", s.handleSetupStart)
 
 	addr := "127.0.0.1:7878"
 	fmt.Printf("Mock daemon listening on %s\n", addr)

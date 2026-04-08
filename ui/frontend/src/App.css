@@ -1463,6 +1463,31 @@ body {
   justify-content: flex-start;
 }
 
+.install-page__token-input {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.install-page__token-input:focus {
+  border-color: var(--primary-aik-100);
+  box-shadow: 0 0 0 3px var(--primary-aik-20);
+}
+
+.install-page__token-input:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+
 .install-page__preview {
   flex: 0.85;
   max-width: 340px;

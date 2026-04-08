@@ -31,6 +31,38 @@ export async function installProxyCertificate(): Promise<void> {
   return DaemonService.InstallProxyCertificate();
 }
 
+export async function setToken(token: string): Promise<void> {
+  return DaemonService.SetToken(token);
+}
+
+export async function activateExtension(): Promise<void> {
+  return DaemonService.ActivateExtension();
+}
+
+export async function allowVpn(): Promise<void> {
+  return DaemonService.AllowVpn();
+}
+
+export async function startProxy(): Promise<void> {
+  return DaemonService.StartProxy();
+}
+
+export async function isExtensionActivated(): Promise<boolean> {
+  return DaemonService.IsExtensionActivated();
+}
+
+export async function isVpnAllowed(): Promise<boolean> {
+  return DaemonService.IsVpnAllowed();
+}
+
+export async function openExtensionSettings(): Promise<void> {
+  return DaemonService.OpenExtensionSettings();
+}
+
+export async function getSetupSteps(): Promise<string[]> {
+  return DaemonService.GetSetupSteps();
+}
+
 export async function closeInstallWindow(): Promise<void> {
   return DaemonService.CloseInstallWindow();
 }

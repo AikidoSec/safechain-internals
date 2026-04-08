@@ -1,24 +1,121 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import logoUrl from "../../assets/logo.svg";
-import { closeInstallWindow, installProxyCertificate } from "../api";
+import {
+  closeInstallWindow,
+  getSetupSteps,
+  setToken,
+  activateExtension,
+  allowVpn,
+  startProxy,
+  installProxyCertificate,
+  isExtensionActivated,
+  isVpnAllowed,
+  openExtensionSettings,
+} from "../api";
+import type { Phase } from "./SetupStepLayout";
 import { InstallFinishPage } from "./InstallFinishPage";
+import { SetupStepToken } from "./SetupStepToken";
+import { SetupStepActivateExtension } from "./SetupStepActivateExtension";
+import { SetupStepAllowVpn } from "./SetupStepAllowVpn";
+import { SetupStepStartProxy } from "./SetupStepStartProxy";
+import { SetupStepInstallCa } from "./SetupStepInstallCa";
 
-type Phase = "idle" | "working" | "done";
+type StepId = "token" | "activate-extension" | "allow-vpn" | "start-proxy" | "install-ca";
+
+const VALID_STEPS = new Set<string>(["token", "activate-extension", "allow-vpn", "start-proxy", "install-ca"]);
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function pollUntil(check: () => Promise<boolean>, intervalMs: number, maxAttempts: number): Promise<boolean> {
+  for (let i = 0; i < maxAttempts; i++) {
+    await sleep(intervalMs);
+    if (await check()) return true;
+  }
+  return false;
+}
+
+const STEP_ACTIONS: Record<StepId, (input?: string) => Promise<void>> = {
+  token: (input) => setToken(input ?? ""),
+  "activate-extension": async () => {
+    await activateExtension();
+    if (await isExtensionActivated()) return;
+    await openExtensionSettings();
+    const ok = await pollUntil(isExtensionActivated, 2000, 30);
+    if (!ok) throw new Error("Network extension was not activated. Please approve it in System Settings and retry.");
+  },
+  "allow-vpn": async () => {
+    await allowVpn();
+    if (await isVpnAllowed()) return;
+    const ok = await pollUntil(isVpnAllowed, 2000, 15);
+    if (!ok) throw new Error("VPN configuration was not allowed. Please approve it and retry.");
+  },
+  "start-proxy": () => startProxy(),
+  "install-ca": () => installProxyCertificate(),
+};
 
 export function InstallPage() {
-  const [wizardStep, setWizardStep] = useState(0);
+  const [steps, setSteps] = useState<StepId[]>([]);
+  const [currentIdx, setCurrentIdx] = useState(0);
   const [phase, setPhase] = useState<Phase>("idle");
-  const [success, setSuccess] = useState<boolean | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [tokenInput, setTokenInput] = useState("");
+  const [showFinish, setShowFinish] = useState(false);
 
-  async function handleInstall() {
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    function poll() {
+      getSetupSteps()
+        .then((s) => {
+          if (cancelled) return;
+          const valid = (s ?? []).filter((id): id is StepId => VALID_STEPS.has(id));
+          if (valid.length > 0) {
+            setSteps(valid);
+          } else {
+            timer = setTimeout(poll, 500);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) timer = setTimeout(poll, 500);
+        });
+    }
+    poll();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, []);
+
+  const currentStep = currentIdx < steps.length ? steps[currentIdx] : null;
+  const totalDots = steps.length + 1;
+
+  async function handleAction() {
+    if (!currentStep) return;
+    if (currentStep === "token" && !tokenInput.trim()) return;
+
     setPhase("working");
+    setErrorMsg("");
     try {
-      await installProxyCertificate();
-      setSuccess(true);
+      await STEP_ACTIONS[currentStep](tokenInput.trim());
       setPhase("done");
-    } catch {
-      setSuccess(false);
-      setPhase("done");
+    } catch (e: unknown) {
+      setPhase("error");
+      setErrorMsg(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+    }
+  }
+
+  function handleNext() {
+    setPhase("idle");
+    setErrorMsg("");
+    setTokenInput("");
+    if (currentIdx + 1 >= steps.length) {
+      setShowFinish(true);
+    } else {
+      setCurrentIdx((i) => i + 1);
     }
   }
 
@@ -26,11 +123,54 @@ export function InstallPage() {
     await closeInstallWindow();
   }
 
-  const done = phase === "done";
-  const step1ButtonDisabled = phase === "working" || success === true;
-  const step1ButtonLabel = phase === "working" ? "Installing…" : success === true ? "Installed" : "Install";
+  if (steps.length === 0) {
+    return (
+      <div className="install-page">
+        <header className="install-page__header">
+          <img src={logoUrl} alt="Aikido" className="install-page__logo" />
+        </header>
+        <div className="install-page__scroll">
+          <div className="install-page__body install-page__body--followup">
+            <div className="install-page__main" style={{ textAlign: "center", paddingTop: 60 }}>
+              <p style={{ color: "#6b7280" }}>Loading setup steps…</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  const showBottomBar = (wizardStep === 0 && success === true) || wizardStep === 1;
+  const showBottomBar = phase === "done" || showFinish;
+  const stepProps = {
+    stepNumber: currentIdx + 1,
+    totalSteps: steps.length,
+    phase,
+    errorMsg,
+    onAction: handleAction,
+  };
+
+  function renderStep() {
+    switch (currentStep) {
+      case "token":
+        return (
+          <SetupStepToken
+            {...stepProps}
+            tokenInput={tokenInput}
+            onTokenChange={setTokenInput}
+          />
+        );
+      case "activate-extension":
+        return <SetupStepActivateExtension {...stepProps} />;
+      case "allow-vpn":
+        return <SetupStepAllowVpn {...stepProps} />;
+      case "start-proxy":
+        return <SetupStepStartProxy {...stepProps} />;
+      case "install-ca":
+        return <SetupStepInstallCa {...stepProps} />;
+      default:
+        return null;
+    }
+  }
 
   return (
     <div className={`install-page${showBottomBar ? " install-page--has-bottom-bar" : ""}`}>
@@ -39,180 +179,40 @@ export function InstallPage() {
       </header>
 
       <div className="install-page__dots" role="tablist" aria-label="Setup steps">
-        <span
-          role="tab"
-          aria-selected={wizardStep === 0}
-          className={`install-page__dot${wizardStep === 0 ? " install-page__dot--active" : ""}`}
-        />
-        <span
-          role="tab"
-          aria-selected={wizardStep === 1}
-          className={`install-page__dot${wizardStep === 1 ? " install-page__dot--active" : ""}`}
-        />
+        {Array.from({ length: totalDots }, (_, i) => (
+          <span
+            key={i}
+            role="tab"
+            aria-selected={showFinish ? i === totalDots - 1 : i === currentIdx}
+            className={`install-page__dot${(showFinish ? i === totalDots - 1 : i === currentIdx) ? " install-page__dot--active" : ""}`}
+          />
+        ))}
       </div>
 
       <div className="install-page__scroll">
-        <div className={`install-page__body${wizardStep === 1 ? " install-page__body--followup" : ""}`}>
-          {wizardStep === 1 ? (
-            <InstallFinishPage />
-          ) : (
-            <>
-              <div className="install-page__main">
-                <h1 className="install-page__title">Just a few more steps</h1>
-                <ol className="install-page__steps">
-                  <li className={`install-page__step${success === true ? " install-page__step--done" : ""}`}>
-                    <div className="install-page__step-badge" aria-hidden>
-                      1
-                    </div>
-                    <div className="install-page__step-body">
-                      <div className="install-page__step-row">
-                        <div>
-                          <p className="install-page__step-title">Install the Aikido Endpoint certificate.</p>
-                          <p className="install-page__step-hint">
-                            Aikido Endpoint needs to install a certificate in the system keychain to verify installs secure your device. macOS will ask for your approval.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          className="button-brand button--primary button--normal button--rounded install-page__action-btn"
-                          onClick={handleInstall}
-                          disabled={step1ButtonDisabled}
-                        >
-                          {step1ButtonLabel}
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-
-                  {done && (
-                    <li
-                      className={`install-page__step install-page__step--result${
-                        success ? " install-page__step--success" : " install-page__step--failure"
-                      }`}
-                    >
-                      <div className="install-page__step-badge install-page__step-badge--muted" aria-hidden>
-                        2
-                      </div>
-                      <div className="install-page__step-body">
-                        {success ? (
-                          <>
-                            <p className="install-page__step-title install-page__step-title--result">Installation complete</p>
-                            <div className="install-page__result-success">
-                              <p>Aikido Endpoint Protection has been installed successfully.</p>
-                            </div>
-                            <p className="install-page__next-hint">Select <strong>Next</strong> to continue.</p>
-                          </>
-                        ) : (
-                          <>
-                            <p className="install-page__step-title install-page__step-title--result">Installation failed</p>
-                            <p className="install-page__step-error install-page__step-error--block">
-                              The certificate could not be installed. Please try again.
-                            </p>
-                            <div className="install-page__retry-row">
-                              <button
-                                type="button"
-                                className="button-brand button--primary button--normal button--rounded install-page__action-btn"
-                                onClick={handleInstall}
-                              >
-                                Retry
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </li>
-                  )}
-                </ol>
-              </div>
-
-              <aside className="install-page__preview" aria-hidden>
-                <div className="install-page__preview-backdrop">
-                  <div className="install-page__preview-sheet">
-                    <div className="install-page__preview-icon-wrap">
-                      <svg
-                        className="install-page__preview-lock"
-                        width="72"
-                        height="72"
-                        viewBox="0 0 72 72"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <defs>
-                          <linearGradient id="installLockGold" x1="20" y1="36" x2="52" y2="64" gradientUnits="userSpaceOnUse">
-                            <stop stopColor="#FDE68A" />
-                            <stop offset="0.35" stopColor="#EAB308" />
-                            <stop offset="1" stopColor="#B45309" />
-                          </linearGradient>
-                        </defs>
-                        <path
-                          d="M23 36V27a13 13 0 0126 0v9"
-                          stroke="#B8B8BE"
-                          strokeWidth="5.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <rect x="17" y="34" width="38" height="30" rx="7" fill="url(#installLockGold)" />
-                      </svg>
-                      <span className="install-page__preview-exec-badge">
-                        <span className="install-page__preview-exec-text">exec</span>
-                      </span>
-                    </div>
-
-                    <h2 className="install-page__preview-heading">security</h2>
-
-                    <p className="install-page__preview-blurb">
-                      You are making changes to the System Certificate Trust Settings. Enter your password to allow this.
-                    </p>
-
-                    <div className="install-page__preview-fields install-page__preview-fields--sheet">
-                      <div className="install-page__preview-field">Current User</div>
-                      <div className="install-page__preview-field install-page__preview-field--password install-page__preview-field--focused">
-                        ••••••••
-                      </div>
-                    </div>
-
-                    <div className="install-page__preview-actions">
-                      <button
-                        type="button"
-                        className="button-brand button--primary button--normal button--rounded install-page__preview-mock-btn install-page__preview-mock-btn--mac-blue"
-                        tabIndex={-1}
-                      >
-                        Update Settings
-                      </button>
-                      <button
-                        type="button"
-                        className="button-brand button--tertiary button--normal button--rounded install-page__preview-mock-btn"
-                        tabIndex={-1}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </aside>
-            </>
-          )}
+        <div className={`install-page__body${showFinish ? " install-page__body--followup" : ""}`}>
+          {showFinish ? <InstallFinishPage /> : renderStep()}
         </div>
       </div>
 
       {showBottomBar && (
         <div className="install-page__finish-bar">
           <div className="install-page__finish-bar-inner">
-            {wizardStep === 0 ? (
-              <button
-                type="button"
-                className="button-brand button--primary button--normal button--rounded"
-                onClick={() => setWizardStep(1)}
-              >
-                Next
-              </button>
-            ) : (
+            {showFinish ? (
               <button
                 type="button"
                 className="button-brand button--primary button--normal button--rounded"
                 onClick={handleFinish}
               >
                 Finish
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="button-brand button--primary button--normal button--rounded"
+                onClick={handleNext}
+              >
+                Next
               </button>
             )}
           </div>
