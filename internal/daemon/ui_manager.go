@@ -32,8 +32,8 @@ type UIManager struct {
 	proxyStatusInitialized bool
 	lastProxyStdoutMessage string
 
-	certPromptMu              sync.Mutex
-	lastCertificatePromptShow bool
+	certPromptMu                        sync.Mutex
+	certificateInstallPromptAlreadySent bool
 }
 
 func NewUIManager() *UIManager {
@@ -120,7 +120,7 @@ func (m *UIManager) EnsureRunning() {
 	}
 	m.waitForUIReady()
 	m.proxyStatusInitialized = false
-	m.lastCertificatePromptShow = false
+	m.certificateInstallPromptAlreadySent = false
 }
 
 // waitForUIReady polls the UI's HTTP port until it accepts TCP connections
@@ -178,14 +178,14 @@ func (m *UIManager) NotifyCertificateInstallPromptIfChanged(needed bool) {
 	m.certPromptMu.Lock()
 	defer m.certPromptMu.Unlock()
 	if !needed {
-		m.lastCertificatePromptShow = false
+		m.certificateInstallPromptAlreadySent = false
 		return
 	}
-	if m.lastCertificatePromptShow {
+	if m.certificateInstallPromptAlreadySent {
 		return
 	}
 	log.Println("Proxy CA not installed; tray app will prompt the user to complete installation")
-	m.lastCertificatePromptShow = true
+	m.certificateInstallPromptAlreadySent = true
 	if err := m.Client.NotifyCertificateInstallPrompt(true); err != nil {
 		log.Printf("Failed to notify UI of certificate install prompt: %v", err)
 	}
