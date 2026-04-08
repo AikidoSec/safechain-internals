@@ -95,25 +95,29 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 		ingress:     ingress.New(cfg, uiMgr),
 	}
 
-	d.ingress.SetCertificateHandlers(
-		func() ingress.CertificateStatus {
-			installed := proxy.ProxyCAInstalled()
-			running := d.proxy != nil && d.proxy.IsRunning()
-			return ingress.CertificateStatus{
-				NeedsInstall: running && !installed,
-				Installed:    installed,
-			}
-		},
-		func(ctx context.Context) error {
-			if err := d.proxy.InstallCA(ctx); err != nil {
-				return err
-			}
-			return certconfig.Install(ctx)
-		},
-	)
+	d.ingress.SetCertificateHandlers(d.certificateStatusForUI, d.installProxyCACertificate)
 
 	d.initLogging(ctx)
 	return d, nil
+}
+
+// certificateStatusForUI drives GET /v1/certificate/status for the tray install wizard.
+// We only prompt for install while the proxy is running but the MITM CA is not yet in the trust store.
+func (d *Daemon) certificateStatusForUI() ingress.CertificateStatus {
+	caTrusted := proxy.ProxyCAInstalled()
+	proxyRunning := d.proxy != nil && d.proxy.IsRunning()
+	return ingress.CertificateStatus{
+		NeedsInstall: proxyRunning && !caTrusted,
+		Installed:    caTrusted,
+	}
+}
+
+// installProxyCACertificate handles POST /v1/certificate/install: trust store + certconfig follow-up.
+func (d *Daemon) installProxyCACertificate(ctx context.Context) error {
+	if err := d.proxy.InstallCA(ctx); err != nil {
+		return err
+	}
+	return certconfig.Install(ctx)
 }
 
 func (d *Daemon) Start(ctx context.Context) error {
