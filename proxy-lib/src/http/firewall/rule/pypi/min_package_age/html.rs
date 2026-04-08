@@ -9,12 +9,13 @@ use crate::{
     package::{released_packages_list::RemoteReleasedPackagesList, version::PackageVersion},
 };
 
+#[derive(Debug)]
 pub(super) struct HtmlRewriteOutcome {
     pub package_name: ArcStr,
     pub suppressed_versions: Vec<PackageVersion>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct HtmlRewriteState {
     package_name: Option<ArcStr>,
     suppressed_versions: Vec<PackageVersion>,
@@ -80,6 +81,7 @@ where
     })
 }
 
+#[derive(Debug)]
 enum AnchorDecision {
     Keep,
     Remove {

@@ -27,10 +27,12 @@ use crate::{
 mod html;
 mod json;
 
+#[derive(Debug, Clone)]
 pub(in crate::http::firewall) struct MinPackageAgePyPI {
     notifier: Option<EventNotifier>,
 }
 
+#[derive(Debug)]
 pub(super) struct JsonRewriteResult {
     bytes: Vec<u8>,
     package_name: ArcStr,
@@ -73,7 +75,7 @@ impl MinPackageAgePyPI {
                 };
 
                 tracing::info!(
-                    format = rewrite_kind.as_str(),
+                    rewrite_kind = ?rewrite_kind,
                     package = %rewrite.package_name,
                     suppressed_versions = ?rewrite.suppressed_versions,
                     "PyPI metadata rewritten: suppressed too-young versions"

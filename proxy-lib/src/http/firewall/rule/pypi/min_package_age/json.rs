@@ -16,20 +16,13 @@ use super::super::parser::{
 };
 use super::JsonRewriteResult;
 
+#[derive(Debug)]
 pub(super) enum JsonRewriteKind {
     Legacy,
     Simple,
 }
 
-impl JsonRewriteKind {
-    pub(super) const fn as_str(&self) -> &'static str {
-        match self {
-            Self::Legacy => "legacy-json",
-            Self::Simple => "simple-json",
-        }
-    }
-}
-
+#[derive(Debug)]
 enum FileDecision {
     Keep,
     Remove {

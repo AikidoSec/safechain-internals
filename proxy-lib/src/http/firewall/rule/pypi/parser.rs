@@ -11,6 +11,7 @@ use crate::package::{
     version::PackageVersion,
 };
 
+#[derive(Debug)]
 pub(super) struct PackageInfo {
     pub(super) name: SmolStr,
     pub(super) version: PackageVersion,
