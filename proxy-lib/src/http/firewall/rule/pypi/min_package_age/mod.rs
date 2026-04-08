@@ -21,7 +21,7 @@ use crate::{
             notifier::EventNotifier,
         },
     },
-    package::released_packages_list::RemoteReleasedPackagesList,
+    package::{released_packages_list::RemoteReleasedPackagesList, version::PackageVersion},
 };
 
 mod html;
@@ -34,7 +34,7 @@ pub(in crate::http::firewall) struct MinPackageAgePyPI {
 pub(super) struct JsonRewriteResult {
     bytes: Vec<u8>,
     package_name: ArcStr,
-    suppressed_versions: Vec<String>,
+    suppressed_versions: Vec<PackageVersion>,
 }
 
 impl MinPackageAgePyPI {
@@ -147,7 +147,7 @@ fn on_html_rewrite_end(rewrite: Option<html::HtmlRewriteOutcome>, notifier: Opti
 
 fn build_min_package_age_event(
     package_name: ArcStr,
-    suppressed_versions: Vec<String>,
+    suppressed_versions: Vec<PackageVersion>,
 ) -> MinPackageAgeEvent {
     MinPackageAgeEvent {
         ts_ms: now_unix_ms(),
@@ -157,13 +157,7 @@ fn build_min_package_age_event(
             display_name: Some(package_name),
             version: None,
         },
-        suppressed_versions: suppressed_versions
-            .iter()
-            .map(|v| {
-                let Ok(v) = v.parse();
-                v
-            })
-            .collect(),
+        suppressed_versions,
     }
 }
 

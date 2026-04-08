@@ -1,34 +1,37 @@
-use std::{collections::BTreeSet, sync::Arc};
+use std::sync::Arc;
 
 use lol_html::send::Settings;
 use parking_lot::Mutex;
 use rama::{http::Body, utils::str::arcstr::ArcStr};
 
-use crate::{http::LolHtmlBody, package::released_packages_list::RemoteReleasedPackagesList};
-
-use crate::http::firewall::rule::pypi::parser::parse_package_info_from_url;
+use crate::{
+    http::{LolHtmlBody, firewall::rule::pypi::parser::parse_package_info_from_url},
+    package::{released_packages_list::RemoteReleasedPackagesList, version::PackageVersion},
+};
 
 pub(super) struct HtmlRewriteOutcome {
     pub package_name: ArcStr,
-    pub suppressed_versions: Vec<String>,
+    pub suppressed_versions: Vec<PackageVersion>,
 }
 
 #[derive(Default)]
 struct HtmlRewriteState {
     package_name: Option<ArcStr>,
-    suppressed_versions: BTreeSet<String>,
+    suppressed_versions: Vec<PackageVersion>,
 }
 
 impl HtmlRewriteState {
-    fn record_suppressed(&mut self, package_name: ArcStr, version: String) {
+    fn record_suppressed(&mut self, package_name: ArcStr, version: PackageVersion) {
         self.package_name.get_or_insert(package_name);
-        self.suppressed_versions.insert(version);
+        if !self.suppressed_versions.contains(&version) {
+            self.suppressed_versions.push(version);
+        }
     }
 
     fn outcome(&self) -> Option<HtmlRewriteOutcome> {
         Some(HtmlRewriteOutcome {
             package_name: self.package_name.clone()?,
-            suppressed_versions: self.suppressed_versions.iter().cloned().collect(),
+            suppressed_versions: self.suppressed_versions.clone(),
         })
     }
 }
@@ -81,7 +84,7 @@ enum AnchorDecision {
     Keep,
     Remove {
         package_name: ArcStr,
-        version: String,
+        version: PackageVersion,
     },
 }
 
@@ -110,7 +113,7 @@ fn analyze_anchor_href(
 
     AnchorDecision::Remove {
         package_name: ArcStr::from(package.name.as_str()),
-        version: package.version.to_string(),
+        version: package.version,
     }
 }
 

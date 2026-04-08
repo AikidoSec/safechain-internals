@@ -4,8 +4,11 @@ use rama::{
     utils::time::now_unix_ms,
 };
 
-use crate::package::released_packages_list::{
-    PyPINormalizedReleasedPackageFormatter, ReleasedPackageData, RemoteReleasedPackagesList,
+use crate::package::{
+    released_packages_list::{
+        PyPINormalizedReleasedPackageFormatter, ReleasedPackageData, RemoteReleasedPackagesList,
+    },
+    version::PackageVersion,
 };
 
 use super::{AnchorDecision, HtmlRewriteOutcome, analyze_anchor_href, rewrite_body};
@@ -62,7 +65,7 @@ fn analyze_anchor_href_removes_recent_package_href() {
             version,
         } => {
             assert_eq!(package_name.as_str(), "my-package");
-            assert_eq!(version, "2.0.0");
+            assert_eq!(version, "2.0.0".parse::<PackageVersion>().unwrap());
         }
     }
 }
@@ -72,7 +75,7 @@ fn analyze_anchor_href_removes_recent_package_href() {
 async fn rewrite_html(
     html: &str,
     list: RemoteReleasedPackagesList,
-) -> Option<(String, String, Vec<String>)> {
+) -> Option<(String, String, Vec<PackageVersion>)> {
     let outcome = std::sync::Arc::new(Mutex::new(None::<HtmlRewriteOutcome>));
     let body = rewrite_body(Body::from(html.to_owned()), default_cutoff_secs(), list, {
         let outcome = outcome.clone();
@@ -105,7 +108,7 @@ async fn rewrite_body_removes_recent_links_from_simple_html() {
     assert!(html.contains("my_package-1.0.0.tar.gz"));
     assert!(!html.contains("my_package-2.0.0.tar.gz"));
     assert_eq!(package_name, "my-package");
-    assert_eq!(suppressed, vec!["2.0.0"]);
+    assert_eq!(suppressed, vec!["2.0.0".parse::<PackageVersion>().unwrap()]);
 }
 
 #[tokio::test]

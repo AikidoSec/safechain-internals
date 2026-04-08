@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, str::FromStr, time::UNIX_EPOCH};
+use std::{str::FromStr, time::UNIX_EPOCH};
 
 use rama::{
     telemetry::tracing,
@@ -34,7 +34,7 @@ enum FileDecision {
     Keep,
     Remove {
         package_name: ArcStr,
-        version: String,
+        version: PackageVersion,
     },
 }
 
@@ -69,7 +69,7 @@ fn rewrite_legacy(
     released_packages: &RemoteReleasedPackagesList,
 ) -> Option<JsonRewriteResult> {
     let package_name = package_name_from_legacy_json(&json);
-    let mut suppressed: BTreeSet<String> = BTreeSet::new();
+    let mut suppressed: Vec<PackageVersion> = Vec::new();
 
     json.get_mut("releases")?
         .as_object_mut()?
@@ -98,7 +98,7 @@ fn legacy_keep_release(
     files: &serde_json::Value,
     cutoff_secs: i64,
     released_packages: &RemoteReleasedPackagesList,
-    suppressed: &mut BTreeSet<String>,
+    suppressed: &mut Vec<PackageVersion>,
 ) -> bool {
     let version =
         PackageVersion::from_str(version).unwrap_or(PackageVersion::Unknown(version.into()));
@@ -106,8 +106,8 @@ fn legacy_keep_release(
     let is_recent = earliest_upload_secs(files).is_some_and(|t| t > cutoff_secs)
         || released_packages.is_recently_released(package_name, Some(&version), cutoff_secs);
 
-    if is_recent {
-        suppressed.insert(version.to_string());
+    if is_recent && !suppressed.contains(&version) {
+        suppressed.push(version);
     }
 
     !is_recent
@@ -146,7 +146,7 @@ fn rewrite_simple(
     cutoff_secs: i64,
     released_packages: &RemoteReleasedPackagesList,
 ) -> Option<JsonRewriteResult> {
-    let mut suppressed: BTreeSet<String> = BTreeSet::new();
+    let mut suppressed: Vec<PackageVersion> = Vec::new();
     let mut package_name: Option<ArcStr> = None;
 
     json.get_mut("files")?.as_array_mut()?.retain(|file| {
@@ -157,7 +157,9 @@ fn rewrite_simple(
                 version,
             } => {
                 package_name.get_or_insert(removed_package_name);
-                suppressed.insert(version);
+                if !suppressed.contains(&version) {
+                    suppressed.push(version);
+                }
                 false
             }
         }
@@ -193,7 +195,7 @@ fn simple_keep_file(
 
     FileDecision::Remove {
         package_name: ArcStr::from(package.name.as_str()),
-        version: package.version.to_string(),
+        version: package.version,
     }
 }
 
@@ -243,14 +245,14 @@ fn package_name_from_legacy_json(json: &serde_json::Value) -> ArcStr {
 fn build_rewrite_result(
     json: serde_json::Value,
     package_name: ArcStr,
-    suppressed: BTreeSet<String>,
+    suppressed: Vec<PackageVersion>,
 ) -> Option<JsonRewriteResult> {
     Some(JsonRewriteResult {
         bytes: serde_json::to_vec(&json)
             .inspect_err(|e| tracing::debug!("failed to serialize rewritten PyPI metadata: {e}"))
             .ok()?,
         package_name,
-        suppressed_versions: suppressed.into_iter().collect(),
+        suppressed_versions: suppressed,
     })
 }
 
