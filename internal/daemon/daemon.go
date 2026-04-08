@@ -228,7 +228,7 @@ func (d *Daemon) run(ctx context.Context) error {
 		}
 	}()
 
-	if d.config.ProxyInitialSetup {
+	if proxy.ProxyCAInstalled() {
 		if err := d.startProxy(ctx); err != nil {
 			platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to start proxy: %v", err))
 			return fmt.Errorf("failed to start proxy: %v", err)
@@ -408,7 +408,7 @@ func (d *Daemon) reportSBOM() error {
 }
 
 func (d *Daemon) heartbeat() error {
-	if d.config.ProxyInitialSetup {
+	if proxy.ProxyCAInstalled() {
 		shouldRetry, err := d.handleProxy()
 		if !shouldRetry {
 			return fmt.Errorf("failed to handle proxy: %v", err)
@@ -417,7 +417,7 @@ func (d *Daemon) heartbeat() error {
 			log.Printf("Failed to start proxy: %v", err)
 		}
 	} else {
-		log.Println("Proxy initial setup is not enabled, skipping proxy start")
+		log.Println("Proxy CA is not installed, skipping proxy start")
 	}
 
 	// Ensure the UI is running, if not, relaunch it

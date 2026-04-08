@@ -18,7 +18,6 @@ const (
 type ConfigInfo struct {
 	Token                   string    `json:"token"`
 	DeviceID                string    `json:"device_id"`
-	ProxyInitialSetup       bool      `json:"proxy_initial_setup"`
 	LastHeartbeatReportTime time.Time `json:"last_heartbeat_report_time"`
 	LastSBOMReportTime      time.Time `json:"last_sbom_report_time"`
 	BaseURL                 string    `json:"base_url,omitempty"`
