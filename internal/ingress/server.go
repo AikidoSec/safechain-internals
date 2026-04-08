@@ -26,6 +26,7 @@ type UIProvider interface {
 	NotifyBlocked(ev any)
 	NotifyTlsTerminationFailed(ev any)
 	NotifyPermissionsUpdated(ev any)
+	StartSetupWizard(steps []string)
 }
 
 type Server struct {
@@ -84,6 +85,9 @@ func (s *Server) Start(ctx context.Context) error {
 
 	mux.HandleFunc("POST /v1/proxy/start", s.handleProxyStart)
 	mux.HandleFunc("POST /v1/token", s.handleSetToken)
+
+	mux.HandleFunc("GET /v1/setup/check", s.handleSetupCheck)
+	mux.HandleFunc("POST /v1/setup/start", s.handleSetupStart)
 
 	listener, err := net.Listen("tcp", DefaultBind)
 	if err != nil {
