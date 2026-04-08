@@ -38,6 +38,14 @@ fn test_domain_matcher_inner(matcher: DomainMatcher) {
 }
 
 #[test]
+fn test_star_domain_matches_anything() {
+    let matcher: DomainMatcher = ["*"].into_iter().collect();
+
+    assert!(matcher.is_match(&Domain::from_static("google.com")));
+    assert!(matcher.is_match(&Domain::from_static("aikido.dev")));
+}
+
+#[test]
 fn test_domain_matcher_parent() {
     let matcher: DomainMatcher = ["example.com", "*.aikido.dev"].into_iter().collect();
     test_domain_matcher_inner(matcher);

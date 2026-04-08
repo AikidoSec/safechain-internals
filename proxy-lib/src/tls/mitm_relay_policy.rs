@@ -20,7 +20,7 @@ use rama::{
 };
 
 use crate::{
-    http::firewall::{Firewall, events::TlsTerminationFailedEvent},
+    http::firewall::{Firewall, IncomingFlowInfo, events::TlsTerminationFailedEvent},
     utils::net::get_app_source_bundle_id_from_ext,
 };
 
@@ -159,7 +159,12 @@ where
         }
 
         if let Some(server_name) = maybe_server_name {
-            match self.firewall.match_http_rules(&server_name) {
+            let incoming_flow_info = IncomingFlowInfo {
+                domain: &server_name,
+                app_bundle_id: source_app_bundle_id.as_deref(),
+            };
+
+            match self.firewall.match_http_rules(&incoming_flow_info) {
                 Some(http_rules) => {
                     // insert the http rules so that they can be used after tls handshake for ws & for our fw layer
                     bridge_io.extensions_mut().insert(http_rules);
