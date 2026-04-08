@@ -423,8 +423,7 @@ func (d *Daemon) heartbeat() error {
 	// Ensure the UI is running, if not, relaunch it
 	d.uiManager.EnsureRunning()
 
-	needed := d.proxy.IsRunning() && !proxy.ProxyCAInstalled()
-	d.uiManager.NotifyCertificateInstallPromptIfChanged(needed)
+	d.uiManager.StartSetupWizard(!proxy.ProxyCAInstalled())
 
 	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.GetStatus())
 

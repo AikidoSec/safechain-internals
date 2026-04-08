@@ -87,5 +87,8 @@ func (p *L4Proxy) GetStatus() (bool, string) {
 	if strings.Contains(p.startStdoutMessage, "status:") {
 		statusMessage = strings.Replace(statusMessage, "status: ", "", 1)
 	}
+	if statusMessage == "" {
+		statusMessage = "not-installed"
+	}
 	return isRunning, statusMessage
 }

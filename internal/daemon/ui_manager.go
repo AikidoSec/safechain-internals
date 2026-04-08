@@ -169,10 +169,10 @@ func (m *UIManager) NotifyPermissionsUpdated(perms any) {
 	m.Client.NotifyPermissionsUpdated(perms)
 }
 
-// NotifyCertificateInstallPromptIfChanged notifies the tray UI to show the install
+// StartSetupWizard notifies the tray UI to show the install
 // window when the CA is missing. It never requests a hide: the user closes the
 // window with Done after finishing the wizard.
-func (m *UIManager) NotifyCertificateInstallPromptIfChanged(needed bool) {
+func (m *UIManager) StartSetupWizard(needed bool) {
 	m.certPromptMu.Lock()
 	defer m.certPromptMu.Unlock()
 	if !needed {
