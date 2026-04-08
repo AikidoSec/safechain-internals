@@ -26,3 +26,11 @@ export async function getTlsEvent(eventId: string): Promise<TlsTerminationFailed
 export async function getVersion(): Promise<string> {
   return DaemonService.GetVersion();
 }
+
+export async function installProxyCertificate(): Promise<void> {
+  return DaemonService.InstallProxyCertificate();
+}
+
+export async function closeInstallWindow(): Promise<void> {
+  return DaemonService.CloseInstallWindow();
+}

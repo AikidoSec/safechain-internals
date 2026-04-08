@@ -30,3 +30,15 @@ func (s *DaemonService) GetTlsEvent(eventId string) (daemon.TlsTerminationFailed
 func (s *DaemonService) GetVersion() (string, error) {
 	return daemon.GetVersion()
 }
+
+// InstallProxyCertificate downloads the proxy CA (if needed) and runs the OS trust installation flow.
+func (s *DaemonService) InstallProxyCertificate() error {
+	return daemon.InstallCertificate()
+}
+
+// CloseInstallWindow hides the certificate install window.
+func (s *DaemonService) CloseInstallWindow() {
+	if closeInstallWindow != nil {
+		closeInstallWindow()
+	}
+}

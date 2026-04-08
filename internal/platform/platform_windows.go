@@ -437,10 +437,6 @@ func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 	)
 }
 
-func ShowPostInstallNotification(_ context.Context) error {
-	return nil
-}
-
 func ShowErrorDialog(_ context.Context, message string) error {
 	return fmt.Errorf("error dialog not implemented on Windows")
 }
