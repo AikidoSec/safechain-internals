@@ -228,8 +228,8 @@ Stream live logs from the host and extension:
 ```bash
 log stream --style compact --level debug \
 --predicate 'subsystem == "com.aikido.endpoint.proxy.l4"
-  OR process == "AikidoEndpointL4ProxyExtension"
-  OR process == "AikidoEndpointL4ProxyHost"'
+  OR process == "com.aikido.endpoint.proxy.l4.dev.extension"
+  OR process == "Aikido Network Extension"'
 ```
 
 Show recent logs from the last 5 minutes:
@@ -237,8 +237,8 @@ Show recent logs from the last 5 minutes:
 ```bash
 log show --last 5m --style compact --debug --info \
 --predicate 'subsystem == "com.aikido.endpoint.proxy.l4"
-  OR process == "AikidoEndpointL4ProxyExtension"
-  OR process == "AikidoEndpointL4ProxyHost"'
+  OR process == "com.aikido.endpoint.proxy.l4.dev.extension"
+  OR process == "Aikido Network Extension"'
 ```
 
 Export recent logs to a file for sharing or later analysis:
@@ -247,8 +247,8 @@ Export recent logs to a file for sharing or later analysis:
 mkdir -p .aikido/logs
 log show --last 30m --style compact --debug --info \
 --predicate 'subsystem == "com.aikido.endpoint.proxy.l4"
-  OR process == "AikidoEndpointL4ProxyExtension"
-  OR process == "AikidoEndpointL4ProxyHost"' \
+  OR process == "com.aikido.endpoint.proxy.l4.dev.extension"
+  OR process == "Aikido Network Extension"' \
  > ".aikido/logs/aikido_l4_proxy_${ts}.log" 2>&1
 ```
 
@@ -279,7 +279,7 @@ log show --last 30m --style compact --debug --info \
 ### Notes For Developers
 
 - The host executable lives inside the installed app bundle at:
-  `/Applications/AikidoEndpointL4ProxyHost.app/Contents/MacOS/AikidoEndpointL4ProxyHost`
+  `/Applications/Aikido Network Extension.app/Contents/MacOS/Aikido Network Extension`
 - `status` reports the current Network Extension state and the saved JSON config, if any.
 - The transparent proxy profile is persisted by `NETransparentProxyManager`.
 - The extension is expected to be restarted by the system according to the saved profile state;

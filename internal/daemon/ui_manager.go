@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -67,8 +66,7 @@ func (m *UIManager) spawnUI(ctx context.Context, ingressAddr string) error {
 	uiURL := fmt.Sprintf("127.0.0.1:%d", port)
 	m.Client.SetBaseURL(uiURL)
 
-	cfg := platform.GetConfig()
-	binaryPath := filepath.Join(cfg.BinaryDir, platform.SafeChainUIAppName)
+	binaryPath := platform.GetUIAppPath()
 	args := []string{
 		"--daemon_url", daemonURL,
 		"--token", token,

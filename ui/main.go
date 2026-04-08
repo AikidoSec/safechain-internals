@@ -191,7 +191,7 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 
 	menu := application.NewMenu()
 	statusLines := make([]*application.MenuItem, maxStatusLines)
-	statusLines[0] = menu.Add("Aikido Proxy: checking…")
+	statusLines[0] = menu.Add("Aikido Network Extension: checking…")
 	statusLines[0].SetEnabled(false)
 	for i := 1; i < maxStatusLines; i++ {
 		statusLines[i] = menu.Add("")
@@ -215,7 +215,7 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 			if ev.Running {
 				prefix = "🟢 "
 			}
-			lines := wrapText(prefix+"Aikido Proxy: "+ev.StdoutMessage, menuMaxWidth)
+			lines := wrapText(prefix+"Aikido Network Extension: "+ev.StdoutMessage, menuMaxWidth)
 			for i, item := range statusLines {
 				if i < len(lines) {
 					item.SetLabel(lines[i])

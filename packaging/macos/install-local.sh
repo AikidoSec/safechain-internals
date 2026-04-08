@@ -36,7 +36,7 @@ fi
 # Install using sudo installer (bypasses Gatekeeper)
 echo "Installing Aikido Endpoint Protection..."
 echo "This will:"
-echo "  - Install binaries to /Library/Application Support/AikidoSecurity/EndpointProtection/"
+echo "  - Install apps to /Applications/ (Aikido Endpoint Protection, Aikido Network Extension)"
 echo "  - Install LaunchDaemon to /Library/LaunchDaemons/"
 echo "  - Start the agent service"
 echo ""
@@ -68,7 +68,7 @@ if [ $? -eq 0 ]; then
     echo "  tail -f /Library/Logs/AikidoSecurity/EndpointProtection/endpoint-protection.log"
     echo "  tail -f /Library/Logs/AikidoSecurity/EndpointProtection/endpoint-protection.err"
     echo ""
-    echo "To uninstall, run: sudo /Library/Application Support/AikidoSecurity/EndpointProtection/scripts/uninstall"
+    echo "To uninstall, run: sudo \"/Applications/Aikido Endpoint Protection.app/Contents/Resources/scripts/uninstall\""
     echo ""
 else
     echo ""

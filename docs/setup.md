@@ -26,7 +26,7 @@ msiexec /i EndpointProtection.msi /qn /norestart AIKIDO_TOKEN=YOUR_TOKEN
 
 Run the uninstall script that was installed with the package:
 ```bash
-sudo "/Library/Application Support/AikidoSecurity/EndpointProtection/scripts/uninstall"
+sudo "/Applications/Aikido Endpoint Protection.app/Contents/Resources/scripts/uninstall"
 ```
 
 ### Windows
