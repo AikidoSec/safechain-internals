@@ -1,8 +1,10 @@
-use core::{
-    mem::size_of,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
-};
+use core::net::SocketAddr;
 
+use safechain_proxy_lib_windows_core::driver_protocol::{
+    IOCTL_CLEAR_IPV6_PROXY, IOCTL_CLEAR_PROXY_PROCESS_ID, IOCTL_SET_IPV4_PROXY,
+    IOCTL_SET_IPV6_PROXY, IOCTL_SET_PROXY_PROCESS_ID, Ipv4ProxyConfigPayload,
+    Ipv6ProxyConfigPayload, ProxyProcessIdPayload, STARTUP_VALUE_NAME, StartupConfig,
+};
 use wdk_sys::{NTSTATUS, PCUNICODE_STRING, STATUS_INVALID_PARAMETER, STATUS_SUCCESS};
 
 use crate::driver::{ProxyDriverConfigUpdate, ProxyDriverController, ProxyDriverStartupConfig};
@@ -36,29 +38,6 @@ pub fn apply_runtime_update(
 pub mod ioctl {
     use super::*;
 
-    const FILE_DEVICE_SAFECHAIN_PROXY: u32 = 0x8000;
-    const FILE_ANY_ACCESS: u32 = 0;
-    const METHOD_BUFFERED: u32 = 0;
-
-    pub const IOCTL_SET_IPV4_PROXY: u32 = ctl_code(
-        FILE_DEVICE_SAFECHAIN_PROXY,
-        0x801,
-        METHOD_BUFFERED,
-        FILE_ANY_ACCESS,
-    );
-    pub const IOCTL_SET_IPV6_PROXY: u32 = ctl_code(
-        FILE_DEVICE_SAFECHAIN_PROXY,
-        0x802,
-        METHOD_BUFFERED,
-        FILE_ANY_ACCESS,
-    );
-    pub const IOCTL_CLEAR_IPV6_PROXY: u32 = ctl_code(
-        FILE_DEVICE_SAFECHAIN_PROXY,
-        0x803,
-        METHOD_BUFFERED,
-        FILE_ANY_ACCESS,
-    );
-
     pub fn handle_device_control_ioctl(
         controller: &ProxyDriverController,
         ioctl_code: u32,
@@ -68,6 +47,8 @@ pub mod ioctl {
             IOCTL_SET_IPV4_PROXY => parse_ipv4_update(input),
             IOCTL_SET_IPV6_PROXY => parse_ipv6_update(input),
             IOCTL_CLEAR_IPV6_PROXY => Some(ProxyDriverConfigUpdate::SetIpv6(None)),
+            IOCTL_SET_PROXY_PROCESS_ID => parse_proxy_process_id_update(input),
+            IOCTL_CLEAR_PROXY_PROCESS_ID => Some(ProxyDriverConfigUpdate::SetProxyProcessId(None)),
             _ => None,
         };
 
@@ -79,54 +60,25 @@ pub mod ioctl {
         (status, 0)
     }
 
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    struct Ipv4ProxyConfigPayload {
-        ip_be: [u8; 4],
-        port_be: u16,
-        _reserved: u16,
-    }
-
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    struct Ipv6ProxyConfigPayload {
-        ip_be: [u8; 16],
-        port_be: u16,
-        _reserved: u16,
-    }
-
     fn parse_ipv4_update(input: &[u8]) -> Option<ProxyDriverConfigUpdate> {
-        if input.len() != size_of::<Ipv4ProxyConfigPayload>() {
-            return None;
-        }
-
-        // SAFETY: exact-size slice copy into a POD payload struct.
-        let payload = unsafe { (input.as_ptr() as *const Ipv4ProxyConfigPayload).read_unaligned() };
-        let addr = Ipv4Addr::from(payload.ip_be);
-        let port = u16::from_be(payload.port_be);
-        Some(ProxyDriverConfigUpdate::SetIpv4(SocketAddr::new(
-            IpAddr::V4(addr),
-            port,
+        let payload = Ipv4ProxyConfigPayload::from_bytes(input)?;
+        Some(ProxyDriverConfigUpdate::SetIpv4(SocketAddr::V4(
+            payload.socket_addr(),
         )))
     }
 
     fn parse_ipv6_update(input: &[u8]) -> Option<ProxyDriverConfigUpdate> {
-        if input.len() != size_of::<Ipv6ProxyConfigPayload>() {
-            return None;
-        }
-
-        // SAFETY: exact-size slice copy into a POD payload struct.
-        let payload = unsafe { (input.as_ptr() as *const Ipv6ProxyConfigPayload).read_unaligned() };
-        let addr = Ipv6Addr::from(payload.ip_be);
-        let port = u16::from_be(payload.port_be);
-        Some(ProxyDriverConfigUpdate::SetIpv6(Some(SocketAddr::new(
-            IpAddr::V6(addr),
-            port,
+        let payload = Ipv6ProxyConfigPayload::from_bytes(input)?;
+        Some(ProxyDriverConfigUpdate::SetIpv6(Some(SocketAddr::V6(
+            payload.socket_addr(),
         ))))
     }
 
-    const fn ctl_code(device_type: u32, function: u32, method: u32, access: u32) -> u32 {
-        (device_type << 16) | (access << 14) | (function << 2) | method
+    fn parse_proxy_process_id_update(input: &[u8]) -> Option<ProxyDriverConfigUpdate> {
+        let payload = ProxyProcessIdPayload::from_bytes(input)?;
+        Some(ProxyDriverConfigUpdate::SetProxyProcessId(Some(
+            payload.pid(),
+        )))
     }
 
     #[cfg(test)]
@@ -138,18 +90,14 @@ pub mod ioctl {
         #[test]
         fn parse_and_apply_ipv4_update() {
             let controller = ProxyDriverController::new();
-            let payload = Ipv4ProxyConfigPayload {
-                ip_be: [127, 0, 0, 1],
-                port_be: 15_000_u16.to_be(),
-                _reserved: 0,
-            };
-            let input = {
-                let ptr = &payload as *const Ipv4ProxyConfigPayload as *const u8;
-                // SAFETY: payload pointer and length are valid for read-only byte view.
-                unsafe { core::slice::from_raw_parts(ptr, size_of::<Ipv4ProxyConfigPayload>()) }
-            };
+            let payload = Ipv4ProxyConfigPayload::new(core::net::SocketAddrV4::new(
+                Ipv4Addr::new(127, 0, 0, 1),
+                15_000,
+            ));
+            let input = payload.to_bytes().expect("encode");
 
-            let (status, _) = handle_device_control_ioctl(&controller, IOCTL_SET_IPV4_PROXY, input);
+            let (status, _) =
+                handle_device_control_ioctl(&controller, IOCTL_SET_IPV4_PROXY, &input);
             assert_eq!(status, STATUS_SUCCESS);
             assert!(
                 controller
@@ -162,33 +110,13 @@ pub mod ioctl {
 
 pub mod startup_config {
     use super::*;
-    use alloc::vec;
     use core::{iter, mem::size_of, ptr};
     use wdk_sys::{
-        KEY_READ,  OBJ_CASE_INSENSITIVE, OBJECT_ATTRIBUTES, PCUNICODE_STRING, REG_BINARY,
+        KEY_READ, OBJ_CASE_INSENSITIVE, OBJECT_ATTRIBUTES, PCUNICODE_STRING, REG_BINARY,
         STATUS_BUFFER_OVERFLOW, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, UNICODE_STRING,
         ntddk::{ZwClose, ZwOpenKey, ZwQueryValueKey},
     };
-
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    struct StartupConfigBlobV1 {
-        magic: [u8; 4],
-        version_be: u16,
-        flags_be: u16,
-        ipv4_be: [u8; 4],
-        ipv4_port_be: u16,
-        _reserved0: u16,
-        ipv6_be: [u8; 16],
-        ipv6_port_be: u16,
-        _reserved1: u16,
-    }
-
-    const STARTUP_BLOB_MAGIC: [u8; 4] = *b"SCL4";
-    const STARTUP_BLOB_VERSION_V1: u16 = 1;
-    const STARTUP_FLAG_IPV6_PRESENT: u16 = 1 << 0;
     const KEY_VALUE_PARTIAL_INFORMATION_CLASS: i32 = 2;
-    const STARTUP_VALUE_NAME: &str = "ProxyStartupConfigV1";
     const PARAMETERS_SUFFIX: &str = "\\Parameters";
 
     #[repr(C)]
@@ -213,43 +141,17 @@ pub mod startup_config {
     }
 
     pub fn parse_startup_blob(blob: &[u8]) -> Option<ProxyDriverStartupConfig> {
-        if blob.len() != size_of::<StartupConfigBlobV1>() {
-            return None;
-        }
-
-        // SAFETY: exact-size slice copy into a POD payload struct.
-        let decoded = unsafe { (blob.as_ptr() as *const StartupConfigBlobV1).read_unaligned() };
-        if decoded.magic != STARTUP_BLOB_MAGIC {
-            return None;
-        }
-        if u16::from_be(decoded.version_be) != STARTUP_BLOB_VERSION_V1 {
-            return None;
-        }
-
-        let ipv4 = SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::from(decoded.ipv4_be)),
-            u16::from_be(decoded.ipv4_port_be),
-        );
-
-        let flags = u16::from_be(decoded.flags_be);
-        let ipv6 = if flags & STARTUP_FLAG_IPV6_PRESENT != 0 {
-            Some(SocketAddr::new(
-                IpAddr::V6(Ipv6Addr::from(decoded.ipv6_be)),
-                u16::from_be(decoded.ipv6_port_be),
-            ))
-        } else {
-            None
-        };
+        let decoded = StartupConfig::from_bytes(blob)?;
 
         Some(ProxyDriverStartupConfig {
-            proxy_ipv4: ipv4,
-            proxy_ipv6: ipv6,
+            proxy_ipv4: SocketAddr::V4(decoded.proxy_ipv4()),
+            proxy_ipv6: decoded.proxy_ipv6().map(SocketAddr::V6),
         })
     }
 
     fn read_startup_blob_from_registry(
         registry_path: PCUNICODE_STRING,
-    ) -> Option<[u8; size_of::<StartupConfigBlobV1>()]> {
+    ) -> Option<alloc::vec::Vec<u8>> {
         let mut parameters_path = registry_path_to_parameters_path(registry_path)?;
         let mut parameters_path_us = unicode_from_wide_mut(&mut parameters_path);
 
@@ -272,7 +174,7 @@ pub mod startup_config {
         }
 
         let result = query_startup_value_blob(key_handle);
-       let close_status =  unsafe {
+        let close_status = unsafe {
             // SAFETY: handle returned by ZwOpenKey must be closed once no longer needed.
             ZwClose(key_handle)
         };
@@ -282,9 +184,7 @@ pub mod startup_config {
         result
     }
 
-    fn query_startup_value_blob(
-        key_handle: *mut core::ffi::c_void,
-    ) -> Option<[u8; size_of::<StartupConfigBlobV1>()]> {
+    fn query_startup_value_blob(key_handle: *mut core::ffi::c_void) -> Option<alloc::vec::Vec<u8>> {
         let mut value_name_w = utf16_null_terminated(STARTUP_VALUE_NAME);
         let mut value_name_us = unicode_from_wide_mut(&mut value_name_w);
 
@@ -307,7 +207,7 @@ pub mod startup_config {
             return None;
         }
 
-        let mut buffer = vec![0_u8; needed_len as usize];
+        let mut buffer = alloc::vec![0_u8; needed_len as usize];
         let mut out_len: u32 = needed_len;
         let query_status = unsafe {
             // SAFETY: output buffer is valid for out_len bytes.
@@ -337,16 +237,11 @@ pub mod startup_config {
 
         let header_len = size_of::<KeyValuePartialInformationPrefix>();
         let data_len = prefix.data_length as usize;
-        if data_len != size_of::<StartupConfigBlobV1>() {
-            return None;
-        }
         if buffer.len() < header_len + data_len {
             return None;
         }
 
-        let mut blob = [0_u8; size_of::<StartupConfigBlobV1>()];
-        blob.copy_from_slice(&buffer[header_len..header_len + data_len]);
-        Some(blob)
+        Some(buffer[header_len..header_len + data_len].to_vec())
     }
 
     fn registry_path_to_parameters_path(
@@ -384,7 +279,7 @@ pub mod startup_config {
     }
 
     fn unicode_from_wide_mut(wide: &mut [u16]) -> UNICODE_STRING {
-        let max_len_bytes = wide.len() * size_of::<u16>();
+        let max_len_bytes = core::mem::size_of_val(wide);
         let len_bytes = max_len_bytes.saturating_sub(size_of::<u16>());
         UNICODE_STRING {
             Length: len_bytes as u16,
@@ -396,26 +291,16 @@ pub mod startup_config {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use core::net::Ipv4Addr;
 
         #[test]
         fn parses_blob_with_optional_ipv6_absent() {
-            let blob = StartupConfigBlobV1 {
-                magic: STARTUP_BLOB_MAGIC,
-                version_be: STARTUP_BLOB_VERSION_V1.to_be(),
-                flags_be: 0_u16.to_be(),
-                ipv4_be: [127, 0, 0, 1],
-                ipv4_port_be: 15000_u16.to_be(),
-                _reserved0: 0,
-                ipv6_be: [0; 16],
-                ipv6_port_be: 0,
-                _reserved1: 0,
-            };
-            let bytes = {
-                let ptr = &blob as *const StartupConfigBlobV1 as *const u8;
-                // SAFETY: blob pointer and length are valid for read-only byte view.
-                unsafe { core::slice::from_raw_parts(ptr, size_of::<StartupConfigBlobV1>()) }
-            };
-            let parsed = parse_startup_blob(bytes).expect("blob should parse");
+            let blob = StartupConfig::new(
+                core::net::SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 15000),
+                None,
+            );
+            let encoded = blob.to_bytes().expect("encode");
+            let parsed = parse_startup_blob(&encoded).expect("blob should parse");
             assert!(matches!(parsed.proxy_ipv4, SocketAddr::V4(_)));
             assert!(parsed.proxy_ipv6.is_none());
         }

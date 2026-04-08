@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "proxy-bin-l4",
+    "proxy-bin-l4-windows-driver-object",
     "proxy-bin-l7",
     "proxy-fuzz",
     "proxy-lib",
@@ -52,6 +53,7 @@ wdk-build = "0.5.1"
 wdk-panic = "0.4.1"
 wdk-sys = "0.5.1"
 windows-native-keyring-store = "0.5"
+windows-sys = "0.61"
 
 [workspace.dependencies.rama]
 git = "https://github.com/plabayo/rama"

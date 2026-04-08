@@ -1,6 +1,5 @@
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
-export RUSTFLAGS := "-D warnings"
 export RUSTDOCFLAGS := "-D rustdoc::broken-intra-doc-links"
 
 l7_team_id := "7VPF8GD6J4"
@@ -29,30 +28,45 @@ xcode_l4_installed_app_exe := xcode_l4_installed_app + "/Contents/MacOS/AikidoEn
 xcode_l4_installed_sysext := xcode_l4_installed_app + "/Contents/Library/SystemExtensions/" + l4_dev_extension_bundle_id + ".systemextension"
 
 rust-quick-qa:
+    just _rust-quick-qa-{{ os() }}
+
+_rust-quick-qa-windows: rust-quick-qa-crossplatform windows-driver-quick-qa
+
+_rust-quick-qa-linux: rust-quick-qa-crossplatform
+
+_rust-quick-qa-macos: rust-quick-qa-crossplatform
+
+rust-quick-qa-crossplatform $RUSTFLAGS="-D warnings":
     cargo fmt
     @cargo install cargo-sort
     cargo sort --grouped --workspace
-    cargo doc --all-features --workspace --no-deps
-    cargo check --all-features --workspace --all-targets
-    cargo clippy --all-features --workspace --all-targets
+    cargo doc --all-features --workspace --no-deps --exclude safechain-lib-l4-proxy-windows-driver
+    cargo check --all-features --workspace --all-targets --exclude safechain-lib-l4-proxy-windows-driver
+    cargo clippy --all-features --workspace --all-targets --exclude safechain-lib-l4-proxy-windows-driver
 
-rust-test *ARGS:
-    cargo test --all-features --workspace {{ARGS}}
+rust-test $RUSTFLAGS="-D warnings" *ARGS:
+    cargo test --all-features --workspace --exclude safechain-lib-l4-proxy-windows-driver {{ARGS}}
 
 rust-qa: rust-quick-qa rust-test rust-fuzz-check
+    just _rust-qa-{{ os() }}
 
-rust-fuzz-check:
+_rust-qa-windows: windows-driver-build
+
+_rust-qa-linux:
+
+_rust-qa-macos:
+
+rust-fuzz-check $CARGO_PROFILE_RELEASE_LTO="false":
     @cargo install cargo-fuzz
-    CARGO_PROFILE_RELEASE_LTO=false \
-        cargo +nightly fuzz check --fuzz-dir ./proxy-fuzz
+    cargo +nightly fuzz check --fuzz-dir ./proxy-fuzz
 
 rust-fuzz *ARGS:
     @cargo install cargo-fuzz
     CARGO_PROFILE_RELEASE_LTO=false \
         cargo +nightly fuzz run --fuzz-dir ./proxy-fuzz -j 8 parse_pragmatic_semver_version -- -max_total_time=60
 
-rust-qa-full: rust-qa rust-fuzz
-    cargo test --all-features --workspace -- --ignored
+rust-qa-full $RUSTFLAGS="-D warnings": rust-qa rust-fuzz
+    cargo test --all-features --workspace --exclude safechain-lib-l4-proxy-windows-driver -- --ignored
 
 run-l4-proxy *ARGS:
     mkdir -p .aikido/safechain-l4-proxy
@@ -208,3 +222,28 @@ macos-l4-stop:
 
 run-macos-l4-proxy *ARGS: macos-l4-install-signed
     just macos-l4-start {{ARGS}}
+
+windows-driver-quick-qa: windows-driver-check windows-driver-clippy windows-driver-test
+windows-driver-qa: windows-driver-quick-qa  windows-driver-build
+
+[working-directory: './proxy-lib-l4-windows-driver']
+windows-driver-check:
+    cargo check
+
+[working-directory: './proxy-lib-l4-windows-driver']
+windows-driver-clippy:
+    cargo clippy
+
+[working-directory: './proxy-lib-l4-windows-driver']
+windows-driver-test *ARGS:
+    cargo test {{ARGS}}
+
+[working-directory: './proxy-lib-l4-windows-driver']
+windows-driver-build profile="dev" *ARGS:
+   @cargo install cargo-wdk
+   @cargo install cargo-make
+   cargo wdk build --profile {{profile}} {{ARGS}}
+
+[working-directory: './proxy-lib-l4-windows-driver']
+windows-driver-build-verify profile="dev" *ARGS:
+    just windows-driver-build {{profile}} --verify-signature {{ARGS}}

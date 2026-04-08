@@ -1,0 +1,19 @@
+[package]
+name = "safechain-l4-proxy-windows-driver-object"
+description = "User-space controller for the SafeChain Windows L4 proxy driver"
+version = { workspace = true }
+edition = { workspace = true }
+publish = false
+rust-version = { workspace = true }
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+safechain-proxy-lib-windows-core = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+] }

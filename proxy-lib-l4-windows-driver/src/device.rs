@@ -2,11 +2,11 @@ use alloc::vec::Vec;
 use core::{iter, mem::size_of, ptr};
 
 use wdk_sys::{
-    DRIVER_OBJECT, IO_NO_INCREMENT, IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_DEVICE_CONTROL,
-    NTSTATUS, PDEVICE_OBJECT, PIRP, STATUS_INVALID_DEVICE_REQUEST, STATUS_SUCCESS, UNICODE_STRING,
+    DRIVER_OBJECT, IO_NO_INCREMENT, IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_DEVICE_CONTROL, NTSTATUS,
+    PDEVICE_OBJECT, PIRP, STATUS_INVALID_DEVICE_REQUEST, STATUS_SUCCESS, UNICODE_STRING,
     ntddk::{
-        IofCompleteRequest, IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice,
-        IoDeleteSymbolicLink,
+        IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink,
+        IofCompleteRequest,
     },
 };
 
@@ -87,7 +87,12 @@ extern "C" fn dispatch_create_close(_device: PDEVICE_OBJECT, irp: PIRP) -> NTSTA
 extern "C" fn dispatch_device_control(_device: PDEVICE_OBJECT, irp: PIRP) -> NTSTATUS {
     let irp_sp = unsafe {
         // SAFETY: IRP is provided by I/O manager for dispatch callback.
-        (*irp).Tail.Overlay.__bindgen_anon_2.__bindgen_anon_1.CurrentStackLocation
+        (*irp)
+            .Tail
+            .Overlay
+            .__bindgen_anon_2
+            .__bindgen_anon_1
+            .CurrentStackLocation
     };
     if irp_sp.is_null() {
         return complete_request(irp, STATUS_INVALID_DEVICE_REQUEST, 0);
@@ -136,7 +141,7 @@ fn utf16_null_terminated(value: &str) -> Vec<u16> {
 }
 
 fn unicode_from_wide_mut(wide: &mut [u16]) -> UNICODE_STRING {
-    let max_len_bytes = wide.len() * size_of::<u16>();
+    let max_len_bytes = core::mem::size_of_val(wide);
     let len_bytes = max_len_bytes.saturating_sub(size_of::<u16>());
     UNICODE_STRING {
         Length: len_bytes as u16,

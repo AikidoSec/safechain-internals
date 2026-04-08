@@ -22,11 +22,11 @@ mod log;
 mod wfp;
 
 pub use driver::{ProxyDriverConfigUpdate, ProxyDriverController, ProxyDriverStartupConfig};
-pub use wfp::{TcpRedirectDecision, WfpFlowMeta};
-pub use {
-    control::ioctl::IOCTL_CLEAR_IPV6_PROXY, control::ioctl::IOCTL_SET_IPV4_PROXY,
-    control::ioctl::IOCTL_SET_IPV6_PROXY,
+pub use safechain_proxy_lib_windows_core::driver_protocol::{
+    IOCTL_CLEAR_IPV6_PROXY, IOCTL_CLEAR_PROXY_PROCESS_ID, IOCTL_SET_IPV4_PROXY,
+    IOCTL_SET_IPV6_PROXY, IOCTL_SET_PROXY_PROCESS_ID,
 };
+pub use wfp::{TcpRedirectDecision, WfpFlowMeta};
 
 #[cfg(not(test))]
 #[global_allocator]

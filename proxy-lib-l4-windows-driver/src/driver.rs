@@ -9,6 +9,7 @@ use crate::wfp::{TcpRedirectDecision, WfpFlowMeta, build_redirect_context, is_lo
 struct ProxyEndpointState {
     ipv4: Option<SocketAddrV4>,
     ipv6: Option<SocketAddrV6>,
+    proxy_pid: Option<u32>,
 }
 
 /// Mutable driver-controlled state for WFP redirection.
@@ -29,6 +30,14 @@ pub struct ProxyDriverStartupConfig {
 pub enum ProxyDriverConfigUpdate {
     SetIpv4(SocketAddr),
     SetIpv6(Option<SocketAddr>),
+    SetProxyProcessId(Option<u32>),
+}
+
+impl Default for ProxyDriverController {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ProxyDriverController {
@@ -37,6 +46,7 @@ impl ProxyDriverController {
             state: RwLock::new(ProxyEndpointState {
                 ipv4: None,
                 ipv6: None,
+                proxy_pid: None,
             }),
         }
     }
@@ -55,6 +65,14 @@ impl ProxyDriverController {
 
     pub fn clear_proxy_ipv6_endpoint(&self) {
         self.state.write().ipv6 = None;
+    }
+
+    pub fn configure_proxy_process_id(&self, proxy_pid: u32) {
+        self.state.write().proxy_pid = Some(proxy_pid);
+    }
+
+    pub fn clear_proxy_process_id(&self) {
+        self.state.write().proxy_pid = None;
     }
 
     pub fn apply_startup_config(&self, config: ProxyDriverStartupConfig) -> bool {
@@ -89,6 +107,10 @@ impl ProxyDriverController {
                 state.ipv6 = None;
                 true
             }
+            ProxyDriverConfigUpdate::SetProxyProcessId(proxy_pid) => {
+                state.proxy_pid = proxy_pid;
+                true
+            }
         }
     }
 
@@ -104,6 +126,10 @@ impl ProxyDriverController {
         self.state.read().ipv6.is_some()
     }
 
+    pub fn proxy_process_id(&self) -> Option<u32> {
+        self.state.read().proxy_pid
+    }
+
     pub fn classify_outbound_tcp_connect(&self, flow: WfpFlowMeta) -> TcpRedirectDecision {
         if is_local_destination(flow.remote) {
             return TcpRedirectDecision::Passthrough;
@@ -114,6 +140,10 @@ impl ProxyDriverController {
         };
 
         if flow.remote == proxy_target {
+            return TcpRedirectDecision::Passthrough;
+        }
+
+        if proxy_target.ip().is_loopback() && self.proxy_process_id().is_none() {
             return TcpRedirectDecision::Passthrough;
         }
 
@@ -166,6 +196,29 @@ mod tests {
 
         let decision = controller.classify_outbound_tcp_connect(flow);
         assert!(matches!(decision, TcpRedirectDecision::Redirect { .. }));
+    }
+
+    #[test]
+    fn loopback_redirect_requires_proxy_process_id() {
+        let controller = ProxyDriverController::new();
+        controller.configure_proxy_ipv4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 15000));
+
+        let flow = WfpFlowMeta {
+            remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
+            source_pid: Some(7),
+            source_process_path: None,
+        };
+
+        assert!(matches!(
+            controller.classify_outbound_tcp_connect(flow.clone()),
+            TcpRedirectDecision::Passthrough
+        ));
+
+        controller.configure_proxy_process_id(1234);
+        assert!(matches!(
+            controller.classify_outbound_tcp_connect(flow),
+            TcpRedirectDecision::Redirect { .. }
+        ));
     }
 
     #[test]

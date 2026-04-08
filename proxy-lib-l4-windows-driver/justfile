@@ -1,9 +1,0 @@
-set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
-
-windows-driver-build profile="dev" *ARGS:
-   @cargo install cargo-wdk
-   @cargo install cargo-make
-   cargo wdk build --profile {{profile}} {{ARGS}}
-
-windows-driver-build-verify profile="dev" *ARGS:
-    just windows-driver-build {{profile}} --verify-signature {{ARGS}}

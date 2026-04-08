@@ -32,23 +32,12 @@ jobs:
         with:
           toolchain: stable
           components: clippy, rustfmt
+      - uses: extractions/setup-just@v4
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
         with:
           env-vars: "RUST_TOOLCHAIN=stable"
-      - name: clippy
-        run: |
-          cargo clippy --all-features --workspace
-      - name: doc
-        run: |
-          cargo doc --all-features --workspace --no-deps
-        env:
-          RUSTDOCFLAGS: "-D rustdoc::broken-intra-doc-links"
-      - name: test
-        run: |
-          cargo test --all-features --workspace
-      - name: test (--ignored)
-        run: |
-          cargo test --all-features --workspace -- --ignored
+      - run: |
+          just rust-qa
 
   proxy-build-check-musl:
     strategy:

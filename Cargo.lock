@@ -2748,6 +2748,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "safechain-l4-proxy-windows-driver-object"
+version = "1.0.0"
+dependencies = [
+ "clap",
+ "safechain-proxy-lib-windows-core",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "safechain-l7-proxy"
 version = "1.0.0"
 dependencies = [
@@ -2833,6 +2842,7 @@ dependencies = [
 name = "safechain-proxy-lib-windows-core"
 version = "1.0.0"
 dependencies = [
+ "postcard",
  "serde",
 ]
 

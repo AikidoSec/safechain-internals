@@ -10,4 +10,5 @@ readme = "../docs/proxy.md"
 [features]
 
 [dependencies]
+postcard = { workspace = true, features = ["alloc"] }
 serde = { workspace = true, features = ["derive", "alloc"] }
