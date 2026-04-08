@@ -50,13 +50,14 @@ where
             return Ok(());
         };
 
-        let AnchorDecision::Remove {
-            package_name: removed_name,
-            version,
-        } = analyze_anchor_href(&href, cutoff_secs, &released_packages)
-        else {
-            return Ok(());
-        };
+        let (removed_name, version) =
+            match analyze_anchor_href(&href, cutoff_secs, &released_packages) {
+                AnchorDecision::Keep => return Ok(()),
+                AnchorDecision::Remove {
+                    package_name: removed_name,
+                    version,
+                } => (removed_name, version),
+            };
 
         state_handler
             .lock()
