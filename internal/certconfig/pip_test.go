@@ -140,3 +140,17 @@ func TestResolvePipBaseCACertBundleFailsClosedWithoutBase(t *testing.T) {
 		t.Fatal("expected error when no base bundle is available")
 	}
 }
+
+func TestParsePipCertSettingStringRecognizesPoetryPyPICert(t *testing.T) {
+	got := parsePipCertSettingString("POETRY_CERTIFICATES_PYPI_CERT:/corp/poetry.pem")
+	if got.EnvVar != poetryPyPICertEnvVar || got.Path != "/corp/poetry.pem" {
+		t.Fatalf("got %+v, want env=%q path=%q", got, poetryPyPICertEnvVar, "/corp/poetry.pem")
+	}
+}
+
+func TestParsePipCertSettingStringFallsBackForUnknownEnvVar(t *testing.T) {
+	got := parsePipCertSettingString("UNKNOWN_CA_VAR:/corp/custom.pem")
+	if got.EnvVar != pipCertEnvVar || got.Path != "UNKNOWN_CA_VAR:/corp/custom.pem" {
+		t.Fatalf("got %+v, want env=%q path=%q", got, pipCertEnvVar, "UNKNOWN_CA_VAR:/corp/custom.pem")
+	}
+}
