@@ -26,6 +26,12 @@ var pipCertShellLookups = []shellLookup{
 	{"fish", []string{"--login", "-c", buildFishPipCertLookupScript()}},
 }
 
+// buildPOSIXPipCertLookupScript and buildFishPipCertLookupScript return a shell
+// snippet that detects the user's pre-existing Python CA bundle override. We
+// take the first var found rather than concatenating all of them: in practice
+// these vars all point to the same corporate CA bundle, and a single base path
+// is all the combined bundle machinery needs.
+
 func buildPOSIXPipCertLookupScript() string {
 	return strings.Join([]string{
 		`if [ -n "${PIP_CERT:-}" ]; then`,
