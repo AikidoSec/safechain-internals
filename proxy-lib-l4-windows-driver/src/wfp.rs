@@ -32,7 +32,9 @@ use core::{
     ptr,
 };
 
-use safechain_proxy_lib_nostd::windows::redirect_ctx::ProxyRedirectContext;
+use safechain_proxy_lib_nostd::{
+    net::is_passthrough_ip, windows::redirect_ctx::ProxyRedirectContext,
+};
 use spin::Mutex;
 use wdk_sys::{GUID, NTSTATUS, STATUS_SUCCESS};
 
@@ -62,26 +64,9 @@ pub fn build_redirect_context(flow: &WfpFlowMeta) -> Result<Vec<u8>, postcard::E
     postcard::to_allocvec(&ctx)
 }
 
+#[inline(always)]
 pub fn is_local_destination(destination: SocketAddr) -> bool {
-    match destination.ip() {
-        IpAddr::V4(addr) => is_local_ipv4(addr),
-        IpAddr::V6(addr) => is_local_ipv6(addr),
-    }
-}
-
-fn is_local_ipv4(addr: Ipv4Addr) -> bool {
-    addr.is_loopback()
-        || addr.is_private()
-        || addr.is_link_local()
-        || addr.is_unspecified()
-        || addr.is_broadcast()
-}
-
-fn is_local_ipv6(addr: Ipv6Addr) -> bool {
-    addr.is_loopback()
-        || addr.is_unspecified()
-        || addr.is_unique_local()
-        || addr.is_unicast_link_local()
+    is_passthrough_ip(destination.ip())
 }
 
 #[derive(Clone, Copy)]

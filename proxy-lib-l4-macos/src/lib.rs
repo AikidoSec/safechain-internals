@@ -1,6 +1,6 @@
 #![cfg(target_os = "macos")]
 
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::IpAddr;
 
 use rama::{
     net::{
@@ -17,6 +17,8 @@ use rama::{
     telemetry::tracing,
     utils::str::any_starts_with_ignore_ascii_case,
 };
+
+use safechain_proxy_lib::nostd::net::is_passthrough_ip;
 
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
@@ -182,28 +184,15 @@ fn is_ip_remote_host_passthrough(meta: &TransparentProxyFlowMeta) -> Option<Host
 
     match &target.host {
         Host::Name(_) => return None,
-        Host::Address(IpAddr::V4(addr)) => {
-            if is_passthrough_ipv4(*addr) {
+        Host::Address(addr) => {
+            if is_passthrough_ip(*addr) {
                 tracing::debug!(
                     protocol = ?meta.protocol,
                     remote = ?meta.remote_endpoint,
                     local = ?meta.local_endpoint,
                     app_bundle_id = ?meta.source_app_bundle_identifier,
                     app_sign_id = ?meta.source_app_signing_identifier,
-                    "remote host is within passthrough IPv4 range: passthrough traffic"
-                );
-                return None;
-            }
-        }
-        Host::Address(IpAddr::V6(addr)) => {
-            if addr.is_loopback() || addr.is_unique_local() {
-                tracing::debug!(
-                    protocol = ?meta.protocol,
-                    remote = ?meta.remote_endpoint,
-                    local = ?meta.local_endpoint,
-                    app_bundle_id = ?meta.source_app_bundle_identifier,
-                    app_sign_id = ?meta.source_app_signing_identifier,
-                    "remote host is within passthrough IPv6 range: passthrough traffic"
+                    "remote host is within passthrough IP range: passthrough traffic"
                 );
                 return None;
             }
@@ -213,24 +202,9 @@ fn is_ip_remote_host_passthrough(meta: &TransparentProxyFlowMeta) -> Option<Host
     Some(target.clone())
 }
 
-fn is_passthrough_ipv4(addr: Ipv4Addr) -> bool {
-    if addr.is_loopback() || addr.is_private() {
-        return true;
-    }
-    // Some applications use IPs that come from the IETF shared address space (RFC 6598).
-    // `is_private()` only covers RFC-1918, so this range needs an explicit check.
-    // For instance, TailScale: https://tailscale.com/docs/concepts/tailscale-ip-addresses
-    let [a, b, ..] = addr.octets();
-    a == 100 && (64..=127).contains(&b)
-}
-
 apple_ne::transparent_proxy_ffi! {
     init = init,
     config = proxy_config,
     flow_action = flow_action,
     tcp_service = self::tcp::try_new_service,
 }
-
-#[cfg(test)]
-#[path = "./lib_tests.rs"]
-mod tests;
