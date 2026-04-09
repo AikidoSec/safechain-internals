@@ -47,7 +47,9 @@ use crate::{
         PolicyEvaluator, RemoteEndpointConfig,
         remote_app_passthrough_list::RemoteAppPassthroughList,
     },
-    http::firewall::rule::{DynRule, npm::min_package_age::MinPackageAge},
+    http::firewall::rule::{
+        DynRule, npm::min_package_age::MinPackageAge, pypi::min_package_age::MinPackageAgePyPI,
+    },
     storage::SyncCompactDataStorage,
     utils::{env::network_service_identifier, token::AgentIdentity},
 };
@@ -233,6 +235,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     policy_evaluator.clone(),
+                    Some(MinPackageAgePyPI::new(notifier.clone())),
                     remote_endpoint_config.clone(),
                 )
                 .await
