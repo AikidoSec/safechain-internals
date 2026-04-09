@@ -17,7 +17,7 @@ export function SetupStepToken({ stepNumber, totalSteps, phase, errorMsg, onActi
       totalSteps={totalSteps}
       heading="Connect your device"
       title="Enter your Aikido token"
-      hint="Paste your Aikido agent token to connect this device to your organization."
+      hint="Paste your Aikido Endpoint Protection token to connect this device to your organization."
       buttonLabel="Set Token"
       phase={phase}
       errorMsg={errorMsg}

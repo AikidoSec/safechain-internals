@@ -1740,6 +1740,84 @@ body {
   justify-content: center;
 }
 
+.sysext-settings-preview {
+  background: #fff;
+  border-radius: 14px;
+  max-width: 320px;
+  margin-top: 32px;
+  padding: 20px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+}
+
+.sysext-settings-preview__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.sysext-settings-preview__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.sysext-settings-preview__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.sysext-settings-preview__app-icon {
+  flex-shrink: 0;
+}
+
+.sysext-settings-preview__app-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sysext-settings-preview__app-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.sysext-settings-preview__app-desc {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.sysext-settings-preview__toggle {
+  flex-shrink: 0;
+}
+
+.sysext-settings-preview__toggle-track {
+  width: 50px;
+  height: 26px;
+  background: #d1d5db;
+  border-radius: 13px;
+  position: relative;
+  transition: background 0.2s;
+}
+
+.sysext-settings-preview__toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
 /* Purple ring — shows users to tap Allow (like Norton’s guide circle) */
 .install-page__preview-mock-btn-spotlight::before {
   content: "";
