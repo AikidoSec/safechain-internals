@@ -34,9 +34,6 @@ use super::{BlockedRequest, RequestAction, Rule};
 
 mod malware_key;
 mod parser;
-mod webstore;
-
-use webstore::ChromeWebStore;
 
 pub(in crate::http::firewall) struct RuleChrome<C> {
     target_domains: DomainMatcher,
@@ -44,7 +41,7 @@ pub(in crate::http::firewall) struct RuleChrome<C> {
     remote_released_packages_list: RemoteReleasedPackagesList,
     remote_endpoint_config: Option<RemoteEndpointConfig>,
     policy_evaluator: Option<PolicyEvaluator>,
-    https_client: C,
+    _https_client: std::marker::PhantomData<C>,
 }
 
 impl<C> RuleChrome<C>
@@ -92,7 +89,7 @@ where
             remote_released_packages_list,
             remote_endpoint_config,
             policy_evaluator,
-            https_client: remote_malware_list_https_client,
+            _https_client: std::marker::PhantomData,
         })
     }
 }
@@ -152,10 +149,9 @@ where
                 }
                 PackagePolicyDecision::Defer => {}
                 decision => {
-                    let display_name = self.lookup_display_name(&extension_id).await;
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        Self::blocked_artifact(&extension_id, &version, display_name),
+                        Self::blocked_artifact(&extension_id, &version),
                         super::block_reason_for(decision),
                     )));
                 }
@@ -170,10 +166,9 @@ where
                 version
             );
 
-            let display_name = self.lookup_display_name(&extension_id).await;
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&extension_id, &version, display_name),
+                Self::blocked_artifact(&extension_id, &version),
                 BlockReason::Malware,
             )));
         }
@@ -189,10 +184,9 @@ where
                 http.url.full = %req.uri(),
                 "blocked Chrome extension: released too recently: {extension_id}"
             );
-            let display_name = self.lookup_display_name(&extension_id).await;
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&extension_id, &version, display_name),
+                Self::blocked_artifact(&extension_id, &version),
                 BlockReason::NewPackage,
             )));
         }
@@ -219,30 +213,11 @@ where
         (now_unix_ms()) / 1000 - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
     }
 
-    async fn lookup_display_name(&self, extension_id: &ArcStr) -> Option<ArcStr> {
-        let normalized_id = extension_id.to_ascii_lowercase();
-        match ChromeWebStore::get_extension_name(&self.https_client, &normalized_id).await {
-            Ok(display_name) => display_name.map(ArcStr::from),
-            Err(err) => {
-                tracing::warn!(
-                    extension_id = extension_id.as_str(),
-                    error = %err,
-                    "failed to look up Chrome extension name; using extension id instead"
-                );
-                None
-            }
-        }
-    }
-
-    fn blocked_artifact(
-        extension_id: &ArcStr,
-        version: &PackageVersion,
-        display_name: Option<ArcStr>,
-    ) -> Artifact {
+    fn blocked_artifact(extension_id: &ArcStr, version: &PackageVersion) -> Artifact {
         Artifact {
             product: arcstr!("chrome"),
             identifier: extension_id.clone(),
-            display_name,
+            display_name: None,
             version: Some(version.clone()),
         }
     }
@@ -264,5 +239,3 @@ where
 
 #[cfg(test)]
 mod test;
-#[cfg(test)]
-mod webstore_test;
