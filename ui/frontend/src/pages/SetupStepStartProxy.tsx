@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { startProxy } from "../api";
+import { SetupStepLayout } from "./SetupStepLayout";
 
 const RETRY_INTERVAL_MS = 3000;
 const TIMEOUT_MS = 2 * 60 * 1000;
@@ -11,7 +12,6 @@ interface Props {
 }
 
 export function SetupStepStartProxy({ stepNumber, totalSteps, onComplete }: Props) {
-  const [error, setError] = useState("");
   const started = useRef(false);
 
   useEffect(() => {
@@ -27,9 +27,7 @@ export function SetupStepStartProxy({ stepNumber, totalSteps, onComplete }: Prop
           await startProxy();
           if (!cancelled) onComplete();
           return;
-        } catch (e: unknown) {
-          const msg = e instanceof Error ? e.message : "Failed to start proxy.";
-          if (!cancelled) setError(msg);
+        } catch {
           if (Date.now() + RETRY_INTERVAL_MS >= deadline) break;
           await new Promise((r) => setTimeout(r, RETRY_INTERVAL_MS));
         }
@@ -41,17 +39,15 @@ export function SetupStepStartProxy({ stepNumber, totalSteps, onComplete }: Prop
   }, [onComplete]);
 
   return (
-    <div className="install-page__main" style={{ textAlign: "center", paddingTop: 48 }}>
-      <h1 className="install-page__title">Just a few more steps</h1>
-      <p className="install-page__lead">
-        Step {stepNumber} of {totalSteps}
-      </p>
-      <div style={{ marginTop: 32 }}>
-        <div className="install-page__spinner" />
-        <p className="install-page__step-hint" style={{ marginTop: 16 }}>
-          Starting proxy…
-        </p>
-      </div>
-    </div>
+    <SetupStepLayout
+      stepNumber={stepNumber}
+      totalSteps={totalSteps}
+      title="Start Proxy"
+      hint="Start the Aikido Endpoint proxy so it can begin protecting your traffic."
+      buttonLabel="Starting…"
+      phase="working"
+      errorMsg=""
+      onAction={() => {}}
+    />
   );
 }

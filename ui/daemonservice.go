@@ -80,6 +80,12 @@ func (s *DaemonService) OpenExtensionSettings() error {
 	return daemon.OpenExtensionSettings()
 }
 
+func (s *DaemonService) SetInstallWindowOnTop(onTop bool) {
+	if setInstallWindowOnTop != nil {
+		setInstallWindowOnTop(onTop)
+	}
+}
+
 // CloseInstallWindow hides the certificate install window.
 func (s *DaemonService) CloseInstallWindow() {
 	if closeInstallWindow != nil {

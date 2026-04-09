@@ -11,6 +11,7 @@ import {
   isExtensionActivated,
   isVpnAllowed,
   openExtensionSettings,
+  setInstallWindowOnTop,
 } from "../api";
 import type { Phase } from "./SetupStepLayout";
 import { InstallFinishPage } from "./InstallFinishPage";
@@ -41,9 +42,14 @@ const STEP_ACTIONS: Record<StepId, (input?: string) => Promise<void>> = {
   "activate-extension": async () => {
     await activateExtension();
     if (await isExtensionActivated()) return;
-    await openExtensionSettings();
-    const ok = await pollUntil(isExtensionActivated, 2000, 30);
-    if (!ok) throw new Error("Network extension was not activated. Please approve it in System Settings and retry.");
+    await setInstallWindowOnTop(false);
+    try {
+      await openExtensionSettings();
+      const ok = await pollUntil(isExtensionActivated, 2000, 30);
+      if (!ok) throw new Error("Network extension was not activated. Please approve it in System Settings and retry.");
+    } finally {
+      await setInstallWindowOnTop(true);
+    }
   },
   "allow-vpn": async () => {
     await allowVpn();

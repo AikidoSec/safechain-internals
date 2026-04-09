@@ -31,6 +31,8 @@ type FocusEventPayload struct {
 // closeInstallWindow hides the certificate install webview; set in newWindowManager.
 var closeInstallWindow func()
 
+var setInstallWindowOnTop func(bool)
+
 func init() {
 	application.RegisterEvent[daemon.BlockEvent]("blocked")
 	application.RegisterEvent[daemon.TlsTerminationFailedEvent]("tls_termination_failed")
@@ -141,14 +143,14 @@ type windowManager struct {
 
 func installWindowOpts() application.WebviewWindowOptions {
 	return application.WebviewWindowOptions{
-		Name:          "install",
-		Title:         "Aikido Endpoint Protection - Install",
-		Width:         920,
-		Height:        680,
-		Hidden:        true,
-		DisableResize: true,
-		// Hash route so the embedded asset server serves index.html (path stays "/"); "/install" alone has no file and loads a blank page.
+		Name:             "install",
+		Title:            "Aikido Endpoint Protection - System Setup",
+		Width:            920,
+		Height:           680,
+		Hidden:           true,
+		DisableResize:    true,
 		URL:              "/#/install",
+		AlwaysOnTop:      true,
 		BackgroundColour: application.NewRGB(255, 255, 255),
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true,
@@ -167,6 +169,17 @@ func newWindowManager(app *application.App) *windowManager {
 	wm.interceptClose(wm.installWindow)
 	closeInstallWindow = func() {
 		wm.setCertificateInstallWindowVisible(false)
+	}
+	setInstallWindowOnTop = func(onTop bool) {
+		wm.installMu.Lock()
+		defer wm.installMu.Unlock()
+		w, ok := wm.app.Window.GetByName("install")
+		if !ok || w == nil {
+			return
+		}
+		if win, _ := w.(*application.WebviewWindow); win != nil {
+			win.SetAlwaysOnTop(onTop)
+		}
 	}
 	return wm
 }

@@ -59,6 +59,10 @@ export async function openExtensionSettings(): Promise<void> {
   return DaemonService.OpenExtensionSettings();
 }
 
+export async function setInstallWindowOnTop(onTop: boolean): Promise<void> {
+  return DaemonService.SetInstallWindowOnTop(onTop);
+}
+
 export async function getSetupSteps(): Promise<string[]> {
   return DaemonService.GetSetupSteps();
 }
