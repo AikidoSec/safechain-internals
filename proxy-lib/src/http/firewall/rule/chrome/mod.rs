@@ -35,26 +35,25 @@ use super::{BlockedRequest, RequestAction, Rule};
 mod malware_key;
 mod parser;
 
-pub(in crate::http::firewall) struct RuleChrome<C> {
+pub(in crate::http::firewall) struct RuleChrome {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
     remote_released_packages_list: RemoteReleasedPackagesList,
     remote_endpoint_config: Option<RemoteEndpointConfig>,
     policy_evaluator: Option<PolicyEvaluator>,
-    _https_client: std::marker::PhantomData<C>,
 }
 
-impl<C> RuleChrome<C>
-where
-    C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
-{
-    pub(in crate::http::firewall) async fn try_new(
+impl RuleChrome {
+    pub(in crate::http::firewall) async fn try_new<C>(
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<PolicyEvaluator>,
         remote_endpoint_config: Option<RemoteEndpointConfig>,
-    ) -> Result<Self, BoxError> {
+    ) -> Result<Self, BoxError>
+    where
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
+    {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_chrome.json"),
@@ -69,7 +68,7 @@ where
             guard,
             Uri::from_static("https://malware-list.aikido.dev/releases/chrome.json"),
             sync_storage,
-            remote_malware_list_https_client.clone(),
+            remote_malware_list_https_client,
             LowerCaseReleasedPackageFormatter,
         )
         .await
@@ -89,21 +88,17 @@ where
             remote_released_packages_list,
             remote_endpoint_config,
             policy_evaluator,
-            _https_client: std::marker::PhantomData,
         })
     }
 }
 
-impl<C> fmt::Debug for RuleChrome<C> {
+impl fmt::Debug for RuleChrome {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RuleChrome").finish()
     }
 }
 
-impl<C> Rule for RuleChrome<C>
-where
-    C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + Sync + 'static,
-{
+impl Rule for RuleChrome {
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
@@ -195,10 +190,7 @@ where
     }
 }
 
-impl<C> RuleChrome<C>
-where
-    C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
-{
+impl RuleChrome {
     const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 48 * 3600;
 
     fn get_package_age_cutoff_secs(&self) -> i64 {
