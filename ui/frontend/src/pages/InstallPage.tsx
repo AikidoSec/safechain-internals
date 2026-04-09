@@ -18,13 +18,14 @@ import type { Phase } from "./SetupStepLayout";
 import { InstallFinishPage } from "./InstallFinishPage";
 import { SetupStepToken } from "./SetupStepToken";
 import { SetupStepInstallExtension } from "./SetupStepInstallExtension";
+import { SetupStepEnableExtension } from "./SetupStepEnableExtension";
 import { SetupStepAllowVpn } from "./SetupStepAllowVpn";
 import { SetupStepStartProxy } from "./SetupStepStartProxy";
 import { SetupStepInstallCa } from "./SetupStepInstallCa";
 
-type StepId = "token" | "install-extension" | "allow-vpn" | "start-proxy" | "install-ca";
+type StepId = "token" | "install-extension" | "enable-extension" | "allow-vpn" | "start-proxy" | "install-ca";
 
-const VALID_STEPS = new Set<string>(["token", "install-extension", "allow-vpn", "start-proxy", "install-ca"]);
+const VALID_STEPS = new Set<string>(["token", "install-extension", "enable-extension", "allow-vpn", "start-proxy", "install-ca"]);
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -42,17 +43,17 @@ const STEP_ACTIONS: Record<StepId, (input?: string) => Promise<void>> = {
   token: (input) => setToken(input ?? ""),
   "install-extension": async () => {
     await installExtension();
+    if (await isExtensionInstalled()) return;
+    const ok = await pollUntil(isExtensionInstalled, 2000, 15);
+    if (!ok) throw new Error("Network extension was not installed. Please retry.");
+  },
+  "enable-extension": async () => {
     if (await isExtensionActivated()) return;
     await setInstallWindowOnTop(false);
     try {
-      if (!(await isExtensionInstalled())) {
-        const installed = await pollUntil(isExtensionInstalled, 2000, 15);
-        if (!installed) throw new Error("Network extension was not installed. Please retry.");
-      }
-      if (await isExtensionActivated()) return;
       await openExtensionSettings();
       const ok = await pollUntil(isExtensionActivated, 2000, 30);
-      if (!ok) throw new Error("Network extension was not activated. Please approve it in System Settings and retry.");
+      if (!ok) throw new Error("Network extension was not enabled. Please approve it in System Settings and retry.");
     } finally {
       await setInstallWindowOnTop(true);
     }
@@ -173,6 +174,8 @@ export function InstallPage() {
         );
       case "install-extension":
         return <SetupStepInstallExtension {...stepProps} />;
+      case "enable-extension":
+        return <SetupStepEnableExtension {...stepProps} />;
       case "allow-vpn":
         return <SetupStepAllowVpn {...stepProps} />;
       case "start-proxy":

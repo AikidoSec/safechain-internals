@@ -191,6 +191,7 @@ type server struct {
 	blocks               []BlockEvent
 	tlsEvents            []TlsEvent
 	permissions          PermissionsResponse
+	extensionInstalled   bool
 	extensionActivated   bool
 	vpnAllowed           bool
 	token                string
@@ -279,10 +280,10 @@ func (s *server) handleCertificateInstall(w http.ResponseWriter, r *http.Request
 
 func (s *server) handleNetworkExtensionInstall(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
-	s.extensionActivated = true
+	s.extensionInstalled = true
 	s.mu.Unlock()
 	log.Println("mock: network extension installed")
-	s.writeJSON(w, map[string]string{"status": "activated"})
+	s.writeJSON(w, map[string]string{"status": "installed"})
 }
 
 func (s *server) handleNetworkExtensionAllowVpn(w http.ResponseWriter, r *http.Request) {
@@ -294,13 +295,16 @@ func (s *server) handleNetworkExtensionAllowVpn(w http.ResponseWriter, r *http.R
 }
 
 func (s *server) handleNetworkExtensionOpenSettings(w http.ResponseWriter, r *http.Request) {
-	log.Println("mock: open network extension settings (no-op)")
+	s.mu.Lock()
+	s.extensionActivated = true
+	s.mu.Unlock()
+	log.Println("mock: open network extension settings (simulated enable)")
 	w.WriteHeader(http.StatusOK)
 }
 
 func (s *server) handleIsExtensionInstalled(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
-	installed := s.extensionActivated
+	installed := s.extensionInstalled
 	s.mu.RUnlock()
 	s.writeJSON(w, map[string]bool{"result": installed})
 }
@@ -339,15 +343,16 @@ func (s *server) handleSetToken(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *server) handleSetupCheck(w http.ResponseWriter, r *http.Request) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *server) computeMockSteps() []string {
 	var steps []string
 	if s.token == "" {
 		steps = append(steps, "token")
 	}
-	if !s.extensionActivated {
+	if !s.extensionInstalled {
 		steps = append(steps, "install-extension")
+		steps = append(steps, "enable-extension")
+	} else if !s.extensionActivated {
+		steps = append(steps, "enable-extension")
 	}
 	if !s.vpnAllowed {
 		steps = append(steps, "allow-vpn")
@@ -355,6 +360,13 @@ func (s *server) handleSetupCheck(w http.ResponseWriter, r *http.Request) {
 	if len(steps) > 0 {
 		steps = append(steps, "start-proxy", "install-ca")
 	}
+	return steps
+}
+
+func (s *server) handleSetupCheck(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	steps := s.computeMockSteps()
 	if len(steps) == 0 {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -367,19 +379,7 @@ func (s *server) handleSetupCheck(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleSetupStart(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	var steps []string
-	if s.token == "" {
-		steps = append(steps, "token")
-	}
-	if !s.extensionActivated {
-		steps = append(steps, "install-extension")
-	}
-	if !s.vpnAllowed {
-		steps = append(steps, "allow-vpn")
-	}
-	if len(steps) > 0 {
-		steps = append(steps, "start-proxy", "install-ca")
-	}
+	steps := s.computeMockSteps()
 	log.Printf("mock: setup start → steps=%v", steps)
 	s.writeJSON(w, map[string][]string{"steps": steps})
 }
