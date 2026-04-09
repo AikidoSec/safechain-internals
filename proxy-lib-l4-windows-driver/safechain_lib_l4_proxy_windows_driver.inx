@@ -8,6 +8,8 @@ Signature   = "$WINDOWS NT$"
 Class       = System
 ClassGuid   = {4D36E97D-E325-11CE-BFC1-08002BE10318}
 Provider    = %ProviderString%
+DriverVer   = 04/09/2026,1.0.0.0
+CatalogFile.NTAMD64 = safechain_lib_l4_proxy_windows_driver.cat
 PnpLockDown = 1
 
 [DestinationDirs]
@@ -20,18 +22,18 @@ DefaultDestDir = 13
 safechain_lib_l4_proxy_windows_driver.sys = 1,,
 
 [Manufacturer]
-%StdMfg%=Standard,NT$ARCH$.10.0...16299
+%StdMfg%=Standard,NTamd64.10.0...16299
 
-[Standard.NT$ARCH$.10.0...16299]
+[Standard.NTamd64.10.0...16299]
 %DeviceDesc%=SafeChainL4Proxy_Install, Root\SafeChainL4Proxy
 
-[SafeChainL4Proxy_Install.NT$ARCH$]
+[SafeChainL4Proxy_Install.NTamd64]
 CopyFiles = DriverCopyFiles
 
 [DriverCopyFiles]
 safechain_lib_l4_proxy_windows_driver.sys
 
-[SafeChainL4Proxy_Install.NT$ARCH$.Services]
+[SafeChainL4Proxy_Install.NTamd64.Services]
 AddService = %ServiceName%, %SPSVCINST_ASSOCSERVICE%, SafeChainL4Proxy_Service_Install
 
 [SafeChainL4Proxy_Service_Install]

@@ -5,11 +5,14 @@ use std::net::{SocketAddrV4, SocketAddrV6};
 use crate::common::{
     DeviceHandle, IOCTL_CLEAR_IPV6_PROXY, IOCTL_CLEAR_PROXY_PROCESS_ID, IOCTL_SET_IPV4_PROXY,
     IOCTL_SET_IPV6_PROXY, IOCTL_SET_PROXY_PROCESS_ID, Ipv4ProxyConfigPayload,
-    Ipv6ProxyConfigPayload, ProxyProcessIdPayload,
+    Ipv6ProxyConfigPayload, ProxyProcessIdPayload, sync_startup_blob,
 };
 
 #[derive(Debug, Args)]
 pub struct UpdateArgs {
+    #[arg(long, default_value = "SafeChainL4Proxy")]
+    pub service_name: String,
+
     #[arg(long, default_value = "\\\\.\\SafechainL4Proxy")]
     pub device_path: String,
 
@@ -31,6 +34,7 @@ pub struct UpdateArgs {
 
 pub fn run(args: UpdateArgs) -> Result<(), String> {
     info!(
+        service_name = %args.service_name,
         device_path = %args.device_path,
         ipv4_proxy = ?args.ipv4_proxy,
         ipv6_proxy = ?args.ipv6_proxy,
@@ -64,6 +68,15 @@ pub fn run(args: UpdateArgs) -> Result<(), String> {
     }
     if args.clear_proxy_pid {
         device.send_ioctl(IOCTL_CLEAR_PROXY_PROCESS_ID, &[])?;
+    }
+
+    if args.ipv4_proxy.is_some() || args.ipv6_proxy.is_some() || args.clear_ipv6 {
+        let next_ipv6 = if args.clear_ipv6 {
+            Some(None)
+        } else {
+            args.ipv6_proxy.map(Some)
+        };
+        sync_startup_blob(&args.service_name, args.ipv4_proxy, next_ipv6)?;
     }
 
     Ok(())

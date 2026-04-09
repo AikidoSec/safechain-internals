@@ -2914,6 +2914,7 @@ name = "safechain-l4-proxy-windows-driver-object"
 version = "1.0.0"
 dependencies = [
  "clap",
+ "hex",
  "rama",
  "safechain-proxy-lib-nostd",
  "windows-sys 0.61.2",

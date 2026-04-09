@@ -249,7 +249,7 @@ run-macos-l4-proxy *ARGS: macos-l4-install-signed
 windows-driver-quick-qa: windows-driver-check windows-driver-clippy windows-driver-test
     cargo doc --all-features --no-deps \
         -p safechain-l4-proxy-windows-driver-object
-    cargo check --all-features--all-targets \
+    cargo check --all-features --all-targets \
         -p safechain-l4-proxy-windows-driver-object
     cargo clippy --all-features --all-targets \
         -p safechain-l4-proxy-windows-driver-object
@@ -257,6 +257,15 @@ windows-driver-quick-qa: windows-driver-check windows-driver-clippy windows-driv
 windows-driver-qa: windows-driver-quick-qa windows-driver-build
     cargo test --all-features \
         -p safechain-l4-proxy-windows-driver-object
+
+windows-driver-package-stage profile="debug" *ARGS:
+    ./packaging/windows/stage-driver-package.ps1 -Profile {{profile}} {{ARGS}}
+
+windows-driver-package-install package_dir="dist/windows-driver-package/debug":
+    ./packaging/windows/install-driver-package.ps1 -PackageDir {{package_dir}}
+
+windows-driver-package-remove:
+    ./packaging/windows/remove-driver-package.ps1
 
 [working-directory: './proxy-lib-l4-windows-driver']
 windows-driver-check:

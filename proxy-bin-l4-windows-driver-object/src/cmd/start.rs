@@ -39,6 +39,7 @@ pub fn run(args: StartArgs) -> Result<(), String> {
     ensure_wfp_objects()?;
 
     update::run(UpdateArgs {
+        service_name: args.service_name,
         device_path: args.device_path,
         ipv4_proxy: Some(args.ipv4_proxy),
         ipv6_proxy: args.ipv6_proxy,

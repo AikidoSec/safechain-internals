@@ -1,4 +1,9 @@
-use std::{ffi::OsStr, os::windows::ffi::OsStrExt, process::Command};
+use std::{
+    ffi::OsStr,
+    net::{SocketAddrV4, SocketAddrV6},
+    os::windows::ffi::OsStrExt,
+    process::Command,
+};
 
 use rama::telemetry::tracing::{debug, info};
 use safechain_proxy_lib_nostd::windows::driver_protocol::STARTUP_VALUE_NAME;
@@ -51,7 +56,7 @@ pub fn write_startup_blob(service_name: &str, blob: &StartupConfig) -> Result<()
     let encoded = blob
         .to_bytes()
         .map_err(|err| format!("failed to encode startup config: {err}"))?;
-    let hex_blob = encode_hex_upper(&encoded);
+    let hex_blob = hex::encode_upper(&encoded);
     debug!(
         service_name,
         bytes = encoded.len(),
@@ -92,6 +97,72 @@ pub fn write_startup_blob(service_name: &str, blob: &StartupConfig) -> Result<()
 
     info!(service_name, "startup blob written to registry");
     Ok(())
+}
+
+pub fn read_startup_blob(service_name: &str) -> Result<Option<StartupConfig>, String> {
+    let key_path = format!(r"HKLM\SYSTEM\CurrentControlSet\Services\{service_name}\Parameters");
+    debug!(service_name, "reading startup blob from registry");
+    let output = Command::new("reg.exe")
+        .args(["query", &key_path, "/v", STARTUP_VALUE_NAME])
+        .output()
+        .map_err(|err| format!("failed to query startup blob: {err}"))?;
+
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stdout.contains("unable to find") || stderr.contains("unable to find") {
+            debug!(service_name, "startup blob is not present in registry");
+            return Ok(None);
+        }
+        return Err(format!(
+            "reg.exe query value failed: {} {}",
+            stdout.trim(),
+            stderr.trim()
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let hex_blob = stdout
+        .lines()
+        .find_map(|line| {
+            if line.contains(STARTUP_VALUE_NAME) && line.contains("REG_BINARY") {
+                line.split("REG_BINARY").nth(1).map(str::trim)
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| format!("failed to parse REG_BINARY output for {STARTUP_VALUE_NAME}"))?;
+
+    let bytes = hex::decode(hex_blob)
+        .map_err(|err| format!("failed to decode registry hex payload: {err}"))?;
+    let blob = StartupConfig::from_bytes(&bytes)
+        .ok_or_else(|| "failed to decode startup config blob".to_string())?;
+    Ok(Some(blob))
+}
+
+pub fn sync_startup_blob(
+    service_name: &str,
+    ipv4_proxy: Option<SocketAddrV4>,
+    ipv6_proxy: Option<Option<SocketAddrV6>>,
+) -> Result<(), String> {
+    let current = read_startup_blob(service_name)?;
+
+    let next_ipv4 = match (ipv4_proxy, current.as_ref().map(StartupConfig::proxy_ipv4)) {
+        (Some(ipv4), _) => ipv4,
+        (None, Some(ipv4)) => ipv4,
+        (None, None) => {
+            return Err(
+                "cannot update persisted startup config without an existing IPv4 proxy; use `start` or pass `--ipv4-proxy`".to_string(),
+            )
+        }
+    };
+
+    let next_ipv6 = match ipv6_proxy {
+        Some(next) => next,
+        None => current.and_then(|blob| blob.proxy_ipv6()),
+    };
+
+    write_startup_blob(service_name, &StartupConfig::new(next_ipv4, next_ipv6))
 }
 
 pub fn delete_startup_blob(service_name: &str) -> Result<(), String> {
@@ -198,13 +269,4 @@ impl Drop for DeviceHandle {
             }
         }
     }
-}
-
-fn encode_hex_upper(bytes: &[u8]) -> String {
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        use std::fmt::Write as _;
-        let _ = write!(&mut output, "{byte:02X}");
-    }
-    output
 }

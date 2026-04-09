@@ -8,6 +8,7 @@ rust-version = { workspace = true }
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
+hex = "0.4"
 rama = { workspace = true }
 safechain-proxy-lib-nostd = { workspace = true }
 
