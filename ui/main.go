@@ -74,22 +74,22 @@ func applyFlags(f appFlags) {
 
 // --- Notifications -------------------------------------------------------
 
-func setupNotifications() (notifier *notifications.NotificationService, authorized bool) {
-	notifier = notifications.New()
+func setupNotifications() *notifications.NotificationService {
+	notifier := notifications.New()
 	notifier.RegisterNotificationCategory(notifications.NotificationCategory{
 		ID:      "aikido-blocked",
 		Actions: []notifications.NotificationAction{{ID: "OPEN", Title: "Open"}},
 	})
-	authorized, _ = notifier.CheckNotificationAuthorization()
+	authorized, _ := notifier.CheckNotificationAuthorization()
 	if !authorized {
 		go func() {
 			ok, _ := notifier.RequestNotificationAuthorization()
 			log.Println("Notifications authorized:", ok)
 		}()
-		return
+		return notifier
 	}
 	log.Println("Notifications authorized:", authorized)
-	return
+	return notifier
 }
 
 // --- Wails application ---------------------------------------------------
@@ -333,14 +333,14 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 
 // --- App server (receives events from daemon) ----------------------------
 
-func startAppServer(app *application.App, wm *windowManager, statusCh chan<- appserver.ProxyStatusBody, notifier *notifications.NotificationService, notifAuthorized bool) {
+func startAppServer(app *application.App, wm *windowManager, statusCh chan<- appserver.ProxyStatusBody, notifier *notifications.NotificationService) {
 	srv := appserver.New()
 	srv.SetHandlers(
 		func(ev appserver.ProxyStatusBody) { statusCh <- ev },
 		func(ev daemon.BlockEvent) {
 			log.Println("Blocked event:", ev)
 			app.Event.Emit("blocked", ev)
-			if notifAuthorized {
+			if authorized, _ := notifier.CheckNotificationAuthorization(); authorized {
 				notifier.SendNotificationWithActions(notifications.NotificationOptions{
 					ID:         "block-" + ev.ID,
 					Title:      "Aikido Endpoint Protection blocked an event",
@@ -353,7 +353,7 @@ func startAppServer(app *application.App, wm *windowManager, statusCh chan<- app
 		func(ev daemon.TlsTerminationFailedEvent) {
 			log.Println("TLS termination failed event:", ev)
 			app.Event.Emit("tls_termination_failed", ev)
-			if notifAuthorized {
+			if authorized, _ := notifier.CheckNotificationAuthorization(); authorized {
 				body := "SNI: " + ev.SNI
 				if ev.App != "" {
 					body += " (" + ev.App + ")"
@@ -387,13 +387,13 @@ func main() {
 	flags := parseFlags()
 	applyFlags(flags)
 
-	notifier, notifAuthorized := setupNotifications()
+	notifier := setupNotifications()
 	app := newApp(notifier)
 
 	wm := newWindowManager(app)
 
 	statusCh := setupSystemTray(app, wm.showDashboard)
-	startAppServer(app, wm, statusCh, notifier, notifAuthorized)
+	startAppServer(app, wm, statusCh, notifier)
 
 	notifier.OnNotificationResponse(func(result notifications.NotificationResult) {
 		if result.Error != nil {
