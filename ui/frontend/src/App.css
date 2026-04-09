@@ -1645,6 +1645,137 @@ body {
   background: #0066d6;
 }
 
+/* VPN / proxy permission alert mock (light sheet, same family as certificate preview) */
+.install-page__preview--vpn {
+  max-width: 360px;
+  margin-top: 50px;
+}
+
+.install-page__preview-backdrop--vpn {
+  padding: 12px 8px;
+  background: transparent;
+}
+
+.install-page__preview-sheet--vpn-alert {
+  max-width: 320px;
+  padding: 28px 22px 22px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 12px 32px rgba(0, 0, 0, 0.14),
+    0 24px 64px rgba(0, 0, 0, 0.08);
+  color: #111827;
+}
+
+.install-page__preview-vpn-icon-wrap {
+  margin: 0 0 14px;
+  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.12));
+}
+
+.install-page__preview-vpn-icon {
+  display: block;
+}
+
+.install-page__preview-vpn-title {
+  margin: 0 0 12px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: #111827;
+  max-width: 280px;
+}
+
+.install-page__preview-vpn-body {
+  margin: 0 0 22px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  font-weight: 400;
+  color: #374151;
+  max-width: 280px;
+}
+
+.install-page__preview-actions--vpn-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.install-page__preview-actions--vpn-row .install-page__preview-mock-btn-spotlight,
+.install-page__preview-actions--vpn-row > .install-page__preview-mock-btn {
+  flex: 1 1 calc(50% - 6px);
+  min-width: 120px;
+}
+
+.install-page__preview-mock-btn-spotlight {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Purple ring — shows users to tap Allow (like Norton’s guide circle) */
+.install-page__preview-mock-btn-spotlight::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 118px;
+  height: 118px;
+  margin-left: -62px;
+  margin-top: -59px;
+  border-radius: 50%;
+  border: 3px solid var(--primary-aik-100);
+  box-shadow:
+    0 0 0 1px rgba(101, 81, 243, 0.12),
+    0 0 0 8px var(--primary-aik-40);
+  pointer-events: none;
+  z-index: 2;
+  animation: install-vpn-spotlight-pulse 2.4s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+.install-page__preview-mock-btn-spotlight .install-page__preview-mock-btn {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+}
+
+@keyframes install-vpn-spotlight-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.88;
+    transform: scale(1.04);
+  }
+}
+
+.install-page__preview-mock-btn--vpn-secondary.button-brand.button--tertiary {
+  background: #f3f4f6;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: #111827;
+}
+
+.install-page__preview-mock-btn--vpn-secondary.button-brand.button--tertiary:hover:not(:disabled) {
+  background: #e5e7eb;
+}
+
+.install-page__preview-mock-btn--vpn-primary.button-brand.button--primary {
+  background: #007aff;
+  color: #fff;
+  border: none;
+}
+
+.install-page__preview-mock-btn--vpn-primary.button-brand.button--primary:hover:not(:disabled) {
+  background: #0066d6;
+}
+
 @media (max-width: 800px) {
   .install-page__body {
     flex-direction: column;
