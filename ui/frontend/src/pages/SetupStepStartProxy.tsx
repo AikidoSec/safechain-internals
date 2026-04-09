@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { startProxy } from "../api";
 import { SetupStepLayout } from "./SetupStepLayout";
 
@@ -13,6 +13,7 @@ interface Props {
 
 export function SetupStepStartProxy({ stepNumber, totalSteps, onComplete }: Props) {
   const started = useRef(false);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     if (started.current) return;
@@ -32,11 +33,17 @@ export function SetupStepStartProxy({ stepNumber, totalSteps, onComplete }: Prop
           await new Promise((r) => setTimeout(r, RETRY_INTERVAL_MS));
         }
       }
+      if (!cancelled) setTimedOut(true);
     }
     attempt();
 
     return () => { cancelled = true; };
   }, [onComplete]);
+
+  function handleRetry() {
+    setTimedOut(false);
+    started.current = false;
+  }
 
   return (
     <SetupStepLayout
@@ -47,16 +54,18 @@ export function SetupStepStartProxy({ stepNumber, totalSteps, onComplete }: Prop
       hint="Start the Aikido Endpoint proxy so it can begin protecting your traffic."
       buttonLabel="Start"
       workingLabel="Starting..."
-      phase="working"
+      phase={timedOut ? "error" : "working"}
       errorMsg=""
-      onAction={() => {}}
+      onAction={handleRetry}
     >
-      <div className="setup-proxy-loading">
-        <div className="setup-proxy-loading__spinner" />
-        <p className="setup-proxy-loading__hint">
-          This may take a moment. Please wait while the proxy initializes.
-        </p>
-      </div>
+      {!timedOut && (
+        <div className="setup-proxy-loading">
+          <div className="setup-proxy-loading__spinner" />
+          <p className="setup-proxy-loading__hint">
+            This may take a moment. Please wait while the proxy initializes.
+          </p>
+        </div>
+      )}
     </SetupStepLayout>
   );
 }
