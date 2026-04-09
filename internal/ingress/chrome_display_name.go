@@ -104,27 +104,33 @@ func (r *chromeExtensionNameResolver) Lookup(ctx context.Context, extensionID st
 //	extractChromeWebStoreDisplayName(html) // "uBlock Origin"
 func extractChromeWebStoreDisplayName(htmlBody string) string {
 	for _, tag := range metaTagRegexp.FindAllString(htmlBody, -1) {
-		attrs := parseHTMLAttributes(tag)
-		if !strings.EqualFold(attrs["property"], "og:title") {
-			continue
-		}
-		content := strings.TrimSpace(attrs["content"])
-		if content == "" {
-			return ""
-		}
-
-		name, ok := strings.CutSuffix(content, chromeWebStoreSuffix)
-		if !ok {
-			return ""
-		}
-		name = strings.TrimSpace(name)
+		name := extractChromeWebStoreDisplayNameFromMetaTag(tag)
 		if name == "" {
-			return ""
+			continue
 		}
 		return name
 	}
 
 	return ""
+}
+
+func extractChromeWebStoreDisplayNameFromMetaTag(tag string) string {
+	attrs := parseHTMLAttributes(tag)
+	if !strings.EqualFold(attrs["property"], "og:title") {
+		return ""
+	}
+
+	content := strings.TrimSpace(attrs["content"])
+	if content == "" {
+		return ""
+	}
+
+	name, ok := strings.CutSuffix(content, chromeWebStoreSuffix)
+	if !ok {
+		return ""
+	}
+
+	return strings.TrimSpace(name)
 }
 
 // parseHTMLAttributes extracts all name=value attribute pairs from a single HTML
