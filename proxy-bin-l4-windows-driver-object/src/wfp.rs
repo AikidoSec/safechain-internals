@@ -17,7 +17,7 @@ use windows_sys::Win32::{
 const RPC_C_AUTHN_DEFAULT: u32 = 0xffff_ffff;
 const IPPROTO_TCP: u8 = 6;
 
-pub fn ensure_wfp_objects() -> Result<(), String> {
+pub fn ensure_wfp_objects(has_ipv6: bool) -> Result<(), String> {
     info!("ensuring WFP provider/sublayer/callouts/filters are installed");
     let engine = EngineHandle::open()?;
     let transaction = Transaction::begin(&engine)?;
@@ -32,13 +32,6 @@ pub fn ensure_wfp_objects() -> Result<(), String> {
         "SafeChain TCP Connect Redirect v4",
         "Kernel callout for SafeChain IPv4 TCP connect redirection.",
     )?;
-    add_callout(
-        &engine,
-        WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
-        FWPM_LAYER_ALE_CONNECT_REDIRECT_V6,
-        "SafeChain TCP Connect Redirect v6",
-        "Kernel callout for SafeChain IPv6 TCP connect redirection.",
-    )?;
     add_filter(
         &engine,
         WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V4,
@@ -47,14 +40,25 @@ pub fn ensure_wfp_objects() -> Result<(), String> {
         "SafeChain TCP Redirect Filter v4",
         "Invokes the SafeChain IPv4 TCP connect-redirect callout.",
     )?;
-    add_filter(
-        &engine,
-        WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
-        FWPM_LAYER_ALE_CONNECT_REDIRECT_V6,
-        WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
-        "SafeChain TCP Redirect Filter v6",
-        "Invokes the SafeChain IPv6 TCP connect-redirect callout.",
-    )?;
+
+    
+    if has_ipv6 {
+        add_callout(
+            &engine,
+            WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
+            FWPM_LAYER_ALE_CONNECT_REDIRECT_V6,
+            "SafeChain TCP Connect Redirect v6",
+            "Kernel callout for SafeChain IPv6 TCP connect redirection.",
+        )?;
+        add_filter(
+            &engine,
+            WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
+            FWPM_LAYER_ALE_CONNECT_REDIRECT_V6,
+            WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
+            "SafeChain TCP Redirect Filter v6",
+            "Invokes the SafeChain IPv6 TCP connect-redirect callout.",
+        )?;
+    }
 
     transaction.commit()
 }

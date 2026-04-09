@@ -36,7 +36,7 @@ pub fn run(args: StartArgs) -> Result<(), String> {
     let startup_blob = StartupConfig::new(args.ipv4_proxy, args.ipv6_proxy);
     write_startup_blob(&args.service_name, &startup_blob)?;
     run_sc(&["start", &args.service_name], "SERVICE_ALREADY_RUNNING")?;
-    ensure_wfp_objects()?;
+    ensure_wfp_objects(args.ipv6_proxy.is_some())?;
 
     update::run(UpdateArgs {
         service_name: args.service_name,

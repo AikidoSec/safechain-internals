@@ -18,7 +18,16 @@ param(
     [string]$OutputDir,
 
     [Parameter(Mandatory = $false)]
-    [switch]$SkipInf2Cat
+    [switch]$SkipInf2Cat,
+
+    [Parameter(Mandatory = $false)]
+    [string]$CertSubject = "CN=SafeChain Test",
+
+    [Parameter(Mandatory = $false)]
+    [string]$CertStore = "My",
+
+    [Parameter(Mandatory = $false)]
+    [switch]$NoTimestamp
 )
 
 function Find-Inf2Cat {
@@ -85,14 +94,12 @@ Write-Host "  sys: $DriverSysPath"
 Write-Host "  inf: $InfPath"
 Write-Host "  out: $OutputDir"
 
-if (-not $SkipInf2Cat) {
+f (-not $SkipInf2Cat) {
     $inf2cat = Get-Command Inf2Cat.exe -ErrorAction SilentlyContinue
     if ($null -eq $inf2cat) {
         $inf2catPath = Find-Inf2Cat
         if ($inf2catPath) {
-            $inf2cat = @{
-                Source = $inf2catPath
-            }
+            $inf2cat = @{ Source = $inf2catPath }
         }
     }
 
@@ -101,15 +108,47 @@ if (-not $SkipInf2Cat) {
     } else {
         Write-Host "Running Inf2Cat to generate catalog..."
         Write-Host "  using: $($inf2cat.Source)"
+
         & $inf2cat.Source /driver:$OutputDir /os:10_X64
         if ($LASTEXITCODE -ne 0) {
             throw "Inf2Cat failed with exit code $LASTEXITCODE"
         }
 
         if (-not (Test-Path $CatPath)) {
-            Write-Warning "Inf2Cat completed but $CatPath was not found."
-        } else {
-            Write-Host "  cat: $CatPath"
+            throw "Inf2Cat completed but $CatPath was not found."
+        }
+
+        Write-Host "  cat: $CatPath"
+
+        $signtool = Get-Command SignTool.exe -ErrorAction SilentlyContinue
+        if ($null -eq $signtool) {
+            throw "SignTool.exe was not found on PATH."
+        }
+
+        Write-Host "Signing catalog file with test certificate..."
+        $signArgs = @(
+            "sign",
+            "/v",
+            "/fd", "SHA256",
+            "/s", $CertStore,
+            "/n", $CertSubject
+        )
+
+        if (-not $NoTimestamp) {
+            $signArgs += @("/tr", "http://timestamp.digicert.com", "/td", "SHA256")
+        }
+
+        $signArgs += $CatPath
+
+        & $signtool.Source @signArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "SignTool sign failed with exit code $LASTEXITCODE"
+        }
+
+        Write-Host "Verifying catalog signature..."
+        & $signtool.Source verify /v /kp /c $CatPath (Join-Path $OutputDir $DriverFileName)
+        if ($LASTEXITCODE -ne 0) {
+            throw "SignTool verify failed with exit code $LASTEXITCODE"
         }
     }
-}
+}s
