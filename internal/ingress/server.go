@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/AikidoSec/safechain-internals/internal/config"
+	"github.com/AikidoSec/safechain-internals/internal/proxy"
 )
 
 const (
@@ -25,6 +26,7 @@ type UIProvider interface {
 	NotifyBlocked(ev any)
 	NotifyTlsTerminationFailed(ev any)
 	NotifyPermissionsUpdated(ev any)
+	StartSetupWizard(steps []string)
 }
 
 type Server struct {
@@ -33,19 +35,18 @@ type Server struct {
 	server   *http.Server
 	config   *config.ConfigInfo
 	ui       UIProvider
+	proxy    proxy.ProxyManager
 
 	eventStore    *eventStore
 	tlsEventStore *tlsEventStore
 	mu            sync.RWMutex
-
-	certStatus  func() CertificateStatus
-	certInstall func(context.Context) error
 }
 
-func New(cfg *config.ConfigInfo, ui UIProvider) *Server {
+func New(cfg *config.ConfigInfo, ui UIProvider, proxy proxy.ProxyManager) *Server {
 	return &Server{
 		config:        cfg,
 		ui:            ui,
+		proxy:         proxy,
 		eventStore:    &eventStore{},
 		tlsEventStore: &tlsEventStore{},
 	}
@@ -75,6 +76,19 @@ func (s *Server) Start(ctx context.Context) error {
 
 	mux.HandleFunc("GET /v1/certificate/status", s.handleCertificateStatus)
 	mux.HandleFunc("POST /v1/certificate/install", s.handleCertificateInstall)
+
+	mux.HandleFunc("POST /v1/network-extension/install", s.handleNetworkExtensionInstall)
+	mux.HandleFunc("POST /v1/network-extension/allow-vpn", s.handleNetworkExtensionAllowVpn)
+	mux.HandleFunc("POST /v1/network-extension/open-settings", s.handleNetworkExtensionOpenSettings)
+	mux.HandleFunc("GET /v1/network-extension/is-installed", s.handleIsExtensionInstalled)
+	mux.HandleFunc("GET /v1/network-extension/is-activated", s.handleIsExtensionActivated)
+	mux.HandleFunc("GET /v1/network-extension/is-vpn-allowed", s.handleIsVpnAllowed)
+
+	mux.HandleFunc("POST /v1/proxy/start", s.handleProxyStart)
+	mux.HandleFunc("POST /v1/token", s.handleSetToken)
+
+	mux.HandleFunc("GET /v1/setup/check", s.handleSetupCheck)
+	mux.HandleFunc("POST /v1/setup/start", s.handleSetupStart)
 
 	listener, err := net.Listen("tcp", DefaultBind)
 	if err != nil {

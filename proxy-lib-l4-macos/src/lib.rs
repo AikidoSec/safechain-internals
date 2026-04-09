@@ -1,6 +1,6 @@
 #![cfg(target_os = "macos")]
 
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 
 use rama::{
     net::{
@@ -183,7 +183,7 @@ fn is_ip_remote_host_passthrough(meta: &TransparentProxyFlowMeta) -> Option<Host
     match &target.host {
         Host::Name(_) => return None,
         Host::Address(IpAddr::V4(addr)) => {
-            if addr.is_loopback() || addr.is_private() {
+            if is_passthrough_ipv4(*addr) {
                 tracing::debug!(
                     protocol = ?meta.protocol,
                     remote = ?meta.remote_endpoint,
@@ -213,9 +213,24 @@ fn is_ip_remote_host_passthrough(meta: &TransparentProxyFlowMeta) -> Option<Host
     Some(target.clone())
 }
 
+fn is_passthrough_ipv4(addr: Ipv4Addr) -> bool {
+    if addr.is_loopback() || addr.is_private() {
+        return true;
+    }
+    // Some applications use IPs that come from the IETF shared address space (RFC 6598).
+    // `is_private()` only covers RFC-1918, so this range needs an explicit check.
+    // For instance, TailScale: https://tailscale.com/docs/concepts/tailscale-ip-addresses
+    let [a, b, ..] = addr.octets();
+    a == 100 && (64..=127).contains(&b)
+}
+
 apple_ne::transparent_proxy_ffi! {
     init = init,
     config = proxy_config,
     flow_action = flow_action,
     tcp_service = self::tcp::try_new_service,
 }
+
+#[cfg(test)]
+#[path = "./lib_tests.rs"]
+mod tests;

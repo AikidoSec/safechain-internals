@@ -214,6 +214,14 @@ impl PragmaticSemver {
         Self::from_str(text)
     }
 
+    /// Returns true if this is a stable release (no pre-release identifier).
+    ///
+    /// Pre-release markers such as `a`, `b`, `rc`, and `dev` are excluded.
+    /// Post releases like `1.2.3.post1` are considered stable.
+    pub fn is_stable(&self) -> bool {
+        self.pre.is_empty() || self.pre.as_str().starts_with("post")
+    }
+
     rama::utils::macros::generate_set_and_with! {
         /// (un)set the prefix part of this [`PragmaticSemver`].
         pub fn prefix(mut self, maybe_str: Option<&str>) -> Self {
