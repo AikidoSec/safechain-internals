@@ -4,10 +4,11 @@ import {
   closeInstallWindow,
   getSetupSteps,
   setToken,
-  activateExtension,
+  installExtension,
   allowVpn,
   startProxy,
   installProxyCertificate,
+  isExtensionInstalled,
   isExtensionActivated,
   isVpnAllowed,
   openExtensionSettings,
@@ -16,14 +17,14 @@ import {
 import type { Phase } from "./SetupStepLayout";
 import { InstallFinishPage } from "./InstallFinishPage";
 import { SetupStepToken } from "./SetupStepToken";
-import { SetupStepActivateExtension } from "./SetupStepActivateExtension";
+import { SetupStepInstallExtension } from "./SetupStepInstallExtension";
 import { SetupStepAllowVpn } from "./SetupStepAllowVpn";
 import { SetupStepStartProxy } from "./SetupStepStartProxy";
 import { SetupStepInstallCa } from "./SetupStepInstallCa";
 
-type StepId = "token" | "activate-extension" | "allow-vpn" | "start-proxy" | "install-ca";
+type StepId = "token" | "install-extension" | "allow-vpn" | "start-proxy" | "install-ca";
 
-const VALID_STEPS = new Set<string>(["token", "activate-extension", "allow-vpn", "start-proxy", "install-ca"]);
+const VALID_STEPS = new Set<string>(["token", "install-extension", "allow-vpn", "start-proxy", "install-ca"]);
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -39,11 +40,16 @@ async function pollUntil(check: () => Promise<boolean>, intervalMs: number, maxA
 
 const STEP_ACTIONS: Record<StepId, (input?: string) => Promise<void>> = {
   token: (input) => setToken(input ?? ""),
-  "activate-extension": async () => {
-    await activateExtension();
+  "install-extension": async () => {
+    await installExtension();
     if (await isExtensionActivated()) return;
     await setInstallWindowOnTop(false);
     try {
+      if (!(await isExtensionInstalled())) {
+        const installed = await pollUntil(isExtensionInstalled, 2000, 15);
+        if (!installed) throw new Error("Network extension was not installed. Please retry.");
+      }
+      if (await isExtensionActivated()) return;
       await openExtensionSettings();
       const ok = await pollUntil(isExtensionActivated, 2000, 30);
       if (!ok) throw new Error("Network extension was not activated. Please approve it in System Settings and retry.");
@@ -165,8 +171,8 @@ export function InstallPage() {
             onTokenChange={setTokenInput}
           />
         );
-      case "activate-extension":
-        return <SetupStepActivateExtension {...stepProps} />;
+      case "install-extension":
+        return <SetupStepInstallExtension {...stepProps} />;
       case "allow-vpn":
         return <SetupStepAllowVpn {...stepProps} />;
       case "start-proxy":

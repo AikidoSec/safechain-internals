@@ -255,15 +255,15 @@ func SetToken(token string) error {
 	return nil
 }
 
-func ActivateExtension() error {
-	resp, err := doRequest(http.MethodPost, "/v1/network-extension/activate", nil)
+func InstallExtension() error {
+	resp, err := doRequest(http.MethodPost, "/v1/network-extension/install", nil)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return fmt.Errorf("activate extension: %s: %s", resp.Status, strings.TrimSpace(string(b)))
+		return fmt.Errorf("install extension: %s: %s", resp.Status, strings.TrimSpace(string(b)))
 	}
 	return nil
 }
@@ -292,6 +292,24 @@ func StartProxy() error {
 		return fmt.Errorf("start proxy: %s: %s", resp.Status, strings.TrimSpace(string(b)))
 	}
 	return nil
+}
+
+func IsExtensionInstalled() (bool, error) {
+	resp, err := doRequest(http.MethodGet, "/v1/network-extension/is-installed", nil)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("is-extension-installed: %s", resp.Status)
+	}
+	var out struct {
+		Result bool `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return false, err
+	}
+	return out.Result, nil
 }
 
 func IsExtensionActivated() (bool, error) {

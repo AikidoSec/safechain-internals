@@ -444,6 +444,12 @@ func (d *Daemon) heartbeat() error {
 		}); err != nil {
 			return fmt.Errorf("Failed to report heartbeat: %v", err)
 		}
+		heartbeatEvent := &cloud.HeartbeatEvent{
+			DeviceInfo:  *d.deviceInfo,
+			VersionInfo: *d.versionInfo,
+		}
+		eventJSON, _ := json.MarshalIndent(heartbeatEvent, "", "  ")
+		log.Printf("Heartbeat report sent successfully: %s", string(eventJSON))
 		return nil
 	})
 	d.runIfIntervalExceeded(&d.config.LastSBOMReportTime, constants.SBOMReportInterval, func() error {

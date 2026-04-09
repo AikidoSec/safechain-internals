@@ -77,9 +77,10 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("GET /v1/certificate/status", s.handleCertificateStatus)
 	mux.HandleFunc("POST /v1/certificate/install", s.handleCertificateInstall)
 
-	mux.HandleFunc("POST /v1/network-extension/activate", s.handleNetworkExtensionActivate)
+	mux.HandleFunc("POST /v1/network-extension/install", s.handleNetworkExtensionInstall)
 	mux.HandleFunc("POST /v1/network-extension/allow-vpn", s.handleNetworkExtensionAllowVpn)
 	mux.HandleFunc("POST /v1/network-extension/open-settings", s.handleNetworkExtensionOpenSettings)
+	mux.HandleFunc("GET /v1/network-extension/is-installed", s.handleIsExtensionInstalled)
 	mux.HandleFunc("GET /v1/network-extension/is-activated", s.handleIsExtensionActivated)
 	mux.HandleFunc("GET /v1/network-extension/is-vpn-allowed", s.handleIsVpnAllowed)
 

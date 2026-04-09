@@ -14,7 +14,7 @@ type NetworkExtensionCheckResult struct {
 	Result bool `json:"result"`
 }
 
-func (s *Server) handleNetworkExtensionActivate(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleNetworkExtensionInstall(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -22,15 +22,15 @@ func (s *Server) handleNetworkExtensionActivate(w http.ResponseWriter, r *http.R
 	if !s.validateUIToken(w, r) {
 		return
 	}
-	status, err := activateNetworkExtension(r.Context())
+	status, err := installNetworkExtension(r.Context())
 	if err != nil {
-		log.Printf("ingress: network extension activate: %v", err)
+		log.Printf("ingress: network extension install: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(NetworkExtensionResult{Status: status}); err != nil {
-		log.Printf("ingress: network extension activate encode: %v", err)
+		log.Printf("ingress: network extension install encode: %v", err)
 	}
 }
 
@@ -48,6 +48,26 @@ func (s *Server) handleNetworkExtensionOpenSettings(w http.ResponseWriter, r *ht
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) handleIsExtensionInstalled(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !s.validateUIToken(w, r) {
+		return
+	}
+	installed, err := IsNetworkExtensionInstalled(r.Context())
+	if err != nil {
+		log.Printf("ingress: is-extension-installed: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(NetworkExtensionCheckResult{Result: installed}); err != nil {
+		log.Printf("ingress: is-extension-installed encode: %v", err)
+	}
 }
 
 func (s *Server) handleIsExtensionActivated(w http.ResponseWriter, r *http.Request) {

@@ -277,11 +277,11 @@ func (s *server) handleCertificateInstall(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *server) handleNetworkExtensionActivate(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleNetworkExtensionInstall(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.extensionActivated = true
 	s.mu.Unlock()
-	log.Println("mock: network extension activated")
+	log.Println("mock: network extension installed")
 	s.writeJSON(w, map[string]string{"status": "activated"})
 }
 
@@ -296,6 +296,13 @@ func (s *server) handleNetworkExtensionAllowVpn(w http.ResponseWriter, r *http.R
 func (s *server) handleNetworkExtensionOpenSettings(w http.ResponseWriter, r *http.Request) {
 	log.Println("mock: open network extension settings (no-op)")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *server) handleIsExtensionInstalled(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	installed := s.extensionActivated
+	s.mu.RUnlock()
+	s.writeJSON(w, map[string]bool{"result": installed})
 }
 
 func (s *server) handleIsExtensionActivated(w http.ResponseWriter, r *http.Request) {
@@ -340,7 +347,7 @@ func (s *server) handleSetupCheck(w http.ResponseWriter, r *http.Request) {
 		steps = append(steps, "token")
 	}
 	if !s.extensionActivated {
-		steps = append(steps, "activate-extension")
+		steps = append(steps, "install-extension")
 	}
 	if !s.vpnAllowed {
 		steps = append(steps, "allow-vpn")
@@ -365,7 +372,7 @@ func (s *server) handleSetupStart(w http.ResponseWriter, r *http.Request) {
 		steps = append(steps, "token")
 	}
 	if !s.extensionActivated {
-		steps = append(steps, "activate-extension")
+		steps = append(steps, "install-extension")
 	}
 	if !s.vpnAllowed {
 		steps = append(steps, "allow-vpn")
@@ -392,9 +399,10 @@ func main() {
 	mux.HandleFunc("GET /v1/certificate/status", s.handleCertificateStatus)
 	mux.HandleFunc("POST /v1/certificate/install", s.handleCertificateInstall)
 
-	mux.HandleFunc("POST /v1/network-extension/activate", s.handleNetworkExtensionActivate)
+	mux.HandleFunc("POST /v1/network-extension/install", s.handleNetworkExtensionInstall)
 	mux.HandleFunc("POST /v1/network-extension/allow-vpn", s.handleNetworkExtensionAllowVpn)
 	mux.HandleFunc("POST /v1/network-extension/open-settings", s.handleNetworkExtensionOpenSettings)
+	mux.HandleFunc("GET /v1/network-extension/is-installed", s.handleIsExtensionInstalled)
 	mux.HandleFunc("GET /v1/network-extension/is-activated", s.handleIsExtensionActivated)
 	mux.HandleFunc("GET /v1/network-extension/is-vpn-allowed", s.handleIsVpnAllowed)
 

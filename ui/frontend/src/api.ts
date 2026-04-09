@@ -35,8 +35,8 @@ export async function setToken(token: string): Promise<void> {
   return DaemonService.SetToken(token);
 }
 
-export async function activateExtension(): Promise<void> {
-  return DaemonService.ActivateExtension();
+export async function installExtension(): Promise<void> {
+  return DaemonService.InstallExtension();
 }
 
 export async function allowVpn(): Promise<void> {
@@ -45,6 +45,10 @@ export async function allowVpn(): Promise<void> {
 
 export async function startProxy(): Promise<void> {
   return DaemonService.StartProxy();
+}
+
+export async function isExtensionInstalled(): Promise<boolean> {
+  return DaemonService.IsExtensionInstalled();
 }
 
 export async function isExtensionActivated(): Promise<boolean> {

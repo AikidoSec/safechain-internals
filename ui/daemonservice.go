@@ -56,8 +56,8 @@ func (s *DaemonService) SetToken(token string) error {
 	return daemon.SetToken(token)
 }
 
-func (s *DaemonService) ActivateExtension() error {
-	return daemon.ActivateExtension()
+func (s *DaemonService) InstallExtension() error {
+	return daemon.InstallExtension()
 }
 
 func (s *DaemonService) AllowVpn() error {
@@ -66,6 +66,10 @@ func (s *DaemonService) AllowVpn() error {
 
 func (s *DaemonService) StartProxy() error {
 	return daemon.StartProxy()
+}
+
+func (s *DaemonService) IsExtensionInstalled() (bool, error) {
+	return daemon.IsExtensionInstalled()
 }
 
 func (s *DaemonService) IsExtensionActivated() (bool, error) {

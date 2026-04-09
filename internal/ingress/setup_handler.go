@@ -25,10 +25,11 @@ func ComputeSetupSteps(ctx context.Context, cfg *config.ConfigInfo) []string {
 		steps = append(steps, "token")
 	}
 
-	if activated, err := IsNetworkExtensionActivated(ctx); err != nil || !activated {
-		steps = append(steps, "activate-extension")
-		// Allowed VPN config is always disabled if the extension is not activated so we need
-		// to always request this allow-vpn step in this case
+	if installed, err := IsNetworkExtensionInstalled(ctx); err != nil || !installed {
+		steps = append(steps, "install-extension")
+		steps = append(steps, "allow-vpn")
+	} else if activated, err := IsNetworkExtensionActivated(ctx); err != nil || !activated {
+		steps = append(steps, "install-extension")
 		steps = append(steps, "allow-vpn")
 	} else {
 		if allowed, err := IsNetworkExtensionVpnAllowed(ctx); err != nil || !allowed {

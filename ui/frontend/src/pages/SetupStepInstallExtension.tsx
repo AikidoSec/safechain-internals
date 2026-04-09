@@ -8,14 +8,14 @@ interface Props {
   onAction: () => void;
 }
 
-export function SetupStepActivateExtension({ stepNumber, totalSteps, phase, errorMsg, onAction }: Props) {
+export function SetupStepInstallExtension({ stepNumber, totalSteps, phase, errorMsg, onAction }: Props) {
   return (
     <SetupStepLayout
       stepNumber={stepNumber}
       totalSteps={totalSteps}
-      title="Activate Network Extension"
+      title="Install Network Extension"
       hint="Aikido Endpoint Protection requires a network extension to inspect traffic. macOS will ask for your approval."
-      buttonLabel="Activate"
+      buttonLabel="Install"
       phase={phase}
       errorMsg={errorMsg}
       onAction={onAction}
