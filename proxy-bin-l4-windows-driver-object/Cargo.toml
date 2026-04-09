@@ -8,12 +8,15 @@ rust-version = { workspace = true }
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
-safechain-proxy-lib = { workspace = true }
+rama = { workspace = true }
+safechain-proxy-lib-nostd = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { workspace = true, features = [
     "Win32_Foundation",
+    "Win32_NetworkManagement_WindowsFilteringPlatform",
     "Win32_Security",
     "Win32_Storage_FileSystem",
     "Win32_System_IO",
+    "Win32_System_Rpc",
 ] }

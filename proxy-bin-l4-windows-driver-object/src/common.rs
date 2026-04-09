@@ -1,6 +1,7 @@
 use std::{ffi::OsStr, os::windows::ffi::OsStrExt, process::Command};
 
-use safechain_proxy_lib::nostd::windows::driver_protocol::STARTUP_VALUE_NAME;
+use rama::telemetry::tracing::{debug, info};
+use safechain_proxy_lib_nostd::windows::driver_protocol::STARTUP_VALUE_NAME;
 use windows_sys::Win32::{
     Foundation::{CloseHandle, GetLastError, HANDLE, INVALID_HANDLE_VALUE},
     Storage::FileSystem::{
@@ -9,25 +10,28 @@ use windows_sys::Win32::{
     System::IO::DeviceIoControl,
 };
 
-pub use safechain_proxy_lib::nostd::windows::driver_protocol::{
+pub use safechain_proxy_lib_nostd::windows::driver_protocol::{
     IOCTL_CLEAR_IPV6_PROXY, IOCTL_CLEAR_PROXY_PROCESS_ID, IOCTL_SET_IPV4_PROXY,
     IOCTL_SET_IPV6_PROXY, IOCTL_SET_PROXY_PROCESS_ID, Ipv4ProxyConfigPayload,
     Ipv6ProxyConfigPayload, ProxyProcessIdPayload, StartupConfig,
 };
 
 pub fn run_sc(args: &[&str], allowed_marker: &str) -> Result<(), String> {
+    debug!(?args, allowed_marker, "running sc.exe command");
     let output = Command::new("sc.exe")
         .args(args)
         .output()
         .map_err(|err| format!("failed to run sc.exe {args:?}: {err}"))?;
 
     if output.status.success() {
+        info!(?args, "sc.exe command completed successfully");
         return Ok(());
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     if stdout.contains(allowed_marker) || stderr.contains(allowed_marker) {
+        debug!(?args, allowed_marker, "sc.exe returned allowed marker");
         return Ok(());
     }
 
@@ -48,6 +52,11 @@ pub fn write_startup_blob(service_name: &str, blob: &StartupConfig) -> Result<()
         .to_bytes()
         .map_err(|err| format!("failed to encode startup config: {err}"))?;
     let hex_blob = encode_hex_upper(&encoded);
+    debug!(
+        service_name,
+        bytes = encoded.len(),
+        "writing startup blob to registry"
+    );
 
     let create_key = Command::new("reg.exe")
         .args(["add", &key_path, "/f"])
@@ -81,23 +90,27 @@ pub fn write_startup_blob(service_name: &str, blob: &StartupConfig) -> Result<()
         ));
     }
 
+    info!(service_name, "startup blob written to registry");
     Ok(())
 }
 
 pub fn delete_startup_blob(service_name: &str) -> Result<(), String> {
     let key_path = format!(r"HKLM\SYSTEM\CurrentControlSet\Services\{service_name}\Parameters");
+    debug!(service_name, "deleting startup blob from registry");
     let output = Command::new("reg.exe")
         .args(["delete", &key_path, "/v", STARTUP_VALUE_NAME, "/f"])
         .output()
         .map_err(|err| format!("failed to delete startup blob: {err}"))?;
 
     if output.status.success() {
+        info!(service_name, "startup blob deleted from registry");
         return Ok(());
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     if stdout.contains("unable to find") || stderr.contains("unable to find") {
+        debug!(service_name, "startup blob was already absent");
         return Ok(());
     }
 
@@ -112,6 +125,7 @@ pub struct DeviceHandle(HANDLE);
 
 impl DeviceHandle {
     pub fn open(device_path: &str) -> Result<Self, String> {
+        debug!(device_path, "opening driver device handle");
         let mut wide_path: Vec<u16> = OsStr::new(device_path).encode_wide().collect();
         wide_path.push(0);
 
@@ -135,10 +149,16 @@ impl DeviceHandle {
             ));
         }
 
+        info!(device_path, "opened driver device handle");
         Ok(Self(handle))
     }
 
     pub fn send_ioctl(&self, ioctl: u32, input: &[u8]) -> Result<(), String> {
+        debug!(
+            ioctl = format_args!("{ioctl:#x}"),
+            input_len = input.len(),
+            "sending driver ioctl"
+        );
         let mut bytes_returned = 0_u32;
         let ok = unsafe {
             // SAFETY: handle is owned by `self`; buffer pointers are valid for the stated lengths.
@@ -164,6 +184,7 @@ impl DeviceHandle {
             ));
         }
 
+        debug!(ioctl = format_args!("{ioctl:#x}"), "driver ioctl completed");
         Ok(())
     }
 }

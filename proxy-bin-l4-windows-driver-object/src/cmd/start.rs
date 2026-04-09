@@ -1,8 +1,10 @@
 use clap::Args;
+use rama::telemetry::tracing::info;
 use std::net::{SocketAddrV4, SocketAddrV6};
 
 use super::update::{self, UpdateArgs};
 use crate::common::{StartupConfig, run_sc, write_startup_blob};
+use crate::wfp::ensure_wfp_objects;
 
 #[derive(Debug, Args)]
 pub struct StartArgs {
@@ -23,9 +25,18 @@ pub struct StartArgs {
 }
 
 pub fn run(args: StartArgs) -> Result<(), String> {
+    info!(
+        service_name = %args.service_name,
+        device_path = %args.device_path,
+        ipv4_proxy = %args.ipv4_proxy,
+        ipv6_proxy = ?args.ipv6_proxy,
+        proxy_pid = ?args.proxy_pid,
+        "starting SafeChain Windows driver"
+    );
     let startup_blob = StartupConfig::new(args.ipv4_proxy, args.ipv6_proxy);
     write_startup_blob(&args.service_name, &startup_blob)?;
     run_sc(&["start", &args.service_name], "SERVICE_ALREADY_RUNNING")?;
+    ensure_wfp_objects()?;
 
     update::run(UpdateArgs {
         device_path: args.device_path,

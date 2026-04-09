@@ -3,7 +3,7 @@ Kernel-mode WFP redirect driver for SafeChain L4 proxy on Windows.
 
 ## TODO
 - [x] Implement kernel classify callback for ALE connect redirection and apply remote redirect targets.
-- [ ] Register/connect the driver callouts at the WFP connect-redirect layers from user mode (`Fwpm*` provider, sublayer, callouts, filters).
+- [x] Register/connect the driver callouts at the WFP connect-redirect layers from user mode (`Fwpm*` provider, sublayer, callouts, filters).
 - [ ] Install/package the driver artifacts (`.sys`, INF, catalog/signing) in the Windows packaging flow.
 - [x] Add a small user-space driver controller CLI/service for `start`, `stop`, and `update`.
 - [ ] Provision the startup registry blob before driver start and keep runtime IOCTL updates in sync with persisted config.

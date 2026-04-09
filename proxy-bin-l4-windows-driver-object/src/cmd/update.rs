@@ -1,4 +1,5 @@
 use clap::Args;
+use rama::telemetry::tracing::info;
 use std::net::{SocketAddrV4, SocketAddrV6};
 
 use crate::common::{
@@ -29,6 +30,15 @@ pub struct UpdateArgs {
 }
 
 pub fn run(args: UpdateArgs) -> Result<(), String> {
+    info!(
+        device_path = %args.device_path,
+        ipv4_proxy = ?args.ipv4_proxy,
+        ipv6_proxy = ?args.ipv6_proxy,
+        clear_ipv6 = args.clear_ipv6,
+        proxy_pid = ?args.proxy_pid,
+        clear_proxy_pid = args.clear_proxy_pid,
+        "updating SafeChain Windows driver config"
+    );
     let device = DeviceHandle::open(&args.device_path)?;
 
     if let Some(ipv4_proxy) = args.ipv4_proxy {

@@ -33,7 +33,15 @@ use core::{
 };
 
 use safechain_proxy_lib_nostd::{
-    net::is_passthrough_ip, windows::redirect_ctx::ProxyRedirectContext,
+    net::is_passthrough_ip,
+    windows::{
+        driver_protocol::{
+            WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4,
+            WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6, WFP_PROVIDER_SAFECHAIN_L4_PROXY,
+            WindowsGuid,
+        },
+        redirect_ctx::ProxyRedirectContext,
+    },
 };
 use spin::Mutex;
 use wdk_sys::{GUID, NTSTATUS, STATUS_SUCCESS};
@@ -537,35 +545,22 @@ const FWPS_CONNECTION_PREVIOUSLY_REDIRECTED_BY_SELF: u32 = 3;
 /// handle created by `FwpsRedirectHandleCreate0`; the callout GUIDs below are
 /// the identifiers that the user-mode `Fwpm*` management plane will register in
 /// the WFP engine for IPv4 and IPv6 connect-redirection.
-const GUID_PROVIDER_SAFECHAIN_L4_PROXY: GUID = guid(
-    0x6a625bb6,
-    0xf310,
-    0x443e,
-    [0x98, 0x50, 0x28, 0x0f, 0xac, 0xdc, 0x1a, 0x21],
-);
+const GUID_PROVIDER_SAFECHAIN_L4_PROXY: GUID = guid(WFP_PROVIDER_SAFECHAIN_L4_PROXY);
 /// Callout GUID for outbound IPv4 TCP connect redirection.
-const GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4: GUID = guid(
-    0x5c6262c4,
-    0x8ef6,
-    0x43d8,
-    [0xa8, 0xf9, 0x48, 0x63, 0x6b, 0x17, 0x2b, 0xb8],
-);
+const GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4: GUID =
+    guid(WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4);
 /// Callout GUID for outbound IPv6 TCP connect redirection.
-const GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6: GUID = guid(
-    0x4f05f1f8,
-    0x9093,
-    0x44f1,
-    [0xa8, 0xe7, 0x2d, 0x84, 0x1a, 0x3e, 0x2e, 0x5a],
-);
+const GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6: GUID =
+    guid(WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6);
 
 /// Helper for building `GUID` literals without expanding the entire WDK type
 /// surface into this module.
-const fn guid(data1: u32, data2: u16, data3: u16, data4: [u8; 8]) -> GUID {
+const fn guid(parts: WindowsGuid) -> GUID {
     GUID {
-        Data1: data1,
-        Data2: data2,
-        Data3: data3,
-        Data4: data4,
+        Data1: parts.data1,
+        Data2: parts.data2,
+        Data3: parts.data3,
+        Data4: parts.data4,
     }
 }
 
