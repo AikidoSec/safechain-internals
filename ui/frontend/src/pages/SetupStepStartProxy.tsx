@@ -42,6 +42,7 @@ export function SetupStepStartProxy({ stepNumber, totalSteps, onComplete }: Prop
     <SetupStepLayout
       stepNumber={stepNumber}
       totalSteps={totalSteps}
+      heading="Starting proxy"
       title="Start Proxy"
       hint="Start the Aikido Endpoint proxy so it can begin protecting your traffic."
       buttonLabel="Start"

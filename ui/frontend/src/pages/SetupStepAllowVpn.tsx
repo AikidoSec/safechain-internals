@@ -13,6 +13,7 @@ export function SetupStepAllowVpn({ stepNumber, totalSteps, phase, errorMsg, onA
     <SetupStepLayout
       stepNumber={stepNumber}
       totalSteps={totalSteps}
+      heading="VPN Configuration"
       title="Allow VPN Configuration"
       hint="Aikido needs to create a local VPN configuration to route traffic through the proxy. macOS will ask for your approval."
       buttonLabel="Allow"

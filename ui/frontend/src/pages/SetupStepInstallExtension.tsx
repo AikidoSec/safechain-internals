@@ -13,6 +13,7 @@ export function SetupStepInstallExtension({ stepNumber, totalSteps, phase, error
     <SetupStepLayout
       stepNumber={stepNumber}
       totalSteps={totalSteps}
+      heading="Network Extension"
       title="Install Network Extension"
       hint="Aikido Endpoint Protection needs to install a network extension to inspect traffic. macOS will ask for your approval."
       buttonLabel="Install"

@@ -5,6 +5,7 @@ export type Phase = "idle" | "working" | "done" | "error";
 export interface SetupStepLayoutProps {
   stepNumber: number;
   totalSteps: number;
+  heading?: string;
   title: string;
   hint: string;
   buttonLabel: string;
@@ -20,6 +21,7 @@ export interface SetupStepLayoutProps {
 export function SetupStepLayout({
   stepNumber,
   totalSteps,
+  heading,
   title,
   hint,
   buttonLabel,
@@ -34,7 +36,7 @@ export function SetupStepLayout({
   return (
     <>
       <div className="install-page__main">
-        <h1 className="install-page__title">Just a few more steps</h1>
+        <h1 className="install-page__title">{heading ?? title}</h1>
         <p className="install-page__lead">
           Step {stepNumber} of {totalSteps}
         </p>
@@ -73,7 +75,7 @@ export function SetupStepLayout({
               </div>
               <div className="install-page__step-body">
                 <p className="install-page__step-title install-page__step-title--result">Step failed</p>
-                <p className="install-page__step-error install-page__step-error--block">{errorMsg}</p>
+                <p className="install-page__step-error install-page__step-error--block">Something went wrong. Please try again.</p>
                 <div className="install-page__retry-row">
                   <button
                     type="button"

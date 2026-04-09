@@ -13,6 +13,7 @@ export function SetupStepEnableExtension({ stepNumber, totalSteps, phase, errorM
     <SetupStepLayout
       stepNumber={stepNumber}
       totalSteps={totalSteps}
+      heading="Network Extension"
       title="Enable Network Extension"
       hint="The network extension is installed but needs to be enabled. Click below to open System Settings and approve it."
       buttonLabel="Open Settings"

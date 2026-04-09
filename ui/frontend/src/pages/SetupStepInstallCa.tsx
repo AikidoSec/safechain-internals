@@ -13,6 +13,7 @@ export function SetupStepInstallCa({ stepNumber, totalSteps, phase, errorMsg, on
     <SetupStepLayout
       stepNumber={stepNumber}
       totalSteps={totalSteps}
+      heading="Just a few more steps"
       title="Install the Aikido Endpoint certificate."
       hint="Aikido Endpoint needs to install a certificate in the system keychain to verify installs secure your device. macOS will ask for your approval."
       buttonLabel="Install"
