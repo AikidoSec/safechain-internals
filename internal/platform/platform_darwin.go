@@ -508,7 +508,10 @@ func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args
 
 	uidStr := fmt.Sprintf("%d", uid)
 	launchctlArgs := append([]string{"asuser", uidStr, binaryPath}, args...)
-	return utils.RunCommandWithEnv(ctx, []string{}, "launchctl", launchctlArgs...)
+	// Audit-session helpers are polled frequently during setup; keep successful
+	// subprocess invocations out of the main log file to avoid log spam.
+	quietCtx := context.WithValue(ctx, "disable_logging", true)
+	return utils.RunCommandWithEnv(quietCtx, []string{}, "launchctl", launchctlArgs...)
 }
 
 // appBinaryName extracts the process name that pgrep will match when searching for a running application.

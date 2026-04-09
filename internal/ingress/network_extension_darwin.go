@@ -5,7 +5,6 @@ package ingress
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
@@ -14,7 +13,6 @@ import (
 func installNetworkExtension(ctx context.Context) (string, error) {
 	output, err := platform.RunInAuditSessionOfCurrentUser(ctx, platform.SafeChainL4ProxyHostPath, []string{"install-extension"})
 	outputStr := strings.TrimSpace(output)
-	log.Printf("network extension install output: %s", outputStr)
 
 	if strings.HasPrefix(outputStr, "extension: ") {
 		return strings.TrimPrefix(outputStr, "extension: "), nil
@@ -33,7 +31,6 @@ func openNetworkExtensionSettings(ctx context.Context) error {
 func IsNetworkExtensionInstalled(ctx context.Context) (bool, error) {
 	output, err := platform.RunInAuditSessionOfCurrentUser(ctx, platform.SafeChainL4ProxyHostPath, []string{"is-extension-installed"})
 	outputStr := strings.TrimSpace(output)
-	log.Printf("network extension is-extension-installed output: %s", outputStr)
 
 	if outputStr == "extension-installed: true" {
 		return true, nil
@@ -50,7 +47,6 @@ func IsNetworkExtensionInstalled(ctx context.Context) (bool, error) {
 func IsNetworkExtensionActivated(ctx context.Context) (bool, error) {
 	output, err := platform.RunInAuditSessionOfCurrentUser(ctx, platform.SafeChainL4ProxyHostPath, []string{"is-extension-activated"})
 	outputStr := strings.TrimSpace(output)
-	log.Printf("network extension is-extension-activated output: %s", outputStr)
 
 	if outputStr == "extension-activated: true" {
 		return true, nil
@@ -67,7 +63,6 @@ func IsNetworkExtensionActivated(ctx context.Context) (bool, error) {
 func IsNetworkExtensionVpnAllowed(ctx context.Context) (bool, error) {
 	output, err := platform.RunInAuditSessionOfCurrentUser(ctx, platform.SafeChainL4ProxyHostPath, []string{"is-vpn-allowed"})
 	outputStr := strings.TrimSpace(output)
-	log.Printf("network extension is-vpn-allowed output: %s", outputStr)
 
 	if outputStr == "vpn-allowed: true" {
 		return true, nil
@@ -84,7 +79,6 @@ func IsNetworkExtensionVpnAllowed(ctx context.Context) (bool, error) {
 func allowNetworkExtensionVpn(ctx context.Context) (string, error) {
 	output, err := platform.RunInAuditSessionOfCurrentUser(ctx, platform.SafeChainL4ProxyHostPath, []string{"allow-vpn"})
 	outputStr := strings.TrimSpace(output)
-	log.Printf("network extension allow-vpn output: %s", outputStr)
 
 	if strings.HasPrefix(outputStr, "vpn: ") {
 		return strings.TrimPrefix(outputStr, "vpn: "), nil
