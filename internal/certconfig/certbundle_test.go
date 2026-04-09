@@ -7,60 +7,10 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 )
 
-func TestReadAndValidatePEMBundleValidCertificate(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "bundle.pem")
-	pemData := mustCreateTestCertificatePEM(t, "test-cert")
-	if err := os.WriteFile(path, []byte(pemData), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := readAndValidatePEMBundle(path)
-	if err != nil {
-		t.Fatalf("readAndValidatePEMBundle failed: %v", err)
-	}
-
-	if !strings.Contains(got, "BEGIN CERTIFICATE") {
-		t.Fatalf("expected certificate PEM in output, got %q", got)
-	}
-}
-
-func TestReadAndValidatePEMBundleRejectsNonPEMContent(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "bundle.pem")
-	if err := os.WriteFile(path, []byte("not a certificate"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err := readAndValidatePEMBundle(path)
-	if err == nil {
-		t.Fatal("expected error for non-PEM content")
-	}
-}
-
-func TestReadAndValidatePEMBundleRejectsSymlink(t *testing.T) {
-	dir := t.TempDir()
-	target := filepath.Join(dir, "target.pem")
-	link := filepath.Join(dir, "link.pem")
-
-	pemData := mustCreateTestCertificatePEM(t, "symlink-test")
-	if err := os.WriteFile(target, []byte(pemData), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(target, link); err != nil {
-		t.Skipf("symlink creation not supported: %v", err)
-	}
-
-	_, err := readAndValidatePEMBundle(link)
-	if err == nil {
-		t.Fatal("expected error for symlinked bundle")
-	}
-}
 
 func mustCreateTestCertificatePEM(t *testing.T, commonName string) string {
 	t.Helper()

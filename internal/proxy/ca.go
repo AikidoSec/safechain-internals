@@ -45,20 +45,32 @@ func DownloadCACertFromL7Proxy() error {
 		return fmt.Errorf("failed to get meta url: %v", err)
 	}
 
-	if err := utils.DownloadBinary(context.Background(), metaUrl+"/ca", GetCaCertPath()); err != nil {
+	certPath := GetCaCertPath()
+	if err := utils.DownloadBinary(context.Background(), metaUrl+"/ca", certPath); err != nil {
 		return fmt.Errorf("failed to download ca cert: %v", err)
 	}
 
-	log.Println("Downloaded CA cert from proxy:", GetCaCertPath())
+	if _, err := utils.ReadAndValidatePEMBundle(certPath); err != nil {
+		os.Remove(certPath)
+		return fmt.Errorf("downloaded ca cert is invalid: %w", err)
+	}
+
+	log.Println("Downloaded CA cert from proxy:", certPath)
 	return nil
 }
 
 func DownloadCACertFromL4Proxy(ctx context.Context) error {
-	if err := utils.DownloadBinary(ctx, l4HijackCAURL, GetCaCertPath()); err != nil {
+	certPath := GetCaCertPath()
+	if err := utils.DownloadBinary(ctx, l4HijackCAURL, certPath); err != nil {
 		return fmt.Errorf("failed to download CA cert from L4 proxy: %v", err)
 	}
 
-	log.Println("Downloaded CA cert from L4 proxy:", GetCaCertPath())
+	if _, err := utils.ReadAndValidatePEMBundle(certPath); err != nil {
+		os.Remove(certPath)
+		return fmt.Errorf("downloaded L4 CA cert is invalid: %w", err)
+	}
+
+	log.Println("Downloaded CA cert from L4 proxy:", certPath)
 	return nil
 }
 
