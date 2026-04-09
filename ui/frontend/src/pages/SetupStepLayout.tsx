@@ -8,6 +8,7 @@ export interface SetupStepLayoutProps {
   title: string;
   hint: string;
   buttonLabel: string;
+  workingLabel?: string;
   phase: Phase;
   errorMsg: string;
   onAction: () => void;
@@ -25,6 +26,7 @@ export function SetupStepLayout({
   phase,
   errorMsg,
   onAction,
+  workingLabel = "Working…",
   disabled,
   children,
   aside,
@@ -55,7 +57,7 @@ export function SetupStepLayout({
                   disabled={phase === "working" || phase === "done" || disabled}
                 >
                   {phase === "working"
-                    ? "Working…"
+                    ? workingLabel
                     : phase === "done"
                       ? "Done ✓"
                       : buttonLabel}
