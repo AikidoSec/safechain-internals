@@ -82,7 +82,11 @@ func setupNotifications() (notifier *notifications.NotificationService, authoriz
 	})
 	authorized, _ = notifier.CheckNotificationAuthorization()
 	if !authorized {
-		authorized, _ = notifier.RequestNotificationAuthorization()
+		go func() {
+			ok, _ := notifier.RequestNotificationAuthorization()
+			log.Println("Notifications authorized:", ok)
+		}()
+		return
 	}
 	log.Println("Notifications authorized:", authorized)
 	return
