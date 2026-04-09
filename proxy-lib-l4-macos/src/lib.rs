@@ -1,7 +1,5 @@
 #![cfg(target_os = "macos")]
 
-use std::net::IpAddr;
-
 use rama::{
     net::{
         address::{Host, HostWithPort},

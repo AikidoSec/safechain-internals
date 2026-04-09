@@ -40,17 +40,28 @@ rust-quick-qa-crossplatform $RUSTFLAGS="-D warnings":
     cargo fmt
     @cargo install cargo-sort
     cargo sort --grouped --workspace
-    cargo doc --all-features --workspace --no-deps --exclude safechain-lib-l4-proxy-windows-driver
-    cargo check --all-features --workspace --all-targets --exclude safechain-lib-l4-proxy-windows-driver
-    cargo clippy --all-features --workspace --all-targets --exclude safechain-lib-l4-proxy-windows-driver
+    cargo doc --all-features --workspace --no-deps \
+        --exclude safechain-lib-l4-proxy-windows-driver \
+        --exclude safechain-l4-proxy-windows-driver-object
+    cargo check --all-features --workspace --all-targets \
+        --exclude safechain-lib-l4-proxy-windows-driver \
+        --exclude safechain-l4-proxy-windows-driver-object
+    cargo clippy --all-features --workspace --all-targets \
+        --exclude safechain-lib-l4-proxy-windows-driver \
+        --exclude safechain-l4-proxy-windows-driver-object
 
 rust-test $RUSTFLAGS="-D warnings" *ARGS:
-    cargo test --all-features --workspace --exclude safechain-lib-l4-proxy-windows-driver {{ARGS}}
+    cargo test --all-features --workspace \
+        --exclude safechain-lib-l4-proxy-windows-driver \
+        --exclude safechain-l4-proxy-windows-driver-object \
+        {{ARGS}}
 
 rust-qa: rust-quick-qa rust-test rust-fuzz-check
     @just _rust-qa-{{ os() }}
 
 _rust-qa-windows: windows-driver-build
+    cargo test --all-features \
+        -p safechain-l4-proxy-windows-driver-object
 
 _rust-qa-linux:
 
@@ -75,7 +86,10 @@ _rust-fuzz-unix $CARGO_PROFILE_RELEASE_LTO="false" *ARGS:
 _rust-fuzz-windows:
 
 rust-qa-full $RUSTFLAGS="-D warnings": rust-qa rust-fuzz
-    cargo test --all-features --workspace --exclude safechain-lib-l4-proxy-windows-driver -- --ignored
+    cargo test --all-features --workspace \
+        --exclude safechain-lib-l4-proxy-windows-driver \
+        --exclude safechain-l4-proxy-windows-driver-object \
+        -- --ignored
 
 run-l4-proxy *ARGS:
     mkdir -p .aikido/safechain-l4-proxy
@@ -233,7 +247,16 @@ run-macos-l4-proxy *ARGS: macos-l4-install-signed
     just macos-l4-start {{ARGS}}
 
 windows-driver-quick-qa: windows-driver-check windows-driver-clippy windows-driver-test
-windows-driver-qa: windows-driver-quick-qa  windows-driver-build
+    cargo doc --all-features --no-deps \
+        -p safechain-l4-proxy-windows-driver-object
+    cargo check --all-features--all-targets \
+        -p safechain-l4-proxy-windows-driver-object
+    cargo clippy --all-features --all-targets \
+        -p safechain-l4-proxy-windows-driver-object
+
+windows-driver-qa: windows-driver-quick-qa windows-driver-build
+    cargo test --all-features \
+        -p safechain-l4-proxy-windows-driver-object
 
 [working-directory: './proxy-lib-l4-windows-driver']
 windows-driver-check:
