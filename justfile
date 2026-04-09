@@ -17,14 +17,14 @@ l4_dist_host_bundle_id := "com.aikido.endpoint.proxy.l4.dist"
 l4_dist_extension_bundle_id := "com.aikido.endpoint.proxy.l4.dist.extension"
 xcode_l4_project_dir := "packaging/macos/xcode/l4-proxy"
 xcode_l4_project_spec_dev := xcode_l4_project_dir + "/Project.dev.yml"
-xcode_l4_project_file := xcode_l4_project_dir + "/AikidoEndpointL4Proxy.xcodeproj"
-xcode_l4_host_scheme := "AikidoEndpointL4ProxyHost"
+xcode_l4_project_file := xcode_l4_project_dir + "/AikidoNetworkExtension.xcodeproj"
+xcode_l4_host_scheme := "AikidoNetworkExtensionHost"
 xcode_l4_derived_data := ".aikido/xcode/safechain-l4-proxy-wrapper"
-xcode_l4_app_name := "AikidoEndpointL4ProxyHost.app"
+xcode_l4_app_name := "Aikido Network Extension.app"
 xcode_l4_app := xcode_l4_derived_data + "/Build/Products/Debug/" + xcode_l4_app_name
-xcode_l4_app_exe := xcode_l4_app + "/Contents/MacOS/AikidoEndpointL4ProxyHost"
+xcode_l4_app_exe := xcode_l4_app + "/Contents/MacOS/Aikido Network Extension"
 xcode_l4_installed_app := "/Applications/" + xcode_l4_app_name
-xcode_l4_installed_app_exe := xcode_l4_installed_app + "/Contents/MacOS/AikidoEndpointL4ProxyHost"
+xcode_l4_installed_app_exe := xcode_l4_installed_app + "/Contents/MacOS/Aikido Network Extension"
 xcode_l4_installed_sysext := xcode_l4_installed_app + "/Contents/Library/SystemExtensions/" + l4_dev_extension_bundle_id + ".systemextension"
 
 rust-quick-qa:
@@ -192,8 +192,8 @@ macos-l4-status:
 macos-l4-log-stream:
     log stream --style compact --level debug \
         --predicate 'subsystem == "com.aikido.endpoint.proxy.l4" \
-        OR process == "AikidoEndpointL4ProxyExtension" \
-        OR process == "AikidoEndpointL4ProxyHost"'
+        OR process == "com.aikido.endpoint.proxy.l4.dev.extension" \
+        OR process == "Aikido Network Extension"'
 
 macos-l4-start *ARGS:
     "{{xcode_l4_installed_app_exe}}" start {{ARGS}}

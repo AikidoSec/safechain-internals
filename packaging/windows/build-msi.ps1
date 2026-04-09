@@ -63,6 +63,8 @@ if (-not (Test-Path $StoreTokenScript)) {
 # Build the MSI
 $OutputMsi = Join-Path $OutputDir "EndpointProtection.msi"
 
+wix eula accept wix7
+
 wix build $WxsFile $CustomUIFile `
     -d Version=$WixVersion `
     -d BinDir=$BinDir `

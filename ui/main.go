@@ -8,6 +8,7 @@ import (
 	"log"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -25,6 +26,9 @@ type FocusEventPayload struct {
 	EventId   string `json:"eventId"`
 	EventType string `json:"eventType"`
 }
+
+// closeInstallWindow hides the certificate install webview; set in newWindowManager.
+var closeInstallWindow func()
 
 func init() {
 	application.RegisterEvent[daemon.BlockEvent]("blocked")
@@ -126,15 +130,62 @@ func mainWindowOpts() application.WebviewWindowOptions {
 // windowManager handles the main window lifecycle: hiding on close instead of
 // quitting the app, and re-creating the window if it was destroyed.
 type windowManager struct {
-	app    *application.App
-	window *application.WebviewWindow
+	app           *application.App
+	window        *application.WebviewWindow
+	installWindow *application.WebviewWindow
+	installMu     sync.Mutex
+}
+
+func installWindowOpts() application.WebviewWindowOptions {
+	return application.WebviewWindowOptions{
+		Name:          "install",
+		Title:         "Aikido Endpoint Protection - Install",
+		Width:         920,
+		Height:        680,
+		Hidden:        true,
+		DisableResize: true,
+		// Hash route so the embedded asset server serves index.html (path stays "/"); "/install" alone has no file and loads a blank page.
+		URL:              "/#/install",
+		BackgroundColour: application.NewRGB(255, 255, 255),
+		AlwaysOnTop:      true,
+		Windows: application.WindowsWindow{
+			HiddenOnTaskbar: true,
+		},
+		Mac: application.MacWindow{
+			CollectionBehavior: application.MacWindowCollectionBehaviorMoveToActiveSpace,
+		},
+	}
 }
 
 func newWindowManager(app *application.App) *windowManager {
 	wm := &windowManager{app: app}
 	wm.window = app.Window.NewWithOptions(mainWindowOpts())
+	wm.installWindow = app.Window.NewWithOptions(installWindowOpts())
 	wm.interceptClose(wm.window)
+	wm.interceptClose(wm.installWindow)
+	closeInstallWindow = func() {
+		wm.setCertificateInstallWindowVisible(false)
+	}
 	return wm
+}
+
+func (wm *windowManager) setCertificateInstallWindowVisible(show bool) {
+	wm.installMu.Lock()
+	defer wm.installMu.Unlock()
+	w, ok := wm.app.Window.GetByName("install")
+	if !ok || w == nil {
+		return
+	}
+	win, _ := w.(*application.WebviewWindow)
+	if win == nil {
+		return
+	}
+	if show {
+		win.Show()
+		win.Focus()
+	} else {
+		win.Hide()
+	}
 }
 
 func (wm *windowManager) interceptClose(w *application.WebviewWindow) {
@@ -191,7 +242,7 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 
 	menu := application.NewMenu()
 	statusLines := make([]*application.MenuItem, maxStatusLines)
-	statusLines[0] = menu.Add("Aikido Proxy: checking…")
+	statusLines[0] = menu.Add("Aikido Network Extension: checking…")
 	statusLines[0].SetEnabled(false)
 	for i := 1; i < maxStatusLines; i++ {
 		statusLines[i] = menu.Add("")
@@ -215,7 +266,7 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 			if ev.Running {
 				prefix = "🟢 "
 			}
-			lines := wrapText(prefix+"Aikido Proxy: "+ev.StdoutMessage, menuMaxWidth)
+			lines := wrapText(prefix+"Aikido Network Extension: "+ev.StdoutMessage, menuMaxWidth)
 			for i, item := range statusLines {
 				if i < len(lines) {
 					item.SetLabel(lines[i])
@@ -233,7 +284,7 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 
 // --- App server (receives events from daemon) ----------------------------
 
-func startAppServer(app *application.App, statusCh chan<- appserver.ProxyStatusBody, notifier *notifications.NotificationService, notifAuthorized bool) {
+func startAppServer(app *application.App, wm *windowManager, statusCh chan<- appserver.ProxyStatusBody, notifier *notifications.NotificationService, notifAuthorized bool) {
 	srv := appserver.New()
 	srv.SetHandlers(
 		func(ev appserver.ProxyStatusBody) { statusCh <- ev },
@@ -271,6 +322,11 @@ func startAppServer(app *application.App, statusCh chan<- appserver.ProxyStatusB
 			log.Println("Permissions updated")
 			app.Event.Emit("permissions_updated", ev)
 		},
+		func(show bool) {
+			if show {
+				wm.setCertificateInstallWindowVisible(true)
+			}
+		},
 	)
 	srv.Start()
 }
@@ -283,10 +339,11 @@ func main() {
 
 	notifier, notifAuthorized := setupNotifications()
 	app := newApp(notifier)
+
 	wm := newWindowManager(app)
 
 	statusCh := setupSystemTray(app, wm.showDashboard)
-	startAppServer(app, statusCh, notifier, notifAuthorized)
+	startAppServer(app, wm, statusCh, notifier, notifAuthorized)
 
 	notifier.OnNotificationResponse(func(result notifications.NotificationResult) {
 		if result.Error != nil {

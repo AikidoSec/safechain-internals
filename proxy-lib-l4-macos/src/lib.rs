@@ -1,6 +1,6 @@
 #![cfg(target_os = "macos")]
 
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 
 use rama::{
     net::{
@@ -69,18 +69,6 @@ fn flow_action(meta: &TransparentProxyFlowMeta) -> TransparentProxyFlowAction {
         app_sign_id = ?meta.source_app_signing_identifier,
         "flow intercept decision: evaluating (rust callback entered)"
     );
-
-    if is_source_app_passthrough(meta) {
-        tracing::debug!(
-            protocol = ?meta.protocol,
-            remote = ?meta.remote_endpoint,
-            local = ?meta.local_endpoint,
-            app_bundle_id = ?meta.source_app_bundle_identifier,
-            app_sign_id = ?meta.source_app_signing_identifier,
-            "flow action: source app is configured for passthrough"
-        );
-        return TransparentProxyFlowAction::Passthrough;
-    }
 
     let Some(remote_host) = is_ip_remote_host_passthrough(meta) else {
         return TransparentProxyFlowAction::Passthrough;
@@ -179,24 +167,6 @@ fn flow_action_udp(
     TransparentProxyFlowAction::Passthrough
 }
 
-fn is_source_app_passthrough(meta: &TransparentProxyFlowMeta) -> bool {
-    // NOTE: in future we can add support fetching this list dynamically,
-    // similar to all other remote resources we already support, that would mean
-    // we have a background task fetching lists at intervals,
-    // and have it here available as a "lazy" (local static) remote resource
-    const APP_SOURCE_BUNDLE_ID_PREFIXES_TO_IGNORE: &[&str] = &[
-        // Docker app and containers
-        "com.docker.docker",
-    ];
-
-    meta.source_app_bundle_identifier
-        .as_deref()
-        .map(|identifier| {
-            any_starts_with_ignore_ascii_case(identifier, APP_SOURCE_BUNDLE_ID_PREFIXES_TO_IGNORE)
-        })
-        .unwrap_or_default()
-}
-
 fn is_ip_remote_host_passthrough(meta: &TransparentProxyFlowMeta) -> Option<HostWithPort> {
     let Some(target) = meta.remote_endpoint.as_ref() else {
         tracing::debug!(
@@ -213,7 +183,7 @@ fn is_ip_remote_host_passthrough(meta: &TransparentProxyFlowMeta) -> Option<Host
     match &target.host {
         Host::Name(_) => return None,
         Host::Address(IpAddr::V4(addr)) => {
-            if addr.is_loopback() || addr.is_private() {
+            if is_passthrough_ipv4(*addr) {
                 tracing::debug!(
                     protocol = ?meta.protocol,
                     remote = ?meta.remote_endpoint,
@@ -243,9 +213,24 @@ fn is_ip_remote_host_passthrough(meta: &TransparentProxyFlowMeta) -> Option<Host
     Some(target.clone())
 }
 
+fn is_passthrough_ipv4(addr: Ipv4Addr) -> bool {
+    if addr.is_loopback() || addr.is_private() {
+        return true;
+    }
+    // Some applications use IPs that come from the IETF shared address space (RFC 6598).
+    // `is_private()` only covers RFC-1918, so this range needs an explicit check.
+    // For instance, TailScale: https://tailscale.com/docs/concepts/tailscale-ip-addresses
+    let [a, b, ..] = addr.octets();
+    a == 100 && (64..=127).contains(&b)
+}
+
 apple_ne::transparent_proxy_ffi! {
     init = init,
     config = proxy_config,
     flow_action = flow_action,
     tcp_service = self::tcp::try_new_service,
 }
+
+#[cfg(test)]
+#[path = "./lib_tests.rs"]
+mod tests;

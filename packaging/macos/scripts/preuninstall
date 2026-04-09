@@ -23,7 +23,7 @@ if [ -f "$LAUNCHDAEMON_PLIST" ]; then
 fi
 
 echo "Running Aikido Endpoint Protection teardown..."
-sudo "/Library/Application Support/AikidoSecurity/EndpointProtection/bin/endpoint-protection" --teardown
+sudo "/Applications/Aikido Endpoint Protection.app/Contents/Resources/bin/endpoint-protection" --teardown
 
 echo "Pre-uninstall completed"
 

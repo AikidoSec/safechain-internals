@@ -4,31 +4,30 @@ set -e
 
 echo "Aikido Endpoint Protection Installer - Post-installation"
 
-INSTALL_DIR="/Library/Application Support/AikidoSecurity/EndpointProtection"
+EP_APP="/Applications/Aikido Endpoint Protection.app"
+EP_BIN_DIR="$EP_APP/Contents/Resources/bin"
+EP_SCRIPTS_DIR="$EP_APP/Contents/Resources/scripts"
+RUN_DIR="/Library/Application Support/AikidoSecurity/EndpointProtection/run"
 LOGS_DIR="/Library/Logs/AikidoSecurity/EndpointProtection"
-RUN_DIR="$INSTALL_DIR/run"
 LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.endpointprotection.plist"
 
-# Ensure logs directory exists and has proper permissions
-echo "Setting up logs directory..."
+L4_APP="/Applications/Aikido Network Extension.app"
+
+echo "Setting up directories..."
 mkdir -p "$LOGS_DIR"
 mkdir -p "$RUN_DIR"
 chmod 755 "$LOGS_DIR"
 
-L4_APP="/Applications/AikidoEndpointL4ProxyHost.app"
-
-# Set proper permissions on binaries
 echo "Setting permissions on binaries..."
-chmod 755 "$INSTALL_DIR/bin/endpoint-protection"
+chmod 755 "$EP_BIN_DIR/endpoint-protection"
 
-if [ -d "$INSTALL_DIR/bin/endpoint-protection-ui.app" ]; then
-    chmod -R 755 "$INSTALL_DIR/bin/endpoint-protection-ui.app"
+if [ -d "$EP_APP" ]; then
+    chmod -R 755 "$EP_APP"
 else
-    echo "Warning: UI app bundle not found at $INSTALL_DIR/bin/endpoint-protection-ui.app"
+    echo "Warning: App bundle not found at $EP_APP"
 fi
-chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
+chmod 755 "$EP_BIN_DIR/safechain-l7-proxy"
 
-# Register L4 proxy extension
 if [ -d "$L4_APP" ]; then
     echo "Registering L4 proxy app..."
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$L4_APP"
@@ -37,9 +36,8 @@ else
     echo "Warning: L4 proxy app not found at $L4_APP"
 fi
 
-# Set proper ownership (root:wheel for system daemon)
 echo "Setting ownership..."
-chown -R root:wheel "$INSTALL_DIR"
+chown -R root:wheel "$EP_APP"
 chown -R root:wheel "$LOGS_DIR"
 chown -R root:wheel "$RUN_DIR"
 
@@ -110,7 +108,7 @@ fi
 echo "Post-installation completed"
 echo ""
 echo "Aikido Endpoint Protection has been installed successfully!"
-echo "  Binaries: $INSTALL_DIR/bin"
+echo "  App: $EP_APP"
 echo "  Logs: $LOGS_DIR"
 echo ""
 echo "The agent is now running as a system daemon."

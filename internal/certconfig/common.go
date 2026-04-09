@@ -22,6 +22,8 @@ const (
 	pipCertEnvVar          = "PIP_CERT"
 	requestsCABundleEnvVar = "REQUESTS_CA_BUNDLE"
 	sslCertFileEnvVar      = "SSL_CERT_FILE"
+	poetryPyPICertEnvVar   = "POETRY_CERTIFICATES_PYPI_CERT"
+	uvNativeTLSEnvVar      = "UV_NATIVE_TLS"
 )
 
 func buildManagedBlock(body string, format managedBlockFormat, newline string) string {
@@ -140,7 +142,7 @@ func parsePipCertSettingString(value string) pipCertSetting {
 	}
 
 	switch envVar {
-	case pipCertEnvVar, requestsCABundleEnvVar, sslCertFileEnvVar:
+	case pipCertEnvVar, requestsCABundleEnvVar, sslCertFileEnvVar, poetryPyPICertEnvVar:
 		return pipCertSetting{
 			EnvVar: envVar,
 			Path:   strings.TrimSpace(path),

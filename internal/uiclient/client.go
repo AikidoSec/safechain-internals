@@ -176,3 +176,12 @@ func (c *Client) NotifyProxyStatus(running bool, stdoutMessage string) error {
 	}
 	return nil
 }
+
+type certificatePromptBody struct {
+	Show bool `json:"show"`
+}
+
+// NotifyCertificateInstallPrompt asks the tray UI to show or hide the install-certificate window.
+func (c *Client) NotifyCertificateInstallPrompt(show bool) error {
+	return c.post("/v1/certificate-prompt", certificatePromptBody{Show: show})
+}

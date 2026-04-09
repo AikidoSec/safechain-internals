@@ -16,6 +16,7 @@ type BlockEvent struct {
 	Artifact    Artifact `json:"artifact"`
 	BlockReason string   `json:"block_reason"`
 	Status      string   `json:"status,omitempty"`
+	Count       int      `json:"count"`
 }
 
 // Validate ensures the BlockedEvent satisfies daemon API contract
