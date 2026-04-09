@@ -20,7 +20,7 @@ windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Network
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
 safechain-proxy-lib = { workspace = true, features = ["pac"] }
-safechain-proxy-lib-windows-core = { workspace = true }
+safechain-proxy-lib-nostd = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [dependencies.rama]

@@ -1,7 +1,7 @@
 use alloc::string::String;
 use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
-use safechain_proxy_lib_windows_core::redirect_ctx::ProxyRedirectContext;
+use safechain_proxy_lib_nostd::windows::redirect_ctx::ProxyRedirectContext;
 
 use super::{WfpFlowMeta, build_redirect_context, is_local_destination};
 

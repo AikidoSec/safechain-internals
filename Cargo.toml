@@ -7,7 +7,7 @@ members = [
     "proxy-lib",
     "proxy-lib-l4-macos",
     "proxy-lib-l4-windows-driver",
-    "proxy-lib-windows-core",
+    "proxy-lib-nostd",
 ]
 resolver = "3"
 
@@ -35,7 +35,7 @@ radix_trie = "0.3"
 rand = "0.10"
 rustls-platform-verifier = "0.6"
 safechain-proxy-lib = { path = "./proxy-lib" }
-safechain-proxy-lib-windows-core = { path = "./proxy-lib-windows-core" }
+safechain-proxy-lib-nostd = { path = "./proxy-lib-nostd" }
 secrecy = "0.10"
 serde = { version = "1.0", default-features = false }
 serde_html_form = "0.4"

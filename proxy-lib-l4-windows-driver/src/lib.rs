@@ -22,7 +22,7 @@ mod log;
 mod wfp;
 
 pub use driver::{ProxyDriverConfigUpdate, ProxyDriverController, ProxyDriverStartupConfig};
-pub use safechain_proxy_lib_windows_core::driver_protocol::{
+pub use safechain_proxy_lib_nostd::windows::driver_protocol::{
     IOCTL_CLEAR_IPV6_PROXY, IOCTL_CLEAR_PROXY_PROCESS_ID, IOCTL_SET_IPV4_PROXY,
     IOCTL_SET_IPV6_PROXY, IOCTL_SET_PROXY_PROCESS_ID,
 };

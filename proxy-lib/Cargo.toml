@@ -37,6 +37,7 @@ postcard = { workspace = true, features = ["alloc"] }
 radix_trie = { workspace = true }
 rand = { workspace = true }
 rustls-platform-verifier = { workspace = true }
+safechain-proxy-lib-nostd = { workspace = true }
 secrecy = { workspace = true }
 serde = { workspace = true, features = ["std"] }
 serde_json = { workspace = true }

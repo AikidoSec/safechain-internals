@@ -2741,7 +2741,7 @@ dependencies = [
  "postcard",
  "rama",
  "safechain-proxy-lib",
- "safechain-proxy-lib-windows-core",
+ "safechain-proxy-lib-nostd",
  "static_vcruntime",
  "tikv-jemallocator",
  "tokio",
@@ -2753,7 +2753,7 @@ name = "safechain-l4-proxy-windows-driver-object"
 version = "1.0.0"
 dependencies = [
  "clap",
- "safechain-proxy-lib-windows-core",
+ "safechain-proxy-lib",
  "windows-sys 0.61.2",
 ]
 
@@ -2794,7 +2794,7 @@ name = "safechain-lib-l4-proxy-windows-driver"
 version = "1.0.0"
 dependencies = [
  "postcard",
- "safechain-proxy-lib-windows-core",
+ "safechain-proxy-lib-nostd",
  "spin",
  "wdk",
  "wdk-alloc",
@@ -2829,6 +2829,7 @@ dependencies = [
  "rama",
  "rand 0.10.0",
  "rustls-platform-verifier",
+ "safechain-proxy-lib-nostd",
  "secrecy",
  "serde",
  "serde_json",
@@ -2840,7 +2841,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "safechain-proxy-lib-windows-core"
+name = "safechain-proxy-lib-nostd"
 version = "1.0.0"
 dependencies = [
  "postcard",

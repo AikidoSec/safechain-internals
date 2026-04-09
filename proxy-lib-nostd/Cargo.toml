@@ -1,6 +1,6 @@
 [package]
-name = "safechain-proxy-lib-windows-core"
-description = "SafeChain Core Windows Proxy Lib"
+name = "safechain-proxy-lib-nostd"
+description = "SafeChain Common NoSTD Proxy Lib"
 version = { workspace = true }
 edition = { workspace = true }
 publish = false

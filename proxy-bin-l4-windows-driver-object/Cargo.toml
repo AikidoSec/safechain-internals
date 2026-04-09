@@ -8,7 +8,7 @@ rust-version = { workspace = true }
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
-safechain-proxy-lib-windows-core = { workspace = true }
+safechain-proxy-lib = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { workspace = true, features = [

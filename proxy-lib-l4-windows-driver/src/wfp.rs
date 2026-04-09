@@ -32,7 +32,7 @@ use core::{
     ptr,
 };
 
-use safechain_proxy_lib_windows_core::redirect_ctx::ProxyRedirectContext;
+use safechain_proxy_lib_nostd::windows::redirect_ctx::ProxyRedirectContext;
 use spin::Mutex;
 use wdk_sys::{GUID, NTSTATUS, STATUS_SUCCESS};
 

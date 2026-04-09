@@ -18,7 +18,7 @@ default = []
 
 [dependencies]
 postcard = { workspace = true, features = ["alloc"] }
-safechain-proxy-lib-windows-core = { workspace = true }
+safechain-proxy-lib-nostd = { workspace = true }
 spin = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]

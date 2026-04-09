@@ -1,6 +1,6 @@
 use std::{ffi::OsStr, os::windows::ffi::OsStrExt, process::Command};
 
-use safechain_proxy_lib_windows_core::driver_protocol::STARTUP_VALUE_NAME;
+use safechain_proxy_lib::nostd::windows::driver_protocol::STARTUP_VALUE_NAME;
 use windows_sys::Win32::{
     Foundation::{CloseHandle, GetLastError, HANDLE, INVALID_HANDLE_VALUE},
     Storage::FileSystem::{
@@ -9,7 +9,7 @@ use windows_sys::Win32::{
     System::IO::DeviceIoControl,
 };
 
-pub use safechain_proxy_lib_windows_core::driver_protocol::{
+pub use safechain_proxy_lib::nostd::windows::driver_protocol::{
     IOCTL_CLEAR_IPV6_PROXY, IOCTL_CLEAR_PROXY_PROCESS_ID, IOCTL_SET_IPV4_PROXY,
     IOCTL_SET_IPV6_PROXY, IOCTL_SET_PROXY_PROCESS_ID, Ipv4ProxyConfigPayload,
     Ipv6ProxyConfigPayload, ProxyProcessIdPayload, StartupConfig,

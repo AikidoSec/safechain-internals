@@ -8,7 +8,7 @@ use rama::{
     },
 };
 
-pub use safechain_proxy_lib_windows_core::redirect_ctx::ProxyRedirectContext as L4ProxyRedirectContext;
+pub use safechain_proxy_lib_nostd::windows::redirect_ctx::ProxyRedirectContext as L4ProxyRedirectContext;
 
 pub type ProxyTargetFromInput<S> = ProxyTargetFromWfpContext<S, L4ProxyRedirectContextDecoder>;
 pub type ProxyTargetFromInputLayer = ProxyTargetFromWfpContextLayer<L4ProxyRedirectContextDecoder>;
