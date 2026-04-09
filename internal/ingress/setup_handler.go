@@ -14,6 +14,10 @@ type setupCheckResult struct {
 	Steps []string `json:"steps"`
 }
 
+func IsSetupOk(ctx context.Context, cfg *config.ConfigInfo) bool {
+	return len(ComputeSetupSteps(ctx, cfg)) == 0
+}
+
 func ComputeSetupSteps(ctx context.Context, cfg *config.ConfigInfo) []string {
 	var steps []string
 
@@ -23,17 +27,20 @@ func ComputeSetupSteps(ctx context.Context, cfg *config.ConfigInfo) []string {
 
 	if activated, err := IsNetworkExtensionActivated(ctx); err != nil || !activated {
 		steps = append(steps, "activate-extension")
-	}
-
-	if allowed, err := IsNetworkExtensionVpnAllowed(ctx); err != nil || !allowed {
+		// Allowed VPN config is always disabled if the extension is not activated so we need
+		// to always request this allow-vpn step in this case
 		steps = append(steps, "allow-vpn")
+	} else {
+		if allowed, err := IsNetworkExtensionVpnAllowed(ctx); err != nil || !allowed {
+			steps = append(steps, "allow-vpn")
+		}
 	}
 
 	if !proxy.ProxyCAInstalled() {
+		// The setup wizard needs to start the proxy in order to access the CA certificate
+		// and be able to install it in the next step
 		steps = append(steps, "start-proxy")
 		steps = append(steps, "install-ca")
-	} else if len(steps) > 0 {
-		steps = append(steps, "start-proxy")
 	}
 
 	return steps

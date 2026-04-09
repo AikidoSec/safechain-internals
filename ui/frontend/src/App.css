@@ -1488,6 +1488,20 @@ body {
   color: #9ca3af;
 }
 
+.install-page__spinner {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto;
+  border: 3.5px solid #e5e7eb;
+  border-top-color: var(--primary-aik-100);
+  border-radius: 50%;
+  animation: install-spin 0.8s linear infinite;
+}
+
+@keyframes install-spin {
+  to { transform: rotate(360deg); }
+}
+
 .install-page__preview {
   flex: 0.85;
   max-width: 340px;

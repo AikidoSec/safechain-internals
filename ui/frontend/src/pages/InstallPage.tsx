@@ -164,7 +164,13 @@ export function InstallPage() {
       case "allow-vpn":
         return <SetupStepAllowVpn {...stepProps} />;
       case "start-proxy":
-        return <SetupStepStartProxy {...stepProps} />;
+        return (
+          <SetupStepStartProxy
+            stepNumber={stepProps.stepNumber}
+            totalSteps={stepProps.totalSteps}
+            onComplete={handleNext}
+          />
+        );
       case "install-ca":
         return <SetupStepInstallCa {...stepProps} />;
       default:

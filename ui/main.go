@@ -150,7 +150,6 @@ func installWindowOpts() application.WebviewWindowOptions {
 		// Hash route so the embedded asset server serves index.html (path stays "/"); "/install" alone has no file and loads a blank page.
 		URL:              "/#/install",
 		BackgroundColour: application.NewRGB(255, 255, 255),
-		AlwaysOnTop:      true,
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true,
 		},
@@ -184,6 +183,7 @@ func (wm *windowManager) setCertificateInstallWindowVisible(show bool) {
 		return
 	}
 	if show {
+		win.SetURL("/#/install")
 		win.Show()
 		win.Focus()
 	} else {
