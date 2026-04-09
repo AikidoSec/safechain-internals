@@ -30,6 +30,60 @@ param(
     [switch]$NoTimestamp
 )
 
+function Find-SignTool {
+    $kitsRoot = "C:\Program Files (x86)\Windows Kits\10\bin"
+    if (-not (Test-Path $kitsRoot)) {
+        return $null
+    }
+
+    $candidates = Get-ChildItem -Path $kitsRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } |
+        Sort-Object Name -Descending
+
+    foreach ($candidate in $candidates) {
+        foreach ($arch in @("x64", "x86")) {
+            $path = Join-Path $candidate.FullName "$arch\signtool.exe"
+            if (Test-Path $path) {
+                return $path
+            }
+        }
+    }
+
+    return $null
+}
+
+function Get-SigningCertificate {
+    param(
+        [string]$Subject = "CN=SafeChain Test"
+    )
+
+    $cert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert -ErrorAction SilentlyContinue |
+        Where-Object { $_.Subject -eq $Subject -and $_.HasPrivateKey } |
+        Sort-Object NotAfter -Descending |
+        Select-Object -First 1
+
+    if ($cert) {
+        return @{
+            Cert = $cert
+            UseMachineStore = $false
+        }
+    }
+
+    $cert = Get-ChildItem Cert:\LocalMachine\My -CodeSigningCert -ErrorAction SilentlyContinue |
+        Where-Object { $_.Subject -eq $Subject -and $_.HasPrivateKey } |
+        Sort-Object NotAfter -Descending |
+        Select-Object -First 1
+
+    if ($cert) {
+        return @{
+            Cert = $cert
+            UseMachineStore = $true
+        }
+    }
+
+    return $null
+}
+
 function Find-Inf2Cat {
     $kitsRoot = "C:\Program Files (x86)\Windows Kits\10\bin"
     if (-not (Test-Path $kitsRoot)) {
@@ -94,7 +148,7 @@ Write-Host "  sys: $DriverSysPath"
 Write-Host "  inf: $InfPath"
 Write-Host "  out: $OutputDir"
 
-f (-not $SkipInf2Cat) {
+if (-not $SkipInf2Cat) {
     $inf2cat = Get-Command Inf2Cat.exe -ErrorAction SilentlyContinue
     if ($null -eq $inf2cat) {
         $inf2catPath = Find-Inf2Cat
@@ -120,19 +174,44 @@ f (-not $SkipInf2Cat) {
 
         Write-Host "  cat: $CatPath"
 
-        $signtool = Get-Command SignTool.exe -ErrorAction SilentlyContinue
-        if ($null -eq $signtool) {
-            throw "SignTool.exe was not found on PATH."
+        $signTool = Get-Command SignTool.exe -ErrorAction SilentlyContinue
+        if ($null -eq $signTool) {
+            $signToolPath = Find-SignTool
+            if ($signToolPath) {
+                $signTool = @{ Source = $signToolPath }
+            }
         }
 
+        if ($null -eq $signTool) {
+            throw "SignTool.exe was not found. Install the Windows SDK / WDK, or add signtool.exe to PATH."
+        }
+
+        $signingCertInfo = Get-SigningCertificate -Subject $CertSubject
+        if (-not $signingCertInfo) {
+            throw "No matching code-signing certificate with private key was found in CurrentUser\My or LocalMachine\My."
+        }
+
+        $cert = $signingCertInfo.Cert
+
+        Write-Host "Using signing certificate:" -ForegroundColor Green
+        Write-Host "  Subject    : $($cert.Subject)"
+        Write-Host "  Thumbprint : $($cert.Thumbprint)"
+        Write-Host "  Store      : " + ($(if ($signingCertInfo.UseMachineStore) { "LocalMachine\My" } else { "CurrentUser\My" }))
+
         Write-Host "Signing catalog file with test certificate..."
+
         $signArgs = @(
             "sign",
             "/v",
+            "/debug",
             "/fd", "SHA256",
-            "/s", $CertStore,
-            "/n", $CertSubject
+            "/sha1", $cert.Thumbprint,
+            "/s", "My"
         )
+
+        if ($signingCertInfo.UseMachineStore) {
+            $signArgs += "/sm"
+        }
 
         if (-not $NoTimestamp) {
             $signArgs += @("/tr", "http://timestamp.digicert.com", "/td", "SHA256")
@@ -140,15 +219,18 @@ f (-not $SkipInf2Cat) {
 
         $signArgs += $CatPath
 
-        & $signtool.Source @signArgs
+        Write-Host "SignTool path: $($signTool.Source)"
+        Write-Host "SignTool args: $($signArgs -join ' ')"
+
+        & $signTool.Source @signArgs
         if ($LASTEXITCODE -ne 0) {
             throw "SignTool sign failed with exit code $LASTEXITCODE"
         }
 
-        Write-Host "Verifying catalog signature..."
-        & $signtool.Source verify /v /kp /c $CatPath (Join-Path $OutputDir $DriverFileName)
+        Write-Host "Verifying catalog signature for test install policy..."
+        & $signTool.Source verify /v /pa /c $CatPath (Join-Path $OutputDir $DriverFileName)
         if ($LASTEXITCODE -ne 0) {
-            throw "SignTool verify failed with exit code $LASTEXITCODE"
+            throw "Catalog verification failed with exit code $LASTEXITCODE"
         }
     }
-}s
+}

@@ -154,3 +154,45 @@ Notes:
 - `pnputil` and driver install/remove operations require an elevated shell.
 - `Inf2Cat` comes from the Windows Driver Kit tooling; if it is missing, staging still completes but the catalog step is skipped.
 - This flow is intentionally local/dev oriented and not yet a production signing/distribution flow.
+
+## Local/Dev Windows Driver Validation
+
+After staging and installing the driver package, run:
+
+```powershell
+just windows-driver-package-verify
+```
+
+This verifies:
+
+* the driver package is staged and present
+* the driver service exists
+* the driver is loaded
+* the installed `.sys` file exists
+* test signing mode is enabled
+* the Base Filtering Engine service is running
+* the driver service registry entry exists
+* the WFP state contains the expected SafeChain provider, sublayer, callout, and filter GUIDs
+
+The verification checks these WFP GUIDs:
+
+* Provider: `{6A625BB6-F310-443E-9850-280FACDC1A21}`
+* Sublayer: `{D95A6EAF-3882-495F-858C-65C2CE3F6A07}`
+* TCP connect redirect callout v4: `{5C6262C4-8EF6-43D8-A8F9-48636B172BB8}`
+* TCP connect redirect callout v6: `{4F05F1F8-9093-44F1-A8E7-2D841A3E2E5A}`
+* TCP connect redirect filter v4: `{DB5B9241-4532-4517-B0E0-6F85E4E631F8}`
+* TCP connect redirect filter v6: `{4B60D58C-85FD-4FB1-8256-8C4E6053E43A}`
+
+A successful verification means the driver is not only installed, but also visible in the WFP state with the expected registration objects.
+
+### Validate via Windows GUI
+
+Use these built in Windows tools for a quick manual check:
+
+* **System Information**: open `msinfo32`, then go to **Software Environment > System Drivers** and confirm the SafeChain driver exists and is running
+* **Services**: open `services.msc` and confirm **Base Filtering Engine** is running
+* **Registry Editor**: open `regedit` and inspect `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\safechain_lib_l4_proxy_windows_driver`
+* **Event Viewer**: open **Windows Logs > System** and look for driver load, signature, or WFP related errors
+* **WFP state dump**: run `netsh wfp show state file=%TEMP%\safechain_wfpstate.xml`, open the XML file, and search for the SafeChain GUIDs above
+
+The PowerShell verification script is the preferred validation path because it checks the full install and WFP registration state in one pass.
