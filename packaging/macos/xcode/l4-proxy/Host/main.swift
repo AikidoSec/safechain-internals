@@ -11,8 +11,9 @@ private enum HostCommand {
     case stop(StopOptions)
     case status
     case cleanSecrets
-    case activateExtension
+    case installExtension
     case allowVpn
+    case isExtensionInstalled
     case isExtensionActivated
     case isVpnAllowed
     case help
@@ -123,11 +124,14 @@ private final class TransparentProxyHostCLI {
             case .cleanSecrets:
                 cleanSecrets()
                 return EXIT_SUCCESS
-            case .activateExtension:
-                try activateExtension()
+            case .installExtension:
+                try installExtension()
                 return EXIT_SUCCESS
             case .allowVpn:
                 try allowVpn()
+                return EXIT_SUCCESS
+            case .isExtensionInstalled:
+                try checkExtensionInstalled()
                 return EXIT_SUCCESS
             case .isExtensionActivated:
                 try checkExtensionActivated()
@@ -246,7 +250,7 @@ private final class TransparentProxyHostCLI {
         print("status: \(statusString(manager.connection.status))")
     }
 
-    private func activateExtension() throws {
+    private func installExtension() throws {
         let outcome = try ensureSystemExtensionActivated()
         switch outcome {
         case .completed:
@@ -273,7 +277,7 @@ private final class TransparentProxyHostCLI {
         print("vpn: allowed")
     }
 
-    private func checkExtensionActivated() throws {
+    private func listExtensionLines() throws -> [Substring] {
         let output: String
         do {
             output = try runProcessCaptureStdout(
@@ -282,13 +286,20 @@ private final class TransparentProxyHostCLI {
             )
         } catch {
             log("failed to list system extensions: \(error.localizedDescription)")
-            print("extension-activated: false")
-            return
+            return []
         }
+        return output.split(separator: "\n").filter { $0.contains(extensionBundleId) && !$0.contains("terminated") }
+    }
 
-        let activated = output.split(separator: "\n").contains { line in
-            line.contains(extensionBundleId) && line.contains("[activated enabled]")
-        }
+    private func checkExtensionInstalled() throws {
+        let lines = try listExtensionLines()
+        let installed = !lines.isEmpty
+        print("extension-installed: \(installed)")
+    }
+
+    private func checkExtensionActivated() throws {
+        let lines = try listExtensionLines()
+        let activated = lines.contains { $0.contains("[activated enabled]") }
         print("extension-activated: \(activated)")
     }
 
@@ -695,16 +706,21 @@ private final class TransparentProxyHostCLI {
                 throw CLIError.usage("`clean-secrets` does not accept additional arguments")
             }
             return .cleanSecrets
-        case "activate-extension":
+        case "install-extension":
             guard arguments.count == 1 else {
-                throw CLIError.usage("`activate-extension` does not accept additional arguments")
+                throw CLIError.usage("`install-extension` does not accept additional arguments")
             }
-            return .activateExtension
+            return .installExtension
         case "allow-vpn":
             guard arguments.count == 1 else {
                 throw CLIError.usage("`allow-vpn` does not accept additional arguments")
             }
             return .allowVpn
+        case "is-extension-installed":
+            guard arguments.count == 1 else {
+                throw CLIError.usage("`is-extension-installed` does not accept additional arguments")
+            }
+            return .isExtensionInstalled
         case "is-extension-activated":
             guard arguments.count == 1 else {
                 throw CLIError.usage("`is-extension-activated` does not accept additional arguments")
@@ -1062,8 +1078,9 @@ private final class TransparentProxyHostCLI {
           "Aikido Network Extension" stop [options]
           "Aikido Network Extension" status
           "Aikido Network Extension" clean-secrets
-          "Aikido Network Extension" activate-extension
+          "Aikido Network Extension" install-extension
           "Aikido Network Extension" allow-vpn
+          "Aikido Network Extension" is-extension-installed
           "Aikido Network Extension" is-extension-activated
           "Aikido Network Extension" is-vpn-allowed
 
@@ -1072,9 +1089,10 @@ private final class TransparentProxyHostCLI {
           stop                   Request that the transparent proxy tunnel stops.
           status                 Show the current Network Extension status and saved engine config.
           clean-secrets          Delete proxy CA secrets from the keychain.
-          activate-extension     Activate the system extension (triggers Network Extension approval).
+          install-extension      Install the system extension (triggers Network Extension approval).
           allow-vpn              Save the VPN profile (triggers Allow VPN Configuration approval).
-          is-extension-activated Check if the system extension is activated (no prompts).
+          is-extension-installed Check if the system extension appears in the extensions list (no prompts).
+          is-extension-activated Check if the system extension is activated and enabled (no prompts).
           is-vpn-allowed         Check if a VPN profile has been saved (no prompts).
 
         Stop options:

@@ -226,9 +226,14 @@ func (d *Daemon) run(ctx context.Context) error {
 		if err := d.uiManager.Launch(ctx, d.ingress.Addr()); err != nil {
 			log.Printf("Failed to launch UI: %v", err)
 		}
+		if !proxy.ProxyCAInstalled() {
+			d.uiManager.StartSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
+		}
 	}()
 
-	if proxy.ProxyCAInstalled() {
+	// For restarts, make sure the proxy is started
+	// On the first run, the CA will not be configured yet, so the proxy will be started by the setup wizard
+	if ingress.IsSetupOk(d.ctx, d.config) {
 		if err := d.startProxy(ctx); err != nil {
 			platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to start proxy: %v", err))
 			return fmt.Errorf("failed to start proxy: %v", err)
@@ -408,7 +413,7 @@ func (d *Daemon) reportSBOM() error {
 }
 
 func (d *Daemon) heartbeat() error {
-	if proxy.ProxyCAInstalled() {
+	if ingress.IsSetupOk(d.ctx, d.config) {
 		shouldRetry, err := d.handleProxy()
 		if !shouldRetry {
 			return fmt.Errorf("failed to handle proxy: %v", err)
@@ -417,13 +422,11 @@ func (d *Daemon) heartbeat() error {
 			log.Printf("Failed to start proxy: %v", err)
 		}
 	} else {
-		log.Println("Proxy CA is not installed, skipping proxy start")
+		log.Println("Setup incomplete, skipping proxy start")
 	}
 
 	// Ensure the UI is running, if not, relaunch it
 	d.uiManager.EnsureRunning()
-
-	d.uiManager.StartSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
 
 	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.GetStatus())
 
@@ -441,6 +444,12 @@ func (d *Daemon) heartbeat() error {
 		}); err != nil {
 			return fmt.Errorf("Failed to report heartbeat: %v", err)
 		}
+		heartbeatEvent := &cloud.HeartbeatEvent{
+			DeviceInfo:  *d.deviceInfo,
+			VersionInfo: *d.versionInfo,
+		}
+		eventJSON, _ := json.MarshalIndent(heartbeatEvent, "", "  ")
+		log.Printf("Heartbeat report sent successfully: %s", string(eventJSON))
 		return nil
 	})
 	d.runIfIntervalExceeded(&d.config.LastSBOMReportTime, constants.SBOMReportInterval, func() error {
