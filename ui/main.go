@@ -275,6 +275,7 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 	var setupHidden atomic.Bool
 	setupHidden.Store(true)
 	go func() {
+		time.Sleep(5 * time.Second)
 		for {
 			ok, err := daemon.SetupCheck()
 			if err != nil {
