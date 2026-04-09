@@ -1,25 +1,17 @@
 package ingress
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"github.com/AikidoSec/safechain-internals/internal/certconfig"
+	"github.com/AikidoSec/safechain-internals/internal/proxy"
 )
 
-// CertificateStatus is returned by GET /v1/certificate/status for the tray UI.
 type CertificateStatus struct {
 	NeedsInstall bool `json:"needs_install"`
 	Installed    bool `json:"installed"`
-}
-
-// SetCertificateHandlers wires proxy CA checks and installation into the ingress API.
-// Both callbacks must be non-nil for the routes to succeed.
-func (s *Server) SetCertificateHandlers(status func() CertificateStatus, install func(context.Context) error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.certStatus = status
-	s.certInstall = install
 }
 
 func (s *Server) handleCertificateStatus(w http.ResponseWriter, r *http.Request) {
@@ -30,14 +22,12 @@ func (s *Server) handleCertificateStatus(w http.ResponseWriter, r *http.Request)
 	if !s.validateUIToken(w, r) {
 		return
 	}
-	s.mu.RLock()
-	fn := s.certStatus
-	s.mu.RUnlock()
-	if fn == nil {
-		http.Error(w, "certificate API not configured", http.StatusServiceUnavailable)
-		return
+	caTrusted := proxy.ProxyCAInstalled()
+	proxyRunning := s.proxy != nil && s.proxy.IsRunning()
+	st := CertificateStatus{
+		NeedsInstall: proxyRunning && !caTrusted,
+		Installed:    caTrusted,
 	}
-	st := fn()
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(st); err != nil {
 		log.Printf("ingress: certificate status encode: %v", err)
@@ -52,15 +42,17 @@ func (s *Server) handleCertificateInstall(w http.ResponseWriter, r *http.Request
 	if !s.validateUIToken(w, r) {
 		return
 	}
-	s.mu.RLock()
-	install := s.certInstall
-	s.mu.RUnlock()
-	if install == nil {
+	if s.proxy == nil {
 		http.Error(w, "certificate API not configured", http.StatusServiceUnavailable)
 		return
 	}
-	if err := install(r.Context()); err != nil {
+	if err := s.proxy.InstallCA(r.Context()); err != nil {
 		log.Printf("ingress: certificate install: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := certconfig.Install(r.Context()); err != nil {
+		log.Printf("ingress: certconfig install: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

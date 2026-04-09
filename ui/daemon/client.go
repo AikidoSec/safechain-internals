@@ -241,6 +241,148 @@ func GetVersion() (string, error) {
 	return out.Version, nil
 }
 
+func SetToken(token string) error {
+	body, _ := json.Marshal(map[string]string{"token": token})
+	resp, err := doRequest(http.MethodPost, "/v1/token", body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("set token: %s: %s", resp.Status, strings.TrimSpace(string(b)))
+	}
+	return nil
+}
+
+func InstallExtension() error {
+	resp, err := doRequest(http.MethodPost, "/v1/network-extension/install", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("install extension: %s: %s", resp.Status, strings.TrimSpace(string(b)))
+	}
+	return nil
+}
+
+func AllowVpn() error {
+	resp, err := doRequest(http.MethodPost, "/v1/network-extension/allow-vpn", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("allow vpn: %s: %s", resp.Status, strings.TrimSpace(string(b)))
+	}
+	return nil
+}
+
+func StartProxy() error {
+	resp, err := doRequest(http.MethodPost, "/v1/proxy/start", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("start proxy: %s: %s", resp.Status, strings.TrimSpace(string(b)))
+	}
+	return nil
+}
+
+func IsExtensionInstalled() (bool, error) {
+	resp, err := doRequest(http.MethodGet, "/v1/network-extension/is-installed", nil)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("is-extension-installed: %s", resp.Status)
+	}
+	var out struct {
+		Result bool `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return false, err
+	}
+	return out.Result, nil
+}
+
+func IsExtensionActivated() (bool, error) {
+	resp, err := doRequest(http.MethodGet, "/v1/network-extension/is-activated", nil)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("is-extension-activated: %s", resp.Status)
+	}
+	var out struct {
+		Result bool `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return false, err
+	}
+	return out.Result, nil
+}
+
+func IsVpnAllowed() (bool, error) {
+	resp, err := doRequest(http.MethodGet, "/v1/network-extension/is-vpn-allowed", nil)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("is-vpn-allowed: %s", resp.Status)
+	}
+	var out struct {
+		Result bool `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return false, err
+	}
+	return out.Result, nil
+}
+
+func OpenExtensionSettings() error {
+	resp, err := doRequest(http.MethodPost, "/v1/network-extension/open-settings", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("open-settings: %s: %s", resp.Status, strings.TrimSpace(string(b)))
+	}
+	return nil
+}
+
+func SetupCheck() (bool, error) {
+	resp, err := doRequest(http.MethodGet, "/v1/setup/check", nil)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusOK, nil
+}
+
+func SetupStart() error {
+	resp, err := doRequest(http.MethodPost, "/v1/setup/start", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("setup start: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+	return nil
+}
+
 // RequestAccess sends POST /v1/events/:id/request-access
 func RequestAccess(eventID string) error {
 	if err := validateEventID(eventID); err != nil {
