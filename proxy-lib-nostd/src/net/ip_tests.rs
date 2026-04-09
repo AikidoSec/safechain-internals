@@ -39,6 +39,11 @@ fn passthrough_ipv4_includes_non_public_ranges() {
         // public internet
         (Ipv4Addr::new(8, 8, 8, 8), false),
         (Ipv4Addr::new(1, 1, 1, 1), false),
+        // explicit anycast/global
+        (Ipv4Addr::new(192, 88, 99, 1), false), // 6to4 Relay Anycast (RFC 3068)
+        (Ipv4Addr::new(192, 31, 196, 1), false), // AS112-v4 Anycast (RFC 7535)
+        (Ipv4Addr::new(198, 51, 100, 1), true), // TEST-NET-2 (Globally unreachable, but documentation)
+        (Ipv4Addr::new(192, 52, 193, 1), false), // AMT Anycast (RFC 7450)
     ];
 
     for (addr, expected) in cases {
@@ -73,6 +78,10 @@ fn passthrough_ipv4_boundary_cases_are_correct() {
         (Ipv4Addr::new(240, 0, 0, 0), true),
         (Ipv4Addr::new(255, 255, 255, 254), true),
         (Ipv4Addr::new(255, 255, 255, 255), true),
+        (Ipv4Addr::new(172, 15, 255, 255), false),
+        (Ipv4Addr::new(172, 16, 0, 0), true),
+        (Ipv4Addr::new(172, 31, 255, 255), true),
+        (Ipv4Addr::new(172, 32, 0, 0), false),
     ];
 
     for (addr, expected) in cases {
@@ -95,9 +104,12 @@ fn passthrough_ipv6_includes_non_public_ranges() {
         ("100::1".parse().unwrap(), true),
         ("100:0:0:1::1".parse().unwrap(), true),
         ("64:ff9b:1::1".parse().unwrap(), true),
+        ("64:ff9b::1".parse().unwrap(), false), // Generic NAT64 (Global)
         ("64:ff9b::808:808".parse().unwrap(), false),
         ("2001:4860:4860::8888".parse().unwrap(), false),
         ("2606:4700:4700::1111".parse().unwrap(), false),
+        ("2001:0::1".parse().unwrap(), false),  // Teredo
+        ("2001:20::1".parse().unwrap(), false), // ORCHIDv2
     ];
 
     for (addr, expected) in cases {
@@ -149,4 +161,30 @@ fn passthrough_ip_dispatches_to_both_versions() {
     for (addr, expected) in cases {
         assert_eq!(is_passthrough_ip(addr), expected, "addr: {addr}");
     }
+}
+
+#[test]
+fn defensive_anycast_and_transition_checks() {
+    let cases = [
+        // IPv4 Anycast that should NOT be passthrough
+        (IpAddr::V4(Ipv4Addr::new(192, 88, 99, 1)), false), // 6to4 Anycast
+        (IpAddr::V4(Ipv4Addr::new(192, 31, 196, 1)), false), // AS112 Anycast
+        (IpAddr::V4(Ipv4Addr::new(192, 52, 193, 1)), false), // AMT Anycast
+        // IPv6 Transition/Anycast that should NOT be passthrough
+        (IpAddr::V6("2001:0::1".parse().unwrap()), false), // Teredo
+        (IpAddr::V6("2001:1::1".parse().unwrap()), false), // Port Control Protocol
+        (IpAddr::V6("2620:4f:8000::1".parse().unwrap()), false), // AS112-v6
+        (IpAddr::V6("64:ff9b::1".parse().unwrap()), false), // Well-Known NAT64
+    ];
+
+    for (addr, expected) in cases {
+        assert_eq!(is_passthrough_ip(addr), expected, "addr: {addr}");
+    }
+}
+
+#[test]
+fn test_trait_dispatch_consistency() {
+    // Verify that passing raw arrays works as expected via Into<IpAddr>
+    assert!(is_passthrough_ip([127, 0, 0, 1]));
+    assert!(!is_passthrough_ip([8, 8, 8, 8]));
 }
