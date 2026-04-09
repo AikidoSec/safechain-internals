@@ -11,6 +11,11 @@ private enum HostCommand {
     case stop(StopOptions)
     case status
     case cleanSecrets
+    case installExtension
+    case allowVpn
+    case isExtensionInstalled
+    case isExtensionActivated
+    case isVpnAllowed
     case help
 }
 
@@ -118,6 +123,21 @@ private final class TransparentProxyHostCLI {
                 return EXIT_SUCCESS
             case .cleanSecrets:
                 cleanSecrets()
+                return EXIT_SUCCESS
+            case .installExtension:
+                try installExtension()
+                return EXIT_SUCCESS
+            case .allowVpn:
+                try allowVpn()
+                return EXIT_SUCCESS
+            case .isExtensionInstalled:
+                try checkExtensionInstalled()
+                return EXIT_SUCCESS
+            case .isExtensionActivated:
+                try checkExtensionActivated()
+                return EXIT_SUCCESS
+            case .isVpnAllowed:
+                try checkVpnAllowed()
                 return EXIT_SUCCESS
             case .help:
                 print(Self.usage())
@@ -228,6 +248,65 @@ private final class TransparentProxyHostCLI {
         }
 
         print("status: \(statusString(manager.connection.status))")
+    }
+
+    private func installExtension() throws {
+        let outcome = try ensureSystemExtensionActivated()
+        switch outcome {
+        case .completed:
+            print("extension: activated")
+        case .replaced:
+            print("extension: replaced")
+        case .approvalRequired:
+            print("extension: approval-required")
+        }
+    }
+
+    private func allowVpn() throws {
+        let existingManagers = try loadManagers()
+        do {
+            let _ = try prepareManager(existingManagers: existingManagers, engineConfigJSON: nil)
+        } catch {
+            let ns = error as NSError
+            if ns.domain == NEVPNErrorDomain && ns.code == NEVPNError.configurationReadWriteFailed.rawValue {
+                print("vpn: not-allowed")
+                return
+            }
+            throw error
+        }
+        print("vpn: allowed")
+    }
+
+    private func listExtensionLines() throws -> [Substring] {
+        let output: String
+        do {
+            output = try runProcessCaptureStdout(
+                launchPath: "/usr/bin/systemextensionsctl",
+                arguments: ["list"]
+            )
+        } catch {
+            log("failed to list system extensions: \(error.localizedDescription)")
+            return []
+        }
+        return output.split(separator: "\n").filter { $0.contains(extensionBundleId) && !$0.contains("terminated") }
+    }
+
+    private func checkExtensionInstalled() throws {
+        let lines = try listExtensionLines()
+        let installed = !lines.isEmpty
+        print("extension-installed: \(installed)")
+    }
+
+    private func checkExtensionActivated() throws {
+        let lines = try listExtensionLines()
+        let activated = lines.contains { $0.contains("[activated enabled]") }
+        print("extension-activated: \(activated)")
+    }
+
+    private func checkVpnAllowed() throws {
+        let managers = try loadManagers()
+        let allowed = selectManager(from: managers) != nil
+        print("vpn-allowed: \(allowed)")
     }
 
     private func loadManagers() throws -> [NETransparentProxyManager] {
@@ -627,6 +706,31 @@ private final class TransparentProxyHostCLI {
                 throw CLIError.usage("`clean-secrets` does not accept additional arguments")
             }
             return .cleanSecrets
+        case "install-extension":
+            guard arguments.count == 1 else {
+                throw CLIError.usage("`install-extension` does not accept additional arguments")
+            }
+            return .installExtension
+        case "allow-vpn":
+            guard arguments.count == 1 else {
+                throw CLIError.usage("`allow-vpn` does not accept additional arguments")
+            }
+            return .allowVpn
+        case "is-extension-installed":
+            guard arguments.count == 1 else {
+                throw CLIError.usage("`is-extension-installed` does not accept additional arguments")
+            }
+            return .isExtensionInstalled
+        case "is-extension-activated":
+            guard arguments.count == 1 else {
+                throw CLIError.usage("`is-extension-activated` does not accept additional arguments")
+            }
+            return .isExtensionActivated
+        case "is-vpn-allowed":
+            guard arguments.count == 1 else {
+                throw CLIError.usage("`is-vpn-allowed` does not accept additional arguments")
+            }
+            return .isVpnAllowed
         default:
             throw CLIError.usage("unknown command: \(first)")
         }
@@ -974,12 +1078,22 @@ private final class TransparentProxyHostCLI {
           "Aikido Network Extension" stop [options]
           "Aikido Network Extension" status
           "Aikido Network Extension" clean-secrets
+          "Aikido Network Extension" install-extension
+          "Aikido Network Extension" allow-vpn
+          "Aikido Network Extension" is-extension-installed
+          "Aikido Network Extension" is-extension-activated
+          "Aikido Network Extension" is-vpn-allowed
 
         Commands:
-          start          Install or update the transparent proxy profile and request that it starts.
-          stop           Request that the transparent proxy tunnel stops.
-          status         Show the current Network Extension status and saved engine config.
-          clean-secrets  Delete proxy CA secrets from the keychain.
+          start                  Install or update the transparent proxy profile and request that it starts.
+          stop                   Request that the transparent proxy tunnel stops.
+          status                 Show the current Network Extension status and saved engine config.
+          clean-secrets          Delete proxy CA secrets from the keychain.
+          install-extension      Install the system extension (triggers Network Extension approval).
+          allow-vpn              Save the VPN profile (triggers Allow VPN Configuration approval).
+          is-extension-installed Check if the system extension appears in the extensions list (no prompts).
+          is-extension-activated Check if the system extension is activated and enabled (no prompts).
+          is-vpn-allowed         Check if a VPN profile has been saved (no prompts).
 
         Stop options:
           --remove-profile             Remove the saved Network Extension profile after stopping.
