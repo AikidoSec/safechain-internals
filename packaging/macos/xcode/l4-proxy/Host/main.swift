@@ -288,7 +288,7 @@ private final class TransparentProxyHostCLI {
             log("failed to list system extensions: \(error.localizedDescription)")
             return []
         }
-        return output.split(separator: "\n").filter { $0.contains(extensionBundleId) }
+        return output.split(separator: "\n").filter { $0.contains(extensionBundleId) && !$0.contains("terminated") }
     }
 
     private func checkExtensionInstalled() throws {
