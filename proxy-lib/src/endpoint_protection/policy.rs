@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use rama::utils::str::arcstr::ArcStr;
 use rama::telemetry::tracing;
+use rama::utils::str::arcstr::ArcStr;
 
 use super::{EcosystemConfig, RemoteEndpointConfig};
 
@@ -22,7 +22,7 @@ fn glob_matches(pattern: &str, text: &str) -> bool {
         }
         rest = &rest[first.len()..];
     }
-    
+
     if parts.len() <= 1 {
         return true;
     }
