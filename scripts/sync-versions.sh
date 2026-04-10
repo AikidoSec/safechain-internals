@@ -93,6 +93,24 @@ update "$PREV_FILE" \
   "s/(\"file_version\": \")[^\"]+(\")/\1${VERSION}\2/" \
   "s/(\"ProductVersion\": \")[^\"]+(\")/\1${VERSION}\2/"
 
+PREV_FILE="$REPO_ROOT/ui/build/windows/nsis/wails_tools.nsh"
+update "$PREV_FILE" \
+  "s/(INFO_PRODUCTVERSION \")[^\"]+(\")$/\1${VERSION}\2/"
+
+PREV_FILE="$REPO_ROOT/ui/build/darwin/Info.plist"
+update "$PREV_FILE" \
+  "/CFBundleShortVersionString/{n;s|<string>[^<]*</string>|<string>${VERSION}</string>|;}" \
+  "/CFBundleVersion/{n;s|<string>[^<]*</string>|<string>${VERSION}</string>|;}"
+
+PREV_FILE="$REPO_ROOT/ui/build/darwin/Info.dev.plist"
+update "$PREV_FILE" \
+  "/CFBundleShortVersionString/{n;s|<string>[^<]*</string>|<string>${VERSION}</string>|;}" \
+  "/CFBundleVersion/{n;s|<string>[^<]*</string>|<string>${VERSION}</string>|;}"
+
+PREV_FILE="$REPO_ROOT/ui/build/windows/wails.exe.manifest"
+update "$PREV_FILE" \
+  "s/(name=\"com\.aikido[^\"]*\" version=\")[^\"]+(\")/\1${VERSION}\2/"
+
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 fi

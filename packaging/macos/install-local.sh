@@ -8,7 +8,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-PKG_FILE="$PROJECT_DIR/dist/EndpointProtection-dev.pkg"
+PKG_FILE="$PROJECT_DIR/dist/EndpointProtection.pkg"
 
 echo "========================================="
 echo "Aikido Endpoint Protection - Local Installation"

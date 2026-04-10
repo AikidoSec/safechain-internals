@@ -223,13 +223,16 @@ echo ""
 cd "$SCRIPT_DIR"
 ./build-distribution-pkg.sh -v "$VERSION" -a "universal" -b "$PROJECT_DIR/bin" -o "$PROJECT_DIR/dist"
 
-PKG_FILE="$PROJECT_DIR/dist/EndpointProtection-$VERSION.pkg"
+VERSIONED_PKG="$PROJECT_DIR/dist/EndpointProtection-$VERSION.pkg"
 
-if [ ! -f "$PKG_FILE" ]; then
+if [ ! -f "$VERSIONED_PKG" ]; then
     echo "✗ PKG file not created"
     exit 1
 fi
 
+PKG_FILE="$PROJECT_DIR/dist/EndpointProtection.pkg"
+mv "$VERSIONED_PKG" "$PKG_FILE"
+rm -f "$VERSIONED_PKG.sha256"
 echo "✓ PKG created: $PKG_FILE"
 echo ""
 
