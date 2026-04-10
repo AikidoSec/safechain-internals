@@ -32,6 +32,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Sync versions
+        id: sync
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            bash scripts/sync-versions.sh --version "${{ inputs.version }}"
+          else
+            bash scripts/sync-versions.sh --dev
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -46,7 +55,7 @@ jobs:
         run: make test
 
       - name: Build binaries for darwin/${{ matrix.arch }}
-        run: make build-darwin-${{ matrix.arch }} VERSION="${{ inputs.version || 'dev' }}"
+        run: make build-darwin-${{ matrix.arch }} VERSION="${{ steps.sync.outputs.version }}"
 
       - name: Prepare artifacts
         run: |
@@ -96,6 +105,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Sync versions
+        id: sync
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            bash scripts/sync-versions.sh --version "${{ inputs.version }}"
+          else
+            bash scripts/sync-versions.sh --dev
+          fi
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561
@@ -171,6 +189,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Sync versions
+        id: sync
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            bash scripts/sync-versions.sh --version "${{ inputs.version }}"
+          else
+            bash scripts/sync-versions.sh --dev
+          fi
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561
