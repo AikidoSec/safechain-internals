@@ -23,10 +23,6 @@ fn glob_matches(pattern: &str, text: &str) -> bool {
         rest = &rest[first.len()..];
     }
 
-    if parts.len() <= 1 {
-        return true;
-    }
-
     for segment in &parts[1..parts.len() - 1] {
         if segment.is_empty() {
             continue;
