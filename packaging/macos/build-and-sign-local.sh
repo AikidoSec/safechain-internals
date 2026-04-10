@@ -19,7 +19,12 @@ restore_versions() {
 }
 trap restore_versions EXIT
 
-bash "$PROJECT_DIR/scripts/sync-versions.sh" --dev
+if [ -n "$1" ] && [ "$1" != "dev" ]; then
+  VERSION="$1"
+else
+  VERSION="0.0.$(date +%s)"
+fi
+bash "$PROJECT_DIR/scripts/sync-versions.sh" --version "$VERSION"
 
 echo "==================================="
 echo "Aikido Endpoint Protection - Local PKG Builder"
