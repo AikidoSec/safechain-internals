@@ -34,9 +34,11 @@ jobs:
 
       - name: Sync versions
         id: sync
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            bash scripts/sync-versions.sh --version "${{ inputs.version }}"
+          if [ -n "$VERSION" ]; then
+            bash scripts/sync-versions.sh --version "$VERSION"
           else
             bash scripts/sync-versions.sh --dev
           fi
@@ -108,9 +110,11 @@ jobs:
 
       - name: Sync versions
         id: sync
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            bash scripts/sync-versions.sh --version "${{ inputs.version }}"
+          if [ -n "$VERSION" ]; then
+            bash scripts/sync-versions.sh --version "$VERSION"
           else
             bash scripts/sync-versions.sh --dev
           fi
@@ -192,9 +196,11 @@ jobs:
 
       - name: Sync versions
         id: sync
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            bash scripts/sync-versions.sh --version "${{ inputs.version }}"
+          if [ -n "$VERSION" ]; then
+            bash scripts/sync-versions.sh --version "$VERSION"
           else
             bash scripts/sync-versions.sh --dev
           fi
