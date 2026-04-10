@@ -96,9 +96,7 @@ rust-qa-full: rust-qa
         --exclude safechain-l4-proxy-windows-driver-object \
         -- --ignored
 
-run-l4-proxy *ARGS:
-    mkdir -p .aikido/safechain-l4-proxy
-    RUST_LOG=info,safechain_l4_proxy=debug,safechain_proxy_lib=debug \
+run-l4-proxy $RUST_LOG="info,safechain_l4_proxy=debug,safechain_proxy_lib=debug" *ARGS:
     cargo run \
         --bin safechain-l4-proxy \
         --features har \
@@ -106,9 +104,7 @@ run-l4-proxy *ARGS:
         --secrets .aikido/safechain-l4-proxy \
         {{ARGS}}
 
-run-l7-proxy *ARGS:
-    mkdir -p .aikido/safechain-l7-proxy
-    RUST_LOG=info,safechain_l7_proxy=debug,safechain_proxy_lib=debug \
+run-l7-proxy $RUST_LOG="info,safechain_l4_proxy=debug,safechain_proxy_lib=debug" *ARGS:
     cargo run \
         --bin safechain-l7-proxy \
         --features har \
