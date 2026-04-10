@@ -3,7 +3,7 @@ use rama_core::telemetry::tracing::info;
 use std::net::{SocketAddrV4, SocketAddrV6};
 
 use super::update::{self, UpdateArgs};
-use crate::common::{StartupConfig, run_sc, write_startup_blob};
+use crate::common::{StartupConfig, start_service, write_startup_blob};
 use crate::wfp::ensure_wfp_objects;
 
 #[derive(Debug, Args)]
@@ -35,7 +35,7 @@ pub fn run(args: StartArgs) -> Result<(), String> {
     );
     let startup_blob = StartupConfig::new(args.ipv4_proxy, args.ipv6_proxy);
     write_startup_blob(&args.service_name, &startup_blob)?;
-    run_sc(&["start", &args.service_name], "SERVICE_ALREADY_RUNNING")?;
+    start_service(&args.service_name)?;
     ensure_wfp_objects(args.ipv6_proxy.is_some())?;
 
     update::run(UpdateArgs {

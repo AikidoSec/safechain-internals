@@ -126,6 +126,8 @@ $DriverSysPath = [System.IO.Path]::GetFullPath($DriverSysPath)
 $DriverFileName = "safechain_lib_l4_proxy_windows_driver.sys"
 $InfFileName = "safechain_lib_l4_proxy_windows_driver.inf"
 $CatFileName = "safechain_lib_l4_proxy_windows_driver.cat"
+$DriverServiceName = "SafeChainL4Proxy"
+$DriverHardwareId = "Root\SafeChainL4Proxy"
 $InfPath = Join-Path $OutputDir $InfFileName
 $CatPath = Join-Path $OutputDir $CatFileName
 
@@ -147,6 +149,8 @@ Write-Host "Staged driver package:" -ForegroundColor Green
 Write-Host "  sys: $DriverSysPath"
 Write-Host "  inf: $InfPath"
 Write-Host "  out: $OutputDir"
+Write-Host "  service: $DriverServiceName"
+Write-Host "  hardware id: $DriverHardwareId"
 
 if (-not $SkipInf2Cat) {
     $inf2cat = Get-Command Inf2Cat.exe -ErrorAction SilentlyContinue

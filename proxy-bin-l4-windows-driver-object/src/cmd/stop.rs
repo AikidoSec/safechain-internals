@@ -1,7 +1,7 @@
 use clap::Args;
 use rama_core::telemetry::tracing::info;
 
-use crate::common::{delete_startup_blob, run_sc};
+use crate::common::{delete_startup_blob, stop_service};
 use crate::wfp::remove_wfp_objects;
 
 #[derive(Debug, Args)]
@@ -20,7 +20,7 @@ pub fn run(args: StopArgs) -> Result<(), String> {
         "stopping SafeChain Windows driver"
     );
     remove_wfp_objects()?;
-    run_sc(&["stop", &args.service_name], "SERVICE_NOT_ACTIVE")?;
+    stop_service(&args.service_name)?;
     if args.clear_persisted_config {
         delete_startup_blob(&args.service_name)?;
     }

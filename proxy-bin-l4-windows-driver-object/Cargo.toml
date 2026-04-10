@@ -21,4 +21,5 @@ windows-sys = { workspace = true, features = [
     "Win32_Storage_FileSystem",
     "Win32_System_IO",
     "Win32_System_Rpc",
+    "Win32_System_Services",
 ] }

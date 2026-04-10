@@ -2,7 +2,40 @@
 
 $ErrorActionPreference = "Stop"
 
+$DriverServiceName = "SafeChainL4Proxy"
+$DriverHardwareId = "Root\SafeChainL4Proxy"
 $OriginalInfName = "safechain_lib_l4_proxy_windows_driver.inf"
+
+Write-Host "Removing SafeChain driver package for service $DriverServiceName"
+
+$deviceOutput = & pnputil.exe /enum-devices /class System /deviceids /services /format csv 2>&1
+if ($LASTEXITCODE -eq 0) {
+    $deviceText = ($deviceOutput | Out-String).Trim()
+    if (-not [string]::IsNullOrWhiteSpace($deviceText)) {
+        $deviceRows = $deviceText | ConvertFrom-Csv
+        $instanceIds = @(
+            $deviceRows |
+                Where-Object {
+                    (
+                        $_.'Hardware IDs' -and
+                        $_.'Hardware IDs'.ToString().ToLowerInvariant().Contains($DriverHardwareId.ToLowerInvariant())
+                    ) -or (
+                        $_.Service -and
+                        $_.Service -eq $DriverServiceName
+                    )
+                } |
+                ForEach-Object { $_.'Instance ID' } |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
+        foreach ($instanceId in $instanceIds) {
+            Write-Host "Removing device instance $instanceId"
+            & pnputil.exe /remove-device $instanceId /subtree
+            if ($LASTEXITCODE -ne 0) {
+                throw "pnputil remove-device failed for $instanceId with exit code $LASTEXITCODE"
+            }
+        }
+    }
+}
 
 $output = & pnputil.exe /enum-drivers
 if ($LASTEXITCODE -ne 0) {

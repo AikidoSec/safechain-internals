@@ -21,7 +21,10 @@ param(
     [string]$OutputDir,
 
     [Parameter(Mandatory = $false)]
-    [string]$DriverServiceName = "safechain_lib_l4_proxy_windows_driver",
+    [string]$DriverServiceName = "SafeChainL4Proxy",
+
+    [Parameter(Mandatory = $false)]
+    [string]$DriverHardwareId = "Root\SafeChainL4Proxy",
 
     [Parameter(Mandatory = $false)]
     [string]$DriverFileName = "safechain_lib_l4_proxy_windows_driver.sys",
@@ -47,6 +50,8 @@ $ExpectedDriverPath = Join-Path $OutputDir $DriverFileName
 
 $ServiceRegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Services\$DriverServiceName"
 $InstalledDriverPath = Join-Path $env:WINDIR "System32\drivers\$DriverFileName"
+$ServiceImagePath = $null
+$ResolvedServiceDriverPath = $null
 
 $WfpStatePath = Join-Path $env:TEMP "safechain_wfpstate.xml"
 
@@ -90,12 +95,70 @@ function Test-CommandExists {
     return $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
+function Resolve-ServiceImagePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ImagePath
+    )
+
+    $resolved = $ImagePath.Trim()
+
+    if ($resolved -like '\SystemRoot\*') {
+        return Join-Path $env:WINDIR $resolved.Substring('\SystemRoot\'.Length)
+    }
+
+    if ($resolved -like '%SystemRoot%\*') {
+        return Join-Path $env:WINDIR $resolved.Substring('%SystemRoot%\'.Length)
+    }
+
+    if ($resolved -like '\??\*') {
+        return $resolved.Substring('\??\'.Length)
+    }
+
+    return [Environment]::ExpandEnvironmentVariables($resolved)
+}
+
+function Get-MatchingDriverDevices {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$HardwareId,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ServiceName
+    )
+
+    $deviceOutput = & pnputil.exe /enum-devices /class System /deviceids /services /format csv 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        return @()
+    }
+
+    $deviceText = ($deviceOutput | Out-String).Trim()
+    if ([string]::IsNullOrWhiteSpace($deviceText)) {
+        return @()
+    }
+
+    $deviceRows = $deviceText | ConvertFrom-Csv
+    return @(
+        $deviceRows |
+            Where-Object {
+                (
+                    $_.'Hardware IDs' -and
+                    $_.'Hardware IDs'.ToString().ToLowerInvariant().Contains($HardwareId.ToLowerInvariant())
+                ) -or (
+                    $_.Service -and
+                    $_.Service -eq $ServiceName
+                )
+            }
+    )
+}
+
 Write-Host "SafeChain driver verification" -ForegroundColor Green
 Write-Host "  ProjectDir : $ProjectDir"
 Write-Host "  OutputDir  : $OutputDir"
 Write-Host "  INF        : $InfPath"
 Write-Host "  SYS        : $ExpectedDriverPath"
 Write-Host "  Service    : $DriverServiceName"
+Write-Host "  DeviceId   : $DriverHardwareId"
 
 Write-Section "Package staging"
 if (Test-Path $OutputDir) {
@@ -150,7 +213,7 @@ try {
         Write-Fail "Driver service not found via Win32_SystemDriver"
     }
 } catch {
-    Write-Fail "Failed to query Win32_SystemDriver: $($_.Exception.Message)"
+    Write-Warn "Failed to query Win32_SystemDriver: $($_.Exception.Message)"
 }
 
 if (Test-CommandExists "sc.exe") {
@@ -175,6 +238,47 @@ if (Test-CommandExists "sc.exe") {
     }
 }
 
+try {
+    $svcReg = Get-ItemProperty $ServiceRegistryPath -ErrorAction Stop
+    if ($null -ne $svcReg.ImagePath) {
+        $ServiceImagePath = [string]$svcReg.ImagePath
+        $ResolvedServiceDriverPath = Resolve-ServiceImagePath -ImagePath $ServiceImagePath
+    }
+} catch {
+}
+
+Write-Section "Driver device"
+if (Test-CommandExists "pnputil.exe") {
+    try {
+        $matchingRows = Get-MatchingDriverDevices -HardwareId $DriverHardwareId -ServiceName $DriverServiceName
+        if ($matchingRows.Count -gt 0) {
+            Write-Pass "Found device instance(s) for $DriverHardwareId"
+            foreach ($device in $matchingRows) {
+                if ($device.'Instance ID') {
+                    Write-Info "Instance ID : $($device.'Instance ID')"
+                }
+                if ($device.'Device Description') {
+                    Write-Info "Description : $($device.'Device Description')"
+                } elseif ($device.Description) {
+                    Write-Info "Description : $($device.Description)"
+                }
+                if ($device.Service) {
+                    Write-Info "Service     : $($device.Service)"
+                }
+                if ($device.Status) {
+                    Write-Info "Status      : $($device.Status)"
+                }
+            }
+        } else {
+            Write-Warn "No device instance found for $DriverHardwareId via pnputil"
+        }
+    } catch {
+        Write-Warn "Failed to query device instance(s): $($_.Exception.Message)"
+    }
+} else {
+    Write-Warn "pnputil.exe not found"
+}
+
 Write-Section "Loaded driver"
 if (Test-CommandExists "driverquery.exe") {
     $driverQueryOutput = & driverquery.exe /v 2>&1
@@ -196,7 +300,20 @@ if (Test-Path $InstalledDriverPath) {
     Write-Info "Length        : $($item.Length)"
     Write-Info "LastWriteTime : $($item.LastWriteTime)"
 } else {
-    Write-Warn "Installed SYS not found at expected path: $InstalledDriverPath"
+    Write-Warn "Installed SYS not found at legacy expected path: $InstalledDriverPath"
+}
+
+if ($ResolvedServiceDriverPath) {
+    Write-Info "Service ImagePath : $ServiceImagePath"
+    Write-Info "Resolved path     : $ResolvedServiceDriverPath"
+    if (Test-Path $ResolvedServiceDriverPath) {
+        Write-Pass "Service driver binary exists at resolved ImagePath"
+        $item = Get-Item $ResolvedServiceDriverPath
+        Write-Info "Length        : $($item.Length)"
+        Write-Info "LastWriteTime : $($item.LastWriteTime)"
+    } else {
+        Write-Fail "Service ImagePath does not exist on disk: $ResolvedServiceDriverPath"
+    }
 }
 
 Write-Section "Test signing mode"

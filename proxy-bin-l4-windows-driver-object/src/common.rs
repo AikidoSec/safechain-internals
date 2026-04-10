@@ -3,16 +3,26 @@ use std::{
     net::{SocketAddrV4, SocketAddrV6},
     os::windows::ffi::OsStrExt,
     process::Command,
+    ptr,
 };
 
 use rama_core::telemetry::tracing::{debug, info};
 use safechain_proxy_lib_nostd::windows::driver_protocol::STARTUP_VALUE_NAME;
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, GetLastError, HANDLE, INVALID_HANDLE_VALUE},
+    Foundation::{
+        CloseHandle, ERROR_SERVICE_ALREADY_RUNNING, ERROR_SERVICE_DOES_NOT_EXIST,
+        ERROR_SERVICE_NOT_ACTIVE, GetLastError, HANDLE, INVALID_HANDLE_VALUE,
+    },
     Storage::FileSystem::{
         CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_GENERIC_READ, FILE_GENERIC_WRITE, OPEN_EXISTING,
     },
     System::IO::DeviceIoControl,
+    System::Services::{
+        CloseServiceHandle, ControlService, OpenSCManagerW, OpenServiceW, QueryServiceStatus,
+        SC_HANDLE, SC_MANAGER_CONNECT, SERVICE_CONTROL_STOP, SERVICE_QUERY_STATUS, SERVICE_RUNNING,
+        SERVICE_START, SERVICE_START_PENDING, SERVICE_STATUS, SERVICE_STOP, SERVICE_STOP_PENDING,
+        SERVICE_STOPPED, StartServiceW,
+    },
 };
 
 pub use safechain_proxy_lib_nostd::windows::driver_protocol::{
@@ -21,34 +31,126 @@ pub use safechain_proxy_lib_nostd::windows::driver_protocol::{
     Ipv6ProxyConfigPayload, ProxyProcessIdPayload, StartupConfig,
 };
 
-pub fn run_sc(args: &[&str], allowed_marker: &str) -> Result<(), String> {
-    debug!(?args, allowed_marker, "running sc.exe command");
-    let output = Command::new("sc.exe")
-        .args(args)
-        .output()
-        .map_err(|err| format!("failed to run sc.exe {args:?}: {err}"))?;
+pub fn start_service(service_name: &str) -> Result<(), String> {
+    debug!(service_name, "starting service via SCM");
+    let manager = ServiceControlManager::connect()?;
+    let service = manager.open_service(service_name, SERVICE_START | SERVICE_QUERY_STATUS)?;
 
-    if output.status.success() {
-        info!(?args, "sc.exe command completed successfully");
+    let mut status = SERVICE_STATUS::default();
+    if unsafe { QueryServiceStatus(service.0, &mut status) } != 0
+        && (status.dwCurrentState == SERVICE_RUNNING || status.dwCurrentState == SERVICE_START_PENDING)
+    {
+        info!(service_name, state = status.dwCurrentState, "service already running");
         return Ok(());
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    if stdout.contains(allowed_marker) || stderr.contains(allowed_marker) {
-        debug!(?args, allowed_marker, "sc.exe returned allowed marker");
+    let ok = unsafe {
+        // SAFETY: service handle is valid and no argument vectors are passed.
+        StartServiceW(service.0, 0, ptr::null())
+    };
+    if ok != 0 {
+        info!(service_name, "service started successfully");
         return Ok(());
     }
 
-    Err(format!(
-        "sc.exe {args:?} failed: {}{}",
-        stdout.trim(),
-        if stderr.trim().is_empty() {
-            String::new()
-        } else {
-            format!(" {}", stderr.trim())
+    let code = unsafe { GetLastError() };
+    if code == ERROR_SERVICE_ALREADY_RUNNING {
+        info!(service_name, code, "service already running");
+        Ok(())
+    } else {
+        Err(format!("failed to start service {service_name}: win32={code}"))
+    }
+}
+
+pub fn stop_service(service_name: &str) -> Result<(), String> {
+    debug!(service_name, "stopping service via SCM");
+    let manager = ServiceControlManager::connect()?;
+    let service = manager.open_service(service_name, SERVICE_STOP | SERVICE_QUERY_STATUS)?;
+
+    let mut status = SERVICE_STATUS::default();
+    if unsafe { QueryServiceStatus(service.0, &mut status) } != 0
+        && (status.dwCurrentState == SERVICE_STOPPED || status.dwCurrentState == SERVICE_STOP_PENDING)
+    {
+        info!(service_name, state = status.dwCurrentState, "service already stopped");
+        return Ok(());
+    }
+
+    let ok = unsafe {
+        // SAFETY: service handle is valid and `status` points to writable memory.
+        ControlService(service.0, SERVICE_CONTROL_STOP, &mut status)
+    };
+    if ok != 0 {
+        info!(service_name, "service stop requested successfully");
+        return Ok(());
+    }
+
+    let code = unsafe { GetLastError() };
+    if code == ERROR_SERVICE_NOT_ACTIVE {
+        info!(service_name, code, "service already inactive");
+        Ok(())
+    } else {
+        Err(format!("failed to stop service {service_name}: win32={code}"))
+    }
+}
+
+struct ServiceControlManager(SC_HANDLE);
+
+impl ServiceControlManager {
+    fn connect() -> Result<Self, String> {
+        let handle = unsafe {
+            // SAFETY: null pointers select the local machine and active database.
+            OpenSCManagerW(ptr::null(), ptr::null(), SC_MANAGER_CONNECT)
+        };
+        if handle.is_null() {
+            let code = unsafe { GetLastError() };
+            return Err(format!("failed to connect to SCM: win32={code}"));
         }
-    ))
+        Ok(Self(handle))
+    }
+
+    fn open_service(&self, service_name: &str, desired_access: u32) -> Result<ServiceHandle, String> {
+        let wide_name = to_wide(service_name);
+        let handle = unsafe {
+            // SAFETY: the service name buffer is null-terminated and valid for the duration of the call.
+            OpenServiceW(self.0, wide_name.as_ptr(), desired_access)
+        };
+        if handle.is_null() {
+            let code = unsafe { GetLastError() };
+            if code == ERROR_SERVICE_DOES_NOT_EXIST {
+                return Err(format!("service {service_name} does not exist: win32={code}"));
+            }
+            return Err(format!("failed to open service {service_name}: win32={code}"));
+        }
+        Ok(ServiceHandle(handle))
+    }
+}
+
+impl Drop for ServiceControlManager {
+    fn drop(&mut self) {
+        if !self.0.is_null() {
+            unsafe {
+                // SAFETY: handle belongs to this wrapper and is closed once here.
+                CloseServiceHandle(self.0);
+            }
+        }
+    }
+}
+
+struct ServiceHandle(SC_HANDLE);
+
+impl Drop for ServiceHandle {
+    fn drop(&mut self) {
+        if !self.0.is_null() {
+            unsafe {
+                // SAFETY: handle belongs to this wrapper and is closed once here.
+                CloseServiceHandle(self.0);
+            }
+        }
+    }
+}
+
+fn to_wide(value: &str) -> Vec<u16> {
+    OsStr::new(value).encode_wide().chain(Some(0)).collect()
 }
 
 pub fn write_startup_blob(service_name: &str, blob: &StartupConfig) -> Result<(), String> {
