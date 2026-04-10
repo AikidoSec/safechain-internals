@@ -90,3 +90,27 @@ fn test_parse_fetch_permissions_timestamp_false_is_invalid() {
     let err = serde_json::from_str::<EndpointConfig>(json).unwrap_err();
     assert!(err.to_string().contains("invalid type: boolean `false`"));
 }
+
+#[test]
+fn test_parse_exceptions_with_wildcard_packages() {
+    let json = r#"{
+        "permission_group": {
+            "id": 1,
+            "name": "Default"
+        },
+        "ecosystems": {
+            "npm": {
+                "block_all_installs": true,
+                "exceptions": {
+                    "allowed_packages": ["@npmcli/*"],
+                    "rejected_packages": ["@evil/*"]
+                }
+            }
+        }
+    }"#;
+
+    let config: EndpointConfig = serde_json::from_str(json).unwrap();
+    let npm = config.ecosystems.get("npm").unwrap();
+    assert!(npm.exceptions.allowed_packages.contains("@npmcli/*"));
+    assert!(npm.exceptions.rejected_packages.contains("@evil/*"));
+}

@@ -12,6 +12,7 @@ func TestMergeChromeBlockIfDuplicate_MergesMatchingArtifact(t *testing.T) {
 					Product:        "chrome",
 					PackageName:    "aikido-safechain",
 					PackageVersion: "1.0.0",
+					DisplayName:    "Aikido SafeChain",
 				},
 				BlockReason: "blocked by policy",
 				Status:      "blocked",
@@ -26,6 +27,7 @@ func TestMergeChromeBlockIfDuplicate_MergesMatchingArtifact(t *testing.T) {
 			Product:        "chrome",
 			PackageName:    "aikido-safechain",
 			PackageVersion: "1.0.0",
+			DisplayName:    "Aikido SafeChain",
 		},
 		BlockReason: "blocked by policy",
 	})

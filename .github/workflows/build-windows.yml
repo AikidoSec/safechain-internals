@@ -24,6 +24,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Sync versions
+        id: sync
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$VERSION" ]; then
+            bash scripts/sync-versions.sh --version "$VERSION"
+          else
+            bash scripts/sync-versions.sh --dev
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -39,7 +51,7 @@ jobs:
         shell: bash
 
       - name: Build Windows binaries
-        run: make build-windows-amd64 VERSION="${{ inputs.version || 'dev' }}"
+        run: make build-windows-amd64
         shell: bash
 
       - name: Rename binary for artifact
@@ -64,6 +76,19 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Sync versions
+        id: sync
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$VERSION" ]; then
+            bash scripts/sync-versions.sh --version "$VERSION"
+          else
+            bash scripts/sync-versions.sh --dev
+          fi
+
       - uses: ilammy/setup-nasm@72793074d3c8cdda771dba85f6deafe00623038b
 
       - name: Set up Rust
@@ -104,6 +129,19 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Sync versions
+        id: sync
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$VERSION" ]; then
+            bash scripts/sync-versions.sh --version "$VERSION"
+          else
+            bash scripts/sync-versions.sh --dev
+          fi
+
       - uses: ilammy/setup-nasm@72793074d3c8cdda771dba85f6deafe00623038b
 
       - name: Set up Rust
@@ -137,6 +175,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Sync versions
+        id: sync
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$VERSION" ]; then
+            bash scripts/sync-versions.sh --version "$VERSION"
+          else
+            bash scripts/sync-versions.sh --dev
+          fi
 
       - name: Download EndpointProtection artifact
         uses: actions/download-artifact@v4
@@ -180,7 +230,7 @@ jobs:
 
       - name: Build and sign MSI installer
         run: |
-          .\packaging\windows\build-msi.ps1 -Version "${{ inputs.version || 'dev' }}" -BinDir ".\bin" -OutputDir "."
+          .\packaging\windows\build-msi.ps1 -Version "${{ steps.sync.outputs.version }}" -BinDir ".\bin" -OutputDir "."
           AzureSignTool sign -kvu "${{ secrets.AZURE_KEY_VAULT_URI }}" -kvi "${{ secrets.AZURE_CLIENT_ID }}" -kvt "${{ secrets.AZURE_TENANT_ID }}" -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" -kvc ${{ secrets.AZURE_CERT_NAME }} -tr http://timestamp.globalsign.com/tsa/advanced -v "EndpointProtection.msi"
         shell: pwsh
 
