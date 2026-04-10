@@ -10,10 +10,16 @@ set -e
 # Usage: ./build-and-sign-local.sh
 # =============================================================================
 
-VERSION="${1:-dev}"
 ARCH="universal"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+restore_versions() {
+  bash "$PROJECT_DIR/scripts/sync-versions.sh" --version "1.0.0"
+}
+trap restore_versions EXIT
+
+bash "$PROJECT_DIR/scripts/sync-versions.sh" --dev
 
 echo "==================================="
 echo "Aikido Endpoint Protection - Local PKG Builder"
