@@ -57,7 +57,7 @@ jobs:
         run: make test
 
       - name: Build binaries for darwin/${{ matrix.arch }}
-        run: make build-darwin-${{ matrix.arch }} VERSION="${{ steps.sync.outputs.version }}"
+        run: make build-darwin-${{ matrix.arch }}
 
       - name: Prepare artifacts
         run: |

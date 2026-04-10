@@ -59,6 +59,10 @@ update() {
   done
 }
 
+PREV_FILE="$REPO_ROOT/internal/version/version.go"
+update "$PREV_FILE" \
+  "s/(Version[[:space:]]+= \")[^\"]+(\")$/\1${VERSION}\2/"
+
 PREV_FILE="$REPO_ROOT/Cargo.toml"
 update "$PREV_FILE" \
   "s/^(version = \")([^\"]+)(\".*# keep in sync with GH releases)/\1${VERSION}\3/"

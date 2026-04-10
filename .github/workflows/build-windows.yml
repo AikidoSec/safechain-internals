@@ -51,7 +51,7 @@ jobs:
         shell: bash
 
       - name: Build Windows binaries
-        run: make build-windows-amd64 VERSION="${{ steps.sync.outputs.version }}"
+        run: make build-windows-amd64
         shell: bash
 
       - name: Rename binary for artifact

@@ -14,17 +14,16 @@ ARCH="universal"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-restore_versions() {
-  bash "$PROJECT_DIR/scripts/sync-versions.sh" --version "1.0.0"
-}
-trap restore_versions EXIT
+VERSION="${1:-dev}"
 
-if [ -n "$1" ] && [ "$1" != "dev" ]; then
-  VERSION="$1"
-else
+if [ "$VERSION" = "--generate-version" ]; then
   VERSION="0.0.$(date +%s)"
+  bash "$PROJECT_DIR/scripts/sync-versions.sh" --version "$VERSION"
+  restore_versions() {
+    bash "$PROJECT_DIR/scripts/sync-versions.sh" --version "1.0.0"
+  }
+  trap restore_versions EXIT
 fi
-bash "$PROJECT_DIR/scripts/sync-versions.sh" --version "$VERSION"
 
 echo "==================================="
 echo "Aikido Endpoint Protection - Local PKG Builder"
