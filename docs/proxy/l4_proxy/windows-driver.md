@@ -209,7 +209,6 @@ just run-windows-driver-cli start \
   --ipv4-proxy 127.0.0.1:52647
 ```
 
-
 ### Validate via Windows GUI
 
 Use these built in Windows tools for a quick manual check:
@@ -240,10 +239,13 @@ Available at: <https://learn.microsoft.com/en-us/sysinternals/downloads/>
 
 Useful tools in particular (run them as administrator == elevated):
 
-- `winobj`: access and display information about driver objects (is my driver object created?)
-- `procexp` (Process Explorer): see how your loaded system driver (`.sys`) is doing
-  (filter on `safechain`)
-#### WinObj
+- `winobj`: access and display information about driver objects (is my driver object created?).
+  - You can find the driver (object) itself under `Driver`
+  - The actual symbolic link through which userspace processes communicate with the driver,
+    can be found under `Global??` (even Microsoft is not sure apparently... joking ofc)
+- `procexp` (Process Explorer): see how your loaded system driver (`.sys`)
+  is doing (filter on `safechain`)
+- `dbgview` (DebugView): capture (kernel) "debug" output (see dedicated doc chapter for it below)
 
 #### DebugView
 
@@ -277,3 +279,40 @@ prefix `[safechain-l4-windows-driver]` prefix.
 > - or `safechain_l4_proxy` (userspace MITM proxy)
 >
 > These are just logging to stderr/file output as per usual.
+
+The driver, written in `Rust`, makes use of `wdk::println` for this,
+which roughly translates to code similar to a C/C++ tracing code generated
+in such drivers using the `kDPrint` macro.
+
+These logs are not stored _unless_ "something" is capturing these.
+The easiest to do this is through the `DebugViewer`, locally or remote.
+
+### WinDbg
+
+Essential on Windows is the `WinDbg` utility (which ships with the Windows SDK).
+You can run it via the start menu as adminstrator by looking for `WinDbg`.
+Probably it will show up as the "x64" variant.
+
+It can be used for debug both userspace processes as well as kernel processes.
+
+E.g. the L4 safechain (userspace) proxy can be debugged using it,
+similar to how you would use `gdb` / `lldb` on unix platforms.
+
+Some essential commands for userspace processes:
+
+- `~`: shows information about all threads in the debugged process
+  (for safechain-l4-proxy this will show mostly generic "tokio" threads given we do not give them custom names (yet))
+- The "current" thread will have a subtle "dot" in front of its name, to switch thread
+  use `~ns` where `n` is the number of the thread
+- using `k` you can view the stack of a thread, a shortcut to see the stack for a specific thread is `~nk`
+  where `n` is the number of the thread
+- for breakpoints you can use `bp <symbol>` to set a breakpoint for a specific symbol, and use `bl` to list all existing breakpoints.
+
+See the documentation of `WinDbg ` for more information on more commands and how to use it.
+In most cases you will not require this, but in case the userspace proxy ever behaves very odd (e.g. feels stuck),
+a tool like this can be pretty essential to narrow down the exact issue (if you can reproduce it ofc...)
+
+It is used in similar ways for debugging a kernel driver, but in this case you will need to
+run the kernel driver in a VM to which you can connect to from the host on which you'll run `WinDbg`.
+This by communicating over a COM. Once you have set this up the UX is pretty similar to debugging
+userspace processes.
