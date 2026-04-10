@@ -1,5 +1,51 @@
-use super::{EcosystemConfig, RemoteEndpointConfig};
+use std::collections::HashSet;
+
 use rama::telemetry::tracing;
+use rama::utils::str::arcstr::ArcStr;
+
+use super::{EcosystemConfig, RemoteEndpointConfig};
+
+/// `*` matches any substring (including empty). Only `*` is special; this is glob-style, not full regex.
+fn glob_matches(pattern: &str, text: &str) -> bool {
+    if !pattern.contains('*') {
+        return pattern == text;
+    }
+
+    let parts: Vec<&str> = pattern.split('*').collect();
+    let mut rest = text;
+
+    if let Some(first) = parts.first()
+        && !first.is_empty()
+    {
+        if !rest.starts_with(first) {
+            return false;
+        }
+        rest = &rest[first.len()..];
+    }
+
+    for segment in &parts[1..parts.len() - 1] {
+        if segment.is_empty() {
+            continue;
+        }
+        match rest.find(segment) {
+            Some(idx) => rest = &rest[idx + segment.len()..],
+            None => return false,
+        }
+    }
+
+    let last = parts[parts.len() - 1];
+    if last.is_empty() {
+        true
+    } else {
+        rest.ends_with(last)
+    }
+}
+
+fn exception_list_matches(entries: &HashSet<ArcStr>, package_name: &str) -> bool {
+    entries
+        .iter()
+        .any(|entry| glob_matches(entry.as_str(), package_name))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackagePolicyDecision {
@@ -45,12 +91,8 @@ impl PolicyEvaluator {
         ecosystem_cfg: &EcosystemConfig,
         package_name: &str,
     ) -> PackagePolicyDecision {
-        // Explicitly rejected packages
-        if ecosystem_cfg
-            .exceptions
-            .rejected_packages
-            .contains(package_name)
-        {
+        // Explicitly rejected packages (exact match or `*` glob)
+        if exception_list_matches(&ecosystem_cfg.exceptions.rejected_packages, package_name) {
             tracing::info!(
                 package = package_name,
                 "package is explicitly blocked by endpoint protection config"
@@ -58,12 +100,8 @@ impl PolicyEvaluator {
             return PackagePolicyDecision::Rejected;
         }
 
-        // Explicitly allowed packages
-        if ecosystem_cfg
-            .exceptions
-            .allowed_packages
-            .contains(package_name)
-        {
+        // Explicitly allowed packages (exact match or `*` glob)
+        if exception_list_matches(&ecosystem_cfg.exceptions.allowed_packages, package_name) {
             tracing::info!(
                 package = package_name,
                 "package is explicitly allowed by endpoint protection config"
