@@ -15,7 +15,6 @@ export interface SetupStepLayoutProps {
   onAction: () => void;
   disabled?: boolean;
   children?: ReactNode;
-  aside?: ReactNode;
 }
 
 export function SetupStepLayout({
@@ -31,7 +30,6 @@ export function SetupStepLayout({
   workingLabel = "Working…",
   disabled,
   children,
-  aside,
 }: SetupStepLayoutProps) {
   return (
     <>
@@ -104,7 +102,6 @@ export function SetupStepLayout({
           )}
         </ol>
       </div>
-      {aside}
     </>
   );
 }
