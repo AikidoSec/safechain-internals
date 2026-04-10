@@ -12,7 +12,7 @@ param(
     [switch]$CurrentUserOnly,
 
     [Parameter(Mandatory = $false)]
-    [switch]$SkipBcdEdit
+    [switch]$EnableBcdEdit
 )
 
 $ErrorActionPreference = "Stop"
@@ -146,10 +146,10 @@ function Enable-TestSigning {
 }
 
 $useCurrentUser = [bool]$CurrentUserOnly
-$needsAdmin = (-not $useCurrentUser) -or (-not $SkipBcdEdit)
+$needsAdmin = (-not $useCurrentUser) -or ($EnableBcdEdit)
 
 if ($needsAdmin -and -not (Test-IsAdministrator)) {
-    throw "This script must be run as Administrator unless you use -CurrentUserOnly and -SkipBcdEdit together."
+    throw "This script must be run as Administrator unless you use -CurrentUserOnly without -EnableBcdEdit."
 }
 
 $storeBase = Get-CertStoreBase -UseCurrentUser $useCurrentUser
@@ -171,7 +171,7 @@ Export-PublicCertificateFile -Certificate $cert -OutputPath $cerPath
 Install-CertificateIntoStore -CertFilePath $cerPath -StorePath $rootStore
 Install-CertificateIntoStore -CertFilePath $cerPath -StorePath $trustedPublisherStore
 
-if (-not $SkipBcdEdit) {
+if ($EnableBcdEdit) {
     Enable-TestSigning
 }
 
@@ -184,7 +184,7 @@ Write-Host "My store            : $myStore"
 Write-Host "Root store          : $rootStore"
 Write-Host "TrustedPublisher    : $trustedPublisherStore"
 
-if (-not $SkipBcdEdit) {
+if ($EnableBcdEdit) {
     Write-Host ""
     Write-Host "Next step: reboot the machine before testing the driver." -ForegroundColor Yellow
 }

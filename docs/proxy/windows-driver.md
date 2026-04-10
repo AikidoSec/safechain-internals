@@ -117,11 +117,7 @@ If this later needs to become a production-distributable Windows driver package,
 - `Test-Path "C:\Program Files (x86)\Windows Kits\10\Include\<SDK_VERSION>\km\crt"`
 4. If the path above is missing, repair/reinstall SDK + WDK so the same `<SDK_VERSION>` is installed for both.
 
-## Build
-
-```
-just windows-driver-build
-```
+> Make sure that your Windows SDK and NDK versions match!
 
 ## Local/Dev Driver Package Flow
 
@@ -131,6 +127,13 @@ Build and stage the driver package:
 just windows-driver-build
 just windows-driver-package-stage
 ```
+
+> Powershell (even when elavated) might not run your script.
+> You can allow it for the current session using:
+>
+> ```ps
+> Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+> ```
 
 That stages the local/dev package under:
 
@@ -155,6 +158,13 @@ Notes:
 - `Inf2Cat` comes from the Windows Driver Kit tooling; if it is missing, staging still completes but the catalog step is skipped.
 - This flow is intentionally local/dev oriented and not yet a production signing/distribution flow.
 
+> Should you for some reason not be able to remove the device,
+> you can do so manually using `Device Manager`,
+> where you will be able to find the `Safechain L4 Proxy Driver` undewr
+> System drivers...
+>
+> As per usual, a reboot is required after cleaning up.
+
 ## Local/Dev Windows Driver Validation
 
 After staging and installing the driver package, run:
@@ -176,6 +186,12 @@ This verifies:
 
 The verification checks these WFP GUIDs:
 
+> Truth of source for these GUIDs and other constants
+> can at any time be found at `proxy-lib-nostd\src\windows\driver_protocol.rs`
+>
+> It's a manual task to keep them up to date in docs and powershell scripts,
+> not that they should change often, if ever.
+
 * Provider: `{6A625BB6-F310-443E-9850-280FACDC1A21}`
 * Sublayer: `{D95A6EAF-3882-495F-858C-65C2CE3F6A07}`
 * TCP connect redirect callout v4: `{5C6262C4-8EF6-43D8-A8F9-48636B172BB8}`
@@ -184,6 +200,15 @@ The verification checks these WFP GUIDs:
 * TCP connect redirect filter v6: `{4B60D58C-85FD-4FB1-8256-8C4E6053E43A}`
 
 A successful verification means the driver is not only installed, but also visible in the WFP state with the expected registration objects.
+
+Until you actually ran the `start` command with your ipv4/ipv6 proxy configured, you will not actually
+see those GUIDs registered or even see your driver active. E.g.:
+
+```ps
+just run-windows-driver-cli start \
+  --ipv4-proxy 127.0.0.1:52647
+```
+
 
 ### Validate via Windows GUI
 
@@ -196,3 +221,59 @@ Use these built in Windows tools for a quick manual check:
 * **WFP state dump**: run `netsh wfp show state file=%TEMP%\safechain_wfpstate.xml`, open the XML file, and search for the SafeChain GUIDs above
 
 The PowerShell verification script is the preferred validation path because it checks the full install and WFP registration state in one pass.
+
+### RegEdit
+
+Run `regedit` evalated and you should also be able to find the registry key
+for the safechain l4 proxy (windows) at:
+
+```
+Computer\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SafeChainL4Proxy
+```
+
+### SysInternals Utilities
+
+Utilities that are useful when working with windows drivers,
+and other system tasks on the Windows OS.
+
+Available at: <https://learn.microsoft.com/en-us/sysinternals/downloads/>
+
+Useful tools in particular (run them as administrator == elevated):
+
+- `winobj`: access and display information about driver objects (is my driver object created?)
+- `procexp` (Process Explorer): see how your loaded system driver (`.sys`) is doing
+  (filter on `safechain`)
+#### WinObj
+
+#### DebugView
+
+Before you can see trace output for the windows driver via `DebugView` you will need to enable tracing
+by adding a key named `Debug Print Filter` (_DWORD_ value named `DEFAULT` with as value `8`) in:
+
+```
+HKLM\SYSTEM\CurrentControlSet\Control\Session Manager
+```
+
+Also ensure to enable debug logging using:
+
+```ps1
+bcdedit /debug on
+```
+
+You will have to restart your system for this to take effect.
+
+Once you have that filter setup correctly you can open `DebugView`
+in elevated mode, and make sure to "Capture Kernel", you can deselect
+user-mode capturees (win32 and Global win32) to reduce noise.
+
+When starting/updating/stopping the SafechainL4Proxy sys driver
+you should now see these logs appear there. You can filter them if you wish using the
+prefix `[safechain-l4-windows-driver]` prefix.
+
+> NOTE: this is about the log output of the `windows driver`!!
+> Not about the trace output of any userspace processes such as:
+>
+> - `safechain_l4_proxy_windows_driver_object` (CC CLI);
+> - or `safechain_l4_proxy` (userspace MITM proxy)
+>
+> These are just logging to stderr/file output as per usual.
