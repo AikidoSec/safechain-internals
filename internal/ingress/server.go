@@ -39,6 +39,7 @@ type Server struct {
 
 	eventStore    *eventStore
 	tlsEventStore *tlsEventStore
+	chromeNames   *chromeExtensionNameResolver
 	mu            sync.RWMutex
 }
 
@@ -49,6 +50,7 @@ func New(cfg *config.ConfigInfo, ui UIProvider, proxy proxy.ProxyManager) *Serve
 		proxy:         proxy,
 		eventStore:    &eventStore{},
 		tlsEventStore: &tlsEventStore{},
+		chromeNames:   newChromeExtensionNameResolver(),
 	}
 }
 
