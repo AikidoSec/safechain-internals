@@ -1,6 +1,6 @@
 use std::ptr;
 
-use rama::telemetry::tracing::{debug, info, warn};
+use rama_core::telemetry::tracing::{debug, info, warn};
 use safechain_proxy_lib_nostd::windows::driver_protocol::{
     WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4, WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
     WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V4, WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,

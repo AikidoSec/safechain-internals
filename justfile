@@ -292,3 +292,9 @@ windows-driver-build profile="dev" *ARGS:
 [working-directory: './proxy-lib-l4-windows-driver']
 windows-driver-build-verify profile="dev" *ARGS:
     just windows-driver-build {{profile}} --verify-signature {{ARGS}}
+
+run-windows-driver-cli *ARGS:
+    cargo run \
+        --bin safechain-l4-proxy-windows-driver-object \
+        -- \
+        {{ARGS}}

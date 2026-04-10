@@ -2915,8 +2915,9 @@ version = "1.0.0"
 dependencies = [
  "clap",
  "hex",
- "rama",
+ "rama-core",
  "safechain-proxy-lib-nostd",
+ "tracing-subscriber",
  "windows-sys 0.61.2",
 ]
 

@@ -1,5 +1,5 @@
 use clap::Args;
-use rama::telemetry::tracing::info;
+use rama_core::telemetry::tracing::info;
 use std::net::{SocketAddrV4, SocketAddrV6};
 
 use super::update::{self, UpdateArgs};

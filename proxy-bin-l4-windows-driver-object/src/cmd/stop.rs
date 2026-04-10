@@ -1,5 +1,5 @@
 use clap::Args;
-use rama::telemetry::tracing::info;
+use rama_core::telemetry::tracing::info;
 
 use crate::common::{delete_startup_blob, run_sc};
 use crate::wfp::remove_wfp_objects;

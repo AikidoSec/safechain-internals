@@ -1,11 +1,11 @@
 use std::{fs, io::IsTerminal as _, path::Path};
 
-use rama::telemetry::tracing;
-use rama::telemetry::tracing::appender::{self, non_blocking::WorkerGuard};
-use rama::telemetry::tracing::metadata::LevelFilter;
-use rama::telemetry::tracing::subscriber::{
-    self, EnvFilter, Layer as _, fmt::writer::BoxMakeWriter, layer::SubscriberExt as _,
-    util::SubscriberInitExt as _,
+use rama_core::telemetry::tracing;
+use rama_core::telemetry::tracing::appender::{self, non_blocking::WorkerGuard};
+use rama_core::telemetry::tracing::metadata::LevelFilter;
+use tracing_subscriber::{
+    self as subscriber, EnvFilter, Layer as _, fmt::writer::BoxMakeWriter,
+    layer::SubscriberExt as _, util::SubscriberInitExt as _,
 };
 
 #[derive(Debug)]

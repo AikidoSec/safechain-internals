@@ -5,7 +5,7 @@ use std::{
     process::Command,
 };
 
-use rama::telemetry::tracing::{debug, info};
+use rama_core::telemetry::tracing::{debug, info};
 use safechain_proxy_lib_nostd::windows::driver_protocol::STARTUP_VALUE_NAME;
 use windows_sys::Win32::{
     Foundation::{CloseHandle, GetLastError, HANDLE, INVALID_HANDLE_VALUE},

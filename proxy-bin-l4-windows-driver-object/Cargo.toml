@@ -9,8 +9,9 @@ rust-version = { workspace = true }
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
 hex = "0.4"
-rama = { workspace = true }
+rama-core = { workspace = true }
 safechain-proxy-lib-nostd = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { workspace = true, features = [
