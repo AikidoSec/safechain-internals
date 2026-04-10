@@ -76,8 +76,9 @@ update "$PREV_FILE" \
   "s/(CURRENT_PROJECT_VERSION: ).+/\1${VERSION}/"
 
 PREV_FILE="$REPO_ROOT/packaging/macos/xcode/l4-proxy/Project.dev.yml"
-update "$PREV_FILE (MARKETING_VERSION only)" \
-  "s/(MARKETING_VERSION: ).+/\1${VERSION}/"
+update "$PREV_FILE" \
+  "s/(MARKETING_VERSION: ).+/\1${VERSION}/" \
+  "s/(CURRENT_PROJECT_VERSION: ).+/\1${VERSION}/"
 
 PREV_FILE="$REPO_ROOT/packaging/macos/xcode/l7-proxy/project.yml"
 update "$PREV_FILE" \
