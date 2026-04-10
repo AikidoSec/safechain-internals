@@ -13,7 +13,7 @@ type VersionInfo struct {
 }
 
 var (
-	Version   = "dev"
+	Version   = "1.0.0"
 	BuildTime = "unknown"
 	GitCommit = "unknown"
 

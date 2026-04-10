@@ -214,7 +214,11 @@ endif
 build-pkg-sign-local:
 ifeq ($(DETECTED_OS),darwin)
 	@echo "Building complete macOS package..."
+ifdef GENERATE_VERSION
+	@cd packaging/macos && ./build-and-sign-local.sh --generate-version
+else
 	@cd packaging/macos && ./build-and-sign-local.sh $(VERSION)
+endif
 else ifeq ($(DETECTED_OS),windows)
 	@echo "Building Windows binaries for $(DETECTED_ARCH)..."
 	@"$(MAKE)" build-windows-$(DETECTED_ARCH) VERSION=$(VERSION)

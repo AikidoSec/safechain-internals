@@ -10,10 +10,20 @@ set -e
 # Usage: ./build-and-sign-local.sh
 # =============================================================================
 
-VERSION="${1:-dev}"
 ARCH="universal"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+VERSION="${1:-dev}"
+
+if [ "$VERSION" = "--generate-version" ]; then
+  VERSION="0.0.$(date +%s)"
+  bash "$PROJECT_DIR/scripts/sync-versions.sh" --version "$VERSION"
+  restore_versions() {
+    bash "$PROJECT_DIR/scripts/sync-versions.sh" --version "1.0.0"
+  }
+  trap restore_versions EXIT
+fi
 
 echo "==================================="
 echo "Aikido Endpoint Protection - Local PKG Builder"
@@ -212,13 +222,16 @@ echo ""
 cd "$SCRIPT_DIR"
 ./build-distribution-pkg.sh -v "$VERSION" -a "universal" -b "$PROJECT_DIR/bin" -o "$PROJECT_DIR/dist"
 
-PKG_FILE="$PROJECT_DIR/dist/EndpointProtection-$VERSION.pkg"
+VERSIONED_PKG="$PROJECT_DIR/dist/EndpointProtection-$VERSION.pkg"
 
-if [ ! -f "$PKG_FILE" ]; then
+if [ ! -f "$VERSIONED_PKG" ]; then
     echo "✗ PKG file not created"
     exit 1
 fi
 
+PKG_FILE="$PROJECT_DIR/dist/EndpointProtection.pkg"
+mv "$VERSIONED_PKG" "$PKG_FILE"
+rm -f "$VERSIONED_PKG.sha256"
 echo "✓ PKG created: $PKG_FILE"
 echo ""
 
