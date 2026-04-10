@@ -63,6 +63,9 @@ PREV_FILE="$REPO_ROOT/Cargo.toml"
 update "$PREV_FILE" \
   "s/^(version = \")([^\"]+)(\".*# keep in sync with GH releases)/\1${VERSION}\3/"
 
+echo "  -> $REPO_ROOT/Cargo.lock"
+(cd "$REPO_ROOT" && cargo update --workspace)
+
 PREV_FILE="$REPO_ROOT/packaging/macos/xcode/l4-proxy/Project.dist.yml"
 update "$PREV_FILE" \
   "s/(MARKETING_VERSION: ).+/\1${VERSION}/" \
