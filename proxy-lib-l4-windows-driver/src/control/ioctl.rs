@@ -9,8 +9,6 @@ pub fn handle_device_control_ioctl(
         IOCTL_SET_IPV4_PROXY => parse_ipv4_update(input),
         IOCTL_SET_IPV6_PROXY => parse_ipv6_update(input),
         IOCTL_CLEAR_IPV6_PROXY => Some(ProxyDriverConfigUpdate::SetIpv6(None)),
-        IOCTL_SET_PROXY_PROCESS_ID => parse_proxy_process_id_update(input),
-        IOCTL_CLEAR_PROXY_PROCESS_ID => Some(ProxyDriverConfigUpdate::SetProxyProcessId(None)),
         _ => None,
     };
 
@@ -34,13 +32,6 @@ fn parse_ipv6_update(input: &[u8]) -> Option<ProxyDriverConfigUpdate> {
     Some(ProxyDriverConfigUpdate::SetIpv6(Some(SocketAddr::V6(
         payload.socket_addr(),
     ))))
-}
-
-fn parse_proxy_process_id_update(input: &[u8]) -> Option<ProxyDriverConfigUpdate> {
-    let payload = ProxyProcessIdPayload::from_bytes(input)?;
-    Some(ProxyDriverConfigUpdate::SetProxyProcessId(Some(
-        payload.pid(),
-    )))
 }
 
 #[cfg(test)]

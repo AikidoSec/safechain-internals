@@ -82,18 +82,6 @@ pub const IOCTL_CLEAR_IPV6_PROXY: u32 = ctl_code(
     METHOD_BUFFERED,
     FILE_ANY_ACCESS,
 );
-pub const IOCTL_SET_PROXY_PROCESS_ID: u32 = ctl_code(
-    FILE_DEVICE_SAFECHAIN_PROXY,
-    0x804,
-    METHOD_BUFFERED,
-    FILE_ANY_ACCESS,
-);
-pub const IOCTL_CLEAR_PROXY_PROCESS_ID: u32 = ctl_code(
-    FILE_DEVICE_SAFECHAIN_PROXY,
-    0x805,
-    METHOD_BUFFERED,
-    FILE_ANY_ACCESS,
-);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum StartupConfig {
@@ -178,31 +166,6 @@ impl Ipv6ProxyConfigPayload {
     pub fn socket_addr(&self) -> SocketAddrV6 {
         match self {
             Self::V1 { proxy } => *proxy,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum ProxyProcessIdPayload {
-    V1 { pid: u32 },
-}
-
-impl ProxyProcessIdPayload {
-    pub fn new(pid: u32) -> Self {
-        Self::V1 { pid }
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        postcard::from_bytes(bytes).ok()
-    }
-
-    pub fn to_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
-        postcard::to_allocvec(self)
-    }
-
-    pub fn pid(&self) -> u32 {
-        match self {
-            Self::V1 { pid } => *pid,
         }
     }
 }

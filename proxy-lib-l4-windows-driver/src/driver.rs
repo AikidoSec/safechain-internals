@@ -9,7 +9,6 @@ use crate::wfp::{TcpRedirectDecision, WfpFlowMeta, build_redirect_context, is_lo
 struct ProxyEndpointState {
     ipv4: Option<SocketAddrV4>,
     ipv6: Option<SocketAddrV6>,
-    proxy_pid: Option<u32>,
 }
 
 /// Mutable driver-controlled state for WFP redirection.
@@ -30,7 +29,6 @@ pub struct ProxyDriverStartupConfig {
 pub enum ProxyDriverConfigUpdate {
     SetIpv4(SocketAddr),
     SetIpv6(Option<SocketAddr>),
-    SetProxyProcessId(Option<u32>),
 }
 
 impl Default for ProxyDriverController {
@@ -46,7 +44,6 @@ impl ProxyDriverController {
             state: RwLock::new(ProxyEndpointState {
                 ipv4: None,
                 ipv6: None,
-                proxy_pid: None,
             }),
         }
     }
@@ -65,14 +62,6 @@ impl ProxyDriverController {
 
     pub fn clear_proxy_ipv6_endpoint(&self) {
         self.state.write().ipv6 = None;
-    }
-
-    pub fn configure_proxy_process_id(&self, proxy_pid: u32) {
-        self.state.write().proxy_pid = Some(proxy_pid);
-    }
-
-    pub fn clear_proxy_process_id(&self) {
-        self.state.write().proxy_pid = None;
     }
 
     pub fn apply_startup_config(&self, config: ProxyDriverStartupConfig) -> bool {
@@ -107,10 +96,6 @@ impl ProxyDriverController {
                 state.ipv6 = None;
                 true
             }
-            ProxyDriverConfigUpdate::SetProxyProcessId(proxy_pid) => {
-                state.proxy_pid = proxy_pid;
-                true
-            }
         }
     }
 
@@ -126,31 +111,50 @@ impl ProxyDriverController {
         self.state.read().ipv6.is_some()
     }
 
-    pub fn proxy_process_id(&self) -> Option<u32> {
-        self.state.read().proxy_pid
-    }
-
     pub fn classify_outbound_tcp_connect(&self, flow: WfpFlowMeta) -> TcpRedirectDecision {
         if is_local_destination(flow.remote) {
+            crate::log::driver_log_info!(
+                "tcp: passthrough: local/private destination: {} (source pid = {:?})",
+                flow.remote,
+                flow.source_pid,
+            );
             return TcpRedirectDecision::Passthrough;
         }
 
         let Some(proxy_target) = self.proxy_endpoint_for(flow.remote) else {
+            crate::log::driver_log_info!(
+                "tcp: passthrough: no proxy configured for traffic: {} (source pid = {:?})",
+                flow.remote,
+                flow.source_pid,
+            );
             return TcpRedirectDecision::Passthrough;
         };
 
         if flow.remote == proxy_target {
+            crate::log::driver_log_info!(
+                "tcp: passthrough: cycle: {} (source pid = {:?})",
+                flow.remote,
+                flow.source_pid,
+            );
             return TcpRedirectDecision::Passthrough;
         }
-
-        if proxy_target.ip().is_loopback() && self.proxy_process_id().is_none() {
-            return TcpRedirectDecision::Passthrough;
-        }
-
         let redirect_context: Vec<u8> = match build_redirect_context(&flow) {
             Ok(bytes) => bytes,
-            Err(_) => return TcpRedirectDecision::Passthrough,
+            Err(err) => {
+                crate::log::driver_log_error!(
+                    "tcp: passthrough: failed to build redirect context (err = {err}): {} (source pid = {:?})",
+                    flow.remote,
+                    flow.source_pid,
+                );
+                return TcpRedirectDecision::Passthrough;
+            }
         };
+
+        crate::log::driver_log_info!(
+            "tcp: redirect to L4 proxy @ {proxy_target}: {} (source pid = {:?})",
+            flow.remote,
+            flow.source_pid,
+        );
 
         TcpRedirectDecision::Redirect {
             proxy_target,

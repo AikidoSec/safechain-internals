@@ -19,9 +19,6 @@ pub struct StartArgs {
 
     #[arg(long)]
     pub ipv6_proxy: Option<SocketAddrV6>,
-
-    #[arg(long)]
-    pub proxy_pid: Option<u32>,
 }
 
 pub fn run(args: StartArgs) -> Result<(), String> {
@@ -30,7 +27,6 @@ pub fn run(args: StartArgs) -> Result<(), String> {
         device_path = %args.device_path,
         ipv4_proxy = %args.ipv4_proxy,
         ipv6_proxy = ?args.ipv6_proxy,
-        proxy_pid = ?args.proxy_pid,
         "starting SafeChain Windows driver"
     );
     let startup_blob = StartupConfig::new(args.ipv4_proxy, args.ipv6_proxy);
@@ -44,7 +40,5 @@ pub fn run(args: StartArgs) -> Result<(), String> {
         ipv4_proxy: Some(args.ipv4_proxy),
         ipv6_proxy: args.ipv6_proxy,
         clear_ipv6: args.ipv6_proxy.is_none(),
-        proxy_pid: args.proxy_pid,
-        clear_proxy_pid: args.proxy_pid.is_none(),
     })
 }

@@ -297,15 +297,13 @@ unsafe extern "system" fn on_callout_classify(
             return;
         }
 
-        let proxy_pid = driver_controller().proxy_process_id().unwrap_or(0);
-
         unsafe {
             // SAFETY: connect_request is the writable request returned by WFP for this classify.
             write_socket_addr_to_storage(
                 &mut (*connect_request).remoteAddressAndPort,
                 proxy_target,
             );
-            (*connect_request).localRedirectTargetPID = proxy_pid;
+            (*connect_request).localRedirectTargetPID = 0; // must only be set if you wish to intercept loopback conns
             (*connect_request).localRedirectHandle = registration.redirect_handle as *mut c_void;
             (*connect_request).localRedirectContext = context_ptr;
             (*connect_request).localRedirectContextSize = redirect_context.len();

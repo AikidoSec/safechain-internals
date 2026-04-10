@@ -1,9 +1,8 @@
 use core::net::SocketAddr;
 
 use safechain_proxy_lib_nostd::windows::driver_protocol::{
-    IOCTL_CLEAR_IPV6_PROXY, IOCTL_CLEAR_PROXY_PROCESS_ID, IOCTL_SET_IPV4_PROXY,
-    IOCTL_SET_IPV6_PROXY, IOCTL_SET_PROXY_PROCESS_ID, Ipv4ProxyConfigPayload,
-    Ipv6ProxyConfigPayload, ProxyProcessIdPayload, STARTUP_VALUE_NAME, StartupConfig,
+    IOCTL_CLEAR_IPV6_PROXY, IOCTL_SET_IPV4_PROXY, IOCTL_SET_IPV6_PROXY, Ipv4ProxyConfigPayload,
+    Ipv6ProxyConfigPayload, STARTUP_VALUE_NAME, StartupConfig,
 };
 use wdk_sys::{NTSTATUS, PCUNICODE_STRING, STATUS_INVALID_PARAMETER, STATUS_SUCCESS};
 

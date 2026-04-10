@@ -26,9 +26,9 @@ use windows_sys::Win32::{
 };
 
 pub use safechain_proxy_lib_nostd::windows::driver_protocol::{
-    IOCTL_CLEAR_IPV6_PROXY, IOCTL_CLEAR_PROXY_PROCESS_ID, IOCTL_SET_IPV4_PROXY,
-    IOCTL_SET_IPV6_PROXY, IOCTL_SET_PROXY_PROCESS_ID, Ipv4ProxyConfigPayload,
-    Ipv6ProxyConfigPayload, ProxyProcessIdPayload, StartupConfig,
+    IOCTL_CLEAR_IPV6_PROXY, IOCTL_SET_IPV4_PROXY,
+    IOCTL_SET_IPV6_PROXY, Ipv4ProxyConfigPayload,
+    Ipv6ProxyConfigPayload, StartupConfig,
 };
 
 pub fn start_service(service_name: &str) -> Result<(), String> {

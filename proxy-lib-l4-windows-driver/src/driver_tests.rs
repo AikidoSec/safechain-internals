@@ -24,7 +24,6 @@ fn passthrough_for_private_destinations() {
 fn redirects_public_destinations() {
     let controller = ProxyDriverController::new();
     controller.configure_proxy_ipv4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 15000));
-    controller.configure_proxy_process_id(1234);
 
     let flow = WfpFlowMeta {
         remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
@@ -37,33 +36,9 @@ fn redirects_public_destinations() {
 }
 
 #[test]
-fn loopback_redirect_requires_proxy_process_id() {
-    let controller = ProxyDriverController::new();
-    controller.configure_proxy_ipv4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 15000));
-
-    let flow = WfpFlowMeta {
-        remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
-        source_pid: Some(7),
-        source_process_path: None,
-    };
-
-    assert!(matches!(
-        controller.classify_outbound_tcp_connect(flow.clone()),
-        TcpRedirectDecision::Passthrough
-    ));
-
-    controller.configure_proxy_process_id(1234);
-    assert!(matches!(
-        controller.classify_outbound_tcp_connect(flow),
-        TcpRedirectDecision::Redirect { .. }
-    ));
-}
-
-#[test]
 fn redirects_public_ipv6_destinations_when_ipv6_proxy_is_configured() {
     let controller = ProxyDriverController::new();
     controller.configure_proxy_ipv6(SocketAddrV6::new(Ipv6Addr::LOCALHOST, 15000, 0, 0));
-    controller.configure_proxy_process_id(1234);
 
     let flow = WfpFlowMeta {
         remote: SocketAddr::new(
