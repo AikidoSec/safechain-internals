@@ -1,5 +1,3 @@
-use core::net::SocketAddr;
-
 use safechain_proxy_lib_nostd::windows::driver_protocol::{
     IOCTL_CLEAR_IPV6_PROXY, IOCTL_SET_IPV4_PROXY, IOCTL_SET_IPV6_PROXY, Ipv4ProxyConfigPayload,
     Ipv6ProxyConfigPayload, STARTUP_VALUE_NAME, StartupConfig,
@@ -16,11 +14,8 @@ pub fn initialize_startup_config(
         return STATUS_INVALID_PARAMETER;
     };
 
-    if controller.apply_startup_config(startup_config) {
-        STATUS_SUCCESS
-    } else {
-        STATUS_INVALID_PARAMETER
-    }
+    controller.apply_startup_config(startup_config);
+    STATUS_SUCCESS
 }
 
 pub fn apply_runtime_update(

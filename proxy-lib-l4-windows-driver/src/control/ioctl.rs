@@ -22,16 +22,14 @@ pub fn handle_device_control_ioctl(
 
 fn parse_ipv4_update(input: &[u8]) -> Option<ProxyDriverConfigUpdate> {
     let payload = Ipv4ProxyConfigPayload::from_bytes(input)?;
-    Some(ProxyDriverConfigUpdate::SetIpv4(SocketAddr::V4(
-        payload.socket_addr(),
-    )))
+    Some(ProxyDriverConfigUpdate::SetIpv4(payload.socket_addr()))
 }
 
 fn parse_ipv6_update(input: &[u8]) -> Option<ProxyDriverConfigUpdate> {
     let payload = Ipv6ProxyConfigPayload::from_bytes(input)?;
-    Some(ProxyDriverConfigUpdate::SetIpv6(Some(SocketAddr::V6(
+    Some(ProxyDriverConfigUpdate::SetIpv6(Some(
         payload.socket_addr(),
-    ))))
+    )))
 }
 
 #[cfg(test)]

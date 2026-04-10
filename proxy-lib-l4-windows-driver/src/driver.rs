@@ -21,14 +21,14 @@ pub struct ProxyDriverController {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ProxyDriverStartupConfig {
-    pub proxy_ipv4: SocketAddr,
-    pub proxy_ipv6: Option<SocketAddr>,
+    pub proxy_ipv4: SocketAddrV4,
+    pub proxy_ipv6: Option<SocketAddrV6>,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum ProxyDriverConfigUpdate {
-    SetIpv4(SocketAddr),
-    SetIpv6(Option<SocketAddr>),
+    SetIpv4(SocketAddrV4),
+    SetIpv6(Option<SocketAddrV6>),
 }
 
 impl Default for ProxyDriverController {
@@ -64,35 +64,38 @@ impl ProxyDriverController {
         self.state.write().ipv6 = None;
     }
 
-    pub fn apply_startup_config(&self, config: ProxyDriverStartupConfig) -> bool {
-        let SocketAddr::V4(proxy_v4) = config.proxy_ipv4 else {
-            return false;
-        };
-
+    pub fn apply_startup_config(&self, config: ProxyDriverStartupConfig) {
         let mut state = self.state.write();
-        state.ipv4 = Some(proxy_v4);
-        state.ipv6 = match config.proxy_ipv6 {
-            Some(SocketAddr::V6(proxy_v6)) => Some(proxy_v6),
-            Some(SocketAddr::V4(_)) => return false,
-            None => None,
-        };
-        true
+
+        state.ipv4 = Some(config.proxy_ipv4);
+        state.ipv6 = config.proxy_ipv6;
+
+        crate::log::driver_log_info!(
+            "apply startup config: ipv4={:?}; ipv6={:?}",
+            state.ipv4,
+            state.ipv6,
+        );
     }
 
     pub fn apply_runtime_update(&self, update: ProxyDriverConfigUpdate) -> bool {
         let mut state = self.state.write();
         match update {
-            ProxyDriverConfigUpdate::SetIpv4(SocketAddr::V4(proxy_v4)) => {
+            ProxyDriverConfigUpdate::SetIpv4(proxy_v4) => {
+                crate::log::driver_log_info!(
+                    "apply runtime update: set ipv4 proxy addr: {proxy_v4}",
+                );
                 state.ipv4 = Some(proxy_v4);
                 true
             }
-            ProxyDriverConfigUpdate::SetIpv4(SocketAddr::V6(_)) => false,
-            ProxyDriverConfigUpdate::SetIpv6(Some(SocketAddr::V6(proxy_v6))) => {
+            ProxyDriverConfigUpdate::SetIpv6(Some(proxy_v6)) => {
+                crate::log::driver_log_info!(
+                    "apply runtime update: set ipv6 proxy addr: {proxy_v6}",
+                );
                 state.ipv6 = Some(proxy_v6);
                 true
             }
-            ProxyDriverConfigUpdate::SetIpv6(Some(SocketAddr::V4(_))) => false,
             ProxyDriverConfigUpdate::SetIpv6(None) => {
+                crate::log::driver_log_info!("apply runtime update: unset ipv6 proxy addr",);
                 state.ipv6 = None;
                 true
             }

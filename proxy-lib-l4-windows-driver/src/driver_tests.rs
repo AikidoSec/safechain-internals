@@ -1,6 +1,6 @@
 use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 
-use super::{ProxyDriverConfigUpdate, ProxyDriverController, ProxyDriverStartupConfig};
+use super::{ProxyDriverConfigUpdate, ProxyDriverController};
 use crate::wfp::{TcpRedirectDecision, WfpFlowMeta};
 
 #[test]
@@ -51,15 +51,6 @@ fn redirects_public_ipv6_destinations_when_ipv6_proxy_is_configured() {
 
     let decision = controller.classify_outbound_tcp_connect(flow);
     assert!(matches!(decision, TcpRedirectDecision::Redirect { .. }));
-}
-
-#[test]
-fn startup_config_requires_ipv4_address_family() {
-    let controller = ProxyDriverController::new();
-    assert!(!controller.apply_startup_config(ProxyDriverStartupConfig {
-        proxy_ipv4: SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 15000),
-        proxy_ipv6: None,
-    }));
 }
 
 #[test]

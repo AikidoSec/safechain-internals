@@ -33,8 +33,8 @@ pub fn parse_startup_blob(blob: &[u8]) -> Option<ProxyDriverStartupConfig> {
     let decoded = StartupConfig::from_bytes(blob)?;
 
     Some(ProxyDriverStartupConfig {
-        proxy_ipv4: SocketAddr::V4(decoded.proxy_ipv4()),
-        proxy_ipv6: decoded.proxy_ipv6().map(SocketAddr::V6),
+        proxy_ipv4: decoded.proxy_ipv4(),
+        proxy_ipv6: decoded.proxy_ipv6(),
     })
 }
 
