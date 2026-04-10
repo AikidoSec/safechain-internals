@@ -3,12 +3,18 @@
 # =============================================================================
 # Aikido Endpoint Protection - Uninstall Script
 # =============================================================================
-# This script completely removes Aikido Endpoint Protection from the system.
-# It is intended to be shipped within the .app installer bundle at:
-# /Applications/Aikido Endpoint Protection.app/Contents/Resources/scripts/uninstall
+# Usage:
+#   sudo ./uninstall             Full uninstall (removes everything)
+#   sudo ./uninstall --upgrade   Pre-upgrade cleanup (preserves config, logs,
+#                                and package receipt)
 # =============================================================================
 
 set -e
+
+UPGRADE_MODE=false
+if [ "$1" = "--upgrade" ]; then
+    UPGRADE_MODE=true
+fi
 
 EP_APP="/Applications/Aikido Endpoint Protection.app"
 EP_BIN_DIR="$EP_APP/Contents/Resources/bin"
@@ -18,9 +24,13 @@ LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.endpointprotection
 DAEMON_LABEL="com.aikidosecurity.endpointprotection"
 BINARY="$EP_BIN_DIR/endpoint-protection"
 
-echo "========================================="
-echo "Aikido Endpoint Protection - Uninstaller"
-echo "========================================="
+if [ "$UPGRADE_MODE" = true ]; then
+    echo "Aikido Endpoint Protection - Pre-upgrade cleanup"
+else
+    echo "========================================="
+    echo "Aikido Endpoint Protection - Uninstaller"
+    echo "========================================="
+fi
 echo ""
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -38,6 +48,11 @@ if [ -x "$L4_HOST" ]; then
     "$L4_HOST" stop --remove-profile --clean-secrets 2>/dev/null && echo "  ✓ L4 Proxy stopped" || echo "  L4 Proxy not running"
 fi
 
+if [ -f "$BINARY" ]; then
+    echo "  Running teardown..."
+    "$BINARY" --teardown 2>/dev/null && echo "  ✓ Teardown complete" || echo "  Teardown skipped (may already be torn down)"
+fi
+
 if launchctl list | grep -q "$DAEMON_LABEL"; then
     echo "  Stopping daemon via launchctl..."
     launchctl bootout system/"$DAEMON_LABEL" 2>/dev/null || {
@@ -53,16 +68,18 @@ pkill -f "endpoint-protection-ui" 2>/dev/null && echo "  ✓ UI process stopped"
 pkill -f "safechain-l7-proxy" 2>/dev/null && echo "  ✓ L7 Proxy process stopped" || echo "  L7 Proxy process not running"
 pkill -f "endpoint-protection" 2>/dev/null && echo "  ✓ Daemon process stopped" || echo "  Daemon process not running"
 
-echo ""
+echo "  Waiting for processes to exit..."
+for i in $(seq 1 10); do
+    if ! pgrep -f "endpoint-protection" >/dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+done
 
-if [ -f "$BINARY" ]; then
-    echo "Running teardown..."
-    "$BINARY" --teardown || {
-        echo "  Warning: Teardown command failed (may already be torn down)"
-    }
-    echo "  ✓ Teardown complete"
-else
-    echo "Warning: Binary not found at $BINARY, skipping teardown"
+if pgrep -f "endpoint-protection" >/dev/null 2>&1; then
+    echo "  Force-killing remaining processes..."
+    pkill -9 -f "endpoint-protection" 2>/dev/null || true
+    sleep 1
 fi
 
 echo ""
@@ -83,36 +100,39 @@ if [ -d "$EP_APP" ]; then
     echo "  ✓ Removed Aikido Endpoint Protection app"
 fi
 
-if [ -d "$SUPPORT_DIR" ]; then
-    rm -rf "$SUPPORT_DIR"
-    echo "  ✓ Removed application support files"
+if [ "$UPGRADE_MODE" = false ]; then
+    if [ -d "$SUPPORT_DIR" ]; then
+        rm -rf "$SUPPORT_DIR"
+        echo "  ✓ Removed application support files"
+    fi
+
+    if [ -d "$LOGS_DIR" ]; then
+        rm -rf "$LOGS_DIR"
+        echo "  ✓ Removed log files"
+    fi
+
+    AIKIDO_DIR="/Library/Application Support/AikidoSecurity"
+    if [ -d "$AIKIDO_DIR" ] && [ -z "$(ls -A "$AIKIDO_DIR" 2>/dev/null)" ]; then
+        rmdir "$AIKIDO_DIR" 2>/dev/null || true
+        echo "  ✓ Removed empty AikidoSecurity directory"
+    fi
+
+    AIKIDO_LOGS_DIR="/Library/Logs/AikidoSecurity"
+    if [ -d "$AIKIDO_LOGS_DIR" ] && [ -z "$(ls -A "$AIKIDO_LOGS_DIR" 2>/dev/null)" ]; then
+        rmdir "$AIKIDO_LOGS_DIR" 2>/dev/null || true
+        echo "  ✓ Removed empty AikidoSecurity logs directory"
+    fi
+
+    echo ""
+    echo "Removing package receipt..."
+    pkgutil --forget com.aikidosecurity.endpointprotection 2>/dev/null && echo "  ✓ Package receipt removed" || echo "  Package receipt not found"
+
+    echo ""
+    echo "========================================="
+    echo "✓ Aikido Endpoint Protection has been uninstalled"
+    echo "========================================="
 fi
 
-if [ -d "$LOGS_DIR" ]; then
-    rm -rf "$LOGS_DIR"
-    echo "  ✓ Removed log files"
-fi
-
-AIKIDO_DIR="/Library/Application Support/AikidoSecurity"
-if [ -d "$AIKIDO_DIR" ] && [ -z "$(ls -A "$AIKIDO_DIR" 2>/dev/null)" ]; then
-    rmdir "$AIKIDO_DIR" 2>/dev/null || true
-    echo "  ✓ Removed empty AikidoSecurity directory"
-fi
-
-AIKIDO_LOGS_DIR="/Library/Logs/AikidoSecurity"
-if [ -d "$AIKIDO_LOGS_DIR" ] && [ -z "$(ls -A "$AIKIDO_LOGS_DIR" 2>/dev/null)" ]; then
-    rmdir "$AIKIDO_LOGS_DIR" 2>/dev/null || true
-    echo "  ✓ Removed empty AikidoSecurity logs directory"
-fi
-
-echo ""
-echo "Removing package receipt..."
-pkgutil --forget com.aikidosecurity.endpointprotection 2>/dev/null && echo "  ✓ Package receipt removed" || echo "  Package receipt not found"
-
-echo ""
-echo "========================================="
-echo "✓ Aikido Endpoint Protection has been uninstalled"
-echo "========================================="
 echo ""
 
 exit 0

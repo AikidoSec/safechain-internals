@@ -66,15 +66,21 @@ if [ -n "$AIKIDO_TOKEN" ]; then
     chown root:wheel "$CONFIG_FILE"
 fi
 
-# Load and start the LaunchDaemon
 if [ -f "$LAUNCHDAEMON_PLIST" ]; then
     echo "Loading LaunchDaemon..."
-    launchctl bootstrap system "$LAUNCHDAEMON_PLIST" 2>/dev/null || {
-        # Fallback to launchctl load (old way of starting the daemon on older macOS versions)
-        echo "LaunchDaemon bootstrap failed, trying load..."
-        launchctl load "$LAUNCHDAEMON_PLIST" || true
-    }
-    echo "Aikido Endpoint Protection daemon installed and started"
+    if ! launchctl bootstrap system "$LAUNCHDAEMON_PLIST" 2>&1; then
+        echo "Bootstrap failed, trying load..."
+        if ! launchctl load "$LAUNCHDAEMON_PLIST" 2>&1; then
+            echo "Error: Failed to load LaunchDaemon" >&2
+        fi
+    fi
+
+    sleep 2
+    if launchctl list | grep -q "com.aikidosecurity.endpointprotection"; then
+        echo "Aikido Endpoint Protection daemon installed and started"
+    else
+        echo "Warning: Daemon may not have started. Check logs at $LOGS_DIR"
+    fi
 else
     echo "Warning: LaunchDaemon plist not found at $LAUNCHDAEMON_PLIST"
 fi
