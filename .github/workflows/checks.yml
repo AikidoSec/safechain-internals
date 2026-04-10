@@ -32,12 +32,18 @@ jobs:
         with:
           toolchain: stable
           components: clippy, rustfmt
+      - name: Install Windows SDK + WDK
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          winget install --source winget --exact --id Microsoft.WindowsSDK.10.0.26100 --accept-package-agreements --accept-source-agreements --disable-interactivity
+          winget install --source winget --exact --id Microsoft.WindowsWDK.10.0.26100 --accept-package-agreements --accept-source-agreements --disable-interactivity
       - uses: extractions/setup-just@v4
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
         with:
           env-vars: "RUST_TOOLCHAIN=stable"
       - run: |
-          just rust-qa
+          just rust-qa-full
 
   proxy-build-check-musl:
     strategy:

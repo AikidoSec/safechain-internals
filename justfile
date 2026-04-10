@@ -36,10 +36,15 @@ _rust-quick-qa-linux: rust-quick-qa-crossplatform
 
 _rust-quick-qa-macos: rust-quick-qa-crossplatform
 
-rust-quick-qa-crossplatform $RUSTFLAGS="-D warnings":
+rust-fmt:
     cargo fmt
     @cargo install cargo-sort
     cargo sort --grouped --workspace
+
+rust-quick-qa-crossplatform $RUSTFLAGS="-D warnings":
+    cargo fmt --all --check
+    @cargo install cargo-sort
+    cargo sort --workspace --grouped --check
     cargo doc --all-features --workspace --no-deps \
         --exclude safechain-lib-l4-proxy-windows-driver \
         --exclude safechain-l4-proxy-windows-driver-object
@@ -85,7 +90,7 @@ _rust-fuzz-unix $CARGO_PROFILE_RELEASE_LTO="false" *ARGS:
 
 _rust-fuzz-windows:
 
-rust-qa-full $RUSTFLAGS="-D warnings": rust-qa rust-fuzz
+rust-qa-full: rust-qa
     cargo test --all-features --workspace \
         --exclude safechain-lib-l4-proxy-windows-driver \
         --exclude safechain-l4-proxy-windows-driver-object \
