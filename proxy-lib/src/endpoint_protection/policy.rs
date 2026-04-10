@@ -14,13 +14,13 @@ fn glob_matches(pattern: &str, text: &str) -> bool {
     let parts: Vec<&str> = pattern.split('*').collect();
     let mut rest = text;
 
-    if let Some(first) = parts.first() {
-        if !first.is_empty() {
-            if !rest.starts_with(first) {
-                return false;
-            }
-            rest = &rest[first.len()..];
+    if let Some(first) = parts.first()
+        && !first.is_empty()
+    {
+        if !rest.starts_with(first) {
+            return false;
         }
+        rest = &rest[first.len()..];
     }
     
     if parts.len() <= 1 {
