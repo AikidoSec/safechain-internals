@@ -45,7 +45,7 @@ export function SetupStepEnableExtension({ stepNumber, totalSteps, phase, errorM
                 </div>
                 <div className="sysext-settings-preview__app-info">
                   <p className="sysext-settings-preview__app-name">Aikido Network Extension</p>
-                  <p className="sysext-settings-preview__app-desc">Aikido Network Extension Sysext</p>
+                  <p className="sysext-settings-preview__app-desc">Aikido Network Extension</p>
                 </div>
                 <div className="install-page__preview-mock-btn-spotlight">
                   <div className="sysext-settings-preview__toggle">
