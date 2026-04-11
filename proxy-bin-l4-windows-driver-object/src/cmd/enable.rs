@@ -54,7 +54,7 @@ pub fn run(args: EnableArgs) -> Result<(), BoxError> {
         "enabling SafeChain Windows driver"
     );
     enable_device(&args.service_name)?;
-    ensure_wfp_objects(args.ipv6_proxy.is_some())?;
+    ensure_wfp_objects()?;
 
     let device = DeviceHandle::open_with_retry(&args.device_path, 10, Duration::from_millis(200))?;
     let ipv4_payload = Ipv4ProxyConfigPayload::new(args.ipv4_proxy, args.ipv4_proxy_pid)

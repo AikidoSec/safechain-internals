@@ -167,10 +167,6 @@ impl ProxyDriverController {
         }
     }
 
-    pub fn has_ipv6_proxy(&self) -> bool {
-        self.state.read().ipv6.is_some()
-    }
-
     pub fn classify_outbound_tcp_connect(&self, flow: WfpFlowMeta) -> TcpRedirectDecision {
         if is_local_destination(flow.remote) {
             crate::log::driver_log_info!(

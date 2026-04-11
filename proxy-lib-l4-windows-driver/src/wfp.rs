@@ -85,7 +85,7 @@ struct KernelCalloutRegistration {
 
 static KERNEL_CALLOUT_REGISTRATION: Mutex<Option<KernelCalloutRegistration>> = Mutex::new(None);
 
-pub fn register_callouts(device_object: *mut c_void, enable_ipv6: bool) -> NTSTATUS {
+pub fn register_callouts(device_object: *mut c_void) -> NTSTATUS {
     if device_object.is_null() {
         return STATUS_INVALID_PARAMETER;
     }
@@ -105,7 +105,6 @@ pub fn register_callouts(device_object: *mut c_void, enable_ipv6: bool) -> NTSTA
     }
 
     let mut callout_id_v4 = 0_u32;
-    let mut callout_id_v6 = None;
 
     let callout_v4 = FWPS_CALLOUT1 {
         calloutKey: GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4,
@@ -126,30 +125,27 @@ pub fn register_callouts(device_object: *mut c_void, enable_ipv6: bool) -> NTSTA
         return status_v4;
     }
 
-    if enable_ipv6 {
-        let mut v6_id = 0_u32;
-        let callout_v6 = FWPS_CALLOUT1 {
-            calloutKey: GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
-            flags: 0,
-            classifyFn: Some(on_callout_classify),
-            notifyFn: Some(on_callout_notify),
-            flowDeleteFn: Some(on_callout_flow_delete),
-        };
-        let status_v6 = unsafe {
-            // SAFETY: arguments are valid pointers for the duration of the call.
-            FwpsCalloutRegister1(device_object, &callout_v6, &mut v6_id)
-        };
-        if status_v6 != STATUS_SUCCESS {
-            unsafe {
-                // SAFETY: v4 callout and redirect handle were created successfully above.
-                let _ =
-                    FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4);
-                FwpsRedirectHandleDestroy0(redirect_handle);
-            }
-            return status_v6;
+    let mut v6_id = 0_u32;
+    let callout_v6 = FWPS_CALLOUT1 {
+        calloutKey: GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
+        flags: 0,
+        classifyFn: Some(on_callout_classify),
+        notifyFn: Some(on_callout_notify),
+        flowDeleteFn: Some(on_callout_flow_delete),
+    };
+    let status_v6 = unsafe {
+        // SAFETY: arguments are valid pointers for the duration of the call.
+        FwpsCalloutRegister1(device_object, &callout_v6, &mut v6_id)
+    };
+    if status_v6 != STATUS_SUCCESS {
+        unsafe {
+            // SAFETY: v4 callout and redirect handle were created successfully above.
+            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4);
+            FwpsRedirectHandleDestroy0(redirect_handle);
         }
-        callout_id_v6 = Some(v6_id);
+        return status_v6;
     }
+    let callout_id_v6 = Some(v6_id);
 
     *registration = Some(KernelCalloutRegistration {
         callout_id_v4,
@@ -162,7 +158,7 @@ pub fn register_callouts(device_object: *mut c_void, enable_ipv6: bool) -> NTSTA
     // - add FWPM_CALLOUT entries for these callout keys
     // - add ALE_CONNECT_REDIRECT v4/v6 filters that target these callouts
     log::driver_log_info!(
-        "kernel callouts registered (v4_id={}, v6_id={:?})",
+        "kernel callouts registered for dual-stack redirect (v4_id={}, v6_id={:?})",
         callout_id_v4,
         callout_id_v6
     );

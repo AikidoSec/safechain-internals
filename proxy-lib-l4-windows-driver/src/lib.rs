@@ -71,7 +71,7 @@ pub unsafe extern "system" fn driver_entry(
         return device_status;
     }
 
-    let status = wfp::register_callouts(driver.DeviceObject.cast(), DRIVER.has_ipv6_proxy());
+    let status = wfp::register_callouts(driver.DeviceObject.cast());
     if status != STATUS_SUCCESS {
         device::cleanup(driver);
         log::driver_log_error!(
