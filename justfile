@@ -96,7 +96,7 @@ rust-qa-full: rust-qa
         --exclude safechain-l4-proxy-windows-driver-object \
         -- --ignored
 
-run-l4-proxy $RUST_LOG="info,safechain_l4_proxy=debug,safechain_proxy_lib=debug" *ARGS:
+run-l4-proxy $RUST_LOG="debug" *ARGS:
     cargo run \
         --bin safechain-l4-proxy \
         -- \
