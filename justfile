@@ -265,7 +265,14 @@ windows-driver-package-stage profile="debug" *ARGS:
 windows-driver-package-install package_dir="dist/windows-driver-package/debug":
     ./packaging/windows/install-driver-package.ps1 -PackageDir {{package_dir}}
 
+windows-driver-package-complete IPV4_PROXY *ARGS:
+    just windows-driver-enable {{IPV4_PROXY}} {{ARGS}}
+    just windows-driver-package-verify
+
 windows-driver-package-install-fresh-debug IPV4_PROXY *ARGS:
+    just windows-driver-package-install-fresh-debug-step1 {{IPV4_PROXY}} {{ARGS}}
+
+windows-driver-package-install-fresh-debug-step1:
     just rust-quick-qa
     just windows-driver-test
     just windows-driver-disable
@@ -273,10 +280,13 @@ windows-driver-package-install-fresh-debug IPV4_PROXY *ARGS:
     just windows-driver-build
     just windows-driver-package-stage
     just windows-driver-package-install
-    just run-windows-driver-cli enable \
-        --ipv4-proxy {{IPV4_PROXY}} \
-        --ipv4-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV4_PROXY}}')" \
-        {{ARGS}}
+    @Write-Host ""
+    @Write-Host "Reboot Windows, then run this to finish the driver update:" -ForegroundColor Yellow
+    @Write-Host "  ensure to start the L4 proxy and copy the ipv4 proxy in:" -ForegroundColor Yellow
+    @Write-Host "  just windows-driver-package-install-fresh-debug-step2 <ipv4 addr>" -ForegroundColor Yellow
+
+windows-driver-package-install-fresh-debug-step2 IPV4_PROXY *ARGS:
+    just windows-driver-package-complete {{IPV4_PROXY}} {{ARGS}}
 
 windows-driver-package-verify *ARGS:
     ./packaging/windows/verify-driver-install.ps1 {{ARGS}}
