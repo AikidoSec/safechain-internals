@@ -182,6 +182,16 @@ impl ProxyDriverController {
             return TcpRedirectDecision::Passthrough;
         }
 
+        if flow.remote.port() == 53 {
+            crate::log::driver_log_info!(
+                "tcp: passthrough: DNS (port 53): {} (source pid = {:?}, source process = {:?})",
+                flow.remote,
+                flow.source_pid,
+                flow.source_process_path,
+            );
+            return TcpRedirectDecision::Passthrough;
+        }
+
         let Some(proxy_target) = self.proxy_endpoint_for(flow.remote) else {
             crate::log::driver_log_info!(
                 "tcp: passthrough: no proxy configured for traffic: {} (source pid = {:?}, source process = {:?})",

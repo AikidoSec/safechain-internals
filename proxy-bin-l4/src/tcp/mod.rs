@@ -22,10 +22,11 @@ use rama::{
         ws::handshake::matcher::HttpWebSocketRelayServiceRequestMatcher,
     },
     io::{BridgeIo, Io},
-    layer::{ArcLayer, ConsumeErrLayer, HijackLayer},
+    layer::{AddInputExtensionLayer, ArcLayer, ConsumeErrLayer, HijackLayer},
     net::{
         address::SocketAddress,
         http::server::HttpPeekRouter,
+        mode::{ConnectIpMode, DnsResolveIpMode},
         proxy::IoForwardService,
         socket::{
             SocketOptions,
@@ -75,6 +76,7 @@ pub async fn start_tcp_server(
 ) -> Result<SocketAddress, BoxError> {
     let tcp_svc = try_new_tcp_service(
         executor.clone(),
+        bind.is_ipv4(),
         peek_duration,
         agent_identity,
         reporting_endpoint,
@@ -140,8 +142,10 @@ async fn try_new_tcp_listener(
     TcpListener::try_from_socket(socket, executor).context("create tcp listener from tcp socket")
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn try_new_tcp_service(
     executor: Executor,
+    is_ipv4: bool,
     peek_duration: Duration,
     agent_identity: Option<AgentIdentity>,
     reporting_endpoint: Option<Uri>,
@@ -213,6 +217,17 @@ async fn try_new_tcp_service(
     Ok(Arc::new(
         (
             ConsumeErrLayer::trace_as_debug(),
+            if is_ipv4 {
+                (
+                    AddInputExtensionLayer::new(DnsResolveIpMode::SingleIpV4),
+                    AddInputExtensionLayer::new(ConnectIpMode::Ipv4),
+                )
+            } else {
+                (
+                    AddInputExtensionLayer::new(DnsResolveIpMode::SingleIpV6),
+                    AddInputExtensionLayer::new(ConnectIpMode::Ipv6),
+                )
+            },
             #[cfg(target_os = "windows")]
             WfpRedirectRecordsLayer::new(),
             self::proxy_target::new_proxy_target_from_input_layer(),
