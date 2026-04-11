@@ -165,6 +165,16 @@ Notes:
 >
 > As per usual, a reboot is required after cleaning up.
 
+As a developer the easiest to run for a new build, packe and install,
+e.g. after a code change, is:
+
+```
+just windows-driver-package-install-fresh-debug
+```
+
+After that you just need to "update" the driver with the proxy address(es)
+and off you go.
+
 ## Local/Dev Windows Driver Validation
 
 After staging and installing the driver package, run:

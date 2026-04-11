@@ -265,6 +265,11 @@ windows-driver-package-stage profile="debug" *ARGS:
 windows-driver-package-install package_dir="dist/windows-driver-package/debug":
     ./packaging/windows/install-driver-package.ps1 -PackageDir {{package_dir}}
 
+windows-driver-package-install-fresh-debug:
+    just windows-driver-qa
+    just windows-driver-package-stage
+    just windows-driver-package-install
+
 windows-driver-package-verify *ARGS:
     ./packaging/windows/verify-driver-install.ps1 {{ARGS}}
 
