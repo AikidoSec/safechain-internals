@@ -49,17 +49,17 @@ pub unsafe extern "system" fn driver_entry(
     registry_path: PCUNICODE_STRING,
 ) -> NTSTATUS {
     log::driver_log_info!(
-        "driver entry invoked (startup config required, redirect-target-pid enabled)"
+        "driver entry invoked (runtime config required, redirect-target-pid enabled)"
     );
     driver.DriverUnload = Some(driver_unload);
 
-    let startup_status = control::initialize_startup_config(&DRIVER, registry_path);
-    if startup_status != STATUS_SUCCESS {
+    let init_status = control::initialize_runtime_config(&DRIVER, registry_path);
+    if init_status != STATUS_SUCCESS {
         log::driver_log_error!(
-            "startup config initialization failed with NTSTATUS={:#x}",
-            startup_status
+            "runtime config initialization failed with NTSTATUS={:#x}",
+            init_status
         );
-        return startup_status;
+        return init_status;
     }
 
     let device_status = device::initialize(driver);
@@ -82,7 +82,7 @@ pub unsafe extern "system" fn driver_entry(
     }
 
     log::driver_log_info!(
-        "driver initialized (startup config required, redirect-target-pid enabled)"
+        "driver initialized (runtime config required, redirect-target-pid enabled)"
     );
     STATUS_SUCCESS
 }
@@ -92,7 +92,7 @@ extern "C" fn driver_unload(_driver: *mut DRIVER_OBJECT) {
     wfp::unregister_callouts();
     device::cleanup(_driver);
     DRIVER.clear_proxy_endpoint();
-    log::driver_log_info!("driver unloaded (startup config required, redirect-target-pid enabled)");
+    log::driver_log_info!("driver unloaded (runtime config required, redirect-target-pid enabled)");
 }
 
 pub fn update_driver_config(update: ProxyDriverConfigUpdate) -> NTSTATUS {

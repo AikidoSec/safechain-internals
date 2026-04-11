@@ -195,14 +195,12 @@ if (Test-CommandExists "pnputil.exe") {
 }
 
 Write-Section "Driver service"
-$serviceFound = $false
 try {
     $service = Get-CimInstance Win32_SystemDriver | Where-Object {
         $_.Name -eq $DriverServiceName -or $_.PathName -like "*$DriverFileName*"
     } | Select-Object -First 1
 
     if ($service) {
-        $serviceFound = $true
         Write-Pass "Driver service found"
         Write-Info "Name      : $($service.Name)"
         Write-Info "State     : $($service.State)"
@@ -397,7 +395,7 @@ if (Test-Path $WfpStatePath) {
         }
     }
 
-    $safechainTextHits = Select-String -Path $WfpStatePath -Pattern "SafeChain|safechain|ProxyStartupConfigV1" -SimpleMatch
+    $safechainTextHits = Select-String -Path $WfpStatePath -Pattern "SafeChain|safechain" -SimpleMatch
     if ($safechainTextHits) {
         Write-Pass "Found SafeChain text markers in WFP state"
         $safechainTextHits | Select-Object -First 20 | ForEach-Object {

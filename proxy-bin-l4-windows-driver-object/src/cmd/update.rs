@@ -5,10 +5,11 @@ use std::net::{SocketAddrV4, SocketAddrV6};
 use crate::common::{
     DeviceHandle, IOCTL_CLEAR_IPV6_PROXY, IOCTL_SET_IPV4_PROXY,
     IOCTL_SET_IPV6_PROXY, Ipv4ProxyConfigPayload,
-    Ipv6ProxyConfigPayload, sync_startup_blob,
+    Ipv6ProxyConfigPayload,
 };
 
 #[derive(Debug, Args)]
+/// Update the running SafeChain Windows driver config.
 pub struct UpdateArgs {
     #[arg(long, default_value = "SafeChainL4Proxy")]
     pub service_name: String,
@@ -87,19 +88,6 @@ pub fn run(args: UpdateArgs) -> Result<(), BoxError> {
     }
     if args.clear_ipv6 {
         device.send_ioctl(IOCTL_CLEAR_IPV6_PROXY, &[])?;
-    }
-
-    if args.ipv4_proxy.is_some() || args.ipv6_proxy.is_some() || args.clear_ipv6 {
-        let next_ipv6 = if args.clear_ipv6 {
-            Some(None)
-        } else {
-            args.ipv6_proxy.zip(args.ipv6_proxy_pid).map(Some)
-        };
-        sync_startup_blob(
-            &args.service_name,
-            args.ipv4_proxy.zip(args.ipv4_proxy_pid),
-            next_ipv6,
-        )?;
     }
 
     Ok(())

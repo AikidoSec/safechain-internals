@@ -74,16 +74,21 @@ where
     type Error = BoxError;
 
     async fn serve(&self, mut input: Input) -> Result<Self::Output, Self::Error> {
-        if let Some(records) = query_wfp_redirect_records(input.as_raw_socket())
+        let inbound_socket = input.as_raw_socket();
+        if let Some(records) = query_wfp_redirect_records(inbound_socket)
             .context("query WFP redirect records from input stream")?
         {
             tracing::info!(
+                inbound_socket,
                 redirect_records_len = records.as_bytes().len(),
                 "accepted inbound socket with WFP redirect records"
             );
             input.extensions_mut().insert(records);
         } else {
-            tracing::debug!("accepted inbound socket without WFP redirect records");
+            tracing::info!(
+                inbound_socket,
+                "accepted inbound socket without WFP redirect records"
+            );
         }
 
         self.inner
@@ -175,10 +180,23 @@ fn tcp_connect_with_socket_opts_and_redirect_records(
     let socket = socket_options
         .try_build_socket(addr.into())
         .context("build outbound TCP socket")?;
+    let outbound_socket = socket.as_raw_socket();
 
     if let Some(redirect_records) = redirect_records {
+        tracing::debug!(
+            outbound_socket,
+            target = %addr,
+            redirect_records_len = redirect_records.as_bytes().len(),
+            "apply WFP redirect records to outbound proxy socket"
+        );
         set_wfp_redirect_records(socket.as_raw_socket(), redirect_records)
             .context("apply WFP redirect records to outbound proxy socket")?;
+    } else {
+        tracing::debug!(
+            outbound_socket,
+            target = %addr,
+            "connect outbound proxy socket without WFP redirect records"
+        );
     }
 
     socket
@@ -213,16 +231,30 @@ fn query_wfp_redirect_records(socket: RawSocket) -> io::Result<Option<WfpRedirec
     };
 
     if rc == 0 && needed == 0 {
+        tracing::debug!(
+            socket,
+            "WFP redirect record query returned success with empty payload"
+        );
         return Ok(None);
     }
 
     let err = unsafe { WSAGetLastError() };
 
     if is_no_wfp_redirect_records_error(err) {
+        tracing::debug!(
+            socket,
+            wsa_error = err,
+            "WFP redirect records are not available on socket"
+        );
         return Ok(None);
     }
 
     if err != ERROR_INSUFFICIENT_BUFFER as i32 && needed == 0 {
+        tracing::debug!(
+            socket,
+            wsa_error = err,
+            "WFP redirect record query failed before buffer allocation"
+        );
         return Err(io::Error::from_raw_os_error(err));
     }
 
@@ -247,15 +279,30 @@ fn query_wfp_redirect_records(socket: RawSocket) -> io::Result<Option<WfpRedirec
     if rc == 0 {
         let out = aligned_blob_as_mut_bytes(&mut storage);
         let blob = out[..returned as usize].to_vec();
+        tracing::debug!(
+            socket,
+            redirect_records_len = returned,
+            "WFP redirect record query returned redirect metadata"
+        );
         return Ok(Some(blob.into()));
     }
 
     let err = unsafe { WSAGetLastError() };
 
     if is_no_wfp_redirect_records_error(err) {
+        tracing::debug!(
+            socket = socket as usize,
+            wsa_error = err,
+            "WFP redirect records disappeared before second query"
+        );
         return Ok(None);
     }
 
+    tracing::debug!(
+        socket,
+        wsa_error = err,
+        "WFP redirect record query failed after buffer allocation"
+    );
     Err(io::Error::from_raw_os_error(err))
 }
 

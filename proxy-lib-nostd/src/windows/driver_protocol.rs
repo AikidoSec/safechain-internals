@@ -22,7 +22,6 @@ impl WindowsGuid {
     }
 }
 
-pub const STARTUP_VALUE_NAME: &str = "ProxyStartupConfigV1";
 pub const WFP_PROVIDER_SAFECHAIN_L4_PROXY: WindowsGuid = WindowsGuid::new(
     0x6a625bb6,
     0xf310,
@@ -82,59 +81,6 @@ pub const IOCTL_CLEAR_IPV6_PROXY: u32 = ctl_code(
     METHOD_BUFFERED,
     FILE_ANY_ACCESS,
 );
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum StartupConfig {
-    V1 {
-        proxy_ipv4: (SocketAddrV4, u32),
-        proxy_ipv6: Option<(SocketAddrV6, u32)>,
-    },
-}
-
-impl StartupConfig {
-    pub fn new(
-        proxy_ipv4: SocketAddrV4,
-        proxy_ipv4_pid: u32,
-        proxy_ipv6: Option<(SocketAddrV6, u32)>,
-    ) -> Self {
-        Self::V1 {
-            proxy_ipv4: (proxy_ipv4, proxy_ipv4_pid),
-            proxy_ipv6,
-        }
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        postcard::from_bytes(bytes).ok()
-    }
-
-    pub fn to_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
-        postcard::to_allocvec(self)
-    }
-
-    pub fn proxy_ipv4(&self) -> SocketAddrV4 {
-        match self {
-            Self::V1 { proxy_ipv4, .. } => proxy_ipv4.0,
-        }
-    }
-
-    pub fn proxy_ipv4_pid(&self) -> u32 {
-        match self {
-            Self::V1 { proxy_ipv4, .. } => proxy_ipv4.1,
-        }
-    }
-
-    pub fn proxy_ipv6(&self) -> Option<SocketAddrV6> {
-        match self {
-            Self::V1 { proxy_ipv6, .. } => proxy_ipv6.map(|value| value.0),
-        }
-    }
-
-    pub fn proxy_ipv6_pid(&self) -> Option<u32> {
-        match self {
-            Self::V1 { proxy_ipv6, .. } => proxy_ipv6.map(|value| value.1),
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Ipv4ProxyConfigPayload {
@@ -200,33 +146,4 @@ impl Ipv6ProxyConfigPayload {
 
 const fn ctl_code(device_type: u32, function: u32, method: u32, access: u32) -> u32 {
     (device_type << 16) | (access << 14) | (function << 2) | method
-}
-
-#[cfg(test)]
-mod tests {
-    use core::net::{Ipv4Addr, Ipv6Addr};
-
-    use super::*;
-
-    #[test]
-    fn startup_config_roundtrips() {
-        let config = StartupConfig::new(
-            SocketAddrV4::new(Ipv4Addr::LOCALHOST, 15000),
-            1234,
-            Some((SocketAddrV6::new(Ipv6Addr::LOCALHOST, 15001, 0, 0), 5678)),
-        );
-
-        let decoded =
-            StartupConfig::from_bytes(&config.to_bytes().expect("encode")).expect("decode");
-        assert_eq!(
-            decoded.proxy_ipv4(),
-            SocketAddrV4::new(Ipv4Addr::LOCALHOST, 15000)
-        );
-        assert_eq!(decoded.proxy_ipv4_pid(), 1234);
-        assert_eq!(
-            decoded.proxy_ipv6(),
-            Some(SocketAddrV6::new(Ipv6Addr::LOCALHOST, 15001, 0, 0))
-        );
-        assert_eq!(decoded.proxy_ipv6_pid(), Some(5678));
-    }
 }

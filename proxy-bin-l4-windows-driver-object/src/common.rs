@@ -1,14 +1,12 @@
 use std::{
     ffi::OsStr,
-    net::{SocketAddrV4, SocketAddrV6},
     os::windows::ffi::OsStrExt,
     ptr::{self, null_mut},
     thread,
     time::Duration,
 };
 
-use rama_core::{error::{BoxError, ErrorContext as _, ErrorExt as _}, telemetry::tracing::{debug, info, warn}};
-use safechain_proxy_lib_nostd::windows::driver_protocol::STARTUP_VALUE_NAME;
+use rama_core::{error::{BoxError, ErrorExt as _}, telemetry::tracing::{debug, info, warn}};
 use windows_sys::Win32::{
     Devices::DeviceAndDriverInstallation::{
         CM_DISABLE_ABSOLUTE, CM_DISABLE_PERSIST, CM_DISABLE_UI_NOT_OK, CM_Disable_DevNode,
@@ -33,7 +31,7 @@ use windows_sys::Win32::{
         SetupDiGetDeviceRegistryPropertyW, SP_DEVINFO_DATA, SPDRP_SERVICE,
     },
     Foundation::{
-        CloseHandle, ERROR_FILE_NOT_FOUND, ERROR_INSUFFICIENT_BUFFER,
+        CloseHandle, ERROR_INSUFFICIENT_BUFFER,
         ERROR_INVALID_DATA, ERROR_NO_MORE_ITEMS, GetLastError, HANDLE,
         INVALID_HANDLE_VALUE,
     },
@@ -41,17 +39,12 @@ use windows_sys::Win32::{
         CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_GENERIC_READ, FILE_GENERIC_WRITE, OPEN_EXISTING,
     },
     System::IO::DeviceIoControl,
-    System::Registry::{
-        RegCloseKey, RegCreateKeyExW, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW,
-        RegSetValueExW, HKEY, HKEY_LOCAL_MACHINE, KEY_CREATE_SUB_KEY, KEY_QUERY_VALUE,
-        KEY_SET_VALUE, REG_BINARY, REG_OPTION_NON_VOLATILE,
-    },
 };
 
 pub use safechain_proxy_lib_nostd::windows::driver_protocol::{
     IOCTL_CLEAR_IPV6_PROXY, IOCTL_SET_IPV4_PROXY,
     IOCTL_SET_IPV6_PROXY, Ipv4ProxyConfigPayload,
-    Ipv6ProxyConfigPayload, StartupConfig,
+    Ipv6ProxyConfigPayload,
 };
 
 pub fn enable_device(service_name: &str) -> Result<(), BoxError> {
@@ -471,272 +464,6 @@ fn from_wide_with_nul(value: &[u16]) -> String {
     String::from_utf16_lossy(&value[..end])
 }
 
-pub fn write_startup_blob(service_name: &str, blob: &StartupConfig) -> Result<(), BoxError> {
-    let key_path = startup_blob_registry_subkey(service_name);
-    let encoded = blob
-        .to_bytes()
-        .context("failed to encode startup config")?;
-
-    debug!(
-        service_name,
-        bytes = encoded.len(),
-        "writing startup blob to registry"
-    );
-
-    let key = RegistryKey::create_local_machine_subkey(
-        &key_path,
-        KEY_CREATE_SUB_KEY | KEY_SET_VALUE,
-    )?;
-    key.set_binary_value(STARTUP_VALUE_NAME, &encoded)?;
-
-    info!(service_name, "startup blob written to registry");
-    Ok(())
-}
-
-pub fn read_startup_blob(service_name: &str) -> Result<Option<StartupConfig>, BoxError> {
-    let key_path = startup_blob_registry_subkey(service_name);
-    debug!(service_name, "reading startup blob from registry");
-    let Some(key) = RegistryKey::open_local_machine_subkey(&key_path, KEY_QUERY_VALUE)? else {
-        debug!(service_name, "startup blob registry key is not present");
-        return Ok(None);
-    };
-    let Some(bytes) = key.query_binary_value(STARTUP_VALUE_NAME)? else {
-        debug!(service_name, "startup blob is not present in registry");
-        return Ok(None);
-    };
-
-    let blob = StartupConfig::from_bytes(&bytes)
-        .ok_or_else(|| "failed to decode startup config blob".to_string())?;
-    Ok(Some(blob))
-}
-
-pub fn sync_startup_blob(
-    service_name: &str,
-    ipv4_proxy: Option<(SocketAddrV4, u32)>,
-    ipv6_proxy: Option<Option<(SocketAddrV6, u32)>>,
-) -> Result<(), BoxError> {
-    let current = read_startup_blob(service_name)?;
-
-    let next_ipv4 = match ipv4_proxy {
-        Some(ipv4) => ipv4,
-        None => match current.as_ref() {
-            Some(blob) => (blob.proxy_ipv4(), blob.proxy_ipv4_pid()),
-            None => {
-                return Err(BoxError::from(
-                    "cannot update persisted startup config without an existing IPv4 proxy; use `enable` or pass `--ipv4-proxy`"
-                ))
-            }
-        },
-    };
-
-    let next_ipv6 = match ipv6_proxy {
-        Some(next) => next,
-        None => current.and_then(|blob| blob.proxy_ipv6().zip(blob.proxy_ipv6_pid())),
-    };
-
-    write_startup_blob(service_name, &StartupConfig::new(next_ipv4.0, next_ipv4.1, next_ipv6))
-}
-
-pub fn delete_startup_blob(service_name: &str) -> Result<(), BoxError> {
-    let key_path = startup_blob_registry_subkey(service_name);
-    debug!(service_name, "deleting startup blob from registry");
-    let Some(key) = RegistryKey::open_local_machine_subkey(&key_path, KEY_SET_VALUE)? else {
-        debug!(service_name, "startup blob registry key was already absent");
-        return Ok(());
-    };
-
-    if key.delete_value(STARTUP_VALUE_NAME)? {
-        info!(service_name, "startup blob deleted from registry");
-    } else {
-        debug!(service_name, "startup blob was already absent");
-    }
-    Ok(())
-}
-
-struct RegistryKey(HKEY);
-
-impl RegistryKey {
-    fn create_local_machine_subkey(subkey: &str, desired_access: u32) -> Result<Self, BoxError> {
-        let wide_subkey = to_wide(subkey);
-        let mut handle = std::ptr::null_mut();
-        let status = unsafe {
-            // SAFETY: pointers are valid and output handle is writable.
-            RegCreateKeyExW(
-                HKEY_LOCAL_MACHINE,
-                wide_subkey.as_ptr(),
-                0,
-                ptr::null(),
-                REG_OPTION_NON_VOLATILE,
-                desired_access,
-                ptr::null(),
-                &mut handle,
-                null_mut(),
-            )
-        };
-        if status != 0 {
-            return Err(
-                BoxError::from("failed to create/open registry key")
-                    .context_str_field("subkey", subkey)
-                    .context_field("win32", status),
-            );
-        }
-
-        Ok(Self(handle))
-    }
-
-    fn open_local_machine_subkey(subkey: &str, desired_access: u32) -> Result<Option<Self>, BoxError> {
-        let wide_subkey = to_wide(subkey);
-        let mut handle = std::ptr::null_mut();
-        let status = unsafe {
-            // SAFETY: pointers are valid and output handle is writable.
-            RegOpenKeyExW(
-                HKEY_LOCAL_MACHINE,
-                wide_subkey.as_ptr(),
-                0,
-                desired_access,
-                &mut handle,
-            )
-        };
-        if status == ERROR_FILE_NOT_FOUND {
-            return Ok(None);
-        }
-        if status != 0 {
-            return Err(
-                BoxError::from("failed to open registry key")
-                    .context_str_field("subkey", subkey)
-                    .context_field("win32", status),
-            );
-        }
-
-        Ok(Some(Self(handle)))
-    }
-
-    fn set_binary_value(&self, value_name: &str, data: &[u8]) -> Result<(), BoxError> {
-        let wide_name = to_wide(value_name);
-        let status = unsafe {
-            // SAFETY: handle is valid, value name is null-terminated, and data buffer is valid.
-            RegSetValueExW(
-                self.0,
-                wide_name.as_ptr(),
-                0,
-                REG_BINARY,
-                data.as_ptr(),
-                data.len() as u32,
-            )
-        };
-        if status != 0 {
-            return Err(
-                BoxError::from("failed to write registry value")
-                    .context_str_field("name", value_name)
-                    .context_field("win32", status),
-            );
-        }
-        Ok(())
-    }
-
-    fn query_binary_value(&self, value_name: &str) -> Result<Option<Vec<u8>>, BoxError> {
-        let wide_name = to_wide(value_name);
-        let mut value_type = 0;
-        let mut data_len = 0;
-        let status = unsafe {
-            // SAFETY: handle is valid and output pointers are writable.
-            RegQueryValueExW(
-                self.0,
-                wide_name.as_ptr(),
-                ptr::null(),
-                &mut value_type,
-                null_mut(),
-                &mut data_len,
-            )
-        };
-        if status == ERROR_FILE_NOT_FOUND {
-            return Ok(None);
-        }
-        if status != 0 {
-            return Err(
-                BoxError::from("failed to query registry value size")
-                    .context_str_field("name", value_name)
-                    .context_field("win32", status),
-            );
-        }
-        if value_type != REG_BINARY {
-            return Err(
-                BoxError::from("registry value has unexpected type")
-                    .context_str_field("name", value_name)
-                    .context_field("registry_type", value_type),
-            );
-        }
-
-        let mut data = vec![0_u8; data_len as usize];
-        let status = unsafe {
-            // SAFETY: handle is valid and the output buffer is sized from the queried length.
-            RegQueryValueExW(
-                self.0,
-                wide_name.as_ptr(),
-                ptr::null(),
-                &mut value_type,
-                data.as_mut_ptr(),
-                &mut data_len,
-            )
-        };
-        if status != 0 {
-            return Err(
-                BoxError::from("failed to read registry value")
-                    .context_str_field("name", value_name)
-                    .context_field("win32", status),
-            );
-        }
-        if value_type != REG_BINARY {
-            return Err(
-                BoxError::from("registry value has unexpected type")
-                    .context_str_field("name", value_name)
-                    .context_field("registry_type", value_type),
-            );
-        }
-
-        data.truncate(data_len as usize);
-        Ok(Some(data))
-    }
-
-    fn delete_value(&self, value_name: &str) -> Result<bool, BoxError> {
-        let wide_name = to_wide(value_name);
-        let status = unsafe {
-            // SAFETY: handle is valid and value name is null-terminated.
-            RegDeleteValueW(self.0, wide_name.as_ptr())
-        };
-        if status == ERROR_FILE_NOT_FOUND {
-            return Ok(false);
-        }
-        if status != 0 {
-            return Err(
-                BoxError::from("failed to delete registry value")
-                    .context_str_field("name", value_name)
-                    .context_field("win32", status),
-            );
-        }
-        Ok(true)
-    }
-}
-
-impl Drop for RegistryKey {
-    fn drop(&mut self) {
-        if !self.0.is_null() {
-            unsafe {
-                // SAFETY: handle belongs to this wrapper and is closed exactly once here.
-                RegCloseKey(self.0);
-            }
-        }
-    }
-}
-
-fn startup_blob_registry_subkey(service_name: &str) -> String {
-    format!(r"SYSTEM\CurrentControlSet\Services\{service_name}\Parameters")
-}
-
-fn to_wide(value: &str) -> Vec<u16> {
-    OsStr::new(value).encode_wide().chain(Some(0)).collect()
-}
-
 pub struct DeviceHandle(HANDLE);
 
 impl DeviceHandle {
@@ -767,6 +494,47 @@ impl DeviceHandle {
 
         info!(device_path, "opened driver device handle");
         Ok(Self(handle))
+    }
+
+    pub fn open_with_retry(
+        device_path: &str,
+        attempts: usize,
+        retry_delay: Duration,
+    ) -> Result<Self, BoxError> {
+        let attempts = attempts.max(1);
+        let mut last_error = None;
+
+        for attempt in 1..=attempts {
+            match Self::open(device_path) {
+                Ok(handle) => {
+                    if attempt > 1 {
+                        info!(
+                            device_path,
+                            attempt,
+                            "opened driver device handle after retry"
+                        );
+                    }
+                    return Ok(handle);
+                }
+                Err(err) => {
+                    last_error = Some(err);
+                    if attempt < attempts {
+                        warn!(
+                            device_path,
+                            attempt,
+                            retry_delay_ms = retry_delay.as_millis(),
+                            "opening driver device handle failed; retrying"
+                        );
+                        thread::sleep(retry_delay);
+                    }
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            BoxError::from("failed to open device after retry")
+                .context_str_field("device_path", device_path)
+        }))
     }
 
     pub fn send_ioctl(&self, ioctl: u32, input: &[u8]) -> Result<(), BoxError> {

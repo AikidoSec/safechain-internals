@@ -5,8 +5,6 @@ $ErrorActionPreference = "Stop"
 $DriverServiceName = "SafeChainL4Proxy"
 $DriverHardwareId = "Root\SafeChainL4Proxy"
 $OriginalInfName = "safechain_lib_l4_proxy_windows_driver.inf"
-$StartupConfigRegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Services\$DriverServiceName\Parameters"
-$StartupConfigValueName = "ProxyStartupConfigV1"
 $PnpUtilSuccess = 0
 $PnpUtilRebootRequired = 3010
 $PnpUtilRebootInitiated = 1641
@@ -132,9 +130,4 @@ foreach ($publishedName in $publishedNames) {
     if (($LASTEXITCODE -eq $PnpUtilRebootRequired) -or ($LASTEXITCODE -eq $PnpUtilRebootInitiated)) {
         throw "Windows reports that driver removal requires a reboot to complete. Please reboot before reinstalling."
     }
-}
-
-if (Test-Path $StartupConfigRegistryPath) {
-    Write-Host "Removing persisted startup config value $StartupConfigValueName"
-    Remove-ItemProperty -Path $StartupConfigRegistryPath -Name $StartupConfigValueName -ErrorAction SilentlyContinue
 }

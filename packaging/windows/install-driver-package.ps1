@@ -43,6 +43,16 @@ function Find-DevCon {
     return $null
 }
 
+function Test-PnpUtilSupports {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Argument
+    )
+
+    $helpOutput = & pnputil.exe /? 2>&1 | Out-String
+    $helpOutput -match [regex]::Escape($Argument)
+}
+
 function Get-DeviceInstanceIds {
     param(
         [Parameter(Mandatory = $true)]
@@ -131,31 +141,64 @@ function Invoke-PnpUtil {
     }
 }
 
+function Invoke-PnpUtilDeviceAction {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Action,
+
+        [Parameter(Mandatory = $true)]
+        [string]$InstanceId,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    $result = Invoke-PnpUtil `
+        -Arguments @($Action, $InstanceId) `
+        -Description $Description `
+        -AllowedExitCodes @($PnpUtilSuccess, $PnpUtilRebootRequired, $PnpUtilRebootInitiated)
+
+    $text = ($result.Output | Out-String).Trim()
+    if ($result.ExitCode -eq $PnpUtilRebootRequired -or $result.ExitCode -eq $PnpUtilRebootInitiated) {
+        throw "$Description requires a reboot`n$text"
+    }
+    return $text
+}
+
 function Restart-DeviceInstance {
     param(
         [Parameter(Mandatory = $true)]
         [string]$InstanceId
     )
 
-    $devconPath = Find-DevCon
-    if (-not $devconPath) {
-        throw "devcon.exe is required for an explicit device restart but was not found."
+    if (Test-PnpUtilSupports -Argument '/restart-device') {
+        Write-Host "Restarting device instance $InstanceId via pnputil" -ForegroundColor Green
+        $restartText = Invoke-PnpUtilDeviceAction `
+            -Action '/restart-device' `
+            -InstanceId $InstanceId `
+            -Description "pnputil restart-device for $InstanceId"
+
+        if ($restartText -match 'No devices restarted') {
+            throw "pnputil restart-device did not restart $InstanceId`n$restartText"
+        }
+        return
     }
 
-    Write-Host "Restarting device instance $InstanceId" -ForegroundColor Green
-    $restartOutput = & $devconPath /r restart "@$InstanceId" 2>&1
-    $restartExitCode = $LASTEXITCODE
-    $restartText = ($restartOutput | Out-String).Trim()
-    if (($restartExitCode -ne 0) -and ($restartExitCode -ne 1)) {
-        throw "devcon restart failed for $InstanceId with exit code $restartExitCode`n$restartText"
+    Write-Warning "pnputil /restart-device is not available; falling back to disable/enable for $InstanceId"
+    $disableText = Invoke-PnpUtilDeviceAction `
+        -Action '/disable-device' `
+        -InstanceId $InstanceId `
+        -Description "pnputil disable-device for $InstanceId"
+    if ($disableText -match 'No devices disabled') {
+        throw "pnputil disable-device did not disable $InstanceId`n$disableText"
     }
 
-    if ($restartText -match 'restart failed' -or $restartText -match 'No devices restarted') {
-        throw "devcon restart did not restart $InstanceId`n$restartText"
-    }
-
-    if ($restartText -match 'reboot is required' -or $restartText -match 'restart requires reboot') {
-        throw "device restart for $InstanceId requires a reboot`n$restartText"
+    $enableText = Invoke-PnpUtilDeviceAction `
+        -Action '/enable-device' `
+        -InstanceId $InstanceId `
+        -Description "pnputil enable-device for $InstanceId"
+    if ($enableText -match 'No devices enabled') {
+        throw "pnputil enable-device did not enable $InstanceId`n$enableText"
     }
 }
 
@@ -277,7 +320,7 @@ if ($serviceInstalled) {
     Write-Host "Driver service registry key detected: HKLM\\SYSTEM\\CurrentControlSet\\Services\\$DriverServiceName" -ForegroundColor Green
 }
 
-Write-Host "Driver package staged/install command completed successfully." -ForegroundColor Green
+Write-Host "Driver package install/update completed successfully." -ForegroundColor Green
 
 if (($addDriver.ExitCode -eq $PnpUtilRebootRequired) -or ($addDriver.ExitCode -eq $PnpUtilRebootInitiated)) {
     throw "Windows reports that the driver update requires a reboot to complete. Please reboot and rerun verification."

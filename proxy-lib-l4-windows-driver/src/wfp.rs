@@ -219,7 +219,15 @@ unsafe extern "system" fn on_callout_classify(
     _flow_context: u64,
     classify_out: *mut FWPS_CLASSIFY_OUT0,
 ) {
-    log::driver_log_info!("wfp: classify callback invoked");
+    let layer_id = incoming_layer_id(in_fixed_values);
+    let metadata_flags = metadata_flags(in_meta_values);
+    let redirect_records_present = has_redirect_records(in_meta_values);
+    log::driver_log_info!(
+        "wfp: classify callback invoked (layer_id={:?}, metadata_flags={:#x}, redirect_records_present={})",
+        layer_id,
+        metadata_flags,
+        redirect_records_present,
+    );
 
     if classify_context.is_null() || filter.is_null() || classify_out.is_null() {
         log::driver_log_warn!(
@@ -238,7 +246,12 @@ unsafe extern "system" fn on_callout_classify(
     };
 
     if should_skip_self_redirect(in_meta_values, registration) {
-        log::driver_log_info!("wfp: classify skipped because flow was already redirected by self");
+        log::driver_log_info!(
+            "wfp: classify skipped because flow was already redirected by self (layer_id={:?}, metadata_flags={:#x}, redirect_records_present={})",
+            layer_id,
+            metadata_flags,
+            redirect_records_present,
+        );
         if unsafe { ((*classify_out).rights & FWPS_RIGHT_ACTION_WRITE) != 0 } {
             unsafe {
                 // SAFETY: classify_out is a valid WFP output buffer for this callback.
@@ -297,12 +310,25 @@ unsafe extern "system" fn on_callout_classify(
     };
 
     let source_pid = source_pid_from_metadata(in_meta_values);
-    let source_process_path = source_process_path_from_metadata(in_meta_values)
-        .or_else(|| source_process_path_from_fixed_values(in_fixed_values));
+    let source_process_path_from_metadata = source_process_path_from_metadata(in_meta_values);
+    let source_process_path_from_fixed_values =
+        source_process_path_from_fixed_values(in_fixed_values);
+    let source_process_path = source_process_path_from_metadata
+        .clone()
+        .or(source_process_path_from_fixed_values.clone());
+    log::driver_log_info!(
+        "wfp: classify flow metadata (layer_id={:?}, remote={}, source_pid={:?}, process_path_metadata={:?}, process_path_app_id={:?}, chosen_process_path={:?})",
+        layer_id,
+        remote,
+        source_pid,
+        source_process_path_from_metadata,
+        source_process_path_from_fixed_values,
+        source_process_path,
+    );
     if source_pid.is_none() {
         log::driver_log_info!(
             "wfp: process id metadata not present for classify (metadata_flags={:#x}, source_process={:?})",
-            metadata_flags(in_meta_values),
+            metadata_flags,
             source_process_path,
         );
     }
@@ -420,6 +446,25 @@ fn metadata_flags(in_meta_values: *const c_void) -> u32 {
     }
 }
 
+fn incoming_layer_id(in_fixed_values: *const FWPS_INCOMING_VALUES0) -> Option<u16> {
+    let fixed_values = unsafe {
+        // SAFETY: pointer comes directly from WFP for the duration of the callback.
+        in_fixed_values.as_ref()?
+    };
+    Some(fixed_values.layerId)
+}
+
+fn has_redirect_records(in_meta_values: *const c_void) -> bool {
+    let Some(metadata) = metadata_values(in_meta_values) else {
+        return false;
+    };
+    unsafe {
+        // SAFETY: the metadata pointer is valid for this classify callback.
+        ((*metadata).currentMetadataValues & FWPS_METADATA_FIELD_REDIRECT_RECORD_HANDLE) != 0
+            && !(*metadata).redirectRecords.is_null()
+    }
+}
+
 fn fwp_byte_blob_to_utf16_string(blob: *mut FWP_BYTE_BLOB) -> Option<String> {
     if blob.is_null() {
         return None;
@@ -452,20 +497,13 @@ fn should_skip_self_redirect(
     in_meta_values: *const c_void,
     registration: KernelCalloutRegistration,
 ) -> bool {
-    if in_meta_values.is_null() {
+    let Some(metadata) = metadata_values(in_meta_values) else {
         return false;
-    }
-
-    let metadata = in_meta_values.cast::<FWPS_INCOMING_METADATA_VALUES0>();
-    let redirect_records_present = unsafe {
-        // SAFETY: `metadata` points to the WFP metadata values for this classify invocation.
-        ((*metadata).currentMetadataValues & FWPS_METADATA_FIELD_REDIRECT_RECORD_HANDLE) != 0
-            && !(*metadata).redirectRecords.is_null()
     };
-
-    if !redirect_records_present {
+    if !has_redirect_records(in_meta_values) {
         return false;
     }
+    let metadata = metadata.cast_mut();
 
     let mut redirect_context = ptr::null_mut();
     let redirect_state = unsafe {

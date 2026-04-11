@@ -268,14 +268,10 @@ windows-driver-package-install package_dir="dist/windows-driver-package/debug":
 windows-driver-package-install-fresh-debug IPV4_PROXY *ARGS:
     just rust-quick-qa
     just windows-driver-test
-    just run-windows-driver-cli disable \
-        --force-remove-on-veto --clear-persisted-config
+    just windows-driver-disable
     just windows-driver-package-remove
     just windows-driver-build
     just windows-driver-package-stage
-    just run-windows-driver-cli seed-startup-config \
-        --ipv4-proxy {{IPV4_PROXY}} \
-        --ipv4-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV4_PROXY}}')"
     just windows-driver-package-install
     just run-windows-driver-cli enable \
         --ipv4-proxy {{IPV4_PROXY}} \
@@ -320,6 +316,11 @@ windows-driver-enable IPV4_PROXY *ARGS:
     just run-windows-driver-cli enable \
         --ipv4-proxy {{IPV4_PROXY}} \
         --ipv4-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV4_PROXY}}')" \
+        {{ARGS}}
+
+windows-driver-disable *ARGS:
+    just run-windows-driver-cli disable \
+        --force-remove-on-veto \
         {{ARGS}}
 
 windows-driver-update-ipv4 IPV4_PROXY *ARGS:

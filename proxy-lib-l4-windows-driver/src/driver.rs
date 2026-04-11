@@ -192,7 +192,7 @@ impl ProxyDriverController {
             return TcpRedirectDecision::Passthrough;
         };
 
-        if flow.remote == proxy_target.socket_addr {
+        if flow.source_pid == Some(proxy_target.process_id) {
             crate::log::driver_log_info!(
                 "tcp: passthrough: cycle: {} (source pid = {:?}, source process = {:?})",
                 flow.remote,

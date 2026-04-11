@@ -183,8 +183,6 @@ async fn try_new_tcp_service(
             tcp_keep_alive: Some(TcpKeepAlive {
                 time: Some(Duration::from_mins(2)),
                 interval: Some(Duration::from_secs(30)),
-                #[cfg(not(target_os = "windows"))]
-                retries: Some(5),
             }),
             ..SocketOptions::default_tcp()
         });
