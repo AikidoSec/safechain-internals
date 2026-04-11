@@ -6,6 +6,7 @@ use rama::{
             ProxyTargetFromWfpContext, ProxyTargetFromWfpContextLayer, WfpContextDecoder,
         },
     },
+    telemetry::tracing,
 };
 
 pub use safechain_proxy_lib_nostd::windows::redirect_ctx::ProxyRedirectContext as L4ProxyRedirectContext;
@@ -28,6 +29,14 @@ impl WfpContextDecoder for L4ProxyRedirectContextDecoder {
     fn decode(&self, bytes: &[u8]) -> Result<(Self::Context, ProxyTarget), Self::Error> {
         let ctx: L4ProxyRedirectContext = postcard::from_bytes(bytes)
             .context("decode WFP context into L4 Safechain redirect proxy context")?;
+
+        tracing::debug!(
+            target = %ctx.destination(),
+            source_pid = ctx.source_pid(),
+            source_app_path = ctx.source_process_path(),
+            "windows context decoder fetched redirect info for proxying",
+        );
+
         let proxy_target = ProxyTarget(ctx.destination().into());
         Ok((ctx, proxy_target))
     }

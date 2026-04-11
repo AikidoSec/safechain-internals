@@ -101,6 +101,7 @@ run-l4-proxy $RUST_LOG="debug" *ARGS:
         --bin safechain-l4-proxy \
         -- \
         --secrets .aikido/safechain-l4-proxy \
+        --output .aikido/safechain-l4-proxy.log \
         {{ARGS}}
 
 run-l7-proxy $RUST_LOG="info,safechain_l4_proxy=debug,safechain_proxy_lib=debug" *ARGS:

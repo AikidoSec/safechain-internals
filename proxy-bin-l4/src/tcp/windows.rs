@@ -23,7 +23,8 @@ use windows_sys::Win32::{
     Foundation::ERROR_INSUFFICIENT_BUFFER,
     Networking::WinSock::{
         SIO_QUERY_WFP_CONNECTION_REDIRECT_RECORDS, SIO_SET_WFP_CONNECTION_REDIRECT_RECORDS, SOCKET,
-        SOCKET_ERROR, WSAEINVAL, WSAENOPROTOOPT, WSAEOPNOTSUPP, WSAGetLastError, WSAIoctl,
+        SOCKET_ERROR, WSAEFAULT, WSAEINVAL, WSAENOPROTOOPT, WSAEOPNOTSUPP, WSAGetLastError,
+        WSAIoctl,
     },
 };
 
@@ -297,7 +298,7 @@ fn last_wsa_error() -> io::Error {
 fn is_no_wfp_redirect_records_error(err_code: i32) -> bool {
     matches!(
         err_code,
-        WSAEINVAL | WSAENOPROTOOPT | WSAEOPNOTSUPP | SOCKET_ERROR
+        WSAEFAULT | WSAEINVAL | WSAENOPROTOOPT | WSAEOPNOTSUPP | SOCKET_ERROR
     )
 }
 
