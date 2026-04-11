@@ -218,16 +218,26 @@ unsafe extern "system" fn on_callout_classify(
     _flow_context: u64,
     classify_out: *mut FWPS_CLASSIFY_OUT0,
 ) {
+    log::driver_log_info!("wfp: classify callback invoked");
+
     if classify_context.is_null() || filter.is_null() || classify_out.is_null() {
+        log::driver_log_warn!(
+            "wfp: classify callback missing required pointers (classify_context_null={}, filter_null={}, classify_out_null={})",
+            classify_context.is_null(),
+            filter.is_null(),
+            classify_out.is_null(),
+        );
         return;
     }
 
     let registration = KERNEL_CALLOUT_REGISTRATION.lock().as_ref().copied();
     let Some(registration) = registration else {
+        log::driver_log_warn!("wfp: classify callback invoked without callout registration");
         return;
     };
 
     if should_skip_self_redirect(in_meta_values, registration) {
+        log::driver_log_info!("wfp: classify skipped because flow was already redirected by self");
         if unsafe { ((*classify_out).rights & FWPS_RIGHT_ACTION_WRITE) != 0 } {
             unsafe {
                 // SAFETY: classify_out is a valid WFP output buffer for this callback.
@@ -273,9 +283,14 @@ unsafe extern "system" fn on_callout_classify(
     }
 
     let connect_request = writable_layer_data.cast::<FWPS_CONNECT_REQUEST0>();
-    let remote =
-        unsafe { sockaddr_storage_to_socket_addr(&(*connect_request).remoteAddressAndPort) };
+    let remote_storage = unsafe { &(*connect_request).remoteAddressAndPort };
+    let remote = unsafe { sockaddr_storage_to_socket_addr(remote_storage) };
     let Some(remote) = remote else {
+        let family = u16::from_ne_bytes([remote_storage.bytes[0], remote_storage.bytes[1]]);
+        log::driver_log_warn!(
+            "wfp: classify could not decode remote address from SOCKADDR_STORAGE (family={:#x})",
+            family
+        );
         complete_writable_classify(classify_handle, writable_layer_data, classify_out);
         return;
     };
