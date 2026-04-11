@@ -1,5 +1,5 @@
 use std::{
-    io,
+    cmp, io, mem,
     os::windows::io::{AsRawSocket, RawSocket},
     ptr,
     sync::Arc,
@@ -23,12 +23,9 @@ use windows_sys::Win32::{
     Foundation::ERROR_INSUFFICIENT_BUFFER,
     Networking::WinSock::{
         SIO_QUERY_WFP_CONNECTION_REDIRECT_RECORDS, SIO_SET_WFP_CONNECTION_REDIRECT_RECORDS, SOCKET,
-        SOCKET_ERROR, WSAEFAULT, WSAEINVAL, WSAENOPROTOOPT, WSAEOPNOTSUPP, WSAGetLastError,
-        WSAIoctl,
+        SOCKET_ERROR, WSAEINVAL, WSAENOPROTOOPT, WSAEOPNOTSUPP, WSAGetLastError, WSAIoctl,
     },
 };
-
-const WFP_REDIRECT_RECORDS_BUFFER_STACK_LEN: usize = 128;
 
 #[derive(Debug, Clone)]
 pub struct WfpRedirectRecords(Vec<u8>);
@@ -198,93 +195,99 @@ fn tcp_connect_with_socket_opts_and_redirect_records(
 
 fn query_wfp_redirect_records(socket: RawSocket) -> io::Result<Option<WfpRedirectRecords>> {
     let socket = socket as SOCKET;
-    let mut bytes_returned = 0u32;
-    let mut buffer = vec![0u8; WFP_REDIRECT_RECORDS_BUFFER_STACK_LEN];
+    let mut needed = 0u32;
 
     let rc = unsafe {
         WSAIoctl(
             socket,
             SIO_QUERY_WFP_CONNECTION_REDIRECT_RECORDS,
-            ptr::null(),
+            ptr::null_mut(),
             0,
-            buffer.as_mut_ptr().cast(),
-            buffer.len() as u32,
-            &mut bytes_returned,
+            ptr::null_mut(),
+            0,
+            &mut needed,
+            ptr::null_mut(),
+            None,
+        )
+    };
+
+    if rc == 0 && needed == 0 {
+        return Ok(None);
+    }
+
+    let err = unsafe { WSAGetLastError() };
+
+    if is_no_wfp_redirect_records_error(err) {
+        return Ok(None);
+    }
+
+    if err != ERROR_INSUFFICIENT_BUFFER as i32 && needed == 0 {
+        return Err(io::Error::from_raw_os_error(err));
+    }
+
+    let mut storage = aligned_blob_buffer(needed as usize);
+    let mut returned = 0u32;
+
+    let rc = unsafe {
+        let out = aligned_blob_as_mut_bytes(&mut storage);
+        WSAIoctl(
+            socket,
+            SIO_QUERY_WFP_CONNECTION_REDIRECT_RECORDS,
+            ptr::null_mut(),
+            0,
+            out.as_mut_ptr().cast(),
+            out.len() as u32,
+            &mut returned,
             ptr::null_mut(),
             None,
         )
     };
 
     if rc == 0 {
-        buffer.truncate(bytes_returned as usize);
-        return Ok(Some(buffer.into()));
+        let out = aligned_blob_as_mut_bytes(&mut storage);
+        let blob = out[..returned as usize].to_vec();
+        return Ok(Some(blob.into()));
     }
 
-    let err_code = unsafe { WSAGetLastError() };
+    let err = unsafe { WSAGetLastError() };
 
-    if (err_code == ERROR_INSUFFICIENT_BUFFER as i32 || err_code == WSAEFAULT) && bytes_returned > 0
-    {
-        buffer.resize(bytes_returned as usize, 0u8);
-        let mut final_bytes = 0u32;
-
-        let second_rc = unsafe {
-            WSAIoctl(
-                socket,
-                SIO_QUERY_WFP_CONNECTION_REDIRECT_RECORDS,
-                ptr::null(),
-                0,
-                buffer.as_mut_ptr().cast(),
-                buffer.len() as u32,
-                &mut final_bytes,
-                ptr::null_mut(),
-                None,
-            )
-        };
-
-        if second_rc == 0 {
-            buffer.truncate(final_bytes as usize);
-            return Ok(Some(buffer.into()));
-        }
-
-        return Err(last_wsa_error());
-    }
-
-    if is_no_wfp_redirect_records_error(err_code) {
+    if is_no_wfp_redirect_records_error(err) {
         return Ok(None);
     }
 
-    Err(io::Error::from_raw_os_error(err_code))
+    Err(io::Error::from_raw_os_error(err))
 }
 
 fn set_wfp_redirect_records(
     socket: RawSocket,
     redirect_records: &WfpRedirectRecords,
 ) -> io::Result<()> {
-    if redirect_records.as_bytes().is_empty() {
+    let bytes = redirect_records.as_bytes();
+    if bytes.is_empty() {
         return Ok(());
     }
 
     let socket = socket as SOCKET;
-    let mut bytes_returned = 0u32;
+
     let rc = unsafe {
         WSAIoctl(
             socket,
             SIO_SET_WFP_CONNECTION_REDIRECT_RECORDS,
-            redirect_records.as_bytes().as_ptr().cast_mut().cast(),
-            redirect_records.as_bytes().len() as u32,
+            bytes.as_ptr() as *mut _,
+            bytes.len() as u32,
             ptr::null_mut(),
             0,
-            &mut bytes_returned,
+            ptr::null_mut(), // or a dummy u32 if your binding insists
             ptr::null_mut(),
             None,
         )
     };
 
     if rc == 0 {
-        return Ok(());
+        Ok(())
+    } else {
+        Err(last_wsa_error())
     }
-
-    Err(last_wsa_error())
 }
 
 fn last_wsa_error() -> io::Error {
@@ -296,4 +299,15 @@ fn is_no_wfp_redirect_records_error(err_code: i32) -> bool {
         err_code,
         WSAEINVAL | WSAENOPROTOOPT | WSAEOPNOTSUPP | SOCKET_ERROR
     )
+}
+
+fn aligned_blob_buffer(byte_len: usize) -> Vec<usize> {
+    let word = mem::size_of::<usize>();
+    let words = cmp::max(1, byte_len.div_ceil(word));
+    vec![0usize; words]
+}
+
+fn aligned_blob_as_mut_bytes(buf: &mut Vec<usize>) -> &mut [u8] {
+    let byte_len = buf.len() * mem::size_of::<usize>();
+    unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), byte_len) }
 }
