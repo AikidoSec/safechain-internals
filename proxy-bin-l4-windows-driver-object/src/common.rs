@@ -3,13 +3,31 @@ use std::{
     net::{SocketAddrV4, SocketAddrV6},
     os::windows::ffi::OsStrExt,
     ptr::{self, null_mut},
+    thread,
+    time::Duration,
 };
 
-use rama_core::{error::{BoxError, ErrorContext as _, ErrorExt as _}, telemetry::tracing::{debug, info}};
+use rama_core::{error::{BoxError, ErrorContext as _, ErrorExt as _}, telemetry::tracing::{debug, info, warn}};
 use safechain_proxy_lib_nostd::windows::driver_protocol::STARTUP_VALUE_NAME;
 use windows_sys::Win32::{
     Devices::DeviceAndDriverInstallation::{
-        CM_DISABLE_PERSIST, CM_Disable_DevNode, CM_Enable_DevNode, CR_SUCCESS,
+        CM_DISABLE_ABSOLUTE, CM_DISABLE_PERSIST, CM_DISABLE_UI_NOT_OK, CM_Disable_DevNode,
+        CM_Enable_DevNode, CR_ACCESS_DENIED, CR_ALREADY_SUCH_DEVINST, CR_APM_VETOED,
+        CR_BUFFER_SMALL, CR_CALL_NOT_IMPLEMENTED, CR_CANT_SHARE_IRQ, CR_CREATE_BLOCKED,
+        CR_DEFAULT, CR_DEVICE_INTERFACE_ACTIVE, CR_DEVICE_NOT_THERE, CR_DEVINST_HAS_REQS,
+        CR_DEVLOADER_NOT_READY, CR_FAILURE, CR_FREE_RESOURCES, CR_INVALID_API,
+        CR_INVALID_ARBITRATOR, CR_INVALID_CONFLICT_LIST, CR_INVALID_DATA, CR_INVALID_DEVICE_ID,
+        CR_INVALID_DEVINST, CR_INVALID_FLAG, CR_INVALID_INDEX, CR_INVALID_LOAD_TYPE,
+        CR_INVALID_LOG_CONF, CR_INVALID_MACHINENAME, CR_INVALID_NODELIST, CR_INVALID_POINTER,
+        CR_INVALID_PRIORITY, CR_INVALID_PROPERTY, CR_INVALID_RANGE, CR_INVALID_RANGE_LIST,
+        CR_INVALID_REFERENCE_STRING, CR_INVALID_RESOURCEID, CR_INVALID_RES_DES,
+        CR_INVALID_STRUCTURE_SIZE, CR_MACHINE_UNAVAILABLE, CR_NEED_RESTART, CR_NOT_DISABLEABLE,
+        CR_NOT_SYSTEM_VM, CR_NO_ARBITRATOR, CR_NO_CM_SERVICES, CR_NO_DEPENDENT,
+        CR_NO_MORE_HW_PROFILES, CR_NO_MORE_LOG_CONF, CR_NO_MORE_RES_DES,
+        CR_NO_SUCH_DEVICE_INTERFACE, CR_NO_SUCH_DEVINST, CR_NO_SUCH_LOGICAL_DEV,
+        CR_NO_SUCH_REGISTRY_KEY, CR_NO_SUCH_VALUE, CR_OUT_OF_MEMORY, CR_QUERY_VETOED,
+        CR_REGISTRY_ERROR, CR_REMOTE_COMM_FAILURE, CR_REMOVE_VETOED, CR_SAME_RESOURCES,
+        CR_SUCCESS, CR_WRONG_TYPE, CM_Uninstall_DevNode,
         DIGCF_ALLCLASSES, HDEVINFO, SetupDiDestroyDeviceInfoList,
         SetupDiEnumDeviceInfo, SetupDiGetClassDevsW, SetupDiGetDeviceInstanceIdW,
         SetupDiGetDeviceRegistryPropertyW, SP_DEVINFO_DATA, SPDRP_SERVICE,
@@ -60,21 +78,53 @@ pub fn enable_device(service_name: &str) -> Result<(), BoxError> {
     Ok(())
 }
 
-pub fn disable_device(service_name: &str) -> Result<(), BoxError> {
+pub fn disable_device(service_name: &str, force_remove_on_veto: bool) -> Result<(), BoxError> {
     debug!(service_name, "disabling device via PnP");
     let devices = find_devices_for_service(service_name)?;
+    if devices.is_empty() {
+        info!(service_name, "no matching PnP device found; treating disable as already complete");
+        return Ok(());
+    }
 
     for device in &devices {
-        let cr = unsafe {
-            // SAFETY: `devinst` came from SetupAPI enumeration for this device info set.
-            CM_Disable_DevNode(device.devinst, CM_DISABLE_PERSIST)
-        };
+        info!(
+            service_name,
+            instance_id = %device.instance_id,
+            "attempting to disable device"
+        );
+        let cr = disable_devinst_with_retry(device.devinst, &device.instance_id);
+        if cr == CR_REMOVE_VETOED && force_remove_on_veto {
+            warn!(
+                service_name,
+                instance_id = %device.instance_id,
+                "disable was vetoed; force-removing device instance subtree"
+            );
+            let remove_cr = force_remove_devinst(device.devinst, &device.instance_id);
+            if remove_cr != CR_SUCCESS {
+                return Err(
+                    BoxError::from("failed to force-remove device after disable veto")
+                        .context_str_field("name", service_name)
+                        .context_str_field("instance_id", &device.instance_id)
+                        .context_field("cfgmgr32", remove_cr)
+                        .context_str_field("cfgmgr32_name", configret_name(remove_cr)),
+                );
+            }
+
+            info!(
+                service_name,
+                instance_id = %device.instance_id,
+                "device force-removed successfully"
+            );
+            continue;
+        }
+
         if cr != CR_SUCCESS {
             return Err(
                 BoxError::from("failed to disable device")
                     .context_str_field("name", service_name)
                     .context_str_field("instance_id", &device.instance_id)
-                    .context_field("cfgmgr32", cr),
+                    .context_field("cfgmgr32", cr)
+                    .context_str_field("cfgmgr32_name", configret_name(cr)),
             );
         }
 
@@ -82,6 +132,114 @@ pub fn disable_device(service_name: &str) -> Result<(), BoxError> {
     }
 
     Ok(())
+}
+
+const DISABLE_FLAGS: u32 = CM_DISABLE_ABSOLUTE | CM_DISABLE_PERSIST | CM_DISABLE_UI_NOT_OK;
+const DISABLE_RETRY_DELAYS_MS: &[u64] = &[150, 500, 1000];
+fn disable_devinst_with_retry(devinst: u32, instance_id: &str) -> u32 {
+    let mut attempt = 0usize;
+    loop {
+        let cr = unsafe {
+            // SAFETY: `devinst` came from SetupAPI enumeration for this device info set.
+            CM_Disable_DevNode(devinst, DISABLE_FLAGS)
+        };
+        if cr == CR_SUCCESS {
+            return cr;
+        }
+
+        if cr != CR_REMOVE_VETOED || attempt >= DISABLE_RETRY_DELAYS_MS.len() {
+            return cr;
+        }
+
+        let delay_ms = DISABLE_RETRY_DELAYS_MS[attempt];
+        warn!(
+            instance_id,
+            cfgmgr32 = configret_name(cr),
+            delay_ms,
+            "device disable was vetoed; retrying"
+        );
+        thread::sleep(Duration::from_millis(delay_ms));
+        attempt += 1;
+    }
+}
+
+fn force_remove_devinst(devinst: u32, instance_id: &str) -> u32 {
+    let cr = unsafe {
+        // SAFETY: `devinst` came from SetupAPI enumeration for this device info set.
+        CM_Uninstall_DevNode(devinst, 0)
+    };
+    if cr != CR_SUCCESS {
+        warn!(
+            instance_id,
+            cfgmgr32 = configret_name(cr),
+            "force-remove of device instance subtree failed"
+        );
+    }
+    cr
+}
+
+fn configret_name(code: u32) -> &'static str {
+    match code {
+        CR_SUCCESS => "CR_SUCCESS",
+        CR_DEFAULT => "CR_DEFAULT",
+        CR_OUT_OF_MEMORY => "CR_OUT_OF_MEMORY",
+        CR_INVALID_POINTER => "CR_INVALID_POINTER",
+        CR_INVALID_FLAG => "CR_INVALID_FLAG",
+        CR_INVALID_DEVINST => "CR_INVALID_DEVINST",
+        CR_INVALID_RES_DES => "CR_INVALID_RES_DES",
+        CR_INVALID_LOG_CONF => "CR_INVALID_LOG_CONF",
+        CR_INVALID_ARBITRATOR => "CR_INVALID_ARBITRATOR",
+        CR_INVALID_NODELIST => "CR_INVALID_NODELIST",
+        CR_DEVINST_HAS_REQS => "CR_DEVINST_HAS_REQS",
+        CR_INVALID_RESOURCEID => "CR_INVALID_RESOURCEID",
+        CR_INVALID_DEVICE_ID => "CR_INVALID_DEVICE_ID",
+        CR_NO_SUCH_DEVINST => "CR_NO_SUCH_DEVINST",
+        CR_NO_MORE_LOG_CONF => "CR_NO_MORE_LOG_CONF",
+        CR_NO_MORE_RES_DES => "CR_NO_MORE_RES_DES",
+        CR_ALREADY_SUCH_DEVINST => "CR_ALREADY_SUCH_DEVINST",
+        CR_INVALID_RANGE_LIST => "CR_INVALID_RANGE_LIST",
+        CR_INVALID_RANGE => "CR_INVALID_RANGE",
+        CR_FAILURE => "CR_FAILURE",
+        CR_NO_SUCH_LOGICAL_DEV => "CR_NO_SUCH_LOGICAL_DEV",
+        CR_CREATE_BLOCKED => "CR_CREATE_BLOCKED",
+        CR_NOT_SYSTEM_VM => "CR_NOT_SYSTEM_VM",
+        CR_REMOVE_VETOED => "CR_REMOVE_VETOED",
+        CR_APM_VETOED => "CR_APM_VETOED",
+        CR_INVALID_LOAD_TYPE => "CR_INVALID_LOAD_TYPE",
+        CR_BUFFER_SMALL => "CR_BUFFER_SMALL",
+        CR_NO_ARBITRATOR => "CR_NO_ARBITRATOR",
+        CR_REGISTRY_ERROR => "CR_REGISTRY_ERROR",
+        CR_INVALID_DATA => "CR_INVALID_DATA",
+        CR_INVALID_API => "CR_INVALID_API",
+        CR_DEVLOADER_NOT_READY => "CR_DEVLOADER_NOT_READY",
+        CR_NEED_RESTART => "CR_NEED_RESTART",
+        CR_NO_MORE_HW_PROFILES => "CR_NO_MORE_HW_PROFILES",
+        CR_DEVICE_NOT_THERE => "CR_DEVICE_NOT_THERE",
+        CR_NO_SUCH_VALUE => "CR_NO_SUCH_VALUE",
+        CR_WRONG_TYPE => "CR_WRONG_TYPE",
+        CR_INVALID_PRIORITY => "CR_INVALID_PRIORITY",
+        CR_NOT_DISABLEABLE => "CR_NOT_DISABLEABLE",
+        CR_FREE_RESOURCES => "CR_FREE_RESOURCES",
+        CR_QUERY_VETOED => "CR_QUERY_VETOED",
+        CR_CANT_SHARE_IRQ => "CR_CANT_SHARE_IRQ",
+        CR_NO_DEPENDENT => "CR_NO_DEPENDENT",
+        CR_SAME_RESOURCES => "CR_SAME_RESOURCES",
+        CR_NO_SUCH_REGISTRY_KEY => "CR_NO_SUCH_REGISTRY_KEY",
+        CR_INVALID_MACHINENAME => "CR_INVALID_MACHINENAME",
+        CR_REMOTE_COMM_FAILURE => "CR_REMOTE_COMM_FAILURE",
+        CR_MACHINE_UNAVAILABLE => "CR_MACHINE_UNAVAILABLE",
+        CR_NO_CM_SERVICES => "CR_NO_CM_SERVICES",
+        CR_ACCESS_DENIED => "CR_ACCESS_DENIED",
+        CR_CALL_NOT_IMPLEMENTED => "CR_CALL_NOT_IMPLEMENTED",
+        CR_INVALID_PROPERTY => "CR_INVALID_PROPERTY",
+        CR_DEVICE_INTERFACE_ACTIVE => "CR_DEVICE_INTERFACE_ACTIVE",
+        CR_NO_SUCH_DEVICE_INTERFACE => "CR_NO_SUCH_DEVICE_INTERFACE",
+        CR_INVALID_REFERENCE_STRING => "CR_INVALID_REFERENCE_STRING",
+        CR_INVALID_CONFLICT_LIST => "CR_INVALID_CONFLICT_LIST",
+        CR_INVALID_INDEX => "CR_INVALID_INDEX",
+        CR_INVALID_STRUCTURE_SIZE => "CR_INVALID_STRUCTURE_SIZE",
+        _ => "CR_UNKNOWN",
+    }
 }
 
 struct DeviceInfoSet(HDEVINFO);
@@ -162,13 +320,6 @@ fn find_devices_for_service(service_name: &str) -> Result<Vec<MatchedDevice>, Bo
             instance_id,
         });
         index += 1;
-    }
-
-    if devices.is_empty() {
-        return Err(
-            BoxError::from("no PnP device found for service")
-                .context_str_field("name", service_name),
-        );
     }
 
     Ok(devices)

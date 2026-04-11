@@ -265,10 +265,15 @@ windows-driver-package-stage profile="debug" *ARGS:
 windows-driver-package-install package_dir="dist/windows-driver-package/debug":
     ./packaging/windows/install-driver-package.ps1 -PackageDir {{package_dir}}
 
-windows-driver-package-install-fresh-debug:
-    just windows-driver-qa
+windows-driver-package-install-fresh-debug IPV4_PROXY *ARGS:
+    just rust-quick-qa
+    just windows-driver-test
+    just run-windows-driver-cli disable --force-remove-on-veto
+    just windows-driver-package-remove
+    just windows-driver-build
     just windows-driver-package-stage
     just windows-driver-package-install
+    just run-windows-driver-cli update --ipv4-proxy {{IPV4_PROXY}} {{ARGS}}
 
 windows-driver-package-verify *ARGS:
     ./packaging/windows/verify-driver-install.ps1 {{ARGS}}

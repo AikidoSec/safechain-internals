@@ -11,17 +11,21 @@ pub struct DisableArgs {
     pub service_name: String,
 
     #[arg(long, default_value_t = false)]
+    pub force_remove_on_veto: bool,
+
+    #[arg(long, default_value_t = false)]
     pub clear_persisted_config: bool,
 }
 
 pub fn run(args: DisableArgs) -> Result<(), BoxError> {
     info!(
         service_name = %args.service_name,
+        force_remove_on_veto = args.force_remove_on_veto,
         clear_persisted_config = args.clear_persisted_config,
         "disabling SafeChain Windows driver"
     );
     remove_wfp_objects()?;
-    disable_device(&args.service_name)?;
+    disable_device(&args.service_name, args.force_remove_on_veto)?;
     if args.clear_persisted_config {
         delete_startup_blob(&args.service_name)?;
     }
