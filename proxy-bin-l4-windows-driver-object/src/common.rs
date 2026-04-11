@@ -3,26 +3,26 @@ use std::{
     net::{SocketAddrV4, SocketAddrV6},
     os::windows::ffi::OsStrExt,
     process::Command,
-    ptr,
+    ptr::{self, null_mut},
 };
 
 use rama_core::{error::{BoxError, ErrorContext as _, ErrorExt as _}, telemetry::tracing::{debug, info}};
 use safechain_proxy_lib_nostd::windows::driver_protocol::STARTUP_VALUE_NAME;
 use windows_sys::Win32::{
+    Devices::DeviceAndDriverInstallation::{
+        CM_DISABLE_PERSIST, CM_Disable_DevNode, CM_Enable_DevNode, CR_SUCCESS,
+        DIGCF_ALLCLASSES, HDEVINFO, SetupDiDestroyDeviceInfoList,
+        SetupDiEnumDeviceInfo, SetupDiGetClassDevsW, SetupDiGetDeviceInstanceIdW,
+        SetupDiGetDeviceRegistryPropertyW, SP_DEVINFO_DATA, SPDRP_SERVICE,
+    },
     Foundation::{
-        CloseHandle, ERROR_SERVICE_ALREADY_RUNNING, ERROR_SERVICE_DOES_NOT_EXIST,
-        ERROR_SERVICE_NOT_ACTIVE, GetLastError, HANDLE, INVALID_HANDLE_VALUE,
+        CloseHandle, ERROR_INSUFFICIENT_BUFFER, ERROR_INVALID_DATA,
+        ERROR_NO_MORE_ITEMS, GetLastError, HANDLE, INVALID_HANDLE_VALUE,
     },
     Storage::FileSystem::{
         CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_GENERIC_READ, FILE_GENERIC_WRITE, OPEN_EXISTING,
     },
     System::IO::DeviceIoControl,
-    System::Services::{
-        CloseServiceHandle, ControlService, OpenSCManagerW, OpenServiceW, QueryServiceStatus,
-        SC_HANDLE, SC_MANAGER_CONNECT, SERVICE_CONTROL_STOP, SERVICE_QUERY_STATUS, SERVICE_RUNNING,
-        SERVICE_START, SERVICE_START_PENDING, SERVICE_STATUS, SERVICE_STOP, SERVICE_STOP_PENDING,
-        SERVICE_STOPPED, StartServiceW,
-    },
 };
 
 pub use safechain_proxy_lib_nostd::windows::driver_protocol::{
@@ -31,143 +31,255 @@ pub use safechain_proxy_lib_nostd::windows::driver_protocol::{
     Ipv6ProxyConfigPayload, StartupConfig,
 };
 
-pub fn start_service(service_name: &str) -> Result<(), BoxError> {
-    debug!(service_name, "starting service via SCM");
-    let manager = ServiceControlManager::connect()?;
-    let service = manager.open_service(service_name, SERVICE_START | SERVICE_QUERY_STATUS)?;
+pub fn enable_device(service_name: &str) -> Result<(), BoxError> {
+    debug!(service_name, "enabling device via PnP");
+    let devices = find_devices_for_service(service_name)?;
 
-    let mut status = SERVICE_STATUS::default();
-    if unsafe { QueryServiceStatus(service.0, &mut status) } != 0
-        && (status.dwCurrentState == SERVICE_RUNNING || status.dwCurrentState == SERVICE_START_PENDING)
-    {
-        info!(service_name, state = status.dwCurrentState, "service already running");
-        return Ok(());
-    }
-
-    let ok = unsafe {
-        // SAFETY: service handle is valid and no argument vectors are passed.
-        StartServiceW(service.0, 0, ptr::null())
-    };
-    if ok != 0 {
-        info!(service_name, "service started successfully");
-        return Ok(());
-    }
-
-    let code = unsafe { GetLastError() };
-    if code == ERROR_SERVICE_ALREADY_RUNNING {
-        info!(service_name, code, "service already running");
-        Ok(())
-    } else {
-        Err(
-            BoxError::from("failed to start service")
-            .context_str_field("name", service_name)
-            .context_field("win32", code)
-        )
-    }
-}
-
-pub fn stop_service(service_name: &str) -> Result<(), BoxError> {
-    debug!(service_name, "stopping service via SCM");
-    let manager = ServiceControlManager::connect()?;
-    let service = manager.open_service(service_name, SERVICE_STOP | SERVICE_QUERY_STATUS)?;
-
-    let mut status = SERVICE_STATUS::default();
-    if unsafe { QueryServiceStatus(service.0, &mut status) } != 0
-        && (status.dwCurrentState == SERVICE_STOPPED || status.dwCurrentState == SERVICE_STOP_PENDING)
-    {
-        info!(service_name, state = status.dwCurrentState, "service already stopped");
-        return Ok(());
-    }
-
-    let ok = unsafe {
-        // SAFETY: service handle is valid and `status` points to writable memory.
-        ControlService(service.0, SERVICE_CONTROL_STOP, &mut status)
-    };
-    if ok != 0 {
-        info!(service_name, "service stop requested successfully");
-        return Ok(());
-    }
-
-    let code = unsafe { GetLastError() };
-    if code == ERROR_SERVICE_NOT_ACTIVE {
-        info!(service_name, code, "service already inactive");
-        Ok(())
-    } else {
-        Err(
-            BoxError::from("failed to stop service")
-            .context_str_field("name", service_name)
-            .context_field("win32", code)
-        )
-    }
-}
-
-struct ServiceControlManager(SC_HANDLE);
-
-impl ServiceControlManager {
-    fn connect() -> Result<Self, BoxError> {
-        let handle = unsafe {
-            // SAFETY: null pointers select the local machine and active database.
-            OpenSCManagerW(ptr::null(), ptr::null(), SC_MANAGER_CONNECT)
+    for device in &devices {
+        let cr = unsafe {
+            // SAFETY: `devinst` came from SetupAPI enumeration for this device info set.
+            CM_Enable_DevNode(device.devinst, 0)
         };
-        if handle.is_null() {
-            let code = unsafe { GetLastError() };
-            return Err(BoxError::from("failed to connect to SCM").context_field("win32", code));
+        if cr != CR_SUCCESS {
+            return Err(
+                BoxError::from("failed to enable device")
+                    .context_str_field("name", service_name)
+                    .context_str_field("instance_id", &device.instance_id)
+                    .context_field("cfgmgr32", cr),
+            );
+        }
+
+        info!(service_name, instance_id = %device.instance_id, "device enabled successfully");
+    }
+
+    Ok(())
+}
+
+pub fn disable_device(service_name: &str) -> Result<(), BoxError> {
+    debug!(service_name, "disabling device via PnP");
+    let devices = find_devices_for_service(service_name)?;
+
+    for device in &devices {
+        let cr = unsafe {
+            // SAFETY: `devinst` came from SetupAPI enumeration for this device info set.
+            CM_Disable_DevNode(device.devinst, CM_DISABLE_PERSIST)
+        };
+        if cr != CR_SUCCESS {
+            return Err(
+                BoxError::from("failed to disable device")
+                    .context_str_field("name", service_name)
+                    .context_str_field("instance_id", &device.instance_id)
+                    .context_field("cfgmgr32", cr),
+            );
+        }
+
+        info!(service_name, instance_id = %device.instance_id, "device disabled successfully");
+    }
+
+    Ok(())
+}
+
+struct DeviceInfoSet(HDEVINFO);
+
+impl DeviceInfoSet {
+    fn all_classes() -> Result<Self, BoxError> {
+        let handle = unsafe {
+            // SAFETY: null pointers enumerate all local device classes.
+            SetupDiGetClassDevsW(ptr::null(), ptr::null(), std::ptr::null_mut(), DIGCF_ALLCLASSES)
+        };
+        if handle == INVALID_HANDLE_VALUE as isize {
+            return Err(
+                BoxError::from("failed to enumerate device info set")
+                    .context_field("win32", unsafe { GetLastError() }),
+            );
         }
         Ok(Self(handle))
     }
+}
 
-    fn open_service(&self, service_name: &str, desired_access: u32) -> Result<ServiceHandle, BoxError> {
-        let wide_name = to_wide(service_name);
-        let handle = unsafe {
-            // SAFETY: the service name buffer is null-terminated and valid for the duration of the call.
-            OpenServiceW(self.0, wide_name.as_ptr(), desired_access)
-        };
-        if handle.is_null() {
-            let code = unsafe { GetLastError() };
-            if code == ERROR_SERVICE_DOES_NOT_EXIST {
-                return Err(
-                    BoxError::from("service does not exist")
-                    .context_str_field("name", service_name)
-                    .context_field("win32", code)
-                );
+impl Drop for DeviceInfoSet {
+    fn drop(&mut self) {
+        if self.0 != INVALID_HANDLE_VALUE as isize {
+            unsafe {
+                // SAFETY: handle belongs to this wrapper and is closed once here.
+                SetupDiDestroyDeviceInfoList(self.0);
             }
-        
+        }
+    }
+}
+
+struct MatchedDevice {
+    devinst: u32,
+    instance_id: String,
+}
+
+fn find_devices_for_service(service_name: &str) -> Result<Vec<MatchedDevice>, BoxError> {
+    let device_info_set = DeviceInfoSet::all_classes()?;
+    let mut index = 0;
+    let mut devices = Vec::new();
+
+    loop {
+        let mut device_info = SP_DEVINFO_DATA {
+            cbSize: std::mem::size_of::<SP_DEVINFO_DATA>() as u32,
+            ..unsafe { std::mem::zeroed() }
+        };
+
+        let ok = unsafe {
+            // SAFETY: `device_info` points to valid writable memory for the duration of the call.
+            SetupDiEnumDeviceInfo(device_info_set.0, index, &mut device_info)
+        };
+        if ok == 0 {
+            let code = unsafe { GetLastError() };
+            if code == ERROR_NO_MORE_ITEMS {
+                break;
+            }
+
             return Err(
-                BoxError::from("failed to open service")
-                .context_str_field("name", service_name)
-                .context_field("win32", code)
+                BoxError::from("failed to enumerate devices")
+                    .context_str_field("name", service_name)
+                    .context_field("win32", code),
             );
         }
-        Ok(ServiceHandle(handle))
-    }
-}
 
-impl Drop for ServiceControlManager {
-    fn drop(&mut self) {
-        if !self.0.is_null() {
-            unsafe {
-                // SAFETY: handle belongs to this wrapper and is closed once here.
-                CloseServiceHandle(self.0);
-            }
+        let Some(device_service_name) = query_device_service_name(device_info_set.0, &device_info)? else {
+            index += 1;
+            continue;
+        };
+
+        if !device_service_name.eq_ignore_ascii_case(service_name) {
+            index += 1;
+            continue;
         }
+
+        let instance_id = query_device_instance_id(device_info_set.0, &device_info)?;
+        devices.push(MatchedDevice {
+            devinst: device_info.DevInst,
+            instance_id,
+        });
+        index += 1;
     }
+
+    if devices.is_empty() {
+        return Err(
+            BoxError::from("no PnP device found for service")
+                .context_str_field("name", service_name),
+        );
+    }
+
+    Ok(devices)
 }
 
-struct ServiceHandle(SC_HANDLE);
-
-impl Drop for ServiceHandle {
-    fn drop(&mut self) {
-        if !self.0.is_null() {
-            unsafe {
-                // SAFETY: handle belongs to this wrapper and is closed once here.
-                CloseServiceHandle(self.0);
-            }
-        }
-    }
+fn query_device_service_name(
+    device_info_set: HDEVINFO,
+    device_info: &SP_DEVINFO_DATA,
+) -> Result<Option<String>, BoxError> {
+    query_device_registry_string_property(device_info_set, device_info, SPDRP_SERVICE)
 }
 
-fn to_wide(value: &str) -> Vec<u16> {
-    OsStr::new(value).encode_wide().chain(Some(0)).collect()
+fn query_device_registry_string_property(
+    device_info_set: HDEVINFO,
+    device_info: &SP_DEVINFO_DATA,
+    property: u32,
+) -> Result<Option<String>, BoxError> {
+    let mut property_type = 0;
+    let mut required_size = 0;
+    let ok = unsafe {
+        // SAFETY: probing for the required size with a null buffer is supported by SetupAPI.
+        SetupDiGetDeviceRegistryPropertyW(
+            device_info_set,
+            device_info,
+            property,
+            &mut property_type,
+            null_mut(),
+            0,
+            &mut required_size,
+        )
+    };
+    if ok != 0 {
+        return Ok(Some(String::new()));
+    }
+
+    let code = unsafe { GetLastError() };
+    if code == ERROR_INVALID_DATA {
+        return Ok(None);
+    }
+    if code != ERROR_INSUFFICIENT_BUFFER || required_size == 0 {
+        return Err(
+            BoxError::from("failed to query device registry property")
+                .context_field("property", property)
+                .context_field("win32", code),
+        );
+    }
+
+    let mut buffer = vec![0_u16; (required_size as usize).div_ceil(2)];
+    let ok = unsafe {
+        // SAFETY: `buffer` is writable and sized from the required byte count reported by SetupAPI.
+        SetupDiGetDeviceRegistryPropertyW(
+            device_info_set,
+            device_info,
+            property,
+            &mut property_type,
+            buffer.as_mut_ptr().cast(),
+            (buffer.len() * std::mem::size_of::<u16>()) as u32,
+            &mut required_size,
+        )
+    };
+    if ok == 0 {
+        return Err(
+            BoxError::from("failed to read device registry property")
+                .context_field("property", property)
+                .context_field("win32", unsafe { GetLastError() }),
+        );
+    }
+
+    Ok(Some(from_wide_with_nul(&buffer)))
+}
+
+fn query_device_instance_id(
+    device_info_set: HDEVINFO,
+    device_info: &SP_DEVINFO_DATA,
+) -> Result<String, BoxError> {
+    let mut required_size = 0;
+    let ok = unsafe {
+        // SAFETY: probing for the required size with a null buffer is supported by SetupAPI.
+        SetupDiGetDeviceInstanceIdW(device_info_set, device_info, null_mut(), 0, &mut required_size)
+    };
+    if ok != 0 {
+        return Ok(String::new());
+    }
+
+    let code = unsafe { GetLastError() };
+    if code != ERROR_INSUFFICIENT_BUFFER || required_size == 0 {
+        return Err(
+            BoxError::from("failed to query device instance id size")
+                .context_field("win32", code),
+        );
+    }
+
+    let mut buffer = vec![0_u16; required_size as usize];
+    let ok = unsafe {
+        // SAFETY: `buffer` is writable and sized from the required character count reported by SetupAPI.
+        SetupDiGetDeviceInstanceIdW(
+            device_info_set,
+            device_info,
+            buffer.as_mut_ptr(),
+            buffer.len() as u32,
+            &mut required_size,
+        )
+    };
+    if ok == 0 {
+        return Err(
+            BoxError::from("failed to read device instance id")
+                .context_field("win32", unsafe { GetLastError() }),
+        );
+    }
+
+    Ok(from_wide_with_nul(&buffer))
+}
+
+fn from_wide_with_nul(value: &[u16]) -> String {
+    let end = value.iter().position(|&ch| ch == 0).unwrap_or(value.len());
+    String::from_utf16_lossy(&value[..end])
 }
 
 pub fn write_startup_blob(service_name: &str, blob: &StartupConfig) -> Result<(), BoxError> {
@@ -276,7 +388,7 @@ pub fn sync_startup_blob(
         (None, Some(ipv4)) => ipv4,
         (None, None) => {
             return Err(BoxError::from(
-                "cannot update persisted startup config without an existing IPv4 proxy; use `start` or pass `--ipv4-proxy`"
+                "cannot update persisted startup config without an existing IPv4 proxy; use `enable` or pass `--ipv4-proxy`"
             ))
         }
     };

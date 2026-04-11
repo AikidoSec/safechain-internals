@@ -1,11 +1,12 @@
 use clap::Args;
 use rama_core::{error::BoxError, telemetry::tracing::info};
 
-use crate::common::{delete_startup_blob, stop_service};
+use crate::common::{delete_startup_blob, disable_device};
 use crate::wfp::remove_wfp_objects;
 
 #[derive(Debug, Args)]
-pub struct StopArgs {
+/// Disable the SafeChain Windows driver device.
+pub struct DisableArgs {
     #[arg(long, default_value = "SafeChainL4Proxy")]
     pub service_name: String,
 
@@ -13,14 +14,14 @@ pub struct StopArgs {
     pub clear_persisted_config: bool,
 }
 
-pub fn run(args: StopArgs) -> Result<(), BoxError> {
+pub fn run(args: DisableArgs) -> Result<(), BoxError> {
     info!(
         service_name = %args.service_name,
         clear_persisted_config = args.clear_persisted_config,
-        "stopping SafeChain Windows driver"
+        "disabling SafeChain Windows driver"
     );
     remove_wfp_objects()?;
-    stop_service(&args.service_name)?;
+    disable_device(&args.service_name)?;
     if args.clear_persisted_config {
         delete_startup_blob(&args.service_name)?;
     }

@@ -2,11 +2,15 @@ use clap::Args;
 use rama_core::{error::BoxError, telemetry::tracing::info};
 use std::net::{SocketAddrV4, SocketAddrV6};
 
-use crate::common::{StartupConfig, start_service, write_startup_blob};
+use crate::common::{enable_device, StartupConfig, write_startup_blob};
 use crate::wfp::ensure_wfp_objects;
 
 #[derive(Debug, Args)]
-pub struct StartArgs {
+/// Enable the SafeChain Windows driver device.
+///
+/// Fresh installs are already enabled after the driver package is installed.
+/// You only need to enable it again if you disabled it before.
+pub struct EnableArgs {
     #[arg(long, default_value = "SafeChainL4Proxy")]
     pub service_name: String,
 
@@ -20,17 +24,17 @@ pub struct StartArgs {
     pub ipv6_proxy: Option<SocketAddrV6>,
 }
 
-pub fn run(args: StartArgs) -> Result<(), BoxError> {
+pub fn run(args: EnableArgs) -> Result<(), BoxError> {
     info!(
         service_name = %args.service_name,
         device_path = %args.device_path,
         ipv4_proxy = %args.ipv4_proxy,
         ipv6_proxy = ?args.ipv6_proxy,
-        "starting SafeChain Windows driver"
+        "enabling SafeChain Windows driver"
     );
     let startup_blob = StartupConfig::new(args.ipv4_proxy, args.ipv6_proxy);
     write_startup_blob(&args.service_name, &startup_blob)?;
-    start_service(&args.service_name)?;
+    enable_device(&args.service_name)?;
     ensure_wfp_objects(args.ipv6_proxy.is_some())?;
     
     Ok(())
