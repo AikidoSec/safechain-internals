@@ -7,9 +7,6 @@ use crate::wfp::ensure_wfp_objects;
 
 #[derive(Debug, Args)]
 /// Enable the SafeChain Windows driver device.
-///
-/// Fresh installs are already enabled after the driver package is installed.
-/// You only need to enable it again if you disabled it before.
 pub struct EnableArgs {
     #[arg(long, default_value = "SafeChainL4Proxy")]
     pub service_name: String,

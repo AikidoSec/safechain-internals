@@ -273,7 +273,7 @@ windows-driver-package-install-fresh-debug IPV4_PROXY *ARGS:
     just windows-driver-build
     just windows-driver-package-stage
     just windows-driver-package-install
-    just run-windows-driver-cli update --ipv4-proxy {{IPV4_PROXY}} {{ARGS}}
+    just run-windows-driver-cli enable --ipv4-proxy {{IPV4_PROXY}} {{ARGS}}
 
 windows-driver-package-verify *ARGS:
     ./packaging/windows/verify-driver-install.ps1 {{ARGS}}
