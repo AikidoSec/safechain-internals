@@ -2,17 +2,13 @@ use clap::Args;
 use rama_core::{error::BoxError, telemetry::tracing::info};
 use std::net::{SocketAddrV4, SocketAddrV6};
 
-use crate::common::{enable_device, StartupConfig, write_startup_blob};
-use crate::wfp::ensure_wfp_objects;
+use crate::common::{StartupConfig, write_startup_blob};
 
 #[derive(Debug, Args)]
-/// Enable the SafeChain Windows driver device.
-pub struct EnableArgs {
+/// Persist startup config without changing current device state.
+pub struct SeedStartupConfigArgs {
     #[arg(long, default_value = "SafeChainL4Proxy")]
     pub service_name: String,
-
-    #[arg(long, default_value = "\\\\.\\SafechainL4Proxy")]
-    pub device_path: String,
 
     #[arg(long)]
     pub ipv4_proxy: SocketAddrV4,
@@ -27,7 +23,7 @@ pub struct EnableArgs {
     pub ipv6_proxy_pid: Option<u32>,
 }
 
-pub fn run(args: EnableArgs) -> Result<(), BoxError> {
+pub fn run(args: SeedStartupConfigArgs) -> Result<(), BoxError> {
     if args.ipv4_proxy_pid == 0 {
         return Err("`--ipv4-proxy-pid` must be a non-zero process id".into());
     }
@@ -40,21 +36,17 @@ pub fn run(args: EnableArgs) -> Result<(), BoxError> {
 
     info!(
         service_name = %args.service_name,
-        device_path = %args.device_path,
         ipv4_proxy = %args.ipv4_proxy,
         ipv4_proxy_pid = args.ipv4_proxy_pid,
         ipv6_proxy = ?args.ipv6_proxy,
         ipv6_proxy_pid = ?args.ipv6_proxy_pid,
-        "enabling SafeChain Windows driver"
+        "persisting SafeChain Windows driver startup config without changing device state"
     );
+
     let startup_blob = StartupConfig::new(
         args.ipv4_proxy,
         args.ipv4_proxy_pid,
         args.ipv6_proxy.zip(args.ipv6_proxy_pid),
     );
-    write_startup_blob(&args.service_name, &startup_blob)?;
-    enable_device(&args.service_name)?;
-    ensure_wfp_objects(args.ipv6_proxy.is_some())?;
-    
-    Ok(())
+    write_startup_blob(&args.service_name, &startup_blob)
 }

@@ -31,10 +31,15 @@ pub fn load_startup_config(registry_path: PCUNICODE_STRING) -> Option<ProxyDrive
 
 pub fn parse_startup_blob(blob: &[u8]) -> Option<ProxyDriverStartupConfig> {
     let decoded = StartupConfig::from_bytes(blob)?;
+    if decoded.proxy_ipv6().is_some() != decoded.proxy_ipv6_pid().is_some() {
+        return None;
+    }
 
     Some(ProxyDriverStartupConfig {
         proxy_ipv4: decoded.proxy_ipv4(),
+        proxy_ipv4_pid: decoded.proxy_ipv4_pid(),
         proxy_ipv6: decoded.proxy_ipv6(),
+        proxy_ipv6_pid: decoded.proxy_ipv6_pid(),
     })
 }
 

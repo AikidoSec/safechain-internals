@@ -16,6 +16,7 @@ use rama::{
         TcpStream,
         client::{TcpStreamConnector, service::TcpConnector},
     },
+    telemetry::tracing,
 };
 
 use windows_sys::Win32::{
@@ -78,7 +79,13 @@ where
         if let Some(records) = query_wfp_redirect_records(input.as_raw_socket())
             .context("query WFP redirect records from input stream")?
         {
+            tracing::info!(
+                redirect_records_len = records.as_bytes().len(),
+                "accepted inbound socket with WFP redirect records"
+            );
             input.extensions_mut().insert(records);
+        } else {
+            tracing::debug!("accepted inbound socket without WFP redirect records");
         }
 
         self.inner

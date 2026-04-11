@@ -128,12 +128,14 @@ just windows-driver-build
 just windows-driver-package-stage
 ```
 
-> Powershell (even when elavated) might not run your script.
+> Normally powershell scripts (even when elavated) might not run your script.
 > You can allow it for the current session using:
 >
 > ```ps
 > Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 > ```
+>
+> These and other just commands provided in this repo do this for you already.
 
 That stages the local/dev package under:
 

@@ -12,6 +12,10 @@ $DriverHardwareId = "Root\SafeChainL4Proxy"
 $InfFileName = "safechain_lib_l4_proxy_windows_driver.inf"
 $DriverFileName = "safechain_lib_l4_proxy_windows_driver.sys"
 $CatalogFileName = "safechain_lib_l4_proxy_windows_driver.cat"
+$PnpUtilSuccess = 0
+$PnpUtilNoMoreItems = 259
+$PnpUtilRebootRequired = 3010
+$PnpUtilRebootInitiated = 1641
 
 function Test-IsAdministrator {
     $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -48,7 +52,7 @@ function Get-DeviceInstanceIds {
         [string]$ServiceName
     )
 
-    $output = & pnputil.exe /enum-devices /class System /deviceids /services /format csv 2>&1
+    $output = & pnputil.exe /enum-devices /deviceids /services /format csv 2>&1
     if ($LASTEXITCODE -ne 0) {
         return @()
     }
@@ -62,16 +66,33 @@ function Get-DeviceInstanceIds {
     return @(
         $rows |
             Where-Object {
+                $hardwareIds = if ($_.PSObject.Properties.Name -contains 'Hardware IDs') {
+                    $_.'Hardware IDs'
+                } else {
+                    $_.HardwareIds
+                }
+                $service = if ($_.PSObject.Properties.Name -contains 'Service') {
+                    $_.Service
+                } else {
+                    $null
+                }
+
                 (
-                    $_.'Hardware IDs' -and
-                    $_.'Hardware IDs'.ToString().ToLowerInvariant().Contains($HardwareId.ToLowerInvariant())
+                    $hardwareIds -and
+                    $hardwareIds.ToString().ToLowerInvariant().Contains($HardwareId.ToLowerInvariant())
                 ) -or (
                     $ServiceName -and
-                    $_.Service -and
-                    $_.Service -eq $ServiceName
+                    $service -and
+                    $service -eq $ServiceName
                 )
             } |
-            ForEach-Object { $_.'Instance ID' } |
+            ForEach-Object {
+                if ($_.PSObject.Properties.Name -contains 'Instance ID') {
+                    $_.'Instance ID'
+                } else {
+                    $_.InstanceId
+                }
+            } |
             Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
     )
 }
@@ -83,6 +104,86 @@ function Test-DriverServiceInstalled {
     )
 
     $null -ne (Get-Item "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName" -ErrorAction SilentlyContinue)
+}
+
+function Invoke-PnpUtil {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description,
+
+        [Parameter(Mandatory = $false)]
+        [int[]]$AllowedExitCodes = @($PnpUtilSuccess)
+    )
+
+    $output = & pnputil.exe @Arguments 2>&1
+    $exitCode = $LASTEXITCODE
+    if ($AllowedExitCodes -notcontains $exitCode) {
+        $rendered = ($output | Out-String).Trim()
+        throw "$Description failed with exit code $exitCode`n$rendered"
+    }
+
+    return @{
+        Output = $output
+        ExitCode = $exitCode
+    }
+}
+
+function Restart-DeviceInstance {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$InstanceId
+    )
+
+    $devconPath = Find-DevCon
+    if (-not $devconPath) {
+        throw "devcon.exe is required for an explicit device restart but was not found."
+    }
+
+    Write-Host "Restarting device instance $InstanceId" -ForegroundColor Green
+    $restartOutput = & $devconPath /r restart "@$InstanceId" 2>&1
+    $restartExitCode = $LASTEXITCODE
+    $restartText = ($restartOutput | Out-String).Trim()
+    if (($restartExitCode -ne 0) -and ($restartExitCode -ne 1)) {
+        throw "devcon restart failed for $InstanceId with exit code $restartExitCode`n$restartText"
+    }
+
+    if ($restartText -match 'restart failed' -or $restartText -match 'No devices restarted') {
+        throw "devcon restart did not restart $InstanceId`n$restartText"
+    }
+
+    if ($restartText -match 'reboot is required' -or $restartText -match 'restart requires reboot') {
+        throw "device restart for $InstanceId requires a reboot`n$restartText"
+    }
+}
+
+function Wait-ForDeviceInstanceIds {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$HardwareId,
+
+        [Parameter(Mandatory = $false)]
+        [string]$ServiceName,
+
+        [Parameter(Mandatory = $false)]
+        [int]$Attempts = 8,
+
+        [Parameter(Mandatory = $false)]
+        [int]$DelayMilliseconds = 250
+    )
+
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        $instanceIds = @(Get-DeviceInstanceIds -HardwareId $HardwareId -ServiceName $ServiceName)
+        if ($instanceIds.Count -gt 0) {
+            return $instanceIds
+        }
+
+        Start-Sleep -Milliseconds $DelayMilliseconds
+    }
+
+    return @()
 }
 
 $ProjectDir = (Get-Item (Split-Path -Parent $MyInvocation.MyCommand.Path)).Parent.Parent.FullName
@@ -123,24 +224,15 @@ Write-Host "  inf: $InfPath"
 Write-Host "  service: $DriverServiceName"
 Write-Host "  hardware id: $DriverHardwareId"
 
-$pnputil = Get-Command pnputil.exe -ErrorAction Stop
+$addDriver = Invoke-PnpUtil `
+    -Arguments @('/add-driver', $InfPath, '/install') `
+    -Description 'pnputil add-driver' `
+    -AllowedExitCodes @($PnpUtilSuccess, $PnpUtilNoMoreItems, $PnpUtilRebootRequired, $PnpUtilRebootInitiated)
 
-$pnputilOutput = & $pnputil.Source /add-driver $InfPath /install 2>&1
-$pnputilSucceeded =
-    ($LASTEXITCODE -eq 0) -or
-    (
-        $LASTEXITCODE -eq 259 -and
-        (($pnputilOutput | Out-String) -match 'Driver package added successfully')
-    )
-
-if (-not $pnputilSucceeded) {
-    throw "pnputil add-driver failed with exit code $LASTEXITCODE"
-}
-
-$deviceInstanceIds = Get-DeviceInstanceIds -HardwareId $DriverHardwareId -ServiceName $DriverServiceName
+$deviceInstanceIds = @(Wait-ForDeviceInstanceIds -HardwareId $DriverHardwareId -ServiceName $DriverServiceName)
 $serviceInstalled = Test-DriverServiceInstalled -ServiceName $DriverServiceName
 
-if (($deviceInstanceIds.Count -eq 0) -and (-not $serviceInstalled)) {
+if ($deviceInstanceIds.Count -eq 0) {
     $devconPath = Find-DevCon
     if (-not $devconPath) {
         throw "No device instance exists for $DriverHardwareId and devcon.exe was not found to create one."
@@ -157,12 +249,21 @@ if (($deviceInstanceIds.Count -eq 0) -and (-not $serviceInstalled)) {
         throw "devcon install failed with exit code $LASTEXITCODE"
     }
 
-    $deviceInstanceIds = Get-DeviceInstanceIds -HardwareId $DriverHardwareId -ServiceName $DriverServiceName
+    & pnputil.exe /scan-devices | Out-Null
+    $deviceInstanceIds = @(Wait-ForDeviceInstanceIds -HardwareId $DriverHardwareId -ServiceName $DriverServiceName)
     $serviceInstalled = Test-DriverServiceInstalled -ServiceName $DriverServiceName
 }
 
-if (($deviceInstanceIds.Count -eq 0) -and (-not $serviceInstalled)) {
+if ($deviceInstanceIds.Count -eq 0) {
+    if ($serviceInstalled) {
+        throw "Driver service registry key exists, but no device instance was found for $DriverHardwareId after install. Refusing to continue without a real devnode to restart."
+    }
+
     throw "Driver package was staged, but neither a device instance nor the $DriverServiceName service was found."
+}
+
+foreach ($instanceId in $deviceInstanceIds) {
+    Restart-DeviceInstance -InstanceId $instanceId
 }
 
 if ($deviceInstanceIds.Count -gt 0) {
@@ -177,3 +278,7 @@ if ($serviceInstalled) {
 }
 
 Write-Host "Driver package staged/install command completed successfully." -ForegroundColor Green
+
+if (($addDriver.ExitCode -eq $PnpUtilRebootRequired) -or ($addDriver.ExitCode -eq $PnpUtilRebootInitiated)) {
+    throw "Windows reports that the driver update requires a reboot to complete. Please reboot and rerun verification."
+}

@@ -14,6 +14,7 @@ pub struct DisableArgs {
     pub force_remove_on_veto: bool,
 
     #[arg(long, default_value_t = false)]
+    #[arg(alias = "wipe-startup-config")]
     pub clear_persisted_config: bool,
 }
 

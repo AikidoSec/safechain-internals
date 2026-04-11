@@ -86,15 +86,19 @@ pub const IOCTL_CLEAR_IPV6_PROXY: u32 = ctl_code(
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum StartupConfig {
     V1 {
-        proxy_ipv4: SocketAddrV4,
-        proxy_ipv6: Option<SocketAddrV6>,
+        proxy_ipv4: (SocketAddrV4, u32),
+        proxy_ipv6: Option<(SocketAddrV6, u32)>,
     },
 }
 
 impl StartupConfig {
-    pub fn new(proxy_ipv4: SocketAddrV4, proxy_ipv6: Option<SocketAddrV6>) -> Self {
+    pub fn new(
+        proxy_ipv4: SocketAddrV4,
+        proxy_ipv4_pid: u32,
+        proxy_ipv6: Option<(SocketAddrV6, u32)>,
+    ) -> Self {
         Self::V1 {
-            proxy_ipv4,
+            proxy_ipv4: (proxy_ipv4, proxy_ipv4_pid),
             proxy_ipv6,
         }
     }
@@ -109,25 +113,37 @@ impl StartupConfig {
 
     pub fn proxy_ipv4(&self) -> SocketAddrV4 {
         match self {
-            Self::V1 { proxy_ipv4, .. } => *proxy_ipv4,
+            Self::V1 { proxy_ipv4, .. } => proxy_ipv4.0,
+        }
+    }
+
+    pub fn proxy_ipv4_pid(&self) -> u32 {
+        match self {
+            Self::V1 { proxy_ipv4, .. } => proxy_ipv4.1,
         }
     }
 
     pub fn proxy_ipv6(&self) -> Option<SocketAddrV6> {
         match self {
-            Self::V1 { proxy_ipv6, .. } => *proxy_ipv6,
+            Self::V1 { proxy_ipv6, .. } => proxy_ipv6.map(|value| value.0),
+        }
+    }
+
+    pub fn proxy_ipv6_pid(&self) -> Option<u32> {
+        match self {
+            Self::V1 { proxy_ipv6, .. } => proxy_ipv6.map(|value| value.1),
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Ipv4ProxyConfigPayload {
-    V1 { proxy: SocketAddrV4 },
+    V1 { proxy: SocketAddrV4, pid: u32 },
 }
 
 impl Ipv4ProxyConfigPayload {
-    pub fn new(proxy: SocketAddrV4) -> Self {
-        Self::V1 { proxy }
+    pub fn new(proxy: SocketAddrV4, pid: u32) -> Self {
+        Self::V1 { proxy, pid }
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
@@ -140,19 +156,25 @@ impl Ipv4ProxyConfigPayload {
 
     pub fn socket_addr(&self) -> SocketAddrV4 {
         match self {
-            Self::V1 { proxy } => *proxy,
+            Self::V1 { proxy, .. } => *proxy,
+        }
+    }
+
+    pub fn pid(&self) -> u32 {
+        match self {
+            Self::V1 { pid, .. } => *pid,
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Ipv6ProxyConfigPayload {
-    V1 { proxy: SocketAddrV6 },
+    V1 { proxy: SocketAddrV6, pid: u32 },
 }
 
 impl Ipv6ProxyConfigPayload {
-    pub fn new(proxy: SocketAddrV6) -> Self {
-        Self::V1 { proxy }
+    pub fn new(proxy: SocketAddrV6, pid: u32) -> Self {
+        Self::V1 { proxy, pid }
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
@@ -165,7 +187,13 @@ impl Ipv6ProxyConfigPayload {
 
     pub fn socket_addr(&self) -> SocketAddrV6 {
         match self {
-            Self::V1 { proxy } => *proxy,
+            Self::V1 { proxy, .. } => *proxy,
+        }
+    }
+
+    pub fn pid(&self) -> u32 {
+        match self {
+            Self::V1 { pid, .. } => *pid,
         }
     }
 }
@@ -184,7 +212,8 @@ mod tests {
     fn startup_config_roundtrips() {
         let config = StartupConfig::new(
             SocketAddrV4::new(Ipv4Addr::LOCALHOST, 15000),
-            Some(SocketAddrV6::new(Ipv6Addr::LOCALHOST, 15001, 0, 0)),
+            1234,
+            Some((SocketAddrV6::new(Ipv6Addr::LOCALHOST, 15001, 0, 0), 5678)),
         );
 
         let decoded =
@@ -193,9 +222,11 @@ mod tests {
             decoded.proxy_ipv4(),
             SocketAddrV4::new(Ipv4Addr::LOCALHOST, 15000)
         );
+        assert_eq!(decoded.proxy_ipv4_pid(), 1234);
         assert_eq!(
             decoded.proxy_ipv6(),
             Some(SocketAddrV6::new(Ipv6Addr::LOCALHOST, 15001, 0, 0))
         );
+        assert_eq!(decoded.proxy_ipv6_pid(), Some(5678));
     }
 }

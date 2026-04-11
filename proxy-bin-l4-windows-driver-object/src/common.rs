@@ -59,6 +59,38 @@ pub fn enable_device(service_name: &str) -> Result<(), BoxError> {
     let devices = find_devices_for_service(service_name)?;
 
     for device in &devices {
+        let restart_disable_cr = unsafe {
+            // SAFETY: `devinst` came from SetupAPI enumeration for this device info set.
+            CM_Disable_DevNode(device.devinst, ENABLE_RESTART_DISABLE_FLAGS)
+        };
+        match restart_disable_cr {
+            CR_SUCCESS => {
+                info!(
+                    service_name,
+                    instance_id = %device.instance_id,
+                    "device disabled transiently to force a driver reload"
+                );
+                thread::sleep(Duration::from_millis(150));
+            }
+            CR_REMOVE_VETOED | CR_NOT_DISABLEABLE | CR_NO_SUCH_DEVINST | CR_DEVICE_NOT_THERE => {
+                warn!(
+                    service_name,
+                    instance_id = %device.instance_id,
+                    cfgmgr32 = configret_name(restart_disable_cr),
+                    "could not force a transient device restart before enable; continuing with enable"
+                );
+            }
+            _ => {
+                return Err(
+                    BoxError::from("failed to prepare device restart before enable")
+                        .context_str_field("name", service_name)
+                        .context_str_field("instance_id", &device.instance_id)
+                        .context_field("cfgmgr32", restart_disable_cr)
+                        .context_str_field("cfgmgr32_name", configret_name(restart_disable_cr)),
+                );
+            }
+        }
+
         let cr = unsafe {
             // SAFETY: `devinst` came from SetupAPI enumeration for this device info set.
             CM_Enable_DevNode(device.devinst, 0)
@@ -135,6 +167,7 @@ pub fn disable_device(service_name: &str, force_remove_on_veto: bool) -> Result<
 }
 
 const DISABLE_FLAGS: u32 = CM_DISABLE_ABSOLUTE | CM_DISABLE_PERSIST | CM_DISABLE_UI_NOT_OK;
+const ENABLE_RESTART_DISABLE_FLAGS: u32 = CM_DISABLE_UI_NOT_OK;
 const DISABLE_RETRY_DELAYS_MS: &[u64] = &[150, 500, 1000];
 fn disable_devinst_with_retry(devinst: u32, instance_id: &str) -> u32 {
     let mut attempt = 0usize;
@@ -479,27 +512,29 @@ pub fn read_startup_blob(service_name: &str) -> Result<Option<StartupConfig>, Bo
 
 pub fn sync_startup_blob(
     service_name: &str,
-    ipv4_proxy: Option<SocketAddrV4>,
-    ipv6_proxy: Option<Option<SocketAddrV6>>,
+    ipv4_proxy: Option<(SocketAddrV4, u32)>,
+    ipv6_proxy: Option<Option<(SocketAddrV6, u32)>>,
 ) -> Result<(), BoxError> {
     let current = read_startup_blob(service_name)?;
 
-    let next_ipv4 = match (ipv4_proxy, current.as_ref().map(StartupConfig::proxy_ipv4)) {
-        (Some(ipv4), _) => ipv4,
-        (None, Some(ipv4)) => ipv4,
-        (None, None) => {
-            return Err(BoxError::from(
-                "cannot update persisted startup config without an existing IPv4 proxy; use `enable` or pass `--ipv4-proxy`"
-            ))
-        }
+    let next_ipv4 = match ipv4_proxy {
+        Some(ipv4) => ipv4,
+        None => match current.as_ref() {
+            Some(blob) => (blob.proxy_ipv4(), blob.proxy_ipv4_pid()),
+            None => {
+                return Err(BoxError::from(
+                    "cannot update persisted startup config without an existing IPv4 proxy; use `enable` or pass `--ipv4-proxy`"
+                ))
+            }
+        },
     };
 
     let next_ipv6 = match ipv6_proxy {
         Some(next) => next,
-        None => current.and_then(|blob| blob.proxy_ipv6()),
+        None => current.and_then(|blob| blob.proxy_ipv6().zip(blob.proxy_ipv6_pid())),
     };
 
-    write_startup_blob(service_name, &StartupConfig::new(next_ipv4, next_ipv6))
+    write_startup_blob(service_name, &StartupConfig::new(next_ipv4.0, next_ipv4.1, next_ipv6))
 }
 
 pub fn delete_startup_blob(service_name: &str) -> Result<(), BoxError> {

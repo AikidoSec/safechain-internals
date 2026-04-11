@@ -6,7 +6,7 @@ use crate::wfp::{TcpRedirectDecision, WfpFlowMeta};
 #[test]
 fn passthrough_for_private_destinations() {
     let controller = ProxyDriverController::new();
-    controller.configure_proxy_ipv4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 15000));
+    controller.configure_proxy_ipv4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 15000), 1234);
 
     let flow = WfpFlowMeta {
         remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)), 443),
@@ -23,7 +23,7 @@ fn passthrough_for_private_destinations() {
 #[test]
 fn redirects_public_destinations() {
     let controller = ProxyDriverController::new();
-    controller.configure_proxy_ipv4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 15000));
+    controller.configure_proxy_ipv4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 15000), 1234);
 
     let flow = WfpFlowMeta {
         remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
@@ -38,7 +38,7 @@ fn redirects_public_destinations() {
 #[test]
 fn redirects_public_ipv6_destinations_when_ipv6_proxy_is_configured() {
     let controller = ProxyDriverController::new();
-    controller.configure_proxy_ipv6(SocketAddrV6::new(Ipv6Addr::LOCALHOST, 15000, 0, 0));
+    controller.configure_proxy_ipv6(SocketAddrV6::new(Ipv6Addr::LOCALHOST, 15000, 0, 0), 5678);
 
     let flow = WfpFlowMeta {
         remote: SocketAddr::new(
@@ -56,10 +56,15 @@ fn redirects_public_ipv6_destinations_when_ipv6_proxy_is_configured() {
 #[test]
 fn runtime_update_can_clear_ipv6_without_touching_ipv4() {
     let controller = ProxyDriverController::new();
-    controller.configure_proxy_ipv4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 15000));
-    controller.configure_proxy_ipv6(SocketAddrV6::new(Ipv6Addr::LOCALHOST, 15000, 0, 0));
+    controller.configure_proxy_ipv4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 15000), 1234);
+    controller.configure_proxy_ipv6(SocketAddrV6::new(Ipv6Addr::LOCALHOST, 15000, 0, 0), 5678);
 
-    assert!(controller.apply_runtime_update(ProxyDriverConfigUpdate::SetIpv6(None)));
+    assert!(
+        controller.apply_runtime_update(ProxyDriverConfigUpdate::SetIpv6 {
+            proxy: None,
+            pid: None,
+        })
+    );
     assert!(
         controller
             .proxy_endpoint_for(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)), 443))

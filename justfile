@@ -1,4 +1,4 @@
-set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
+set windows-shell := ["powershell.exe", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command"]
 
 export RUSTDOCFLAGS := "-D rustdoc::broken-intra-doc-links"
 
@@ -99,7 +99,6 @@ rust-qa-full: rust-qa
 run-l4-proxy $RUST_LOG="info,safechain_l4_proxy=debug,safechain_proxy_lib=debug" *ARGS:
     cargo run \
         --bin safechain-l4-proxy \
-        --features har \
         -- \
         --secrets .aikido/safechain-l4-proxy \
         {{ARGS}}
@@ -268,12 +267,19 @@ windows-driver-package-install package_dir="dist/windows-driver-package/debug":
 windows-driver-package-install-fresh-debug IPV4_PROXY *ARGS:
     just rust-quick-qa
     just windows-driver-test
-    just run-windows-driver-cli disable --force-remove-on-veto
+    just run-windows-driver-cli disable \
+        --force-remove-on-veto --clear-persisted-config
     just windows-driver-package-remove
     just windows-driver-build
     just windows-driver-package-stage
+    just run-windows-driver-cli seed-startup-config \
+        --ipv4-proxy {{IPV4_PROXY}} \
+        --ipv4-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV4_PROXY}}')"
     just windows-driver-package-install
-    just run-windows-driver-cli enable --ipv4-proxy {{IPV4_PROXY}} {{ARGS}}
+    just run-windows-driver-cli enable \
+        --ipv4-proxy {{IPV4_PROXY}} \
+        --ipv4-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV4_PROXY}}')" \
+        {{ARGS}}
 
 windows-driver-package-verify *ARGS:
     ./packaging/windows/verify-driver-install.ps1 {{ARGS}}
@@ -307,4 +313,27 @@ run-windows-driver-cli *ARGS:
     cargo run \
         --bin safechain-l4-proxy-windows-driver-object \
         -- \
+        {{ARGS}}
+
+windows-driver-enable IPV4_PROXY *ARGS:
+    just run-windows-driver-cli enable \
+        --ipv4-proxy {{IPV4_PROXY}} \
+        --ipv4-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV4_PROXY}}')" \
+        {{ARGS}}
+
+windows-driver-update-ipv4 IPV4_PROXY *ARGS:
+    just run-windows-driver-cli update \
+        --ipv4-proxy {{IPV4_PROXY}} \
+        --ipv4-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV4_PROXY}}')" \
+        {{ARGS}}
+
+windows-driver-update-ipv6 IPV6_PROXY *ARGS:
+    just run-windows-driver-cli update \
+        --ipv6-proxy {{IPV6_PROXY}} \
+        --ipv6-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV6_PROXY}}')" \
+        {{ARGS}}
+
+windows-driver-clear-ipv6 *ARGS:
+    just run-windows-driver-cli update \
+        --clear-ipv6 \
         {{ARGS}}

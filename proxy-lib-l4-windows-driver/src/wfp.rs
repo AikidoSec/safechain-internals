@@ -61,6 +61,7 @@ pub enum TcpRedirectDecision {
     Passthrough,
     Redirect {
         proxy_target: SocketAddr,
+        proxy_target_pid: u32,
         redirect_context: Vec<u8>,
     },
 }
@@ -210,7 +211,7 @@ unsafe extern "system" fn on_callout_flow_delete(
 
 /// WFP classify callback where redirect decisions are applied.
 unsafe extern "system" fn on_callout_classify(
-    _in_fixed_values: *const FWPS_INCOMING_VALUES0,
+    in_fixed_values: *const FWPS_INCOMING_VALUES0,
     in_meta_values: *const c_void,
     _layer_data: *mut c_void,
     classify_context: *const c_void,
@@ -295,14 +296,26 @@ unsafe extern "system" fn on_callout_classify(
         return;
     };
 
+    let source_pid = source_pid_from_metadata(in_meta_values);
+    let source_process_path = source_process_path_from_metadata(in_meta_values)
+        .or_else(|| source_process_path_from_fixed_values(in_fixed_values));
+    if source_pid.is_none() {
+        log::driver_log_info!(
+            "wfp: process id metadata not present for classify (metadata_flags={:#x}, source_process={:?})",
+            metadata_flags(in_meta_values),
+            source_process_path,
+        );
+    }
+
     let decision = driver_controller().classify_outbound_tcp_connect(WfpFlowMeta {
         remote,
-        source_pid: None,
-        source_process_path: None,
+        source_pid,
+        source_process_path,
     });
 
     if let TcpRedirectDecision::Redirect {
         proxy_target,
+        proxy_target_pid,
         redirect_context,
     } = decision
     {
@@ -318,7 +331,7 @@ unsafe extern "system" fn on_callout_classify(
                 &mut (*connect_request).remoteAddressAndPort,
                 proxy_target,
             );
-            (*connect_request).localRedirectTargetPID = 0; // must only be set if you wish to intercept loopback conns
+            (*connect_request).localRedirectTargetPID = proxy_target_pid;
             (*connect_request).localRedirectHandle = registration.redirect_handle as *mut c_void;
             (*connect_request).localRedirectContext = context_ptr;
             (*connect_request).localRedirectContextSize = redirect_context.len();
@@ -331,6 +344,108 @@ unsafe extern "system" fn on_callout_classify(
     }
 
     complete_writable_classify(classify_handle, writable_layer_data, classify_out);
+}
+
+fn source_pid_from_metadata(in_meta_values: *const c_void) -> Option<u32> {
+    let metadata = metadata_values(in_meta_values)?;
+    let raw_pid = unsafe {
+        // SAFETY: the metadata pointer is valid for this classify callback.
+        if ((*metadata).currentMetadataValues & FWPS_METADATA_FIELD_PROCESS_ID) == 0 {
+            return None;
+        }
+        (*metadata).processId
+    };
+    u32::try_from(raw_pid).ok()
+}
+
+fn source_process_path_from_metadata(in_meta_values: *const c_void) -> Option<String> {
+    let metadata = metadata_values(in_meta_values)?;
+    let blob = unsafe {
+        // SAFETY: the metadata pointer is valid for this classify callback.
+        if ((*metadata).currentMetadataValues & FWPS_METADATA_FIELD_PROCESS_PATH) == 0 {
+            return None;
+        }
+        (*metadata).processPath
+    };
+    fwp_byte_blob_to_utf16_string(blob)
+}
+
+fn source_process_path_from_fixed_values(
+    in_fixed_values: *const FWPS_INCOMING_VALUES0,
+) -> Option<String> {
+    let fixed_values = unsafe {
+        // SAFETY: pointer comes directly from WFP for the duration of the callback.
+        in_fixed_values.as_ref()?
+    };
+
+    let field_index = match fixed_values.layerId as u32 {
+        FWPS_LAYER_ALE_CONNECT_REDIRECT_V4 => {
+            FWPS_FIELD_ALE_CONNECT_REDIRECT_V4_ALE_APP_ID as usize
+        }
+        FWPS_LAYER_ALE_CONNECT_REDIRECT_V6 => {
+            FWPS_FIELD_ALE_CONNECT_REDIRECT_V6_ALE_APP_ID as usize
+        }
+        _ => return None,
+    };
+    if fixed_values.incomingValue.is_null() || field_index >= fixed_values.valueCount as usize {
+        return None;
+    }
+
+    let values = unsafe {
+        // SAFETY: the slice is bounded by the valueCount provided by WFP.
+        core::slice::from_raw_parts(fixed_values.incomingValue, fixed_values.valueCount as usize)
+    };
+    let app_id_blob = unsafe {
+        // SAFETY: the selected field index is for the ALE_APP_ID field at this layer.
+        values.get(field_index)?.value.value.byteBlob
+    };
+
+    fwp_byte_blob_to_utf16_string(app_id_blob)
+}
+
+fn metadata_values(in_meta_values: *const c_void) -> Option<*const FWPS_INCOMING_METADATA_VALUES0> {
+    if in_meta_values.is_null() {
+        return None;
+    }
+    Some(in_meta_values.cast::<FWPS_INCOMING_METADATA_VALUES0>())
+}
+
+fn metadata_flags(in_meta_values: *const c_void) -> u32 {
+    let Some(metadata) = metadata_values(in_meta_values) else {
+        return 0;
+    };
+    unsafe {
+        // SAFETY: the metadata pointer is valid for this classify callback.
+        (*metadata).currentMetadataValues
+    }
+}
+
+fn fwp_byte_blob_to_utf16_string(blob: *mut FWP_BYTE_BLOB) -> Option<String> {
+    if blob.is_null() {
+        return None;
+    }
+
+    let (data, size) = unsafe {
+        // SAFETY: `blob` comes from WFP metadata for the current classify invocation.
+        ((*blob).data, (*blob).size as usize)
+    };
+    if data.is_null() || size < 2 || (size % 2) != 0 {
+        return None;
+    }
+
+    let wide = unsafe {
+        // SAFETY: buffer length is validated above and reinterpreted as UTF-16 code units.
+        core::slice::from_raw_parts(data.cast::<u16>(), size / 2)
+    };
+    let end = wide
+        .iter()
+        .position(|unit| *unit == 0)
+        .unwrap_or(wide.len());
+    if end == 0 {
+        return None;
+    }
+
+    Some(String::from_utf16_lossy(&wide[..end]))
 }
 
 fn should_skip_self_redirect(
@@ -511,6 +626,18 @@ const FWPS_RIGHT_ACTION_WRITE: u32 = 0x0000_0001;
 /// Signals that `FWPS_INCOMING_METADATA_VALUES0.redirectRecords` is present.
 /// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/ns-fwpsk-fwps_incoming_metadata_values0
 const FWPS_METADATA_FIELD_REDIRECT_RECORD_HANDLE: u32 = 0x4000_0000;
+/// `FWPS_METADATA_FIELD_PROCESS_PATH` from `fwpsk.h`.
+const FWPS_METADATA_FIELD_PROCESS_PATH: u32 = 0x0000_0008;
+/// `FWPS_METADATA_FIELD_PROCESS_ID` from `fwpsk.h`.
+const FWPS_METADATA_FIELD_PROCESS_ID: u32 = 0x0000_0020;
+/// `FWPS_LAYER_ALE_CONNECT_REDIRECT_V4` from `fwpsk.h`.
+const FWPS_LAYER_ALE_CONNECT_REDIRECT_V4: u32 = 36;
+/// `FWPS_LAYER_ALE_CONNECT_REDIRECT_V6` from `fwpsk.h`.
+const FWPS_LAYER_ALE_CONNECT_REDIRECT_V6: u32 = 37;
+/// `FWPS_FIELD_ALE_CONNECT_REDIRECT_V4_ALE_APP_ID` from `fwpsk.h`.
+const FWPS_FIELD_ALE_CONNECT_REDIRECT_V4_ALE_APP_ID: u32 = 0;
+/// `FWPS_FIELD_ALE_CONNECT_REDIRECT_V6_ALE_APP_ID` from `fwpsk.h`.
+const FWPS_FIELD_ALE_CONNECT_REDIRECT_V6_ALE_APP_ID: u32 = 0;
 /// `FWP_ACTION_PERMIT` from `fwptypes.h`.
 ///
 /// Used after rewriting the connect request so WFP allows the redirected flow.
@@ -634,7 +761,30 @@ struct FWPS_CALLOUT1 {
 struct FWPS_INCOMING_VALUES0 {
     layerId: u16,
     valueCount: u32,
-    incomingValue: *const c_void,
+    incomingValue: *const FWPS_INCOMING_VALUE0,
+}
+
+#[repr(C)]
+#[allow(non_snake_case)]
+struct FWPS_INCOMING_VALUE0 {
+    value: FWP_VALUE0,
+}
+
+#[repr(C)]
+#[allow(non_snake_case)]
+struct FWP_VALUE0 {
+    r#type: u32,
+    value: FWP_VALUE0_0,
+}
+
+#[repr(C)]
+#[allow(non_snake_case)]
+union FWP_VALUE0_0 {
+    byteBlob: *mut FWP_BYTE_BLOB,
+    uint8: u8,
+    uint16: u16,
+    uint32: u32,
+    uint64: u64,
 }
 
 #[repr(C)]

@@ -48,6 +48,9 @@ pub unsafe extern "system" fn driver_entry(
     driver: &mut DRIVER_OBJECT,
     registry_path: PCUNICODE_STRING,
 ) -> NTSTATUS {
+    log::driver_log_info!(
+        "driver entry invoked (startup config required, redirect-target-pid enabled)"
+    );
     driver.DriverUnload = Some(driver_unload);
 
     let startup_status = control::initialize_startup_config(&DRIVER, registry_path);
@@ -78,7 +81,9 @@ pub unsafe extern "system" fn driver_entry(
         return status;
     }
 
-    log::driver_log_info!("driver initialized");
+    log::driver_log_info!(
+        "driver initialized (startup config required, redirect-target-pid enabled)"
+    );
     STATUS_SUCCESS
 }
 
@@ -87,7 +92,7 @@ extern "C" fn driver_unload(_driver: *mut DRIVER_OBJECT) {
     wfp::unregister_callouts();
     device::cleanup(_driver);
     DRIVER.clear_proxy_endpoint();
-    log::driver_log_info!("driver unloaded");
+    log::driver_log_info!("driver unloaded (startup config required, redirect-target-pid enabled)");
 }
 
 pub fn update_driver_config(update: ProxyDriverConfigUpdate) -> NTSTATUS {
