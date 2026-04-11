@@ -93,6 +93,38 @@ pub async fn start_tcp_server(
     Ok(tcp_addr.into())
 }
 
+#[allow(clippy::too_many_arguments)]
+pub async fn start_tcp_servers(
+    binds: &[SocketAddr],
+    executor: Executor,
+    peek_duration: Duration,
+    agent_identity: Option<AgentIdentity>,
+    reporting_endpoint: Option<Uri>,
+    aikido_url: Uri,
+    data_storage: SyncCompactDataStorage,
+    secret_storage: SyncSecrets,
+) -> Result<Vec<SocketAddress>, BoxError> {
+    let mut addrs = Vec::with_capacity(binds.len());
+
+    for bind in binds {
+        let addr = start_tcp_server(
+            *bind,
+            executor.clone(),
+            peek_duration,
+            agent_identity.clone(),
+            reporting_endpoint.clone(),
+            aikido_url.clone(),
+            data_storage.clone(),
+            secret_storage.clone(),
+        )
+        .await
+        .with_context_debug_field("bind", || *bind)?;
+        addrs.push(addr);
+    }
+
+    Ok(addrs)
+}
+
 async fn try_new_tcp_listener(
     executor: Executor,
     bind: SocketAddress,

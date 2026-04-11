@@ -84,6 +84,4 @@ Well that depends on the platform:
 
   See [./l4_proxy/windows-driver.md](./l4_proxy/windows-driver.md) for more information.
 
-To recap, regardless of the platform, the L4 (MITM transparent) proxy runs as a process in user space,
-or depending on the platform as 2 proxies (1 for IPv4 and 1 for IPv6), but how the traffic "ends up"
-in the proxy (to "pass through") is platform specific.
+To recap, regardless of the platform, the L4 (MITM transparent) proxy runs as a process in user space.

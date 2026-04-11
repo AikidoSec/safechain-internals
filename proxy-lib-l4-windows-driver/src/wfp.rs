@@ -14,6 +14,7 @@
 //!   https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsapplymodifiedlayerdata0
 //! - `FwpsRedirectHandleCreate0`:
 //!   https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsredirecthandlecreate0
+//!
 //! Header references used for the owned FFI/constants below:
 //! - `fwpsk.h` (`km`): callout registration, classify output, metadata flags,
 //!   redirect state, connect request structures

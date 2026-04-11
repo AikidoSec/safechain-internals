@@ -5,7 +5,7 @@
 )]
 
 use std::{
-    net::SocketAddr,
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -44,8 +44,8 @@ pub mod utils;
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// network interface to bind the transparent proxy to
-    #[arg(long, default_value = "127.0.0.1:0")]
-    pub bind: SocketAddr,
+    #[arg(long, default_values_t = default_bind_addresses())]
+    pub bind: Vec<SocketAddr>,
 
     /// secrets storage to use (e.g. for root CA)
     #[arg(
@@ -155,8 +155,8 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
 
     let agent_identity = AgentIdentity::load(&args.data);
 
-    let tcp_server_addr = self::tcp::start_tcp_server(
-        args.bind,
+    let tcp_server_addr = self::tcp::start_tcp_servers(
+        &args.bind,
         Executor::graceful(graceful.guard()),
         Duration::from_secs_f64(args.peek_duration.max(0.05)),
         agent_identity,
@@ -168,14 +168,13 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
     .await
     .context("start tcp services")?;
 
-    tracing::info!(
-        address = %tcp_server_addr,
-        "tcp server up and running",
-    );
+    for addr in &tcp_server_addr {
+        tracing::info!(address = %addr, "tcp server up and running");
+    }
 
-    write_server_socket_address_as_file(&args.data, tcp_server_addr)
+    write_server_socket_addresses_as_files(&args.data, &tcp_server_addr)
         .await
-        .context("write server addr to fs")
+        .context("write server addrs to fs")
         .context_debug_field("dir", args.data)?;
 
     let delay = match graceful_timeout {
@@ -187,15 +186,76 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
     Ok(())
 }
 
-async fn write_server_socket_address_as_file(
+fn default_bind_addresses() -> Vec<SocketAddr> {
+    vec![
+        SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)),
+        SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::LOCALHOST, 0, 0, 0)),
+    ]
+}
+
+async fn write_server_socket_addresses_as_files(
     dir: &Path,
-    addr: SocketAddress,
+    addrs: &[SocketAddress],
 ) -> Result<(), BoxError> {
-    let kind = if addr.ip_addr.is_ipv4() { "v4" } else { "v6" };
-    let path = dir.join(format!("l4_proxy.addr.{kind}.txt"));
-    tokio::fs::write(&path, addr.to_string())
+    remove_stale_server_socket_address_files(dir).await?;
+
+    let mut v4_index = 0usize;
+    let mut v6_index = 0usize;
+
+    for addr in addrs {
+        let (kind, index) = if addr.ip_addr.is_ipv4() {
+            let index = v4_index;
+            v4_index += 1;
+            ("v4", index)
+        } else {
+            let index = v6_index;
+            v6_index += 1;
+            ("v6", index)
+        };
+
+        let file_name = if index == 0 {
+            format!("l4_proxy.addr.{kind}.txt")
+        } else {
+            format!("l4_proxy.addr.{kind}.{index}.txt")
+        };
+        let path = dir.join(file_name);
+        tokio::fs::write(&path, addr.to_string())
+            .await
+            .context("write server's socket address to file")
+            .context_field("address", *addr)
+            .with_context_debug_field("path", || path.to_owned())?;
+    }
+
+    Ok(())
+}
+
+async fn remove_stale_server_socket_address_files(dir: &Path) -> Result<(), BoxError> {
+    let mut entries = tokio::fs::read_dir(dir)
         .await
-        .context("write server's socket address to file")
-        .context_field("address", addr)
-        .with_context_debug_field("path", || path.to_owned())
+        .context("read data directory while clearing stale socket address files")
+        .with_context_debug_field("path", || dir.to_owned())?;
+
+    while let Some(entry) = entries
+        .next_entry()
+        .await
+        .context("iterate data directory while clearing stale socket address files")?
+    {
+        let Some(file_name) = entry.file_name().to_str().map(str::to_owned) else {
+            continue;
+        };
+
+        let is_socket_address_file =
+            file_name.starts_with("l4_proxy.addr.v4") || file_name.starts_with("l4_proxy.addr.v6");
+        if !is_socket_address_file || !file_name.ends_with(".txt") {
+            continue;
+        }
+
+        let path = entry.path();
+        tokio::fs::remove_file(&path)
+            .await
+            .context("remove stale socket address file")
+            .with_context_debug_field("path", || path.clone())?;
+    }
+
+    Ok(())
 }
