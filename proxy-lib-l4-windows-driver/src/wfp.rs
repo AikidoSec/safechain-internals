@@ -14,9 +14,6 @@
 //!   https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsapplymodifiedlayerdata0
 //! - `FwpsRedirectHandleCreate0`:
 //!   https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsredirecthandlecreate0
-//! - `FwpsQueryConnectionRedirectState0`:
-//!   https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsqueryconnectionredirectstate0
-//!
 //! Header references used for the owned FFI/constants below:
 //! - `fwpsk.h` (`km`): callout registration, classify output, metadata flags,
 //!   redirect state, connect request structures
@@ -220,14 +217,7 @@ unsafe extern "system" fn on_callout_classify(
     classify_out: *mut FWPS_CLASSIFY_OUT0,
 ) {
     let layer_id = incoming_layer_id(in_fixed_values);
-    let metadata_flags = metadata_flags(in_meta_values);
-    let redirect_records_present = has_redirect_records(in_meta_values);
-    log::driver_log_info!(
-        "wfp: classify callback invoked (layer_id={:?}, metadata_flags={:#x}, redirect_records_present={})",
-        layer_id,
-        metadata_flags,
-        redirect_records_present,
-    );
+    log::driver_log_info!("wfp: classify callback invoked (layer_id={:?})", layer_id);
 
     if classify_context.is_null() || filter.is_null() || classify_out.is_null() {
         log::driver_log_warn!(
@@ -244,22 +234,6 @@ unsafe extern "system" fn on_callout_classify(
         log::driver_log_warn!("wfp: classify callback invoked without callout registration");
         return;
     };
-
-    if should_skip_self_redirect(in_meta_values, registration) {
-        log::driver_log_info!(
-            "wfp: classify skipped because flow was already redirected by self (layer_id={:?}, metadata_flags={:#x}, redirect_records_present={})",
-            layer_id,
-            metadata_flags,
-            redirect_records_present,
-        );
-        if unsafe { ((*classify_out).rights & FWPS_RIGHT_ACTION_WRITE) != 0 } {
-            unsafe {
-                // SAFETY: classify_out is a valid WFP output buffer for this callback.
-                (*classify_out).actionType = FWP_ACTION_CONTINUE;
-            }
-        }
-        return;
-    }
 
     let mut classify_handle = 0_u64;
     let status = unsafe {
@@ -327,9 +301,8 @@ unsafe extern "system" fn on_callout_classify(
     );
     if source_pid.is_none() {
         log::driver_log_info!(
-            "wfp: process id metadata not present for classify (metadata_flags={:#x}, source_process={:?})",
-            metadata_flags,
-            source_process_path,
+            "wfp: process id metadata not present for classify (source_process={:?})",
+            source_process_path
         );
     }
 
@@ -436,33 +409,12 @@ fn metadata_values(in_meta_values: *const c_void) -> Option<*const FWPS_INCOMING
     Some(in_meta_values.cast::<FWPS_INCOMING_METADATA_VALUES0>())
 }
 
-fn metadata_flags(in_meta_values: *const c_void) -> u32 {
-    let Some(metadata) = metadata_values(in_meta_values) else {
-        return 0;
-    };
-    unsafe {
-        // SAFETY: the metadata pointer is valid for this classify callback.
-        (*metadata).currentMetadataValues
-    }
-}
-
 fn incoming_layer_id(in_fixed_values: *const FWPS_INCOMING_VALUES0) -> Option<u16> {
     let fixed_values = unsafe {
         // SAFETY: pointer comes directly from WFP for the duration of the callback.
         in_fixed_values.as_ref()?
     };
     Some(fixed_values.layerId)
-}
-
-fn has_redirect_records(in_meta_values: *const c_void) -> bool {
-    let Some(metadata) = metadata_values(in_meta_values) else {
-        return false;
-    };
-    unsafe {
-        // SAFETY: the metadata pointer is valid for this classify callback.
-        ((*metadata).currentMetadataValues & FWPS_METADATA_FIELD_REDIRECT_RECORD_HANDLE) != 0
-            && !(*metadata).redirectRecords.is_null()
-    }
 }
 
 fn fwp_byte_blob_to_utf16_string(blob: *mut FWP_BYTE_BLOB) -> Option<String> {
@@ -491,37 +443,6 @@ fn fwp_byte_blob_to_utf16_string(blob: *mut FWP_BYTE_BLOB) -> Option<String> {
     }
 
     Some(String::from_utf16_lossy(&wide[..end]))
-}
-
-fn should_skip_self_redirect(
-    in_meta_values: *const c_void,
-    registration: KernelCalloutRegistration,
-) -> bool {
-    let Some(metadata) = metadata_values(in_meta_values) else {
-        return false;
-    };
-    if !has_redirect_records(in_meta_values) {
-        return false;
-    }
-    let metadata = metadata.cast_mut();
-
-    let mut redirect_context = ptr::null_mut();
-    let redirect_state = unsafe {
-        // SAFETY:
-        // 1. `redirectRecords` originates from WFP metadata for this classify invocation.
-        // 2. `registration.redirect_handle` was created via `FwpsRedirectHandleCreate0`.
-        // 3. `redirect_context` is a valid optional out pointer.
-        FwpsQueryConnectionRedirectState0(
-            (*metadata).redirectRecords,
-            registration.redirect_handle as *mut c_void,
-            &mut redirect_context,
-        )
-    };
-
-    matches!(
-        redirect_state,
-        FWPS_CONNECTION_REDIRECTED_BY_SELF | FWPS_CONNECTION_PREVIOUSLY_REDIRECTED_BY_SELF
-    )
 }
 
 fn complete_writable_classify(
@@ -659,11 +580,6 @@ const STATUS_INVALID_PARAMETER: NTSTATUS = -1_073_741_811_i32;
 /// Indicates the callout may still write `FWPS_CLASSIFY_OUT0.actionType`.
 /// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/ns-fwpsk-fwps_classify_out0
 const FWPS_RIGHT_ACTION_WRITE: u32 = 0x0000_0001;
-/// `FWPS_METADATA_FIELD_REDIRECT_RECORD_HANDLE` from `fwpsk.h`.
-///
-/// Signals that `FWPS_INCOMING_METADATA_VALUES0.redirectRecords` is present.
-/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/ns-fwpsk-fwps_incoming_metadata_values0
-const FWPS_METADATA_FIELD_REDIRECT_RECORD_HANDLE: u32 = 0x4000_0000;
 /// `FWPS_METADATA_FIELD_PROCESS_PATH` from `fwpsk.h`.
 const FWPS_METADATA_FIELD_PROCESS_PATH: u32 = 0x0000_0008;
 /// `FWPS_METADATA_FIELD_PROCESS_ID` from `fwpsk.h`.
@@ -704,17 +620,6 @@ const AF_INET: u16 = 2;
 ///
 /// Docs: https://learn.microsoft.com/en-us/windows/win32/winsock/address-families
 const AF_INET6: u16 = 23;
-/// `FWPS_CONNECTION_REDIRECTED_BY_SELF` enum value from
-/// `FWPS_CONNECTION_REDIRECT_STATE`.
-///
-/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsqueryconnectionredirectstate0
-const FWPS_CONNECTION_REDIRECTED_BY_SELF: u32 = 1;
-/// `FWPS_CONNECTION_PREVIOUSLY_REDIRECTED_BY_SELF` enum value from
-/// `FWPS_CONNECTION_REDIRECT_STATE`.
-///
-/// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsqueryconnectionredirectstate0
-const FWPS_CONNECTION_PREVIOUSLY_REDIRECTED_BY_SELF: u32 = 3;
-
 /// Provider GUID for the SafeChain L4 redirector.
 ///
 /// These GUIDs were generated once as stable random UUID-style identifiers and
@@ -1028,17 +933,6 @@ unsafe extern "system" {
         flags: u32,
     );
 
-    /// Queries the redirect state for the connection represented by redirect
-    /// records.
-    ///
-    /// Used here to detect connections already redirected by this driver and
-    /// avoid redirect loops.
-    /// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsqueryconnectionredirectstate0
-    fn FwpsQueryConnectionRedirectState0(
-        redirect_records: *mut c_void,
-        redirect_handle: *mut c_void,
-        redirect_context: *mut *mut c_void,
-    ) -> u32;
 }
 
 #[link(name = "NtosKrnl")]
