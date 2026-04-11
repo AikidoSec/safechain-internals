@@ -294,6 +294,9 @@ windows-driver-package-verify *ARGS:
 windows-driver-package-remove:
     ./packaging/windows/remove-driver-package.ps1
 
+windows-install-root-crt:
+    ./packaging/windows/install-root-crt.ps1
+
 [working-directory: './proxy-lib-l4-windows-driver']
 windows-driver-check:
     cargo check
