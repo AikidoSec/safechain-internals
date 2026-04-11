@@ -6,7 +6,7 @@ use std::{
     ptr,
 };
 
-use rama_core::telemetry::tracing::{debug, info};
+use rama_core::{error::{BoxError, ErrorContext as _, ErrorExt as _}, telemetry::tracing::{debug, info}};
 use safechain_proxy_lib_nostd::windows::driver_protocol::STARTUP_VALUE_NAME;
 use windows_sys::Win32::{
     Foundation::{
@@ -31,7 +31,7 @@ pub use safechain_proxy_lib_nostd::windows::driver_protocol::{
     Ipv6ProxyConfigPayload, StartupConfig,
 };
 
-pub fn start_service(service_name: &str) -> Result<(), String> {
+pub fn start_service(service_name: &str) -> Result<(), BoxError> {
     debug!(service_name, "starting service via SCM");
     let manager = ServiceControlManager::connect()?;
     let service = manager.open_service(service_name, SERVICE_START | SERVICE_QUERY_STATUS)?;
@@ -58,11 +58,15 @@ pub fn start_service(service_name: &str) -> Result<(), String> {
         info!(service_name, code, "service already running");
         Ok(())
     } else {
-        Err(format!("failed to start service {service_name}: win32={code}"))
+        Err(
+            BoxError::from("failed to start service")
+            .context_str_field("name", service_name)
+            .context_field("win32", code)
+        )
     }
 }
 
-pub fn stop_service(service_name: &str) -> Result<(), String> {
+pub fn stop_service(service_name: &str) -> Result<(), BoxError> {
     debug!(service_name, "stopping service via SCM");
     let manager = ServiceControlManager::connect()?;
     let service = manager.open_service(service_name, SERVICE_STOP | SERVICE_QUERY_STATUS)?;
@@ -89,26 +93,30 @@ pub fn stop_service(service_name: &str) -> Result<(), String> {
         info!(service_name, code, "service already inactive");
         Ok(())
     } else {
-        Err(format!("failed to stop service {service_name}: win32={code}"))
+        Err(
+            BoxError::from("failed to stop service")
+            .context_str_field("name", service_name)
+            .context_field("win32", code)
+        )
     }
 }
 
 struct ServiceControlManager(SC_HANDLE);
 
 impl ServiceControlManager {
-    fn connect() -> Result<Self, String> {
+    fn connect() -> Result<Self, BoxError> {
         let handle = unsafe {
             // SAFETY: null pointers select the local machine and active database.
             OpenSCManagerW(ptr::null(), ptr::null(), SC_MANAGER_CONNECT)
         };
         if handle.is_null() {
             let code = unsafe { GetLastError() };
-            return Err(format!("failed to connect to SCM: win32={code}"));
+            return Err(BoxError::from("failed to connect to SCM").context_field("win32", code));
         }
         Ok(Self(handle))
     }
 
-    fn open_service(&self, service_name: &str, desired_access: u32) -> Result<ServiceHandle, String> {
+    fn open_service(&self, service_name: &str, desired_access: u32) -> Result<ServiceHandle, BoxError> {
         let wide_name = to_wide(service_name);
         let handle = unsafe {
             // SAFETY: the service name buffer is null-terminated and valid for the duration of the call.
@@ -117,9 +125,18 @@ impl ServiceControlManager {
         if handle.is_null() {
             let code = unsafe { GetLastError() };
             if code == ERROR_SERVICE_DOES_NOT_EXIST {
-                return Err(format!("service {service_name} does not exist: win32={code}"));
+                return Err(
+                    BoxError::from("service does not exist")
+                    .context_str_field("name", service_name)
+                    .context_field("win32", code)
+                );
             }
-            return Err(format!("failed to open service {service_name}: win32={code}"));
+        
+            return Err(
+                BoxError::from("failed to open service")
+                .context_str_field("name", service_name)
+                .context_field("win32", code)
+            );
         }
         Ok(ServiceHandle(handle))
     }
@@ -153,11 +170,12 @@ fn to_wide(value: &str) -> Vec<u16> {
     OsStr::new(value).encode_wide().chain(Some(0)).collect()
 }
 
-pub fn write_startup_blob(service_name: &str, blob: &StartupConfig) -> Result<(), String> {
+pub fn write_startup_blob(service_name: &str, blob: &StartupConfig) -> Result<(), BoxError> {
     let key_path = format!(r"HKLM\SYSTEM\CurrentControlSet\Services\{service_name}\Parameters");
     let encoded = blob
         .to_bytes()
-        .map_err(|err| format!("failed to encode startup config: {err}"))?;
+        .context("failed to encode startup config")?;
+
     let hex_blob = hex::encode_upper(&encoded);
     debug!(
         service_name,
@@ -168,12 +186,13 @@ pub fn write_startup_blob(service_name: &str, blob: &StartupConfig) -> Result<()
     let create_key = Command::new("reg.exe")
         .args(["add", &key_path, "/f"])
         .output()
-        .map_err(|err| format!("failed to create/open registry key {key_path}: {err}"))?;
+        .context("failed to create/open registry key")
+        .with_context_field("key_path", || key_path.clone())?;
+
     if !create_key.status.success() {
-        return Err(format!(
-            "reg.exe add key failed: {}",
-            String::from_utf8_lossy(&create_key.stderr).trim()
-        ));
+        return Err(BoxError::from(
+            "reg.exe add key failed"
+        ).context_str_field("stderr", String::from_utf8_lossy(&create_key.stderr).trim()));
     }
 
     let write_value = Command::new("reg.exe")
@@ -190,37 +209,40 @@ pub fn write_startup_blob(service_name: &str, blob: &StartupConfig) -> Result<()
         ])
         .output()
         .map_err(|err| format!("failed to write startup blob: {err}"))?;
+
     if !write_value.status.success() {
-        return Err(format!(
-            "reg.exe add value failed: {}",
-            String::from_utf8_lossy(&write_value.stderr).trim()
-        ));
+        return Err(BoxError::from(
+            "reg.exe add value failed"
+        ).context_str_field("stderr", String::from_utf8_lossy(&write_value.stderr).trim()));
     }
 
     info!(service_name, "startup blob written to registry");
     Ok(())
 }
 
-pub fn read_startup_blob(service_name: &str) -> Result<Option<StartupConfig>, String> {
+pub fn read_startup_blob(service_name: &str) -> Result<Option<StartupConfig>, BoxError> {
     let key_path = format!(r"HKLM\SYSTEM\CurrentControlSet\Services\{service_name}\Parameters");
     debug!(service_name, "reading startup blob from registry");
     let output = Command::new("reg.exe")
         .args(["query", &key_path, "/v", STARTUP_VALUE_NAME])
         .output()
-        .map_err(|err| format!("failed to query startup blob: {err}"))?;
+        .context("failed to query startup blob")?;
 
     if !output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        if stdout.contains("unable to find") || stderr.contains("unable to find") {
-            debug!(service_name, "startup blob is not present in registry");
-            return Ok(None);
-        }
-        return Err(format!(
-            "reg.exe query value failed: {} {}",
-            stdout.trim(),
-            stderr.trim()
-        ));
+
+        // TODO: find a non-locale aware way to do this
+        // if stdout.contains("unable to find") || stderr.contains("unable to find") {
+        //     debug!(service_name, "startup blob is not present in registry");
+        //     return Ok(None);
+        // }
+
+        
+
+        return Err(BoxError::from("reg.exe query value failed")
+            .context_str_field("stdout", stdout.trim())
+            .context_str_field("stderr", stderr.trim()));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -246,16 +268,16 @@ pub fn sync_startup_blob(
     service_name: &str,
     ipv4_proxy: Option<SocketAddrV4>,
     ipv6_proxy: Option<Option<SocketAddrV6>>,
-) -> Result<(), String> {
+) -> Result<(), BoxError> {
     let current = read_startup_blob(service_name)?;
 
     let next_ipv4 = match (ipv4_proxy, current.as_ref().map(StartupConfig::proxy_ipv4)) {
         (Some(ipv4), _) => ipv4,
         (None, Some(ipv4)) => ipv4,
         (None, None) => {
-            return Err(
-                "cannot update persisted startup config without an existing IPv4 proxy; use `start` or pass `--ipv4-proxy`".to_string(),
-            )
+            return Err(BoxError::from(
+                "cannot update persisted startup config without an existing IPv4 proxy; use `start` or pass `--ipv4-proxy`"
+            ))
         }
     };
 
@@ -267,7 +289,7 @@ pub fn sync_startup_blob(
     write_startup_blob(service_name, &StartupConfig::new(next_ipv4, next_ipv6))
 }
 
-pub fn delete_startup_blob(service_name: &str) -> Result<(), String> {
+pub fn delete_startup_blob(service_name: &str) -> Result<(), BoxError> {
     let key_path = format!(r"HKLM\SYSTEM\CurrentControlSet\Services\{service_name}\Parameters");
     debug!(service_name, "deleting startup blob from registry");
     let output = Command::new("reg.exe")
@@ -282,22 +304,24 @@ pub fn delete_startup_blob(service_name: &str) -> Result<(), String> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    if stdout.contains("unable to find") || stderr.contains("unable to find") {
-        debug!(service_name, "startup blob was already absent");
-        return Ok(());
-    }
 
-    Err(format!(
-        "reg.exe delete value failed: {} {}",
-        stdout.trim(),
-        stderr.trim()
-    ))
+    // TODO: need to find non-locale aware way to fix this
+    // if stdout.contains("unable to find") || stderr.contains("unable to find") {
+    //     debug!(service_name, "startup blob was already absent");
+    //     return Ok(());
+    // }
+
+    Err(
+        BoxError::from("reg.exe delete value failed")
+            .context_str_field("stdout", stdout.trim())
+            .context_str_field("stderr", stderr.trim())
+    )
 }
 
 pub struct DeviceHandle(HANDLE);
 
 impl DeviceHandle {
-    pub fn open(device_path: &str) -> Result<Self, String> {
+    pub fn open(device_path: &str) -> Result<Self, BoxError> {
         debug!(device_path, "opening driver device handle");
         let mut wide_path: Vec<u16> = OsStr::new(device_path).encode_wide().collect();
         wide_path.push(0);
@@ -315,18 +339,18 @@ impl DeviceHandle {
             )
         };
         if handle == INVALID_HANDLE_VALUE {
-            return Err(format!(
-                "failed to open device {}: win32={}",
-                device_path,
-                unsafe { GetLastError() }
-            ));
+            return Err(
+                BoxError::from("failed to open device")
+                .context_str_field("device_path", device_path)
+                .context_field("win32", unsafe { GetLastError() })
+            );
         }
 
         info!(device_path, "opened driver device handle");
         Ok(Self(handle))
     }
 
-    pub fn send_ioctl(&self, ioctl: u32, input: &[u8]) -> Result<(), String> {
+    pub fn send_ioctl(&self, ioctl: u32, input: &[u8]) -> Result<(), BoxError> {
         debug!(
             ioctl = format_args!("{ioctl:#x}"),
             input_len = input.len(),
@@ -351,10 +375,11 @@ impl DeviceHandle {
             )
         };
         if ok == 0 {
-            return Err(format!(
-                "DeviceIoControl failed for ioctl {ioctl:#x}: win32={}",
-                unsafe { GetLastError() }
-            ));
+            return Err(
+                BoxError::from("DeviceIoControl failed for ioctl")
+                .context_hex_field("ioctl", ioctl)
+                .context_field("win32", unsafe { GetLastError() })
+            );
         }
 
         debug!(ioctl = format_args!("{ioctl:#x}"), "driver ioctl completed");

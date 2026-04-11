@@ -1,5 +1,6 @@
 use std::{fs, io::IsTerminal as _, path::Path};
 
+use rama_core::error::{BoxError, ErrorContext as _};
 use rama_core::telemetry::tracing;
 use rama_core::telemetry::tracing::appender::{self, non_blocking::WorkerGuard};
 use rama_core::telemetry::tracing::metadata::LevelFilter;
@@ -20,7 +21,7 @@ pub struct TelemetryConfig<'a> {
     pub output: Option<&'a Path>,
 }
 
-pub fn init_tracing(cfg: &TelemetryConfig<'_>) -> Result<TracingGuard, String> {
+pub fn init_tracing(cfg: &TelemetryConfig<'_>) -> Result<TracingGuard, BoxError> {
     let directive = if cfg.verbose {
         LevelFilter::DEBUG
     } else {
@@ -39,9 +40,7 @@ pub fn init_tracing(cfg: &TelemetryConfig<'_>) -> Result<TracingGuard, String> {
 
             let file_appender = appender::rolling::never(
                 path.parent().unwrap_or_else(|| Path::new(".")),
-                path.file_name().ok_or_else(|| {
-                    format!("output path {} must include a file name", path.display())
-                })?,
+                path.file_name().context("output path must include a file name").with_context_debug_field("path", || path.to_owned())?
             );
             let (non_blocking, guard) = appender::non_blocking(file_appender);
             (BoxMakeWriter::new(non_blocking), Some(guard))
@@ -66,7 +65,7 @@ pub fn init_tracing(cfg: &TelemetryConfig<'_>) -> Result<TracingGuard, String> {
         )
         .with(fmt_layer)
         .try_init()
-        .map_err(|err| format!("failed to initialize tracing: {err}"))?;
+        .context("failed to initialize tracing")?;
 
     tracing::info!(
         verbose = cfg.verbose,

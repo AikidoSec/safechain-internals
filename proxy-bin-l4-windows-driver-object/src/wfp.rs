@@ -1,6 +1,6 @@
 use std::ptr;
 
-use rama_core::telemetry::tracing::{debug, info, warn};
+use rama_core::{error::{BoxError, ErrorExt}, telemetry::tracing::{debug, info, warn}};
 use safechain_proxy_lib_nostd::windows::driver_protocol::{
     WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4, WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
     WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V4, WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
@@ -17,7 +17,7 @@ use windows_sys::Win32::{
 const RPC_C_AUTHN_DEFAULT: u32 = 0xffff_ffff;
 const IPPROTO_TCP: u8 = 6;
 
-pub fn ensure_wfp_objects(has_ipv6: bool) -> Result<(), String> {
+pub fn ensure_wfp_objects(has_ipv6: bool) -> Result<(), BoxError> {
     info!("ensuring WFP provider/sublayer/callouts/filters are installed");
     let engine = EngineHandle::open()?;
     let transaction = Transaction::begin(&engine)?;
@@ -63,7 +63,7 @@ pub fn ensure_wfp_objects(has_ipv6: bool) -> Result<(), String> {
     transaction.commit()
 }
 
-pub fn remove_wfp_objects() -> Result<(), String> {
+pub fn remove_wfp_objects() -> Result<(), BoxError> {
     info!("removing WFP provider/sublayer/callouts/filters");
     let engine = EngineHandle::open()?;
     let transaction = Transaction::begin(&engine)?;
@@ -71,7 +71,7 @@ pub fn remove_wfp_objects() -> Result<(), String> {
     transaction.commit()
 }
 
-fn remove_wfp_objects_inner(engine: &EngineHandle) -> Result<(), String> {
+fn remove_wfp_objects_inner(engine: &EngineHandle) -> Result<(), BoxError> {
     unsafe {
         // SAFETY: object keys are stable GUIDs owned by this application.
         check_delete_status(
@@ -121,7 +121,7 @@ fn remove_wfp_objects_inner(engine: &EngineHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn add_provider(engine: &EngineHandle) -> Result<(), String> {
+fn add_provider(engine: &EngineHandle) -> Result<(), BoxError> {
     debug!("adding WFP provider");
     let mut name = WideString::new("SafeChain L4 Proxy");
     let mut description = WideString::new("Provider for SafeChain Windows L4 redirect objects.");
@@ -144,7 +144,7 @@ fn add_provider(engine: &EngineHandle) -> Result<(), String> {
     check_status(status, "FwpmProviderAdd0")
 }
 
-fn add_sublayer(engine: &EngineHandle) -> Result<(), String> {
+fn add_sublayer(engine: &EngineHandle) -> Result<(), BoxError> {
     debug!("adding WFP sublayer");
     let mut name = WideString::new("SafeChain L4 Redirect");
     let mut description = WideString::new("Sublayer for SafeChain TCP connect redirection.");
@@ -174,7 +174,7 @@ fn add_callout(
     layer_key: windows_sys::core::GUID,
     name: &str,
     description: &str,
-) -> Result<(), String> {
+) -> Result<(), BoxError> {
     debug!(name, "adding WFP callout");
     let mut name = WideString::new(name);
     let mut description = WideString::new(description);
@@ -206,7 +206,7 @@ fn add_filter(
     callout_key: WindowsGuid,
     name: &str,
     description: &str,
-) -> Result<(), String> {
+) -> Result<(), BoxError> {
     debug!(name, "adding WFP filter");
     let mut name = WideString::new(name);
     let mut description = WideString::new(description);
@@ -259,7 +259,7 @@ fn add_filter(
     check_status(status, "FwpmFilterAdd0")
 }
 
-fn check_delete_status(status: u32, operation: &str, not_found_status: u32) -> Result<(), String> {
+fn check_delete_status(status: u32, operation: &str, not_found_status: u32) -> Result<(), BoxError> {
     if status == ERROR_SUCCESS {
         debug!(operation, "WFP object removed");
         return Ok(());
@@ -275,7 +275,7 @@ fn check_delete_status(status: u32, operation: &str, not_found_status: u32) -> R
         status = format_args!("{status:#x}"),
         "unexpected WFP delete failure"
     );
-    Err(format!("{operation} failed: win32={status:#x}"))
+    Err(BoxError::from("WFP (delete) operation failed").context_hex_field("status", status))
 }
 
 fn zeroed_blob() -> FWP_BYTE_BLOB {
@@ -294,7 +294,7 @@ fn guid(parts: WindowsGuid) -> windows_sys::core::GUID {
     }
 }
 
-fn check_status(status: u32, operation: &str) -> Result<(), String> {
+fn check_status(status: u32, operation: &str) -> Result<(), BoxError> {
     if status == ERROR_SUCCESS {
         debug!(operation, "WFP operation completed");
         Ok(())
@@ -304,14 +304,14 @@ fn check_status(status: u32, operation: &str) -> Result<(), String> {
             status = format_args!("{status:#x}"),
             "WFP operation failed"
         );
-        Err(format!("{operation} failed: win32={status:#x}"))
+        Err(BoxError::from("WFP operation failed").context_hex_field("status", status))
     }
 }
 
 struct EngineHandle(HANDLE);
 
 impl EngineHandle {
-    fn open() -> Result<Self, String> {
+    fn open() -> Result<Self, BoxError> {
         let mut engine: HANDLE = ptr::null_mut();
         let status = unsafe {
             // SAFETY: out pointer is valid; remaining pointers are null for local default auth.
@@ -345,7 +345,7 @@ struct Transaction<'a> {
 }
 
 impl<'a> Transaction<'a> {
-    fn begin(engine: &'a EngineHandle) -> Result<Self, String> {
+    fn begin(engine: &'a EngineHandle) -> Result<Self, BoxError> {
         let status = unsafe {
             // SAFETY: engine handle is valid for the lifetime of the transaction.
             FwpmTransactionBegin0(engine.0, 0)
@@ -357,7 +357,7 @@ impl<'a> Transaction<'a> {
         })
     }
 
-    fn commit(mut self) -> Result<(), String> {
+    fn commit(mut self) -> Result<(), BoxError> {
         let status = unsafe {
             // SAFETY: engine handle is valid and has an active transaction.
             FwpmTransactionCommit0(self.engine.0)

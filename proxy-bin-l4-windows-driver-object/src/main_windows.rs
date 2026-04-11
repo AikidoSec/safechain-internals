@@ -5,6 +5,7 @@ mod wfp;
 
 use clap::Parser;
 use cmd::CommandKind;
+use rama_core::error::BoxError;
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
@@ -25,7 +26,7 @@ struct Cli {
     command: CommandKind,
 }
 
-fn main() -> Result<(), String> {
+fn main() -> Result<(), BoxError> {
     let cli = Cli::parse();
     let _tracing_guard = telemetry::init_tracing(&telemetry::TelemetryConfig {
         verbose: cli.verbose,

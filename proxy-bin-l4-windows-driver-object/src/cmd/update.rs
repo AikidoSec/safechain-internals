@@ -1,5 +1,5 @@
 use clap::Args;
-use rama_core::telemetry::tracing::info;
+use rama_core::{error::BoxError, telemetry::tracing::info};
 use std::net::{SocketAddrV4, SocketAddrV6};
 
 use crate::common::{
@@ -26,7 +26,7 @@ pub struct UpdateArgs {
     pub clear_ipv6: bool,
 }
 
-pub fn run(args: UpdateArgs) -> Result<(), String> {
+pub fn run(args: UpdateArgs) -> Result<(), BoxError> {
     info!(
         service_name = %args.service_name,
         device_path = %args.device_path,

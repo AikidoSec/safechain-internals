@@ -1,5 +1,5 @@
 use clap::Args;
-use rama_core::telemetry::tracing::info;
+use rama_core::{error::BoxError, telemetry::tracing::info};
 
 use crate::common::{delete_startup_blob, stop_service};
 use crate::wfp::remove_wfp_objects;
@@ -13,7 +13,7 @@ pub struct StopArgs {
     pub clear_persisted_config: bool,
 }
 
-pub fn run(args: StopArgs) -> Result<(), String> {
+pub fn run(args: StopArgs) -> Result<(), BoxError> {
     info!(
         service_name = %args.service_name,
         clear_persisted_config = args.clear_persisted_config,
