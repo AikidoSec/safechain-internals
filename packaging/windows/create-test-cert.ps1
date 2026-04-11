@@ -6,7 +6,7 @@ param(
     [string]$ExportDir = ".\test-cert",
 
     [Parameter(Mandatory = $false)]
-    [int]$ValidYears = 3,
+    [int]$ValidYears = 10,
 
     [Parameter(Mandatory = $false)]
     [switch]$CurrentUserOnly,
