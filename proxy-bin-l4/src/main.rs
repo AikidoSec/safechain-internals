@@ -5,7 +5,7 @@
 )]
 
 use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -21,13 +21,17 @@ use rama::{
 
 use clap::Parser;
 
-#[cfg(target_os = "windows")]
-use safechain_l4_proxy_windows_driver_object::runtime_config::{
-    DriverRuntimeConfig, apply_runtime_config,
-};
 use safechain_proxy_lib::{
     storage,
     utils::{self as safechain_utils, token::AgentIdentity},
+};
+
+#[cfg(target_os = "windows")]
+use ::{
+    safechain_l4_proxy_windows_driver_object::runtime_config::{
+        DriverRuntimeConfig, apply_runtime_config,
+    },
+    std::net::IpAddr,
 };
 
 #[cfg(target_family = "unix")]
