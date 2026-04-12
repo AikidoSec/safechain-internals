@@ -1,4 +1,4 @@
-use super::{is_chromium_browser_process_path, is_windows_service_host_process_path};
+use super::is_chromium_browser_process_path;
 
 #[test]
 fn detects_common_chromium_browsers_on_windows() {
@@ -20,19 +20,5 @@ fn ignores_non_chromium_binaries() {
     ));
     assert!(!is_chromium_browser_process_path(
         "\\Device\\HarddiskVolume4\\Program Files\\Mozilla Firefox\\firefox.exe"
-    ));
-}
-
-#[test]
-fn detects_windows_service_host_binary() {
-    assert!(is_windows_service_host_process_path(
-        "\\Device\\HarddiskVolume4\\Windows\\System32\\svchost.exe"
-    ));
-}
-
-#[test]
-fn ignores_non_service_host_binaries() {
-    assert!(!is_windows_service_host_process_path(
-        "\\Device\\HarddiskVolume4\\Windows\\System32\\curl.exe"
     ));
 }

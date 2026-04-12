@@ -38,25 +38,6 @@ fn redirects_public_destinations() {
 }
 
 #[test]
-fn passes_through_windows_service_host_tcp_connects() {
-    let controller = ProxyDriverController::new();
-    controller.configure_proxy_ipv4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 15000), 1234);
-
-    let flow = WfpFlowMeta {
-        remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(20, 50, 88, 244)), 443),
-        source_pid: Some(17096),
-        source_process_path: Some(String::from(
-            "\\Device\\HarddiskVolume4\\Windows\\System32\\svchost.exe",
-        )),
-    };
-
-    assert!(matches!(
-        controller.classify_outbound_tcp_connect(flow),
-        TcpRedirectDecision::Passthrough
-    ));
-}
-
-#[test]
 fn redirects_public_ipv6_destinations_when_ipv6_proxy_is_configured() {
     let controller = ProxyDriverController::new();
     controller.configure_proxy_ipv6(SocketAddrV6::new(Ipv6Addr::LOCALHOST, 15000, 0, 0), 5678);

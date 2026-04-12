@@ -352,7 +352,7 @@ unsafe extern "system" fn on_callout_classify(
     });
 
     let (proxy_target, proxy_target_pid, redirect_context) = match decision {
-        ctx @ TcpRedirectDecision::Redirect {
+        TcpRedirectDecision::Redirect {
             proxy_target,
             proxy_target_pid,
             redirect_context,
