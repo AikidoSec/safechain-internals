@@ -286,7 +286,23 @@ unsafe extern "system" fn on_callout_classify(
         return;
     };
 
+    let proxy_target = driver_controller().proxy_endpoint_for(remote);
+    let Some(proxy_target) = proxy_target else {
+        complete_writable_classify(classify_handle, writable_layer_data, classify_out);
+        return;
+    };
+
     let source_pid = source_pid_from_metadata(in_meta_values);
+    if source_pid == Some(proxy_target.process_id) {
+        complete_writable_classify(classify_handle, writable_layer_data, classify_out);
+        return;
+    }
+
+    if is_local_destination(remote) || remote.port() == 53 {
+        complete_writable_classify(classify_handle, writable_layer_data, classify_out);
+        return;
+    }
+
     let source_process_path = source_pid.and_then(source_process_path_from_pid);
     log::driver_log_info!(
         "wfp: classify flow metadata (layer_id={:?}, remote={}, source_pid={:?}, source_process_path={:?})",
