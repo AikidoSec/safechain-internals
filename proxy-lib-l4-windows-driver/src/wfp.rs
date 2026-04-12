@@ -272,7 +272,7 @@ unsafe extern "system" fn on_callout_flow_delete(
 unsafe extern "system" fn on_callout_classify(
     in_fixed_values: *const FWPS_INCOMING_VALUES0,
     in_meta_values: *const c_void,
-    _layer_data: *mut c_void,
+    layer_data: *mut c_void,
     classify_context: *const c_void,
     filter: *const FWPS_FILTER1,
     _flow_context: u64,
@@ -291,9 +291,14 @@ unsafe extern "system" fn on_callout_classify(
         _ => {}
     }
 
-    if classify_context.is_null() || filter.is_null() || classify_out.is_null() {
+    if layer_data.is_null()
+        || classify_context.is_null()
+        || filter.is_null()
+        || classify_out.is_null()
+    {
         log::driver_log_warn!(
-            "wfp: classify callback missing required pointers (classify_context_null={}, filter_null={}, classify_out_null={})",
+            "wfp: classify callback missing required pointers (layer_data_null={}, classify_context_null={}, filter_null={}, classify_out_null={})",
+            layer_data.is_null(),
             classify_context.is_null(),
             filter.is_null(),
             classify_out.is_null(),
@@ -305,6 +310,61 @@ unsafe extern "system" fn on_callout_classify(
     let Some(registration) = registration else {
         log::driver_log_warn!("wfp: classify callback invoked without callout registration");
         return;
+    };
+
+    let connect_request = layer_data.cast::<FWPS_CONNECT_REQUEST0>();
+    let remote_storage = unsafe { &(*connect_request).remoteAddressAndPort };
+    let remote = unsafe { sockaddr_storage_to_socket_addr(remote_storage) };
+    let Some(remote) = remote else {
+        let family = u16::from_ne_bytes([remote_storage.bytes[0], remote_storage.bytes[1]]);
+        log::driver_log_warn!(
+            "wfp: classify could not decode remote address from SOCKADDR_STORAGE (family={:#x})",
+            family
+        );
+        unsafe {
+            if (*classify_out).rights & FWPS_RIGHT_ACTION_WRITE != 0 {
+                (*classify_out).actionType = FWP_ACTION_CONTINUE;
+            }
+        }
+        return;
+    };
+
+    let source_pid = source_pid_from_metadata(in_meta_values);
+    let source_process_path = source_pid.and_then(source_process_path_from_pid);
+    log::driver_log_info!(
+        "wfp: classify flow metadata (layer_id={:?}, remote={}, source_pid={:?}, source_process_path={:?})",
+        layer_id,
+        remote,
+        source_pid,
+        source_process_path,
+    );
+    if source_pid.is_none() {
+        log::driver_log_info!(
+            "wfp: process id metadata not present for classify (source_process={:?})",
+            source_process_path
+        );
+    }
+
+    let decision = driver_controller().classify_outbound_tcp_connect(WfpFlowMeta {
+        remote,
+        source_pid,
+        source_process_path,
+    });
+
+    let (proxy_target, proxy_target_pid, redirect_context) = match decision {
+        ctx @ TcpRedirectDecision::Redirect {
+            proxy_target,
+            proxy_target_pid,
+            redirect_context,
+        } => (proxy_target, proxy_target_pid, redirect_context),
+        TcpRedirectDecision::Passthrough => {
+            unsafe {
+                if (*classify_out).rights & FWPS_RIGHT_ACTION_WRITE != 0 {
+                    (*classify_out).actionType = FWP_ACTION_CONTINUE;
+                }
+            }
+            return;
+        }
     };
 
     let mut classify_handle = 0_u64;
@@ -342,84 +402,28 @@ unsafe extern "system" fn on_callout_classify(
         return;
     }
 
-    let connect_request = writable_layer_data.cast::<FWPS_CONNECT_REQUEST0>();
-    let remote_storage = unsafe { &(*connect_request).remoteAddressAndPort };
-    let remote = unsafe { sockaddr_storage_to_socket_addr(remote_storage) };
-    let Some(remote) = remote else {
-        let family = u16::from_ne_bytes([remote_storage.bytes[0], remote_storage.bytes[1]]);
-        log::driver_log_warn!(
-            "wfp: classify could not decode remote address from SOCKADDR_STORAGE (family={:#x})",
-            family
+    let writable_connect_request = writable_layer_data.cast::<FWPS_CONNECT_REQUEST0>();
+    let context_ptr = allocate_redirect_context(&redirect_context);
+    if !redirect_context.is_empty() && context_ptr.is_null() {
+        complete_writable_classify(classify_handle, writable_layer_data, classify_out);
+        return;
+    }
+
+    unsafe {
+        // SAFETY: connect_request is the writable request returned by WFP for this classify.
+        write_socket_addr_to_storage(
+            &mut (*writable_connect_request).remoteAddressAndPort,
+            proxy_target,
         );
-        complete_writable_classify(classify_handle, writable_layer_data, classify_out);
-        return;
-    };
+        (*writable_connect_request).localRedirectTargetPID = proxy_target_pid;
+        (*writable_connect_request).localRedirectHandle =
+            registration.redirect_handle as *mut c_void;
+        (*writable_connect_request).localRedirectContext = context_ptr;
+        (*writable_connect_request).localRedirectContextSize = redirect_context.len();
 
-    if is_local_destination(remote) || remote.port() == 53 {
-        complete_writable_classify(classify_handle, writable_layer_data, classify_out);
-        return;
-    }
-
-    let proxy_target = driver_controller().proxy_endpoint_for(remote);
-    let Some(proxy_target) = proxy_target else {
-        complete_writable_classify(classify_handle, writable_layer_data, classify_out);
-        return;
-    };
-
-    let source_pid = source_pid_from_metadata(in_meta_values);
-    if source_pid == Some(proxy_target.process_id) {
-        complete_writable_classify(classify_handle, writable_layer_data, classify_out);
-        return;
-    }
-
-    let source_process_path = source_pid.and_then(source_process_path_from_pid);
-    log::driver_log_info!(
-        "wfp: classify flow metadata (layer_id={:?}, remote={}, source_pid={:?}, source_process_path={:?})",
-        layer_id,
-        remote,
-        source_pid,
-        source_process_path,
-    );
-    if source_pid.is_none() {
-        log::driver_log_info!(
-            "wfp: process id metadata not present for classify (source_process={:?})",
-            source_process_path
-        );
-    }
-
-    let decision = driver_controller().classify_outbound_tcp_connect(WfpFlowMeta {
-        remote,
-        source_pid,
-        source_process_path,
-    });
-
-    if let TcpRedirectDecision::Redirect {
-        proxy_target,
-        proxy_target_pid,
-        redirect_context,
-    } = decision
-    {
-        let context_ptr = allocate_redirect_context(&redirect_context);
-        if !redirect_context.is_empty() && context_ptr.is_null() {
-            complete_writable_classify(classify_handle, writable_layer_data, classify_out);
-            return;
-        }
-
-        unsafe {
-            // SAFETY: connect_request is the writable request returned by WFP for this classify.
-            write_socket_addr_to_storage(
-                &mut (*connect_request).remoteAddressAndPort,
-                proxy_target,
-            );
-            (*connect_request).localRedirectTargetPID = proxy_target_pid;
-            (*connect_request).localRedirectHandle = registration.redirect_handle as *mut c_void;
-            (*connect_request).localRedirectContext = context_ptr;
-            (*connect_request).localRedirectContextSize = redirect_context.len();
-
-            if ((*classify_out).rights & FWPS_RIGHT_ACTION_WRITE) != 0 {
-                (*classify_out).actionType = FWP_ACTION_PERMIT;
-                (*classify_out).rights &= !FWPS_RIGHT_ACTION_WRITE;
-            }
+        if ((*classify_out).rights & FWPS_RIGHT_ACTION_WRITE) != 0 {
+            (*classify_out).actionType = FWP_ACTION_PERMIT;
+            (*classify_out).rights &= !FWPS_RIGHT_ACTION_WRITE;
         }
     }
 

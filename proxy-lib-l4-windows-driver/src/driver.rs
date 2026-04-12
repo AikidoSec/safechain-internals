@@ -213,6 +213,18 @@ impl ProxyDriverController {
             return TcpRedirectDecision::Passthrough;
         }
 
+        if flow.source_process_path.as_deref().is_some_and(
+            safechain_proxy_lib_nostd::windows::browser::is_windows_service_host_process_path,
+        ) {
+            crate::log::driver_log_info!(
+                "tcp: passthrough: windows service host process: {} (source pid = {:?}, source process = {:?})",
+                flow.remote,
+                flow.source_pid,
+                flow.source_process_path,
+            );
+            return TcpRedirectDecision::Passthrough;
+        }
+
         let Some(proxy_target) = self.proxy_endpoint_for(flow.remote) else {
             crate::log::driver_log_info!(
                 "tcp: passthrough: no proxy configured for traffic: {} (source pid = {:?}, source process = {:?})",

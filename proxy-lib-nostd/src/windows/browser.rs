@@ -16,6 +16,10 @@ pub fn is_chromium_browser_process_path(process_path: &str) -> bool {
     )
 }
 
+pub fn is_windows_service_host_process_path(process_path: &str) -> bool {
+    any_ends_with_ignore_ascii_case(process_path, &["\\svchost.exe"])
+}
+
 // utils below borrowed from rama-utils (soon those parts will be no-std compatible and we can
 // clean up a lot of no std code in this repo)
 
