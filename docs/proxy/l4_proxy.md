@@ -6,6 +6,8 @@ Other L4 Proxy docs:
   CLI usage, and developer build instructions.
 - [./l4_proxy/windows-driver.md](./l4_proxy/windows-driver.md):
   windows (kernel) driver docs specifically for the Windows L4 proxy.
+- [./l4_proxy/windows-driver-prod.md](./l4_proxy/windows-driver-prod.md):
+  production/release notes for the Windows L4 driver package.
 
 ## Intro
 

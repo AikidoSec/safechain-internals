@@ -1,361 +1,252 @@
 # Windows L4 Driver
-Kernel-mode WFP redirect driver for SafeChain L4 proxy on Windows.
+Kernel-mode WFP driver for the Windows L4 proxy.
 
-## TODO
-- [x] Implement kernel classify callback for ALE connect redirection and apply remote redirect targets.
-- [x] Register/connect the driver callouts at the WFP connect-redirect layers from user mode (`Fwpm*` provider, sublayer, callouts, filters).
-- [x] Install/package the driver artifacts for local/dev Windows usage (`.sys`, INF staging, optional catalog generation hook, install/remove scripts).
-- [x] Add a small user-space driver controller CLI/service for `enable`, `disable`, and `update`.
-- [x] Keep the driver runtime-configurable from user space without relying on persisted proxy endpoint state across restarts.
-- [x] Prevent proxy-loop redirection for the local proxy process and redirected/proxied follow-up connections.
-- [x] Add end-to-end verification on Windows for IPv4 redirect, IPv6 redirect, unload/reload, and runtime config updates.
-- [x] Ensure proxy (driver) is compatible with VPNs .. e.g. wireguard
+For production/release packaging and signing, see [windows-driver-prod.md](/C:/Users/glendc/Documents/GitHub/safechain-internals/docs/proxy/l4_proxy/windows-driver-prod.md).
 
-last miles TODO:
+## Scope
 
-- [x] how can we disable proxy runtime config when process on PID is "dead"
-- [x] how to get process path in windows driver, it is still missing
-- [x] once we do have process path figure out how to block udp chrome traffic in windows driver for now
-- [ ] document update flow (dev)
-- [ ] separate out production WIP notes into its own doc...
-- [x] fix CI And prepare PR
-
-## Production TODO
-- [ ] Add production driver package signing flow (`.cat` / release-signing path).
-- [ ] Decide and document the intended production signing route (attestation vs WHQL/HLK-backed path).
-- [ ] Wire production-ready driver artifacts into the MSI/distribution flow.
-- [ ] Add production-grade install/uninstall rollback and upgrade handling.
-- [ ] Add production validation and compatibility/signing verification across supported Windows targets.
-
-## Packaging Scope
-The current packaging goal is local/development install only.
-
-That means it is acceptable for now to:
-- build and stage the driver package locally on a Windows developer machine;
-- generate the final `.inf` and `.cat` locally;
-- use development or test-signing flows for install/load on development systems;
-- install/remove the package through local tooling such as `pnputil`.
-
-It does not yet need to satisfy public-distribution requirements such as Microsoft dashboard signing, WHQL/HLK validation, production certificate handling, or consumer-friendly MSI-only install UX.
-
-## Local/Dev Packaging Requirements
-To complete the current TODO item for local/dev usage, the Windows packaging flow still needs to do all of the following:
-
-1. Build and stage the driver binary.
-- Produce the final driver `.sys` from [`proxy-lib-l4-windows-driver`](/C:/Users/glendc/Documents/GitHub/safechain-internals/proxy-lib-l4-windows-driver).
-- Copy it into a packaging/staging directory used by the Windows installer flow.
-
-2. Turn the INF template into a real INF.
-- Convert [`safechain_lib_l4_proxy_windows_driver.inx`](/C:/Users/glendc/Documents/GitHub/safechain-internals/proxy-lib-l4-windows-driver/safechain_lib_l4_proxy_windows_driver.inx) into a concrete `.inf`.
-- Ensure the file names and service/binary names match the actual staged driver artifact names.
-
-3. Generate a catalog file.
-- Run `Inf2Cat` over the staged driver package directory so the package has a `.cat`.
-- This is the standard Windows tool for generating an unsigned catalog from an INF-based driver package.
-- Microsoft docs: [Inf2Cat](https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/inf2cat)
-
-4. Add a development signing flow.
-- For local/dev, test-signing or another development-only signing workflow is acceptable.
-- The package should be signed in a way that allows it to install/load on the intended development systems.
-- Microsoft docs: [Test-Signing Driver Packages](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/test-signing-driver-packages)
-
-5. Package the driver artifacts into the Windows install flow.
-- Update [`EndpointProtection.wxs`](/C:/Users/glendc/Documents/GitHub/safechain-internals/packaging/windows/EndpointProtection.wxs) so the driver package files are included:
-  - `.sys`
-  - generated `.inf`
-  - generated `.cat`
-  - and, if needed during install, the Windows driver-object helper binary
-
-6. Add install/remove actions.
-- Install the driver package during setup, most likely via `pnputil /add-driver <inf> /install`.
-- Remove the driver package during uninstall.
-- Microsoft docs: [PnPUtil Command Line Tool for Driver Packages](https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/pnputil)
-
-7. Verify the development flow end-to-end.
-- Fresh install on a development machine.
-- Upgrade/reinstall behavior.
-- Uninstall/cleanup behavior.
-- Confirm the driver service loads and the callout path can be exercised after install.
-
-## Production Gap
-If this later needs to become a production-distributable Windows driver package, the following work is still missing beyond the local/dev scope:
-
-1. Production signing and Microsoft acceptance path.
-- Modern 64-bit Windows production drivers generally need Microsoft-signed packages through the Hardware Dev Center process.
-- This is stricter than ordinary EXE/MSI signing.
-- Microsoft docs: [Driver Signing Policy](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/kernel-mode-code-signing-policy--windows-vista-and-later-), [Driver signing](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/driver-signing), [Kernel-Mode Code Signing Requirements](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/kernel-mode-code-signing-requirements--windows-vista-and-later-)
-
-2. Decide production submission route.
-- Attestation signing may be sufficient for some scenarios.
-- WHQL/HLK-backed signing may be needed if broader compatibility or certification requirements apply.
-- Microsoft docs: [Release Signing](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/release-signing)
-
-3. Production certificate and CI handling.
-- EV certificate / Hardware Dev Center onboarding.
-- Secure handling of release signing credentials.
-- CI steps that distinguish development signing from release signing.
-
-4. Stronger installer behavior.
-- Robust rollback if package install partially fails.
-- Upgrade-safe migration behavior.
-- Better uninstall semantics when the driver is in use.
-- Clear user/admin privilege handling and diagnostics.
-
-5. Compliance and validation.
-- Test matrix across supported Windows versions.
-- HLK/compatibility validation if required by the chosen release-signing path.
-- Production verification that install, boot/load, redirect behavior, and uninstall are all stable.
+This document is the day-to-day developer and operator guide for the Windows driver:
+- local/dev build and staging;
+- fresh install;
+- updating a machine that already has the driver;
+- verification and debugging;
+- runtime behavior and WFP terminology.
 
 ## Requirements
+
 - Windows machine
-- Rust tooling (as usual, see other docs)
-- Windows Driver Kit environment.
-- Visual Studio C++ Build Tools + Windows SDK/WDK integration.
-- LLVM/Clang 17 on `PATH` (used by `bindgen` via `wdk-build`/`wdk-sys`).
+- Rust tooling
+- Visual Studio C++ Build Tools with:
+  - `Desktop development with C++`
+  - `MSVC v143`
+  - `Windows 10/11 SDK`
+- Windows Driver Kit matching the installed SDK
+- LLVM/Clang 17 on `PATH`
 
-## Install WDK
-1. Install Visual Studio 2022 Build Tools (or Visual Studio 2022) with:
-- `Desktop development with C++`
-- `MSVC v143` toolchain
-- `Windows 10/11 SDK`
-  <https://learn.microsoft.com/en-us/windows/apps/windows-sdk/downloads> (`10.0.26100`)
-2. Install the Windows Driver Kit (WDK) matching your installed Windows SDK version:
-- Download from the official Microsoft WDK page and run the installer:
-  <https://learn.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk> (`10.0.26100`)
-3. Open a Developer PowerShell (or eWDK prompt) and verify headers exist:
-- `Test-Path "C:\Program Files (x86)\Windows Kits\10\Include\<SDK_VERSION>\km\crt"`
-4. If the path above is missing, repair/reinstall SDK + WDK so the same `<SDK_VERSION>` is installed for both.
+Quick check after installing SDK + WDK:
 
-> Make sure that your Windows SDK and NDK versions match!
-
-## Local/Dev Driver Package Flow
-
-Build and stage the driver package:
-
+```powershell
+Test-Path "C:\Program Files (x86)\Windows Kits\10\Include\<SDK_VERSION>\km\crt"
 ```
+
+## Build And Stage
+
+Build the driver and stage a local/dev package:
+
+```powershell
 just windows-driver-build
 just windows-driver-package-stage
 ```
 
-> Normally powershell scripts (even when elavated) might not run your script.
-> You can allow it for the current session using:
->
-> ```ps
-> Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-> ```
->
-> These and other just commands provided in this repo do this for you already.
+That produces a staged package under:
 
-That stages the local/dev package under:
-
-```
+```text
 dist/windows-driver-package/debug
 ```
 
-By default the staging script:
+By default staging:
 - copies the built `.sys`;
-- renders the `.inf` from the checked-in `.inx` template;
-- attempts to run `Inf2Cat` when it is available on `PATH`.
+- renders the checked-in `.inx` template into a concrete `.inf`;
+- runs `Inf2Cat` when available;
+- signs the generated catalog with the configured local code-signing cert.
 
-You can install/remove the staged package with:
+## Fresh Install
 
-```
+Use this on a machine that does not already have the current driver package installed:
+
+```powershell
 just windows-driver-package-install
-just windows-driver-package-remove
 ```
 
-Notes:
-- `pnputil` and driver install/remove operations require an elevated shell.
-- `Inf2Cat` comes from the Windows Driver Kit tooling; if it is missing, staging still completes but the catalog step is skipped.
-- This flow is intentionally local/dev oriented and not yet a production signing/distribution flow.
+Or, for the full clean local/dev flow:
 
-> Should you for some reason not be able to remove the device,
-> you can do so manually using `Device Manager`,
-> where you will be able to find the `Safechain L4 Proxy Driver` undewr
-> System drivers...
->
-> As per usual, a reboot is required after cleaning up.
-
-As a developer the easiest to run for a new build, packe and install,
-e.g. after a code change, is:
-
-```
+```powershell
 just windows-driver-package-install-fresh-debug
 ```
 
-After that reboot Windows so the newly installed driver package is active.
+That recipe:
+- runs the usual QA/build checks;
+- disables the currently running runtime config path;
+- removes the old driver package;
+- rebuilds and restages the driver;
+- installs the fresh package.
 
-Once Windows is back up, start `safechain-l4-proxy`.
-On Windows the L4 proxy now synchronizes its live listener address(es) and its current process pid
-into the driver runtime config automatically:
-- it always programs the active IPv4 listener;
-- it optionally also programs the active IPv6 listener when one is configured;
-- it clears the driver's IPv6 runtime config when no IPv6 listener is running.
+After install:
+1. Reboot Windows.
+2. Start `safechain-l4-proxy`.
 
-That means there is no longer a separate manual "step 2" for copying proxy addresses into the driver.
-The happy path is now:
-- install the driver package;
-- reboot Windows;
-- start the L4 proxy.
+Once the proxy starts, it automatically synchronizes its live IPv4 bind and optional IPv6 bind into the driver runtime config. There is no separate manual runtime-config step anymore.
 
-## Runtime Behavior Notes
+In practice this means the `safechain-l4-proxy-windows-driver-object` CLI is no longer part of the normal install/start flow.
+It is now mostly optional extra tooling for inspection, manual experiments, or recovery scenarios.
+Day-to-day usage should generally rely on:
+- the PowerShell packaging/install/update scripts for driver lifecycle;
+- `safechain-l4-proxy` for runtime registration;
+- the driver's own proxy-PID exit handling to clear stale runtime config.
 
-The driver is intentionally fail-open when it cannot safely redirect.
+## Update An Existing Driver
 
-That means outbound TCP traffic is permitted directly when:
-- no IPv4/IPv6 proxy endpoint is configured in the runtime state;
-- the destination is local/private traffic or DNS on port `53`;
-- redirect context encoding fails for a flow.
+When the machine already has a driver installed and you want to replace it with a newer build:
 
-The stale-runtime-config edge case is handled separately.
-The driver registers a kernel process-create/process-exit notification callback and
-clears any configured proxy endpoint whose tracked proxy PID exits.
-This prevents the driver from continuing to redirect traffic toward a dead proxy process.
+```powershell
+just windows-driver-build
+just windows-driver-package-stage
+just windows-driver-package-install
+```
 
-For source process paths, the WFP classify callback now resolves the executable image path
-directly from the source PID through kernel process lookup APIs instead of relying on
-`processPath` metadata or the `ALE_APP_ID` fixed-value field at the connect-redirect layer,
-which proved unreliable in practice for our current flow.
+The install script is intentionally written as an install-or-update path. It uses `pnputil /add-driver ... /install`, preserves the existing service/hardware identity, and stages the updated package for activation.
 
-## Local/Dev Windows Driver Validation
+After an update:
+1. Reboot Windows so the new driver package is active.
+2. Start `safechain-l4-proxy`.
 
-After staging and installing the driver package, run:
+If you want the most conservative dev update flow, use `just windows-driver-package-install-fresh-debug` instead.
+
+Again, the driver-object CLI is typically not needed for this update path.
+
+## Remove
+
+To remove the currently installed local/dev driver package:
+
+```powershell
+just windows-driver-package-remove
+```
+
+If Windows keeps the device around, remove it manually via Device Manager and reboot.
+
+## Verify
+
+After installing or updating the driver package, run:
 
 ```powershell
 just windows-driver-package-verify
 ```
 
 This verifies:
+- the staged package exists;
+- the driver service exists;
+- the driver is loaded;
+- the installed `.sys` exists;
+- test-signing state;
+- Base Filtering Engine state;
+- the service registry entry;
+- the expected SafeChain WFP provider, sublayer, callout, and filter GUIDs.
 
-* the driver package is staged and present
-* the driver service exists
-* the driver is loaded
-* the installed `.sys` file exists
-* test signing mode is enabled
-* the Base Filtering Engine service is running
-* the driver service registry entry exists
-* the WFP state contains the expected SafeChain provider, sublayer, callout, and filter GUIDs
+The verification script checks these WFP GUIDs:
 
-The verification checks these WFP GUIDs:
+- Provider: `{6A625BB6-F310-443E-9850-280FACDC1A21}`
+- Sublayer: `{D95A6EAF-3882-495F-858C-65C2CE3F6A07}`
+- TCP connect redirect callout v4: `{5C6262C4-8EF6-43D8-A8F9-48636B172BB8}`
+- TCP connect redirect callout v6: `{4F05F1F8-9093-44F1-A8E7-2D841A3E2E5A}`
+- TCP connect redirect filter v4: `{DB5B9241-4532-4517-B0E0-6F85E4E631F8}`
+- TCP connect redirect filter v6: `{4B60D58C-85FD-4FB1-8256-8C4E6053E43A}`
+- UDP auth-connect block callout v4: `{87053C13-7C73-4E52-8DDD-F82B3856EF41}`
+- UDP auth-connect block callout v6: `{27B8A5FA-66B5-451C-A566-B79478B52A81}`
+- UDP auth-connect block filter v4: `{E4B805FC-B3AB-45E8-8F04-200DCBC00955}`
+- UDP auth-connect block filter v6: `{FCBAB31F-7DFB-4128-8196-559FE0E0E8B4}`
 
-> Truth of source for these GUIDs and other constants
-> can at any time be found at `proxy-lib-nostd\src\windows\driver_protocol.rs`
->
-> It's a manual task to keep them up to date in docs and powershell scripts,
-> not that they should change often, if ever.
+Source of truth for these GUIDs is [driver_protocol.rs](/C:/Users/glendc/Documents/GitHub/safechain-internals/proxy-lib-nostd/src/windows/driver_protocol.rs).
 
-* Provider: `{6A625BB6-F310-443E-9850-280FACDC1A21}`
-* Sublayer: `{D95A6EAF-3882-495F-858C-65C2CE3F6A07}`
-* TCP connect redirect callout v4: `{5C6262C4-8EF6-43D8-A8F9-48636B172BB8}`
-* TCP connect redirect callout v6: `{4F05F1F8-9093-44F1-A8E7-2D841A3E2E5A}`
-* TCP connect redirect filter v4: `{DB5B9241-4532-4517-B0E0-6F85E4E631F8}`
-* TCP connect redirect filter v6: `{4B60D58C-85FD-4FB1-8256-8C4E6053E43A}`
-* UDP auth-connect block callout v4: `{87053C13-7C73-4E52-8DDD-F82B3856EF41}`
-* UDP auth-connect block callout v6: `{27B8A5FA-66B5-451C-A566-B79478B52A81}`
-* UDP auth-connect block filter v4: `{E4B805FC-B3AB-45E8-8F04-200DCBC00955}`
-* UDP auth-connect block filter v6: `{FCBAB31F-7DFB-4128-8196-559FE0E0E8B4}`
+## Runtime Behavior
 
-A successful verification means the driver is not only installed, but also visible in the WFP state with the expected registration objects.
+The driver is intentionally fail-open when it cannot safely redirect TCP traffic.
 
-Until you actually ran the `start` command with your ipv4/ipv6 proxy configured, you will not actually
-see those GUIDs registered or even see your driver active. E.g.:
+Outbound TCP is permitted directly when:
+- no proxy endpoint is configured for that address family;
+- the destination is local/private traffic;
+- the destination is TCP port `53`;
+- redirect context encoding fails.
 
-```ps
-just run-windows-driver-cli start \
-  --ipv4-proxy 127.0.0.1:52647
-```
+The stale-runtime-config edge case is handled separately. The driver registers a kernel process notification callback and clears any configured proxy endpoint whose tracked proxy PID exits.
 
-### Validate via Windows GUI
+Source process paths are resolved from the source PID in-kernel during classify. We do not rely on the `processPath` metadata or `ALE_APP_ID` fixed values for our current flow.
 
-Use these built in Windows tools for a quick manual check:
+For UDP:
+- the driver never redirects;
+- UDP/443 is intercepted at ALE auth-connect v4/v6;
+- Chromium-family browsers are blocked on UDP/443;
+- everything else is passed through.
 
-* **System Information**: open `msinfo32`, then go to **Software Environment > System Drivers** and confirm the SafeChain driver exists and is running
-* **Services**: open `services.msc` and confirm **Base Filtering Engine** is running
-* **Registry Editor**: open `regedit` and inspect `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\safechain_lib_l4_proxy_windows_driver`
-* **Event Viewer**: open **Windows Logs > System** and look for driver load, signature, or WFP related errors
-* **WFP state dump**: run `netsh wfp show state file=%TEMP%\safechain_wfpstate.xml`, open the XML file, and search for the SafeChain GUIDs above
+## Validate Via Windows GUI
 
-The PowerShell verification script is the preferred validation path because it checks the full install and WFP registration state in one pass.
+Useful manual checks:
+
+- `msinfo32` -> `Software Environment > System Drivers`
+- `services.msc` -> confirm `Base Filtering Engine` is running
+- `regedit` -> `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SafeChainL4Proxy`
+- Event Viewer -> `Windows Logs > System`
+- `netsh wfp show state file=%TEMP%\safechain_wfpstate.xml`
 
 ## Glossary
 
 ### `layer id`
 
-The WFP layer id identifies the exact filtering stage that invoked the classify callback.
-In our driver logs it is the numeric `FWPS_LAYER_*` value that Windows passes in
-`FWPS_INCOMING_VALUES0.layerId`.
+The WFP layer id identifies the filtering stage that invoked the classify callback.
 
-For this driver the important ones are:
+Important layers for this driver:
 - `FWPS_LAYER_ALE_CONNECT_REDIRECT_V4`
 - `FWPS_LAYER_ALE_CONNECT_REDIRECT_V6`
 - `FWPS_LAYER_ALE_AUTH_CONNECT_V4`
 - `FWPS_LAYER_ALE_AUTH_CONNECT_V6`
 
-The ALE connect-redirect layers are where Windows still lets a callout rewrite the
-outbound connect target before the socket connect is finalized.
+The connect-redirect layers are where TCP destinations can still be rewritten.
 
-The ALE auth-connect layers are earlier policy/authorization checkpoints.
-We use those for UDP because right now the driver only makes a block-or-pass decision there;
-it never rewrites UDP destinations.
+The auth-connect layers are earlier policy checkpoints. We currently use them for UDP block/pass decisions only.
 
 ### `callout`
 
 A callout is the kernel callback implementation registered with WFP.
-Our driver currently registers four callouts:
+
+This driver currently registers four callouts:
 - IPv4 TCP connect redirect
 - IPv6 TCP connect redirect
 - IPv4 UDP auth-connect block
 - IPv6 UDP auth-connect block
 
-When a filter matches traffic at the target layer, WFP invokes that callout.
-
 ### `filter`
 
-A filter is the WFP rule that says which traffic should be inspected at a given layer and
-which callout should receive it.
-Without a filter, a registered callout exists but is never invoked for traffic.
+A filter is the WFP rule that selects traffic and binds it to a callout at a given layer.
 
 ### `classify callback`
 
-This is the driver function WFP calls for each matching flow or packet at a layer.
-In our code this is where we read the flow metadata and decide one of:
-- passthrough
-- TCP redirect to the local L4 proxy
-- UDP block
+This is the driver function WFP invokes for matching traffic. In our code it decides:
+- passthrough;
+- TCP redirect to the local L4 proxy;
+- UDP block.
 
 ### `redirect handle`
 
-The redirect handle is a WFP object created through `FwpsRedirectHandleCreate0`.
-It is attached to the modified connect request so Windows knows the redirection comes from
-our callout and can track the redirect correctly.
+The redirect handle is created through `FwpsRedirectHandleCreate0` and attached to redirected TCP flows so Windows tracks the redirection correctly.
 
 ### `runtime config`
 
-Runtime config is the in-memory driver state updated from user space through IOCTLs.
-For now that primarily means the active IPv4 and IPv6 proxy endpoints plus their proxy PIDs.
-It is not persisted across driver reloads.
+Runtime config is the in-memory driver state updated from user space through IOCTLs. Today that is mainly:
+- active IPv4 proxy endpoint;
+- active IPv6 proxy endpoint;
+- proxy PID tracking.
+
+It is not persisted across driver reloads. The proxy repopulates it on startup.
 
 ### `source pid`
 
-The source pid is the process id reported for the outbound connect that triggered classification.
-We still log and serialize it into the redirect context because it is useful for loop prevention,
-telemetry, and user-space correlation.
+The source pid is the process id reported for the outbound flow that triggered classification.
 
 ### `source process path`
 
-The source process path is the executable image path associated with that source pid.
-The driver now resolves this directly from the source pid during classify so it can attach
-a path string such as
-`C:\Program Files\Google\Chrome\Application\chrome.exe`.
+The source process path is the executable image path resolved from that source pid during classify.
 
 ## Tools
 
-### RegEdit
+Useful Windows tools while debugging:
 
-Run `regedit` evalated and you should also be able to find the registry key
-for the safechain l4 proxy (windows) at:
+- `winobj`
+- `procexp`
+- `dbgview`
+- `WinDbg`
 
-```
+For registry inspection, the service key is:
+
+```text
 Computer\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SafeChainL4Proxy
 ```
 
