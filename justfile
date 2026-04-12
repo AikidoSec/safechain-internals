@@ -41,7 +41,7 @@ rust-fmt:
     @cargo install cargo-sort
     cargo sort --grouped --workspace
 
-rust-quick-qa-crossplatform $RUSTFLAGS="-D warnings":
+rust-quick-qa-crossplatform:
     cargo fmt --all --check
     @cargo install cargo-sort
     cargo sort --workspace --grouped --check
@@ -51,11 +51,13 @@ rust-quick-qa-crossplatform $RUSTFLAGS="-D warnings":
     cargo check --all-features --workspace --all-targets \
         --exclude safechain-lib-l4-proxy-windows-driver \
         --exclude safechain-l4-proxy-windows-driver-object
-    cargo clippy --all-features --workspace --all-targets \
+    cargo clippy \
+        --all-features --workspace --all-targets \
         --exclude safechain-lib-l4-proxy-windows-driver \
-        --exclude safechain-l4-proxy-windows-driver-object
+        --exclude safechain-l4-proxy-windows-driver-object \
+        -- -D warnings
 
-rust-test $RUSTFLAGS="-D warnings" *ARGS:
+rust-test *ARGS:
     cargo test --all-features --workspace \
         --exclude safechain-lib-l4-proxy-windows-driver \
         --exclude safechain-l4-proxy-windows-driver-object \
@@ -255,7 +257,8 @@ windows-driver-quick-qa: windows-driver-check windows-driver-clippy windows-driv
     cargo check --all-features --all-targets \
         -p safechain-l4-proxy-windows-driver-object
     cargo clippy --all-features --all-targets \
-        -p safechain-l4-proxy-windows-driver-object
+        -p safechain-l4-proxy-windows-driver-object \
+        -- -D warnings
 
 windows-driver-qa: windows-driver-quick-qa windows-driver-build
     cargo test --all-features \
@@ -305,7 +308,8 @@ windows-driver-check:
 
 [working-directory: './proxy-lib-l4-windows-driver']
 windows-driver-clippy:
-    cargo clippy
+    cargo clippy \
+        -- -D warnings
 
 [working-directory: './proxy-lib-l4-windows-driver']
 windows-driver-test *ARGS:

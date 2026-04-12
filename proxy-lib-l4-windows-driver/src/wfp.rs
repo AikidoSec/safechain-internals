@@ -39,10 +39,16 @@ use safechain_proxy_lib_nostd::{
             WindowsGuid,
         },
         redirect_ctx::ProxyRedirectContext,
+        unicode::unicode_string_to_string,
     },
 };
 use spin::Mutex;
-use wdk_sys::{GUID, NTSTATUS, STATUS_SUCCESS};
+use wdk_sys::{
+    GUID, HANDLE, NTSTATUS, PEPROCESS, PUNICODE_STRING, STATUS_SUCCESS,
+    ntddk::{
+        ExFreePool, ObfDereferenceObject, PsLookupProcessByProcessId, SeLocateProcessImageName,
+    },
+};
 
 use crate::{driver_controller, log};
 
@@ -281,19 +287,12 @@ unsafe extern "system" fn on_callout_classify(
     };
 
     let source_pid = source_pid_from_metadata(in_meta_values);
-    let source_process_path_from_metadata = source_process_path_from_metadata(in_meta_values);
-    let source_process_path_from_fixed_values =
-        source_process_path_from_fixed_values(in_fixed_values);
-    let source_process_path = source_process_path_from_metadata
-        .clone()
-        .or(source_process_path_from_fixed_values.clone());
+    let source_process_path = source_pid.and_then(source_process_path_from_pid);
     log::driver_log_info!(
-        "wfp: classify flow metadata (layer_id={:?}, remote={}, source_pid={:?}, process_path_metadata={:?}, process_path_app_id={:?}, chosen_process_path={:?})",
+        "wfp: classify flow metadata (layer_id={:?}, remote={}, source_pid={:?}, source_process_path={:?})",
         layer_id,
         remote,
         source_pid,
-        source_process_path_from_metadata,
-        source_process_path_from_fixed_values,
         source_process_path,
     );
     if source_pid.is_none() {
@@ -354,49 +353,45 @@ fn source_pid_from_metadata(in_meta_values: *const c_void) -> Option<u32> {
     u32::try_from(raw_pid).ok()
 }
 
-fn source_process_path_from_metadata(in_meta_values: *const c_void) -> Option<String> {
-    let metadata = metadata_values(in_meta_values)?;
-    let blob = unsafe {
-        // SAFETY: the metadata pointer is valid for this classify callback.
-        if ((*metadata).currentMetadataValues & FWPS_METADATA_FIELD_PROCESS_PATH) == 0 {
-            return None;
-        }
-        (*metadata).processPath
+fn source_process_path_from_pid(pid: u32) -> Option<String> {
+    let mut process: PEPROCESS = ptr::null_mut();
+    let status = unsafe {
+        // SAFETY: PID is reinterpreted as the HANDLE form expected by the kernel API.
+        PsLookupProcessByProcessId(pid_to_handle(pid), &mut process)
     };
-    fwp_byte_blob_to_utf16_string(blob)
-}
-
-fn source_process_path_from_fixed_values(
-    in_fixed_values: *const FWPS_INCOMING_VALUES0,
-) -> Option<String> {
-    let fixed_values = unsafe {
-        // SAFETY: pointer comes directly from WFP for the duration of the callback.
-        in_fixed_values.as_ref()?
-    };
-
-    let field_index = match fixed_values.layerId as u32 {
-        FWPS_LAYER_ALE_CONNECT_REDIRECT_V4 => {
-            FWPS_FIELD_ALE_CONNECT_REDIRECT_V4_ALE_APP_ID as usize
-        }
-        FWPS_LAYER_ALE_CONNECT_REDIRECT_V6 => {
-            FWPS_FIELD_ALE_CONNECT_REDIRECT_V6_ALE_APP_ID as usize
-        }
-        _ => return None,
-    };
-    if fixed_values.incomingValue.is_null() || field_index >= fixed_values.valueCount as usize {
+    if status != STATUS_SUCCESS || process.is_null() {
+        log::driver_log_warn!(
+            "wfp: failed to resolve process object from pid (pid = {}, status = {:#x})",
+            pid,
+            status
+        );
         return None;
     }
 
-    let values = unsafe {
-        // SAFETY: the slice is bounded by the valueCount provided by WFP.
-        core::slice::from_raw_parts(fixed_values.incomingValue, fixed_values.valueCount as usize)
-    };
-    let app_id_blob = unsafe {
-        // SAFETY: the selected field index is for the ALE_APP_ID field at this layer.
-        values.get(field_index)?.value.value.byteBlob
-    };
+    let mut image_name: PUNICODE_STRING = ptr::null_mut();
 
-    fwp_byte_blob_to_utf16_string(app_id_blob)
+    unsafe {
+        // SAFETY: `process` is referenced by `PsLookupProcessByProcessId` above.
+        let status = SeLocateProcessImageName(process, &mut image_name);
+        let _ = ObfDereferenceObject(process.cast());
+
+        if status != STATUS_SUCCESS || image_name.is_null() {
+            log::driver_log_warn!(
+                "wfp: failed to resolve process image path from pid (pid = {}, status = {:#x})",
+                pid,
+                status
+            );
+            None
+        } else {
+            let path = unicode_string_to_string(image_name.cast_const());
+            ExFreePool(image_name.cast());
+            path
+        }
+    }
+}
+
+fn pid_to_handle(pid: u32) -> HANDLE {
+    pid as usize as HANDLE
 }
 
 fn metadata_values(in_meta_values: *const c_void) -> Option<*const FWPS_INCOMING_METADATA_VALUES0> {
@@ -412,34 +407,6 @@ fn incoming_layer_id(in_fixed_values: *const FWPS_INCOMING_VALUES0) -> Option<u1
         in_fixed_values.as_ref()?
     };
     Some(fixed_values.layerId)
-}
-
-fn fwp_byte_blob_to_utf16_string(blob: *mut FWP_BYTE_BLOB) -> Option<String> {
-    if blob.is_null() {
-        return None;
-    }
-
-    let (data, size) = unsafe {
-        // SAFETY: `blob` comes from WFP metadata for the current classify invocation.
-        ((*blob).data, (*blob).size as usize)
-    };
-    if data.is_null() || size < 2 || (size % 2) != 0 {
-        return None;
-    }
-
-    let wide = unsafe {
-        // SAFETY: buffer length is validated above and reinterpreted as UTF-16 code units.
-        core::slice::from_raw_parts(data.cast::<u16>(), size / 2)
-    };
-    let end = wide
-        .iter()
-        .position(|unit| *unit == 0)
-        .unwrap_or(wide.len());
-    if end == 0 {
-        return None;
-    }
-
-    Some(String::from_utf16_lossy(&wide[..end]))
 }
 
 fn complete_writable_classify(
@@ -577,18 +544,8 @@ const STATUS_INVALID_PARAMETER: NTSTATUS = -1_073_741_811_i32;
 /// Indicates the callout may still write `FWPS_CLASSIFY_OUT0.actionType`.
 /// Docs: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/ns-fwpsk-fwps_classify_out0
 const FWPS_RIGHT_ACTION_WRITE: u32 = 0x0000_0001;
-/// `FWPS_METADATA_FIELD_PROCESS_PATH` from `fwpsk.h`.
-const FWPS_METADATA_FIELD_PROCESS_PATH: u32 = 0x0000_0008;
 /// `FWPS_METADATA_FIELD_PROCESS_ID` from `fwpsk.h`.
 const FWPS_METADATA_FIELD_PROCESS_ID: u32 = 0x0000_0020;
-/// `FWPS_LAYER_ALE_CONNECT_REDIRECT_V4` from `fwpsk.h`.
-const FWPS_LAYER_ALE_CONNECT_REDIRECT_V4: u32 = 36;
-/// `FWPS_LAYER_ALE_CONNECT_REDIRECT_V6` from `fwpsk.h`.
-const FWPS_LAYER_ALE_CONNECT_REDIRECT_V6: u32 = 37;
-/// `FWPS_FIELD_ALE_CONNECT_REDIRECT_V4_ALE_APP_ID` from `fwpsk.h`.
-const FWPS_FIELD_ALE_CONNECT_REDIRECT_V4_ALE_APP_ID: u32 = 0;
-/// `FWPS_FIELD_ALE_CONNECT_REDIRECT_V6_ALE_APP_ID` from `fwpsk.h`.
-const FWPS_FIELD_ALE_CONNECT_REDIRECT_V6_ALE_APP_ID: u32 = 0;
 /// `FWP_ACTION_PERMIT` from `fwptypes.h`.
 ///
 /// Used after rewriting the connect request so WFP allows the redirected flow.

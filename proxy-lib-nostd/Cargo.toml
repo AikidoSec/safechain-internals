@@ -12,3 +12,6 @@ readme = "../docs/proxy.md"
 [dependencies]
 postcard = { workspace = true, features = ["alloc"] }
 serde = { workspace = true, features = ["derive", "alloc"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+wdk-sys = { workspace = true }

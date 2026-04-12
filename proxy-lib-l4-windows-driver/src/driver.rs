@@ -167,6 +167,28 @@ impl ProxyDriverController {
         }
     }
 
+    pub fn handle_process_exit(&self, pid: u32) {
+        let mut state = self.state.write();
+        let clear_ipv4 = state.ipv4.is_some_and(|proxy| proxy.process_id == pid);
+        let clear_ipv6 = state.ipv6.is_some_and(|proxy| proxy.process_id == pid);
+
+        if clear_ipv4 {
+            state.ipv4 = None;
+        }
+        if clear_ipv6 {
+            state.ipv6 = None;
+        }
+
+        if clear_ipv4 || clear_ipv6 {
+            crate::log::driver_log_warn!(
+                "cleared proxy runtime config after tracked process exit (pid = {}, cleared_ipv4 = {}, cleared_ipv6 = {})",
+                pid,
+                clear_ipv4,
+                clear_ipv6,
+            );
+        }
+    }
+
     pub fn classify_outbound_tcp_connect(&self, flow: WfpFlowMeta) -> TcpRedirectDecision {
         if is_local_destination(flow.remote) {
             crate::log::driver_log_info!(

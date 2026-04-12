@@ -1,9 +1,10 @@
-use alloc::vec::Vec;
-use core::{iter, mem::size_of, ptr};
+use core::ptr;
+
+use safechain_proxy_lib_nostd::windows::unicode::{unicode_from_wide_mut, utf16_null_terminated};
 
 use wdk_sys::{
     DRIVER_OBJECT, IO_NO_INCREMENT, IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_DEVICE_CONTROL, NTSTATUS,
-    PDEVICE_OBJECT, PIRP, STATUS_INVALID_DEVICE_REQUEST, STATUS_SUCCESS, UNICODE_STRING,
+    PDEVICE_OBJECT, PIRP, STATUS_INVALID_DEVICE_REQUEST, STATUS_SUCCESS,
     ntddk::{
         IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink,
         IofCompleteRequest,
@@ -134,18 +135,4 @@ fn complete_request(irp: PIRP, status: NTSTATUS, info: u64) -> NTSTATUS {
         IofCompleteRequest(irp, IO_NO_INCREMENT as i8);
     }
     status
-}
-
-fn utf16_null_terminated(value: &str) -> Vec<u16> {
-    value.encode_utf16().chain(iter::once(0)).collect()
-}
-
-fn unicode_from_wide_mut(wide: &mut [u16]) -> UNICODE_STRING {
-    let max_len_bytes = core::mem::size_of_val(wide);
-    let len_bytes = max_len_bytes.saturating_sub(size_of::<u16>());
-    UNICODE_STRING {
-        Length: len_bytes as u16,
-        MaximumLength: max_len_bytes as u16,
-        Buffer: wide.as_mut_ptr(),
-    }
 }

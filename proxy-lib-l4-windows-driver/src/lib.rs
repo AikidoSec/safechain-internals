@@ -19,6 +19,7 @@ mod control;
 mod device;
 mod driver;
 mod log;
+mod process_monitor;
 mod wfp;
 
 pub use driver::{ProxyDriverConfigUpdate, ProxyDriverController, ProxyDriverStartupConfig};
@@ -71,8 +72,19 @@ pub unsafe extern "system" fn driver_entry(
         return device_status;
     }
 
+    let process_monitor_status = process_monitor::register();
+    if process_monitor_status != STATUS_SUCCESS {
+        device::cleanup(driver);
+        log::driver_log_error!(
+            "process monitor registration failed with NTSTATUS={:#x}",
+            process_monitor_status
+        );
+        return process_monitor_status;
+    }
+
     let status = wfp::register_callouts(driver.DeviceObject.cast());
     if status != STATUS_SUCCESS {
+        process_monitor::unregister();
         device::cleanup(driver);
         log::driver_log_error!(
             "WFP callout registration failed with NTSTATUS={:#x}",
@@ -90,6 +102,7 @@ pub unsafe extern "system" fn driver_entry(
 /// Driver unload callback registered in `DriverEntry`.
 extern "C" fn driver_unload(_driver: *mut DRIVER_OBJECT) {
     wfp::unregister_callouts();
+    process_monitor::unregister();
     device::cleanup(_driver);
     DRIVER.clear_proxy_endpoint();
     log::driver_log_info!("driver unloaded (runtime config required, redirect-target-pid enabled)");

@@ -11,6 +11,15 @@ Kernel-mode WFP redirect driver for SafeChain L4 proxy on Windows.
 - [x] Add end-to-end verification on Windows for IPv4 redirect, IPv6 redirect, unload/reload, and runtime config updates.
 - [x] Ensure proxy (driver) is compatible with VPNs .. e.g. wireguard
 
+last miles TODO:
+
+- [x] how can we disable proxy runtime config when process on PID is "dead"
+- [x] how to get process path in windows driver, it is still missing
+- [ ] once we do have process path figure out how to block udp chrome traffic in windows driver for now
+- [ ] document update flow (dev)
+- [ ] separate out production WIP notes into its own doc...
+- [x] fix CI And prepare PR
+
 ## Production TODO
 - [ ] Add production driver package signing flow (`.cat` / release-signing path).
 - [ ] Decide and document the intended production signing route (attestation vs WHQL/HLK-backed path).
@@ -103,7 +112,6 @@ If this later needs to become a production-distributable Windows driver package,
 - Windows Driver Kit environment.
 - Visual Studio C++ Build Tools + Windows SDK/WDK integration.
 - LLVM/Clang 17 on `PATH` (used by `bindgen` via `wdk-build`/`wdk-sys`).
-- Workspace root must have `Cargo.lock` present.
 
 ## Install WDK
 1. Install Visual Studio 2022 Build Tools (or Visual Studio 2022) with:
@@ -178,6 +186,25 @@ just windows-driver-package-install-fresh-debug
 After that you just need to "update" the driver with the proxy address(es)
 and off you go.
 
+## Runtime Behavior Notes
+
+The driver is intentionally fail-open when it cannot safely redirect.
+
+That means outbound TCP traffic is permitted directly when:
+- no IPv4/IPv6 proxy endpoint is configured in the runtime state;
+- the destination is local/private traffic or DNS on port `53`;
+- redirect context encoding fails for a flow.
+
+The stale-runtime-config edge case is handled separately.
+The driver registers a kernel process-create/process-exit notification callback and
+clears any configured proxy endpoint whose tracked proxy PID exits.
+This prevents the driver from continuing to redirect traffic toward a dead proxy process.
+
+For source process paths, the WFP classify callback now resolves the executable image path
+directly from the source PID through kernel process lookup APIs instead of relying on
+`processPath` metadata or the `ALE_APP_ID` fixed-value field at the connect-redirect layer,
+which proved unreliable in practice for our current flow.
+
 ## Local/Dev Windows Driver Validation
 
 After staging and installing the driver package, run:
@@ -233,6 +260,66 @@ Use these built in Windows tools for a quick manual check:
 * **WFP state dump**: run `netsh wfp show state file=%TEMP%\safechain_wfpstate.xml`, open the XML file, and search for the SafeChain GUIDs above
 
 The PowerShell verification script is the preferred validation path because it checks the full install and WFP registration state in one pass.
+
+## Glossary
+
+### `layer id`
+
+The WFP layer id identifies the exact filtering stage that invoked the classify callback.
+In our driver logs it is the numeric `FWPS_LAYER_*` value that Windows passes in
+`FWPS_INCOMING_VALUES0.layerId`.
+
+For this driver the important ones are:
+- `FWPS_LAYER_ALE_CONNECT_REDIRECT_V4`
+- `FWPS_LAYER_ALE_CONNECT_REDIRECT_V6`
+
+Those are the ALE connect-redirect layers where Windows still lets a callout rewrite the
+outbound connect target before the socket connect is finalized.
+
+### `callout`
+
+A callout is the kernel callback implementation registered with WFP.
+Our driver registers one callout for IPv4 connect redirect and one for IPv6 connect redirect.
+When a filter matches traffic at the target layer, WFP invokes that callout.
+
+### `filter`
+
+A filter is the WFP rule that says which traffic should be inspected at a given layer and
+which callout should receive it.
+Without a filter, a registered callout exists but is never invoked for traffic.
+
+### `classify callback`
+
+This is the driver function WFP calls for each matching flow or packet at a layer.
+In our code this is where we read the flow metadata, decide passthrough vs redirect,
+and optionally rewrite the remote target to the local L4 proxy.
+
+### `redirect handle`
+
+The redirect handle is a WFP object created through `FwpsRedirectHandleCreate0`.
+It is attached to the modified connect request so Windows knows the redirection comes from
+our callout and can track the redirect correctly.
+
+### `runtime config`
+
+Runtime config is the in-memory driver state updated from user space through IOCTLs.
+For now that primarily means the active IPv4 and IPv6 proxy endpoints plus their proxy PIDs.
+It is not persisted across driver reloads.
+
+### `source pid`
+
+The source pid is the process id reported for the outbound connect that triggered classification.
+We still log and serialize it into the redirect context because it is useful for loop prevention,
+telemetry, and user-space correlation.
+
+### `source process path`
+
+The source process path is the executable image path associated with that source pid.
+The driver now resolves this directly from the source pid during classify so it can attach
+a path string such as
+`C:\Program Files\Google\Chrome\Application\chrome.exe`.
+
+## Tools
 
 ### RegEdit
 
