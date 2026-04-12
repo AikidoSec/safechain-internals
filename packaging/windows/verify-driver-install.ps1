@@ -399,7 +399,7 @@ if (Test-Path $WfpStatePath) {
         }
     }
 
-    $safechainTextHits = Select-String -Path $WfpStatePath -Pattern "SafeChain|safechain" -SimpleMatch
+    $safechainTextHits = Select-String -Path $WfpStatePath -Pattern "SafeChain|safechain"
     if ($safechainTextHits) {
         Write-Pass "Found SafeChain text markers in WFP state"
         $safechainTextHits | Select-Object -First 20 | ForEach-Object {
