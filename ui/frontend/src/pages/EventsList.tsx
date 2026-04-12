@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { BlockEvent } from "../types";
 import { Events } from "@wailsio/runtime";
 import { listEvents } from "../api";
-import { getToolIcon } from "../constants";
+import { BLOCK_REASON_LABEL, getToolIcon } from "../constants";
 import { formatEventTime, isConnectionError } from "../utils";
 
 export function EventsList() {
@@ -105,7 +105,14 @@ export function EventsList() {
                   </td>
                   <td className="event-time">{formatEventTime(ev.ts_ms)}</td>
                   <td className="event-identifier" title={ev.artifact.identifier}>
-                    {ev.artifact.display_name ?? ev.artifact.identifier}
+                    <span className="event-identifier-content">
+                      {ev.count !== undefined && ev.count > 1 && (
+                        <span className="event-count-badge" aria-label={`${ev.count} blocked events`}>
+                          x{ev.count}
+                        </span>
+                      )}
+                      {ev.artifact.display_name ?? ev.artifact.identifier}
+                    </span>
                   </td>
                   <td>
                     {ev.status === "request_approved" ? (
@@ -115,7 +122,9 @@ export function EventsList() {
                     ) : ev.status === "request_rejected" ? (
                       <span className="status status-rejected">rejected</span>
                     ) : (
-                      <span className="status status-blocked">blocked</span>
+                      <span className={`reason-badge reason-badge--${ev.block_reason}`}>
+                        {BLOCK_REASON_LABEL[ev.block_reason] ?? ev.block_reason}
+                      </span>
                     )}
                   </td>
                 </tr>

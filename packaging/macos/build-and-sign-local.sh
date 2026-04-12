@@ -10,10 +10,20 @@ set -e
 # Usage: ./build-and-sign-local.sh
 # =============================================================================
 
-VERSION="${1:-dev}"
 ARCH="universal"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+VERSION="${1:-dev}"
+
+if [ "$VERSION" = "--generate-version" ]; then
+  VERSION="0.0.$(date +%s)"
+  bash "$PROJECT_DIR/scripts/sync-versions.sh" --version "$VERSION"
+  restore_versions() {
+    bash "$PROJECT_DIR/scripts/sync-versions.sh" --version "1.0.0"
+  }
+  trap restore_versions EXIT
+fi
 
 echo "==================================="
 echo "Aikido Endpoint Protection - Local PKG Builder"
@@ -118,8 +128,8 @@ L4_DERIVED_DATA="$PROJECT_DIR/.aikido/xcode/safechain-l4-proxy-release"
 
 echo "Building L4 proxy macOS app..."
 xcodebuild \
-    -project AikidoEndpointL4Proxy.xcodeproj \
-    -scheme AikidoEndpointL4ProxyHost \
+    -project AikidoNetworkExtension.xcodeproj \
+    -scheme AikidoNetworkExtensionHost \
     -configuration Release \
     -derivedDataPath "$L4_DERIVED_DATA" \
     -allowProvisioningUpdates \
@@ -128,15 +138,15 @@ xcodebuild \
 
 cd "$PROJECT_DIR"
 
-L4_APP_SRC="$L4_DERIVED_DATA/Build/Products/Release/AikidoEndpointL4ProxyHost.app"
+L4_APP_SRC="$L4_DERIVED_DATA/Build/Products/Release/Aikido Network Extension.app"
 if [ ! -d "$L4_APP_SRC" ]; then
     echo "✗ L4 proxy app build failed — app bundle not found at $L4_APP_SRC"
     exit 1
 fi
 
-rm -rf "bin/AikidoEndpointL4ProxyHost.app"
-ditto "$L4_APP_SRC" "bin/AikidoEndpointL4ProxyHost.app"
-echo "✓ L4 Proxy app built: bin/AikidoEndpointL4ProxyHost.app"
+rm -rf "bin/Aikido Network Extension.app"
+ditto "$L4_APP_SRC" "bin/Aikido Network Extension.app"
+echo "✓ L4 Network Extension app built: bin/Aikido Network Extension.app"
 
 lipo -info bin/endpoint-protection-darwin-universal
 lipo -info "bin/endpoint-protection-ui-darwin-universal.app/Contents/MacOS/$APP_BINARY_NAME"
@@ -193,7 +203,7 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
     echo "✓ Binary signatures verified"
 
     echo "Verifying L4 proxy app signature (signed by Xcode)..."
-    codesign --verify --verbose --deep "$PROJECT_DIR/bin/AikidoEndpointL4ProxyHost.app"
+    codesign --verify --verbose --deep "$PROJECT_DIR/bin/Aikido Network Extension.app"
     echo "✓ L4 Proxy app signature verified"
     echo ""
 else
@@ -212,13 +222,16 @@ echo ""
 cd "$SCRIPT_DIR"
 ./build-distribution-pkg.sh -v "$VERSION" -a "universal" -b "$PROJECT_DIR/bin" -o "$PROJECT_DIR/dist"
 
-PKG_FILE="$PROJECT_DIR/dist/EndpointProtection-$VERSION.pkg"
+VERSIONED_PKG="$PROJECT_DIR/dist/EndpointProtection-$VERSION.pkg"
 
-if [ ! -f "$PKG_FILE" ]; then
+if [ ! -f "$VERSIONED_PKG" ]; then
     echo "✗ PKG file not created"
     exit 1
 fi
 
+PKG_FILE="$PROJECT_DIR/dist/EndpointProtection.pkg"
+mv "$VERSIONED_PKG" "$PKG_FILE"
+rm -f "$VERSIONED_PKG.sha256"
 echo "✓ PKG created: $PKG_FILE"
 echo ""
 

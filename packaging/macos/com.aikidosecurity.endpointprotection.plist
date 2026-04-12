@@ -18,7 +18,7 @@
         </array>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Library/Application Support/AikidoSecurity/EndpointProtection/bin/endpoint-protection</string>
+		<string>/Applications/Aikido Endpoint Protection.app/Contents/Resources/bin/endpoint-protection</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>

@@ -67,7 +67,7 @@ impl<K> RemoteReleasedPackagesList<K> {
         Ok(Self { trie })
     }
 
-    /// Returns true if the package was released recently (after `cutoff_secs`).
+    /// Returns true if the package was released recently (after `cutoff_ts`).
     ///
     /// - `version = Some(v)`: only the specific version must be recent
     /// - `version = None`: true if ANY version of the package is recent
@@ -87,6 +87,24 @@ impl<K> RemoteReleasedPackagesList<K> {
         entries
             .iter()
             .any(|e| e.released_on > cutoff_ts && version.is_none_or(|v| *v == e.version))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_trie_for_tests(trie: ReleasedPackagesTrie<K>) -> Self {
+        Self {
+            trie: RemoteResource::from_state(trie),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_entries_for_tests(
+        entries: Vec<ReleasedPackageData>,
+        now_ts: SystemTimestampMilliseconds,
+    ) -> Self
+    where
+        K: PackageName + radix_trie::TrieKey,
+    {
+        Self::from_trie_for_tests(trie_from_released_packages_list(entries, now_ts))
     }
 }
 

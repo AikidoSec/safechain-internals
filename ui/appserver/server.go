@@ -40,6 +40,7 @@ type Server struct {
 	onBlocked              func(ev daemon.BlockEvent)
 	onTlsTerminationFailed func(ev daemon.TlsTerminationFailedEvent)
 	onPermissionsUpdated   func(ev daemon.PermissionsResponse)
+	onSetupWizard          func(steps []string)
 }
 
 func New() *Server {
@@ -51,6 +52,7 @@ func (s *Server) SetHandlers(
 	onBlocked func(daemon.BlockEvent),
 	onTlsTerminationFailed func(daemon.TlsTerminationFailedEvent),
 	onPermissionsUpdated func(daemon.PermissionsResponse),
+	onSetupWizard func(steps []string),
 ) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -58,6 +60,7 @@ func (s *Server) SetHandlers(
 	s.onBlocked = onBlocked
 	s.onTlsTerminationFailed = onTlsTerminationFailed
 	s.onPermissionsUpdated = onPermissionsUpdated
+	s.onSetupWizard = onSetupWizard
 }
 
 // Start launches the HTTP server in a background goroutine.
@@ -67,6 +70,7 @@ func (s *Server) Start() {
 	mux.HandleFunc("POST /v1/blocked", s.handleBlocked)
 	mux.HandleFunc("POST /v1/tls-termination-failed", s.handleTlsTerminationFailed)
 	mux.HandleFunc("POST /v1/permissions", s.handlePermissionsUpdated)
+	mux.HandleFunc("POST /v1/setup-wizard", s.handleSetupWizard)
 
 	go func() {
 		if err := http.ListenAndServe(ListenAddr, mux); err != nil && err != http.ErrServerClosed {
@@ -131,6 +135,28 @@ func (s *Server) handlePermissionsUpdated(w http.ResponseWriter, r *http.Request
 	s.mu.Unlock()
 	if cb != nil {
 		cb(ev)
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+type setupWizardBody struct {
+	Steps []string `json:"steps"`
+}
+
+func (s *Server) handleSetupWizard(w http.ResponseWriter, r *http.Request) {
+	if !validateToken(w, r) {
+		return
+	}
+	var body setupWizardBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	cb := s.onSetupWizard
+	s.mu.Unlock()
+	if cb != nil {
+		cb(body.Steps)
 	}
 	w.WriteHeader(http.StatusOK)
 }

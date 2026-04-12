@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import type { BlockEvent, BlockReason } from "../types";
 import { getEvent, requestAccess } from "../api";
 import { Events } from "@wailsio/runtime";
-import { getToolIcon } from "../constants";
+import { BLOCK_REASON_LABEL, getToolIcon } from "../constants";
 import { formatEventTime, isConnectionError } from "../utils";
 
 const BLOCK_REASON_INFO: Record<BlockReason, { title: string; description: string }> = {
@@ -29,14 +29,6 @@ const BLOCK_REASON_INFO: Record<BlockReason, { title: string; description: strin
   },
 };
 
-const BLOCK_REASON_LABEL: Record<BlockReason, string> = {
-  malware: "Malware",
-  rejected: "Rejected by policy",
-  block_all: "All Installs Blocked",
-  request_install: "Approval required",
-  new_package: "Too recently published",
-};
-
 function EventInfo({ event }: { event: BlockEvent }) {
   return (
     <dl className="event-info">
@@ -49,6 +41,11 @@ function EventInfo({ event }: { event: BlockEvent }) {
             className="event-info-icon"
           />
           {event.artifact.display_name ?? event.artifact.identifier}
+          {event.count !== undefined && event.count > 1 && (
+            <span className="event-count-badge" aria-label={`${event.count} blocked events`}>
+              x{event.count}
+            </span>
+          )}
         </dd>
       </div>
       {event.artifact.version && (

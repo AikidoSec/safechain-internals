@@ -176,3 +176,11 @@ func (c *Client) NotifyProxyStatus(running bool, stdoutMessage string) error {
 	}
 	return nil
 }
+
+type setupWizardBody struct {
+	Steps []string `json:"steps"`
+}
+
+func (c *Client) StartSetupWizard(steps []string) error {
+	return c.post("/v1/setup-wizard", setupWizardBody{Steps: steps})
+}

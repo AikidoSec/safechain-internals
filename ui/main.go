@@ -8,6 +8,8 @@ import (
 	"log"
 	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -25,6 +27,11 @@ type FocusEventPayload struct {
 	EventId   string `json:"eventId"`
 	EventType string `json:"eventType"`
 }
+
+// closeInstallWindow hides the certificate install webview; set in newWindowManager.
+var closeInstallWindow func()
+
+var setInstallWindowOnTop func(bool)
 
 func init() {
 	application.RegisterEvent[daemon.BlockEvent]("blocked")
@@ -67,21 +74,27 @@ func applyFlags(f appFlags) {
 
 // --- Notifications -------------------------------------------------------
 
-func setupNotifications() (notifier *notifications.NotificationService, authorized bool) {
-	notifier = notifications.New()
+func setupNotifications() *notifications.NotificationService {
+	notifier := notifications.New()
 	notifier.RegisterNotificationCategory(notifications.NotificationCategory{
 		ID:      "aikido-blocked",
 		Actions: []notifications.NotificationAction{{ID: "OPEN", Title: "Open"}},
 	})
-	authorized, _ = notifier.CheckNotificationAuthorization()
+	authorized, _ := notifier.CheckNotificationAuthorization()
 	if !authorized {
-		authorized, _ = notifier.RequestNotificationAuthorization()
+		go func() {
+			ok, _ := notifier.RequestNotificationAuthorization()
+			log.Println("Notifications authorized:", ok)
+		}()
+		return notifier
 	}
 	log.Println("Notifications authorized:", authorized)
-	return
+	return notifier
 }
 
 // --- Wails application ---------------------------------------------------
+
+var daemonSvc = &DaemonService{}
 
 func newApp(notifier *notifications.NotificationService) *application.App {
 	return application.New(application.Options{
@@ -89,7 +102,7 @@ func newApp(notifier *notifications.NotificationService) *application.App {
 		Description: "Aikido Endpoint Protection",
 		Services: []application.Service{
 			application.NewService(notifier),
-			application.NewService(&DaemonService{}),
+			application.NewService(daemonSvc),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -117,21 +130,82 @@ func mainWindowOpts() application.WebviewWindowOptions {
 			HiddenOnTaskbar: true,
 		},
 		HideOnEscape: true,
+		Mac: application.MacWindow{
+			CollectionBehavior: application.MacWindowCollectionBehaviorMoveToActiveSpace,
+		},
 	}
 }
 
 // windowManager handles the main window lifecycle: hiding on close instead of
 // quitting the app, and re-creating the window if it was destroyed.
 type windowManager struct {
-	app    *application.App
-	window *application.WebviewWindow
+	app           *application.App
+	window        *application.WebviewWindow
+	installWindow *application.WebviewWindow
+	installMu     sync.Mutex
+}
+
+func installWindowOpts() application.WebviewWindowOptions {
+	return application.WebviewWindowOptions{
+		Name:             "install",
+		Title:            "Aikido Endpoint Protection - System Setup",
+		Width:            920,
+		Height:           680,
+		Hidden:           true,
+		DisableResize:    true,
+		URL:              "/#/install",
+		AlwaysOnTop:      true,
+		BackgroundColour: application.NewRGB(255, 255, 255),
+		Windows: application.WindowsWindow{
+			HiddenOnTaskbar: true,
+		},
+		Mac: application.MacWindow{
+			CollectionBehavior: application.MacWindowCollectionBehaviorMoveToActiveSpace,
+		},
+	}
 }
 
 func newWindowManager(app *application.App) *windowManager {
 	wm := &windowManager{app: app}
 	wm.window = app.Window.NewWithOptions(mainWindowOpts())
+	wm.installWindow = app.Window.NewWithOptions(installWindowOpts())
 	wm.interceptClose(wm.window)
+	wm.interceptClose(wm.installWindow)
+	closeInstallWindow = func() {
+		wm.setCertificateInstallWindowVisible(false)
+	}
+	setInstallWindowOnTop = func(onTop bool) {
+		wm.installMu.Lock()
+		defer wm.installMu.Unlock()
+		w, ok := wm.app.Window.GetByName("install")
+		if !ok || w == nil {
+			return
+		}
+		if win, _ := w.(*application.WebviewWindow); win != nil {
+			win.SetAlwaysOnTop(onTop)
+		}
+	}
 	return wm
+}
+
+func (wm *windowManager) setCertificateInstallWindowVisible(show bool) {
+	wm.installMu.Lock()
+	defer wm.installMu.Unlock()
+	w, ok := wm.app.Window.GetByName("install")
+	if !ok || w == nil {
+		return
+	}
+	win, _ := w.(*application.WebviewWindow)
+	if win == nil {
+		return
+	}
+	if show {
+		win.SetURL("/#/install")
+		win.Show()
+		win.Focus()
+	} else {
+		win.Hide()
+	}
 }
 
 func (wm *windowManager) interceptClose(w *application.WebviewWindow) {
@@ -188,13 +262,23 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 
 	menu := application.NewMenu()
 	statusLines := make([]*application.MenuItem, maxStatusLines)
-	statusLines[0] = menu.Add("Aikido Proxy: checking…")
+	statusLines[0] = menu.Add("Aikido Network Extension: checking…")
 	statusLines[0].SetEnabled(false)
 	for i := 1; i < maxStatusLines; i++ {
 		statusLines[i] = menu.Add("")
 		statusLines[i].SetEnabled(false)
 		statusLines[i].SetHidden(true)
 	}
+	menu.AddSeparator()
+	setupItem := menu.Add("⚠ System Setup Required...")
+	setupItem.SetHidden(true)
+	setupItem.OnClick(func(_ *application.Context) {
+		go func() {
+			if err := daemon.SetupStart(); err != nil {
+				log.Printf("setup start: %v", err)
+			}
+		}()
+	})
 	menu.AddSeparator()
 	menu.Add("Open Dashboard").OnClick(func(_ *application.Context) {
 		app.Event.Emit("focus_event", FocusEventPayload{EventId: ""})
@@ -205,6 +289,25 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 		systray.OnClick(systray.OpenMenu)
 	}
 
+	var setupHidden atomic.Bool
+	setupHidden.Store(true)
+	go func() {
+		time.Sleep(5 * time.Second)
+		for {
+			ok, err := daemon.SetupCheck()
+			if err != nil {
+				log.Printf("setup check: %v", err)
+			}
+			shouldHide := ok || err != nil
+			if shouldHide != setupHidden.Load() {
+				setupHidden.Store(shouldHide)
+				setupItem.SetHidden(shouldHide)
+				menu.Update()
+			}
+			time.Sleep(10 * time.Second)
+		}
+	}()
+
 	statusCh := make(chan appserver.ProxyStatusBody, 8)
 	go func() {
 		for ev := range statusCh {
@@ -212,7 +315,7 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 			if ev.Running {
 				prefix = "🟢 "
 			}
-			lines := wrapText(prefix+"Aikido Proxy: "+ev.StdoutMessage, menuMaxWidth)
+			lines := wrapText(prefix+"Aikido Network Extension: "+ev.StdoutMessage, menuMaxWidth)
 			for i, item := range statusLines {
 				if i < len(lines) {
 					item.SetLabel(lines[i])
@@ -230,14 +333,14 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 
 // --- App server (receives events from daemon) ----------------------------
 
-func startAppServer(app *application.App, statusCh chan<- appserver.ProxyStatusBody, notifier *notifications.NotificationService, notifAuthorized bool) {
+func startAppServer(app *application.App, wm *windowManager, statusCh chan<- appserver.ProxyStatusBody, notifier *notifications.NotificationService) {
 	srv := appserver.New()
 	srv.SetHandlers(
 		func(ev appserver.ProxyStatusBody) { statusCh <- ev },
 		func(ev daemon.BlockEvent) {
 			log.Println("Blocked event:", ev)
 			app.Event.Emit("blocked", ev)
-			if notifAuthorized {
+			if authorized, _ := notifier.CheckNotificationAuthorization(); authorized {
 				notifier.SendNotificationWithActions(notifications.NotificationOptions{
 					ID:         "block-" + ev.ID,
 					Title:      "Aikido Endpoint Protection blocked an event",
@@ -250,7 +353,7 @@ func startAppServer(app *application.App, statusCh chan<- appserver.ProxyStatusB
 		func(ev daemon.TlsTerminationFailedEvent) {
 			log.Println("TLS termination failed event:", ev)
 			app.Event.Emit("tls_termination_failed", ev)
-			if notifAuthorized {
+			if authorized, _ := notifier.CheckNotificationAuthorization(); authorized {
 				body := "SNI: " + ev.SNI
 				if ev.App != "" {
 					body += " (" + ev.App + ")"
@@ -268,6 +371,12 @@ func startAppServer(app *application.App, statusCh chan<- appserver.ProxyStatusB
 			log.Println("Permissions updated")
 			app.Event.Emit("permissions_updated", ev)
 		},
+		func(steps []string) {
+			if len(steps) > 0 {
+				daemonSvc.SetSetupSteps(steps)
+				wm.setCertificateInstallWindowVisible(true)
+			}
+		},
 	)
 	srv.Start()
 }
@@ -278,12 +387,13 @@ func main() {
 	flags := parseFlags()
 	applyFlags(flags)
 
-	notifier, notifAuthorized := setupNotifications()
+	notifier := setupNotifications()
 	app := newApp(notifier)
+
 	wm := newWindowManager(app)
 
 	statusCh := setupSystemTray(app, wm.showDashboard)
-	startAppServer(app, statusCh, notifier, notifAuthorized)
+	startAppServer(app, wm, statusCh, notifier)
 
 	notifier.OnNotificationResponse(func(result notifications.NotificationResult) {
 		if result.Error != nil {

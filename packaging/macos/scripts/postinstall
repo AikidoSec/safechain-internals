@@ -4,31 +4,30 @@ set -e
 
 echo "Aikido Endpoint Protection Installer - Post-installation"
 
-INSTALL_DIR="/Library/Application Support/AikidoSecurity/EndpointProtection"
+EP_APP="/Applications/Aikido Endpoint Protection.app"
+EP_BIN_DIR="$EP_APP/Contents/Resources/bin"
+EP_SCRIPTS_DIR="$EP_APP/Contents/Resources/scripts"
+RUN_DIR="/Library/Application Support/AikidoSecurity/EndpointProtection/run"
 LOGS_DIR="/Library/Logs/AikidoSecurity/EndpointProtection"
-RUN_DIR="$INSTALL_DIR/run"
 LAUNCHDAEMON_PLIST="/Library/LaunchDaemons/com.aikidosecurity.endpointprotection.plist"
 
-# Ensure logs directory exists and has proper permissions
-echo "Setting up logs directory..."
+L4_APP="/Applications/Aikido Network Extension.app"
+
+echo "Setting up directories..."
 mkdir -p "$LOGS_DIR"
 mkdir -p "$RUN_DIR"
 chmod 755 "$LOGS_DIR"
 
-L4_APP="/Applications/AikidoEndpointL4ProxyHost.app"
-
-# Set proper permissions on binaries
 echo "Setting permissions on binaries..."
-chmod 755 "$INSTALL_DIR/bin/endpoint-protection"
+chmod 755 "$EP_BIN_DIR/endpoint-protection"
 
-if [ -d "$INSTALL_DIR/bin/endpoint-protection-ui.app" ]; then
-    chmod -R 755 "$INSTALL_DIR/bin/endpoint-protection-ui.app"
+if [ -d "$EP_APP" ]; then
+    chmod -R 755 "$EP_APP"
 else
-    echo "Warning: UI app bundle not found at $INSTALL_DIR/bin/endpoint-protection-ui.app"
+    echo "Warning: App bundle not found at $EP_APP"
 fi
-chmod 755 "$INSTALL_DIR/bin/safechain-l7-proxy"
+chmod 755 "$EP_BIN_DIR/safechain-l7-proxy"
 
-# Register L4 proxy extension
 if [ -d "$L4_APP" ]; then
     echo "Registering L4 proxy app..."
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$L4_APP"
@@ -37,9 +36,8 @@ else
     echo "Warning: L4 proxy app not found at $L4_APP"
 fi
 
-# Set proper ownership (root:wheel for system daemon)
 echo "Setting ownership..."
-chown -R root:wheel "$INSTALL_DIR"
+chown -R root:wheel "$EP_APP"
 chown -R root:wheel "$LOGS_DIR"
 chown -R root:wheel "$RUN_DIR"
 
@@ -61,32 +59,6 @@ if [ -z "$AIKIDO_TOKEN" ] && [ -f "$CONFIG_FILE" ]; then
     fi
 fi
 
-# 3) No token from file and no existing config — prompt user (fresh install)
-if [ -z "$AIKIDO_TOKEN" ] && [ -z "$EXISTING_TOKEN" ]; then
-    echo "No token found, prompting user..."
-    AIKIDO_TOKEN=$(osascript <<'APPLESCRIPT' 2>/dev/null
-set dashboardURL to "https://app.aikido.dev/endpoint-protection"
-repeat
-    set dialogResult to display dialog "Enter your Token to activate Aikido Endpoint Protection." & return & return & "You can find this token in your Aikido Security dashboard." with title "Aikido Endpoint Protection — Token Setup" default answer "" buttons {"Skip", "Open Dashboard", "OK"} default button "OK" with icon caution
-    if button returned of dialogResult is "Open Dashboard" then
-        do shell script "open " & quoted form of dashboardURL
-    else if button returned of dialogResult is "OK" then
-        return text returned of dialogResult
-    else
-        return ""
-    end if
-end repeat
-APPLESCRIPT
-    ) || true
-    AIKIDO_TOKEN="$(echo "$AIKIDO_TOKEN" | tr -d '[:space:]')"
-
-    if [ -z "$AIKIDO_TOKEN" ]; then
-        echo "No token provided. You can configure it later by writing your token to:"
-        echo "  $CONFIG_FILE"
-        echo "  Format: {\"token\":\"YOUR_TOKEN\"}"
-    fi
-fi
-
 if [ -n "$AIKIDO_TOKEN" ]; then
     echo "Storing Aikido token..."
     echo '{"token":"'"$AIKIDO_TOKEN"'"}' > "$CONFIG_FILE"
@@ -94,15 +66,21 @@ if [ -n "$AIKIDO_TOKEN" ]; then
     chown root:wheel "$CONFIG_FILE"
 fi
 
-# Load and start the LaunchDaemon
 if [ -f "$LAUNCHDAEMON_PLIST" ]; then
     echo "Loading LaunchDaemon..."
-    launchctl bootstrap system "$LAUNCHDAEMON_PLIST" 2>/dev/null || {
-        # Fallback to launchctl load (old way of starting the daemon on older macOS versions)
-        echo "LaunchDaemon bootstrap failed, trying load..."
-        launchctl load "$LAUNCHDAEMON_PLIST" || true
-    }
-    echo "Aikido Endpoint Protection daemon installed and started"
+    if ! launchctl bootstrap system "$LAUNCHDAEMON_PLIST" 2>&1; then
+        echo "Bootstrap failed, trying load..."
+        if ! launchctl load "$LAUNCHDAEMON_PLIST" 2>&1; then
+            echo "Error: Failed to load LaunchDaemon" >&2
+        fi
+    fi
+
+    sleep 2
+    if launchctl list | grep -q "com.aikidosecurity.endpointprotection"; then
+        echo "Aikido Endpoint Protection daemon installed and started"
+    else
+        echo "Warning: Daemon may not have started. Check logs at $LOGS_DIR"
+    fi
 else
     echo "Warning: LaunchDaemon plist not found at $LAUNCHDAEMON_PLIST"
 fi
@@ -110,7 +88,7 @@ fi
 echo "Post-installation completed"
 echo ""
 echo "Aikido Endpoint Protection has been installed successfully!"
-echo "  Binaries: $INSTALL_DIR/bin"
+echo "  App: $EP_APP"
 echo "  Logs: $LOGS_DIR"
 echo ""
 echo "The agent is now running as a system daemon."

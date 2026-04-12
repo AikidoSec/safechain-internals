@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -67,8 +66,7 @@ func (m *UIManager) spawnUI(ctx context.Context, ingressAddr string) error {
 	uiURL := fmt.Sprintf("127.0.0.1:%d", port)
 	m.Client.SetBaseURL(uiURL)
 
-	cfg := platform.GetConfig()
-	binaryPath := filepath.Join(cfg.BinaryDir, platform.SafeChainUIAppName)
+	binaryPath := platform.GetUIAppPath()
 	args := []string{
 		"--daemon_url", daemonURL,
 		"--token", token,
@@ -165,6 +163,20 @@ func (m *UIManager) NotifyTlsTerminationFailed(ev any) {
 // NotifyPermissionsUpdated sends the latest permissions to the UI.
 func (m *UIManager) NotifyPermissionsUpdated(perms any) {
 	m.Client.NotifyPermissionsUpdated(perms)
+}
+
+// StartSetupWizard notifies the tray UI to show the install
+// window when the CA is missing. It never requests a hide: the user closes the
+// window with Done after finishing the wizard.
+func (m *UIManager) StartSetupWizard(steps []string) {
+	if len(steps) == 0 {
+		return
+	}
+
+	log.Printf("Starting setup wizard with steps: %v", steps)
+	if err := m.Client.StartSetupWizard(steps); err != nil {
+		log.Printf("Failed to start setup wizard: %v", err)
+	}
 }
 
 // NotifyProxyStatusIfChanged sends a proxy-status update to the UI only when

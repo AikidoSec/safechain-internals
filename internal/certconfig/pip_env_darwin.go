@@ -5,6 +5,7 @@ package certconfig
 import (
 	"context"
 	"os/exec"
+	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
@@ -18,11 +19,45 @@ import (
 // Each command wraps the result in a unique marker so shell startup noise does
 // not contaminate the discovered Python CA bundle override.
 var pipCertShellLookups = []shellLookup{
-	{"zsh", []string{"-lc", `if [ -n "${PIP_CERT:-}" ]; then printf 'AIKIDO_CERT=PIP_CERT:%s\n' "$PIP_CERT"; elif [ -n "${REQUESTS_CA_BUNDLE:-}" ]; then printf 'AIKIDO_CERT=REQUESTS_CA_BUNDLE:%s\n' "$REQUESTS_CA_BUNDLE"; elif [ -n "${SSL_CERT_FILE:-}" ]; then printf 'AIKIDO_CERT=SSL_CERT_FILE:%s\n' "$SSL_CERT_FILE"; fi`}},
-	{"zsh", []string{"-ic", `if [ -n "${PIP_CERT:-}" ]; then printf 'AIKIDO_CERT=PIP_CERT:%s\n' "$PIP_CERT"; elif [ -n "${REQUESTS_CA_BUNDLE:-}" ]; then printf 'AIKIDO_CERT=REQUESTS_CA_BUNDLE:%s\n' "$REQUESTS_CA_BUNDLE"; elif [ -n "${SSL_CERT_FILE:-}" ]; then printf 'AIKIDO_CERT=SSL_CERT_FILE:%s\n' "$SSL_CERT_FILE"; fi`}},
-	{"bash", []string{"-lc", `if [ -n "${PIP_CERT:-}" ]; then printf 'AIKIDO_CERT=PIP_CERT:%s\n' "$PIP_CERT"; elif [ -n "${REQUESTS_CA_BUNDLE:-}" ]; then printf 'AIKIDO_CERT=REQUESTS_CA_BUNDLE:%s\n' "$REQUESTS_CA_BUNDLE"; elif [ -n "${SSL_CERT_FILE:-}" ]; then printf 'AIKIDO_CERT=SSL_CERT_FILE:%s\n' "$SSL_CERT_FILE"; fi`}},
-	{"bash", []string{"-ic", `if [ -n "${PIP_CERT:-}" ]; then printf 'AIKIDO_CERT=PIP_CERT:%s\n' "$PIP_CERT"; elif [ -n "${REQUESTS_CA_BUNDLE:-}" ]; then printf 'AIKIDO_CERT=REQUESTS_CA_BUNDLE:%s\n' "$REQUESTS_CA_BUNDLE"; elif [ -n "${SSL_CERT_FILE:-}" ]; then printf 'AIKIDO_CERT=SSL_CERT_FILE:%s\n' "$SSL_CERT_FILE"; fi`}},
-	{"fish", []string{"--login", "-c", "if set -q PIP_CERT; printf 'AIKIDO_CERT=PIP_CERT:%s\n' $PIP_CERT; else if set -q REQUESTS_CA_BUNDLE; printf 'AIKIDO_CERT=REQUESTS_CA_BUNDLE:%s\n' $REQUESTS_CA_BUNDLE; else if set -q SSL_CERT_FILE; printf 'AIKIDO_CERT=SSL_CERT_FILE:%s\n' $SSL_CERT_FILE; end; end; end"}},
+	{"zsh", []string{"-lc", buildPOSIXPipCertLookupScript()}},
+	{"zsh", []string{"-ic", buildPOSIXPipCertLookupScript()}},
+	{"bash", []string{"-lc", buildPOSIXPipCertLookupScript()}},
+	{"bash", []string{"-ic", buildPOSIXPipCertLookupScript()}},
+	{"fish", []string{"--login", "-c", buildFishPipCertLookupScript()}},
+}
+
+// buildPOSIXPipCertLookupScript and buildFishPipCertLookupScript return a shell
+// snippet that detects the user's pre-existing Python CA bundle override. We
+// take the first var found rather than concatenating all of them: in practice
+// these vars all point to the same corporate CA bundle, and a single base path
+// is all the combined bundle machinery needs.
+
+func buildPOSIXPipCertLookupScript() string {
+	return strings.Join([]string{
+		`if [ -n "${PIP_CERT:-}" ]; then`,
+		`  printf 'AIKIDO_CERT=PIP_CERT:%s\n' "$PIP_CERT"`,
+		`elif [ -n "${REQUESTS_CA_BUNDLE:-}" ]; then`,
+		`  printf 'AIKIDO_CERT=REQUESTS_CA_BUNDLE:%s\n' "$REQUESTS_CA_BUNDLE"`,
+		`elif [ -n "${SSL_CERT_FILE:-}" ]; then`,
+		`  printf 'AIKIDO_CERT=SSL_CERT_FILE:%s\n' "$SSL_CERT_FILE"`,
+		`elif [ -n "${POETRY_CERTIFICATES_PYPI_CERT:-}" ]; then`,
+		`  printf 'AIKIDO_CERT=POETRY_CERTIFICATES_PYPI_CERT:%s\n' "$POETRY_CERTIFICATES_PYPI_CERT"`,
+		`fi`,
+	}, "\n")
+}
+
+func buildFishPipCertLookupScript() string {
+	return strings.Join([]string{
+		`if set -q PIP_CERT`,
+		`  printf 'AIKIDO_CERT=PIP_CERT:%s\n' $PIP_CERT`,
+		`else if set -q REQUESTS_CA_BUNDLE`,
+		`  printf 'AIKIDO_CERT=REQUESTS_CA_BUNDLE:%s\n' $REQUESTS_CA_BUNDLE`,
+		`else if set -q SSL_CERT_FILE`,
+		`  printf 'AIKIDO_CERT=SSL_CERT_FILE:%s\n' $SSL_CERT_FILE`,
+		`else if set -q POETRY_CERTIFICATES_PYPI_CERT`,
+		`  printf 'AIKIDO_CERT=POETRY_CERTIFICATES_PYPI_CERT:%s\n' $POETRY_CERTIFICATES_PYPI_CERT`,
+		`end`,
+	}, "\n")
 }
 
 func runPipCertLookup(ctx context.Context) (pipCertSetting, error) {

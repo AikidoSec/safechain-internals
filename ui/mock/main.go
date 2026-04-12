@@ -34,6 +34,7 @@ type BlockEvent struct {
 	Artifact    Artifact `json:"artifact"`
 	BlockReason string   `json:"block_reason"`
 	Status      string   `json:"status"`
+	Count       int      `json:"count"`
 }
 
 type TlsEvent struct {
@@ -53,29 +54,72 @@ func seedData() ([]BlockEvent, []TlsEvent) {
 		{
 			ID:          "block-1",
 			TsMs:        now - 60_000,
-			Artifact:    Artifact{Product: "npm", Identifier: "evil-package", Version: "1.0.0", DisplayName: "evil-package"},
+			Artifact:    Artifact{Product: "chrome", Identifier: "mgngmngjioknlgjjaiiamcdbahombpfb", Version: "1.0.0", DisplayName: ""},
 			BlockReason: "malware",
 			Status:      "blocked",
+			Count:       13,
 		},
 		{
 			ID:          "block-2",
 			TsMs:        now - 120_000,
-			Artifact:    Artifact{Product: "pip", Identifier: "shady-lib", Version: "0.3.1", DisplayName: "shady-lib"},
+			Artifact:    Artifact{Product: "pypi", Identifier: "shady-lib", Version: "0.3.1", DisplayName: "shady-lib"},
 			BlockReason: "rejected",
 			Status:      "blocked",
+			Count:       1,
 		},
 		{
 			ID:          "block-3",
 			TsMs:        now - 300_000,
-			Artifact:    Artifact{Product: "npm", Identifier: "typosquat-pkg", Version: "2.0.0", DisplayName: "typosquat-pkg"},
+			Artifact:    Artifact{Product: "vscode", Identifier: "typosquat-pkg", Version: "2.0.0", DisplayName: "typosquat-pkg"},
 			BlockReason: "block_all",
 			Status:      "blocked",
+			Count:       1,
 		},
 		{
 			ID:          "block-4",
 			TsMs:        now - 45_000,
-			Artifact:    Artifact{Product: "npm", Identifier: "left-pad", Version: "1.3.0", DisplayName: "left-pad"},
+			Artifact:    Artifact{Product: "maven", Identifier: "left-pad", Version: "1.3.0", DisplayName: "left-pad"},
 			BlockReason: "request_install",
+			Status:      "blocked",
+			Count:       1,
+		},
+		{
+			ID:          "block-5",
+			TsMs:        now - 90_000,
+			Artifact:    Artifact{Product: "npm", Identifier: "brand-new-lib", Version: "0.0.2", DisplayName: "brand-new-lib"},
+			BlockReason: "new_package",
+			Status:      "blocked",
+			Count:       1,
+		},
+		{
+			ID:          "block-6",
+			TsMs:        now - 15_000,
+			Artifact:    Artifact{Product: "nuget", Identifier: "Contoso.Analytics", Version: "3.1.0", DisplayName: "Contoso.Analytics"},
+			BlockReason: "request_install",
+			Status:      "request_pending",
+			Count:       1,
+		},
+		{
+			ID:          "block-7",
+			TsMs:        now - 360_000,
+			Artifact:    Artifact{Product: "chrome", Identifier: "pgojnojmmhpofjgdmaebadhbocahppod", Version: "", DisplayName: ""},
+			BlockReason: "request_install",
+			Status:      "request_approved",
+			Count:       32,
+		},
+		{
+			ID:          "block-8",
+			TsMs:        now - 400_000,
+			Artifact:    Artifact{Product: "open_vsx", Identifier: "ms-python.python", Version: "2024.0.0", DisplayName: "Python"},
+			BlockReason: "request_install",
+			Status:      "request_rejected",
+			Count:       1,
+		},
+		{
+			ID:          "block-5",
+			TsMs:        now - 90_000,
+			Artifact:    Artifact{Product: "npm", Identifier: "brand-new-lib", Version: "0.0.2", DisplayName: "brand-new-lib"},
+			BlockReason: "new_package",
 			Status:      "blocked",
 		},
 	}
@@ -143,10 +187,14 @@ func seedPermissions() PermissionsResponse {
 // ── server ───────────────────────────────────────────────────────────
 
 type server struct {
-	mu          sync.RWMutex
-	blocks      []BlockEvent
-	tlsEvents   []TlsEvent
-	permissions PermissionsResponse
+	mu                   sync.RWMutex
+	blocks               []BlockEvent
+	tlsEvents            []TlsEvent
+	permissions          PermissionsResponse
+	extensionInstalled   bool
+	extensionActivated   bool
+	vpnAllowed           bool
+	token                string
 }
 
 func (s *server) writeJSON(w http.ResponseWriter, v any) {
@@ -219,6 +267,123 @@ func (s *server) handleRequestAccess(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
+func (s *server) handleCertificateStatus(w http.ResponseWriter, r *http.Request) {
+	// Mock: pretend CA is already installed so the install window stays hidden during UI dev.
+	s.writeJSON(w, map[string]bool{"needs_install": false, "installed": true})
+}
+
+func (s *server) handleCertificateInstall(w http.ResponseWriter, r *http.Request) {
+	log.Println("mock: certificate install (simulated 2s delay)")
+	time.Sleep(2 * time.Second)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *server) handleNetworkExtensionInstall(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.extensionInstalled = true
+	s.mu.Unlock()
+	log.Println("mock: network extension installed")
+	s.writeJSON(w, map[string]string{"status": "installed"})
+}
+
+func (s *server) handleNetworkExtensionAllowVpn(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.vpnAllowed = true
+	s.mu.Unlock()
+	log.Println("mock: vpn allowed")
+	s.writeJSON(w, map[string]string{"status": "allowed"})
+}
+
+func (s *server) handleNetworkExtensionOpenSettings(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.extensionActivated = true
+	s.mu.Unlock()
+	log.Println("mock: open network extension settings (simulated enable)")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *server) handleIsExtensionInstalled(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	installed := s.extensionInstalled
+	s.mu.RUnlock()
+	s.writeJSON(w, map[string]bool{"result": installed})
+}
+
+func (s *server) handleIsExtensionActivated(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	activated := s.extensionActivated
+	s.mu.RUnlock()
+	s.writeJSON(w, map[string]bool{"result": activated})
+}
+
+func (s *server) handleIsVpnAllowed(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	allowed := s.vpnAllowed
+	s.mu.RUnlock()
+	s.writeJSON(w, map[string]bool{"result": allowed})
+}
+
+func (s *server) handleProxyStart(w http.ResponseWriter, r *http.Request) {
+	log.Println("mock: proxy started")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *server) handleSetToken(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	s.token = body.Token
+	s.mu.Unlock()
+	log.Printf("mock: token set to %q", body.Token)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *server) computeMockSteps() []string {
+	var steps []string
+	if s.token == "" {
+		steps = append(steps, "token")
+	}
+	if !s.extensionInstalled {
+		steps = append(steps, "install-extension")
+		steps = append(steps, "enable-extension")
+	} else if !s.extensionActivated {
+		steps = append(steps, "enable-extension")
+	}
+	if !s.vpnAllowed {
+		steps = append(steps, "allow-vpn")
+	}
+	if len(steps) > 0 {
+		steps = append(steps, "start-proxy", "install-ca")
+	}
+	return steps
+}
+
+func (s *server) handleSetupCheck(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	steps := s.computeMockSteps()
+	if len(steps) == 0 {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusConflict)
+	json.NewEncoder(w).Encode(map[string][]string{"steps": steps})
+}
+
+func (s *server) handleSetupStart(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	steps := s.computeMockSteps()
+	log.Printf("mock: setup start → steps=%v", steps)
+	s.writeJSON(w, map[string][]string{"steps": steps})
+}
+
 func main() {
 	blocks, tlsEvents := seedData()
 	s := &server{blocks: blocks, tlsEvents: tlsEvents, permissions: seedPermissions()}
@@ -231,6 +396,21 @@ func main() {
 	mux.HandleFunc("GET /v1/tls-events/{id}", s.handleGetTlsEvent)
 	mux.HandleFunc("GET /v1/permissions", s.handlePermissions)
 	mux.HandleFunc("POST /v1/events/{id}/request-access", s.handleRequestAccess)
+	mux.HandleFunc("GET /v1/certificate/status", s.handleCertificateStatus)
+	mux.HandleFunc("POST /v1/certificate/install", s.handleCertificateInstall)
+
+	mux.HandleFunc("POST /v1/network-extension/install", s.handleNetworkExtensionInstall)
+	mux.HandleFunc("POST /v1/network-extension/allow-vpn", s.handleNetworkExtensionAllowVpn)
+	mux.HandleFunc("POST /v1/network-extension/open-settings", s.handleNetworkExtensionOpenSettings)
+	mux.HandleFunc("GET /v1/network-extension/is-installed", s.handleIsExtensionInstalled)
+	mux.HandleFunc("GET /v1/network-extension/is-activated", s.handleIsExtensionActivated)
+	mux.HandleFunc("GET /v1/network-extension/is-vpn-allowed", s.handleIsVpnAllowed)
+
+	mux.HandleFunc("POST /v1/proxy/start", s.handleProxyStart)
+	mux.HandleFunc("POST /v1/token", s.handleSetToken)
+
+	mux.HandleFunc("GET /v1/setup/check", s.handleSetupCheck)
+	mux.HandleFunc("POST /v1/setup/start", s.handleSetupStart)
 
 	addr := "127.0.0.1:7878"
 	fmt.Printf("Mock daemon listening on %s\n", addr)

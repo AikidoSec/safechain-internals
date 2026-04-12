@@ -22,9 +22,27 @@ type darwinPipTrustConfigurator struct {
 }
 
 func newPipTrustConfigurator(bundlePath string) pipTrustConfigurator {
-	comment := "# Allow pip to trust the SafeChain MITM CA while preserving user-provided roots."
-	posix := comment + "\n" + fmt.Sprintf("export PIP_CERT=%q", bundlePath)
-	fish := comment + "\n" + fmt.Sprintf("set -gx PIP_CERT %q", bundlePath)
+	comment := "# Allow Python package managers to trust the SafeChain MITM CA while preserving user-provided roots."
+	posix := comment + "\n" + fmt.Sprintf(
+		"export %s=%q\nexport %s=%q\nexport %s=%q\nexport %s=true",
+		pipCertEnvVar,
+		bundlePath,
+		requestsCABundleEnvVar,
+		bundlePath,
+		poetryPyPICertEnvVar,
+		bundlePath,
+		uvNativeTLSEnvVar,
+	)
+	fish := comment + "\n" + fmt.Sprintf(
+		"set -gx %s %q\nset -gx %s %q\nset -gx %s %q\nset -gx %s true",
+		pipCertEnvVar,
+		bundlePath,
+		requestsCABundleEnvVar,
+		bundlePath,
+		poetryPyPICertEnvVar,
+		bundlePath,
+		uvNativeTLSEnvVar,
+	)
 
 	homeDir := platform.GetConfig().HomeDir
 

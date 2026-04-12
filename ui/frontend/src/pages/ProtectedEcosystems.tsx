@@ -27,12 +27,6 @@ export function ProtectedEcosystems() {
     <div className="protected-ecosystems">
       <div className="protected-ecosystems-table-wrap">
         <table className="protected-ecosystems-table">
-          <thead>
-            <tr>
-              <th className="protected-ecosystems-table__icon-col" aria-hidden />
-              <th>Ecosystem</th>
-            </tr>
-          </thead>
           <tbody>
             {ECOSYSTEMS.map((row) => (
               <tr key={row.id}>

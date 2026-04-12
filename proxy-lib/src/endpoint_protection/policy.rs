@@ -1,12 +1,65 @@
+use std::{collections::HashSet, fmt, hash::Hash, sync::Arc};
+
 use arc_swap::ArcSwapOption;
-use std::{fmt, hash::Hash, sync::Arc};
+use rama::{graceful::ShutdownGuard, telemetry::tracing};
 use tokio::sync::broadcast;
 
-use rama::{graceful::ShutdownGuard, telemetry::tracing};
-
 use super::{EcosystemConfig, EndpointConfig, RemoteEndpointConfig};
-use crate::utils::time::{SystemDuration, SystemTimestampMilliseconds};
-use crate::{endpoint_protection::EcosystemKey, package::name_formatter::PackageName};
+use crate::{
+    endpoint_protection::EcosystemKey,
+    package::name_formatter::PackageName,
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
+};
+
+/// `*` matches any substring (including empty). Only `*` is special; this is glob-style, not full regex.
+fn glob_matches(pattern: &str, text: &str) -> bool {
+    if !pattern.contains('*') {
+        return pattern == text;
+    }
+
+    let parts: Vec<&str> = pattern.split('*').collect();
+    let mut rest = text;
+
+    if let Some(first) = parts.first()
+        && !first.is_empty()
+    {
+        if !rest.starts_with(first) {
+            return false;
+        }
+        rest = &rest[first.len()..];
+    }
+
+    for segment in &parts[1..parts.len() - 1] {
+        if segment.is_empty() {
+            continue;
+        }
+        match rest.find(segment) {
+            Some(idx) => rest = &rest[idx + segment.len()..],
+            None => return false,
+        }
+    }
+
+    let last = parts[parts.len() - 1];
+    if last.is_empty() {
+        true
+    } else {
+        rest.ends_with(last)
+    }
+}
+
+fn exception_list_matches<K>(entries: &HashSet<K>, package_name: &K) -> bool
+where
+    K: Eq + Hash + fmt::Display,
+{
+    // TODO: this logic is _very_ slow... glob_matches was introduced on main...
+    // even there it is a slow solution... we need to be smarter here...
+    entries.iter().any(|entry| {
+        glob_matches(
+            entry.to_string().as_str(),
+            package_name.to_string().as_str(),
+        )
+    })
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackagePolicyDecision {
@@ -152,7 +205,8 @@ impl<K> PolicyEvaluator<K> {
     where
         K: Eq + Hash + fmt::Display,
     {
-        if ecosystem_cfg.rejected_packages.contains(package_name) {
+        // Explicitly rejected packages (exact match or `*` glob)
+        if exception_list_matches(&ecosystem_cfg.rejected_packages, package_name) {
             tracing::info!(
                 package = %package_name,
                 "package is explicitly blocked by endpoint protection config"
@@ -160,7 +214,8 @@ impl<K> PolicyEvaluator<K> {
             return PackagePolicyDecision::Rejected;
         }
 
-        if ecosystem_cfg.allowed_packages.contains(package_name) {
+        // Explicitly allowed packages (exact match or `*` glob)
+        if exception_list_matches(&ecosystem_cfg.allowed_packages, package_name) {
             tracing::info!(
                 package = %package_name,
                 "package is explicitly allowed by endpoint protection config"

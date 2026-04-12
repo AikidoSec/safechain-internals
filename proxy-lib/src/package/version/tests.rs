@@ -213,6 +213,22 @@ mod pragmatic_semver {
     }
 
     #[test]
+    fn test_is_stable() {
+        for v in ["1.0.0", "2.31", "3", "1.0.0.post1"] {
+            assert!(
+                PragmaticSemver::parse(v).unwrap().is_stable(),
+                "{v} should be stable"
+            );
+        }
+        for v in ["1.0.0a1", "1.0.0b2", "1.0.0rc1", "1.0.0.dev0"] {
+            assert!(
+                !PragmaticSemver::parse(v).unwrap().is_stable(),
+                "{v} should not be stable"
+            );
+        }
+    }
+
+    #[test]
     fn test_le_and_ge() {
         for (a, b) in [
             ("1.2", "1.2.0"),

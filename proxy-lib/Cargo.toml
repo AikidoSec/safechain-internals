@@ -30,6 +30,7 @@ windows-native-keyring-store = { workspace = true }
 arc-swap = { workspace = true }
 humantime = { workspace = true }
 keyring-core = { workspace = true }
+lol_html = { workspace = true }
 lz4_flex = { workspace = true }
 moka = { workspace = true }
 parking_lot = { workspace = true }
@@ -38,9 +39,10 @@ radix_trie = { workspace = true }
 rand = { workspace = true }
 rustls-platform-verifier = { workspace = true }
 secrecy = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["std"] }
 serde_json = { workspace = true }
 serde_test = { workspace = true }
+sync_wrapper = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [dependencies.rama]
