@@ -6,34 +6,35 @@ use std::{
     time::Duration,
 };
 
-use rama_core::{error::{BoxError, ErrorExt as _}, telemetry::tracing::{debug, info, warn}};
+use rama_core::{
+    error::{BoxError, ErrorExt as _},
+    telemetry::tracing::{debug, info, warn},
+};
 use windows_sys::Win32::{
     Devices::DeviceAndDriverInstallation::{
         CM_DISABLE_ABSOLUTE, CM_DISABLE_PERSIST, CM_DISABLE_UI_NOT_OK, CM_Disable_DevNode,
-        CM_Enable_DevNode, CR_ACCESS_DENIED, CR_ALREADY_SUCH_DEVINST, CR_APM_VETOED,
-        CR_BUFFER_SMALL, CR_CALL_NOT_IMPLEMENTED, CR_CANT_SHARE_IRQ, CR_CREATE_BLOCKED,
-        CR_DEFAULT, CR_DEVICE_INTERFACE_ACTIVE, CR_DEVICE_NOT_THERE, CR_DEVINST_HAS_REQS,
-        CR_DEVLOADER_NOT_READY, CR_FAILURE, CR_FREE_RESOURCES, CR_INVALID_API,
+        CM_Enable_DevNode, CM_Uninstall_DevNode, CR_ACCESS_DENIED, CR_ALREADY_SUCH_DEVINST,
+        CR_APM_VETOED, CR_BUFFER_SMALL, CR_CALL_NOT_IMPLEMENTED, CR_CANT_SHARE_IRQ,
+        CR_CREATE_BLOCKED, CR_DEFAULT, CR_DEVICE_INTERFACE_ACTIVE, CR_DEVICE_NOT_THERE,
+        CR_DEVINST_HAS_REQS, CR_DEVLOADER_NOT_READY, CR_FAILURE, CR_FREE_RESOURCES, CR_INVALID_API,
         CR_INVALID_ARBITRATOR, CR_INVALID_CONFLICT_LIST, CR_INVALID_DATA, CR_INVALID_DEVICE_ID,
         CR_INVALID_DEVINST, CR_INVALID_FLAG, CR_INVALID_INDEX, CR_INVALID_LOAD_TYPE,
         CR_INVALID_LOG_CONF, CR_INVALID_MACHINENAME, CR_INVALID_NODELIST, CR_INVALID_POINTER,
         CR_INVALID_PRIORITY, CR_INVALID_PROPERTY, CR_INVALID_RANGE, CR_INVALID_RANGE_LIST,
-        CR_INVALID_REFERENCE_STRING, CR_INVALID_RESOURCEID, CR_INVALID_RES_DES,
-        CR_INVALID_STRUCTURE_SIZE, CR_MACHINE_UNAVAILABLE, CR_NEED_RESTART, CR_NOT_DISABLEABLE,
-        CR_NOT_SYSTEM_VM, CR_NO_ARBITRATOR, CR_NO_CM_SERVICES, CR_NO_DEPENDENT,
-        CR_NO_MORE_HW_PROFILES, CR_NO_MORE_LOG_CONF, CR_NO_MORE_RES_DES,
-        CR_NO_SUCH_DEVICE_INTERFACE, CR_NO_SUCH_DEVINST, CR_NO_SUCH_LOGICAL_DEV,
-        CR_NO_SUCH_REGISTRY_KEY, CR_NO_SUCH_VALUE, CR_OUT_OF_MEMORY, CR_QUERY_VETOED,
-        CR_REGISTRY_ERROR, CR_REMOTE_COMM_FAILURE, CR_REMOVE_VETOED, CR_SAME_RESOURCES,
-        CR_SUCCESS, CR_WRONG_TYPE, CM_Uninstall_DevNode,
-        DIGCF_ALLCLASSES, HDEVINFO, SetupDiDestroyDeviceInfoList,
+        CR_INVALID_REFERENCE_STRING, CR_INVALID_RES_DES, CR_INVALID_RESOURCEID,
+        CR_INVALID_STRUCTURE_SIZE, CR_MACHINE_UNAVAILABLE, CR_NEED_RESTART, CR_NO_ARBITRATOR,
+        CR_NO_CM_SERVICES, CR_NO_DEPENDENT, CR_NO_MORE_HW_PROFILES, CR_NO_MORE_LOG_CONF,
+        CR_NO_MORE_RES_DES, CR_NO_SUCH_DEVICE_INTERFACE, CR_NO_SUCH_DEVINST,
+        CR_NO_SUCH_LOGICAL_DEV, CR_NO_SUCH_REGISTRY_KEY, CR_NO_SUCH_VALUE, CR_NOT_DISABLEABLE,
+        CR_NOT_SYSTEM_VM, CR_OUT_OF_MEMORY, CR_QUERY_VETOED, CR_REGISTRY_ERROR,
+        CR_REMOTE_COMM_FAILURE, CR_REMOVE_VETOED, CR_SAME_RESOURCES, CR_SUCCESS, CR_WRONG_TYPE,
+        DIGCF_ALLCLASSES, HDEVINFO, SP_DEVINFO_DATA, SPDRP_SERVICE, SetupDiDestroyDeviceInfoList,
         SetupDiEnumDeviceInfo, SetupDiGetClassDevsW, SetupDiGetDeviceInstanceIdW,
-        SetupDiGetDeviceRegistryPropertyW, SP_DEVINFO_DATA, SPDRP_SERVICE,
+        SetupDiGetDeviceRegistryPropertyW,
     },
     Foundation::{
-        CloseHandle, ERROR_INSUFFICIENT_BUFFER,
-        ERROR_INVALID_DATA, ERROR_NO_MORE_ITEMS, GetLastError, HANDLE,
-        INVALID_HANDLE_VALUE,
+        CloseHandle, ERROR_INSUFFICIENT_BUFFER, ERROR_INVALID_DATA, ERROR_NO_MORE_ITEMS,
+        GetLastError, HANDLE, INVALID_HANDLE_VALUE,
     },
     Storage::FileSystem::{
         CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_GENERIC_READ, FILE_GENERIC_WRITE, OPEN_EXISTING,
@@ -42,8 +43,7 @@ use windows_sys::Win32::{
 };
 
 pub use safechain_proxy_lib_nostd::windows::driver_protocol::{
-    IOCTL_CLEAR_IPV6_PROXY, IOCTL_SET_IPV4_PROXY,
-    IOCTL_SET_IPV6_PROXY, Ipv4ProxyConfigPayload,
+    IOCTL_CLEAR_IPV6_PROXY, IOCTL_SET_IPV4_PROXY, IOCTL_SET_IPV6_PROXY, Ipv4ProxyConfigPayload,
     Ipv6ProxyConfigPayload,
 };
 
@@ -89,12 +89,10 @@ pub fn enable_device(service_name: &str) -> Result<(), BoxError> {
             CM_Enable_DevNode(device.devinst, 0)
         };
         if cr != CR_SUCCESS {
-            return Err(
-                BoxError::from("failed to enable device")
-                    .context_str_field("name", service_name)
-                    .context_str_field("instance_id", &device.instance_id)
-                    .context_field("cfgmgr32", cr),
-            );
+            return Err(BoxError::from("failed to enable device")
+                .context_str_field("name", service_name)
+                .context_str_field("instance_id", &device.instance_id)
+                .context_field("cfgmgr32", cr));
         }
 
         info!(service_name, instance_id = %device.instance_id, "device enabled successfully");
@@ -107,7 +105,10 @@ pub fn disable_device(service_name: &str, force_remove_on_veto: bool) -> Result<
     debug!(service_name, "disabling device via PnP");
     let devices = find_devices_for_service(service_name)?;
     if devices.is_empty() {
-        info!(service_name, "no matching PnP device found; treating disable as already complete");
+        info!(
+            service_name,
+            "no matching PnP device found; treating disable as already complete"
+        );
         return Ok(());
     }
 
@@ -144,13 +145,11 @@ pub fn disable_device(service_name: &str, force_remove_on_veto: bool) -> Result<
         }
 
         if cr != CR_SUCCESS {
-            return Err(
-                BoxError::from("failed to disable device")
-                    .context_str_field("name", service_name)
-                    .context_str_field("instance_id", &device.instance_id)
-                    .context_field("cfgmgr32", cr)
-                    .context_str_field("cfgmgr32_name", configret_name(cr)),
-            );
+            return Err(BoxError::from("failed to disable device")
+                .context_str_field("name", service_name)
+                .context_str_field("instance_id", &device.instance_id)
+                .context_field("cfgmgr32", cr)
+                .context_str_field("cfgmgr32_name", configret_name(cr)));
         }
 
         info!(service_name, instance_id = %device.instance_id, "device disabled successfully");
@@ -274,13 +273,16 @@ impl DeviceInfoSet {
     fn all_classes() -> Result<Self, BoxError> {
         let handle = unsafe {
             // SAFETY: null pointers enumerate all local device classes.
-            SetupDiGetClassDevsW(ptr::null(), ptr::null(), std::ptr::null_mut(), DIGCF_ALLCLASSES)
+            SetupDiGetClassDevsW(
+                ptr::null(),
+                ptr::null(),
+                std::ptr::null_mut(),
+                DIGCF_ALLCLASSES,
+            )
         };
         if handle == INVALID_HANDLE_VALUE as isize {
-            return Err(
-                BoxError::from("failed to enumerate device info set")
-                    .context_field("win32", unsafe { GetLastError() }),
-            );
+            return Err(BoxError::from("failed to enumerate device info set")
+                .context_field("win32", unsafe { GetLastError() }));
         }
         Ok(Self(handle))
     }
@@ -323,14 +325,13 @@ fn find_devices_for_service(service_name: &str) -> Result<Vec<MatchedDevice>, Bo
                 break;
             }
 
-            return Err(
-                BoxError::from("failed to enumerate devices")
-                    .context_str_field("name", service_name)
-                    .context_field("win32", code),
-            );
+            return Err(BoxError::from("failed to enumerate devices")
+                .context_str_field("name", service_name)
+                .context_field("win32", code));
         }
 
-        let Some(device_service_name) = query_device_service_name(device_info_set.0, &device_info)? else {
+        let Some(device_service_name) = query_device_service_name(device_info_set.0, &device_info)?
+        else {
             index += 1;
             continue;
         };
@@ -386,11 +387,9 @@ fn query_device_registry_string_property(
         return Ok(None);
     }
     if code != ERROR_INSUFFICIENT_BUFFER || required_size == 0 {
-        return Err(
-            BoxError::from("failed to query device registry property")
-                .context_field("property", property)
-                .context_field("win32", code),
-        );
+        return Err(BoxError::from("failed to query device registry property")
+            .context_field("property", property)
+            .context_field("win32", code));
     }
 
     let mut buffer = vec![0_u16; (required_size as usize).div_ceil(2)];
@@ -407,11 +406,9 @@ fn query_device_registry_string_property(
         )
     };
     if ok == 0 {
-        return Err(
-            BoxError::from("failed to read device registry property")
-                .context_field("property", property)
-                .context_field("win32", unsafe { GetLastError() }),
-        );
+        return Err(BoxError::from("failed to read device registry property")
+            .context_field("property", property)
+            .context_field("win32", unsafe { GetLastError() }));
     }
 
     Ok(Some(from_wide_with_nul(&buffer)))
@@ -424,7 +421,13 @@ fn query_device_instance_id(
     let mut required_size = 0;
     let ok = unsafe {
         // SAFETY: probing for the required size with a null buffer is supported by SetupAPI.
-        SetupDiGetDeviceInstanceIdW(device_info_set, device_info, null_mut(), 0, &mut required_size)
+        SetupDiGetDeviceInstanceIdW(
+            device_info_set,
+            device_info,
+            null_mut(),
+            0,
+            &mut required_size,
+        )
     };
     if ok != 0 {
         return Ok(String::new());
@@ -433,8 +436,7 @@ fn query_device_instance_id(
     let code = unsafe { GetLastError() };
     if code != ERROR_INSUFFICIENT_BUFFER || required_size == 0 {
         return Err(
-            BoxError::from("failed to query device instance id size")
-                .context_field("win32", code),
+            BoxError::from("failed to query device instance id size").context_field("win32", code)
         );
     }
 
@@ -450,10 +452,8 @@ fn query_device_instance_id(
         )
     };
     if ok == 0 {
-        return Err(
-            BoxError::from("failed to read device instance id")
-                .context_field("win32", unsafe { GetLastError() }),
-        );
+        return Err(BoxError::from("failed to read device instance id")
+            .context_field("win32", unsafe { GetLastError() }));
     }
 
     Ok(from_wide_with_nul(&buffer))
@@ -485,11 +485,9 @@ impl DeviceHandle {
             )
         };
         if handle == INVALID_HANDLE_VALUE {
-            return Err(
-                BoxError::from("failed to open device")
+            return Err(BoxError::from("failed to open device")
                 .context_str_field("device_path", device_path)
-                .context_field("win32", unsafe { GetLastError() })
-            );
+                .context_field("win32", unsafe { GetLastError() }));
         }
 
         info!(device_path, "opened driver device handle");
@@ -510,8 +508,7 @@ impl DeviceHandle {
                     if attempt > 1 {
                         info!(
                             device_path,
-                            attempt,
-                            "opened driver device handle after retry"
+                            attempt, "opened driver device handle after retry"
                         );
                     }
                     return Ok(handle);
@@ -562,11 +559,9 @@ impl DeviceHandle {
             )
         };
         if ok == 0 {
-            return Err(
-                BoxError::from("DeviceIoControl failed for ioctl")
+            return Err(BoxError::from("DeviceIoControl failed for ioctl")
                 .context_hex_field("ioctl", ioctl)
-                .context_field("win32", unsafe { GetLastError() })
-            );
+                .context_field("win32", unsafe { GetLastError() }));
         }
 
         debug!(ioctl = format_args!("{ioctl:#x}"), "driver ioctl completed");

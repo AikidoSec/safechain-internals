@@ -102,8 +102,8 @@ run-l4-proxy $RUST_LOG="debug" *ARGS:
     cargo run \
         --bin safechain-l4-proxy \
         -- \
-        --bind '127.0.0.1:0' \
-        --bind '[::1]:0' \
+        --bind-ipv4 '127.0.0.1:0' \
+        --bind-ipv6 '[::1]:0' \
         --secrets .aikido/safechain-l4-proxy \
         --output .aikido/safechain-l4-proxy.log \
         {{ARGS}}
@@ -270,12 +270,8 @@ windows-driver-package-stage profile="debug" *ARGS:
 windows-driver-package-install package_dir="dist/windows-driver-package/debug":
     ./packaging/windows/install-driver-package.ps1 -PackageDir {{package_dir}}
 
-windows-driver-package-complete IPV4_PROXY IPV6_PROXY *ARGS:
-    just windows-driver-enable-dual-stack {{IPV4_PROXY}} {{IPV6_PROXY}} {{ARGS}}
-    just windows-driver-package-verify
-
-windows-driver-package-install-fresh-debug IPV4_PROXY IPV6_PROXY *ARGS:
-    just windows-driver-package-install-fresh-debug-step1 {{IPV4_PROXY}} {{IPV6_PROXY}} {{ARGS}}
+windows-driver-package-install-fresh-debug *ARGS:
+    just windows-driver-package-install-fresh-debug-step1 {{ARGS}}
 
 windows-driver-package-install-fresh-debug-step1:
     just rust-quick-qa
@@ -286,12 +282,8 @@ windows-driver-package-install-fresh-debug-step1:
     just windows-driver-package-stage
     just windows-driver-package-install
     @Write-Host ""
-    @Write-Host "Reboot Windows, then run this to finish the driver update:" -ForegroundColor Yellow
-    @Write-Host "  ensure to start the L4 proxy and copy the ipv4/ipv6 proxy addrs in:" -ForegroundColor Yellow
-    @Write-Host "  just windows-driver-package-install-fresh-debug-step2 <ipv4 addr> [ipv6 addr]" -ForegroundColor Yellow
-
-windows-driver-package-install-fresh-debug-step2 IPV4_PROXY IPV6_PROXY *ARGS:
-    just windows-driver-package-complete {{IPV4_PROXY}} {{IPV6_PROXY}} {{ARGS}}
+    @Write-Host "Reboot Windows to activate the new driver package." -ForegroundColor Yellow
+    @Write-Host "After reboot, start safechain-l4-proxy; it will automatically synchronize its IPv4/IPv6 listener addresses into the Windows driver runtime config." -ForegroundColor Yellow
 
 windows-driver-package-verify *ARGS:
     ./packaging/windows/verify-driver-install.ps1 {{ARGS}}

@@ -1,8 +1,7 @@
 use clap::Args;
 use rama_core::{error::BoxError, telemetry::tracing::info};
 
-use crate::common::disable_device;
-use crate::wfp::remove_wfp_objects;
+use safechain_l4_proxy_windows_driver_object::{common::disable_device, wfp::remove_wfp_objects};
 
 #[derive(Debug, Args)]
 /// Disable the SafeChain Windows driver device.

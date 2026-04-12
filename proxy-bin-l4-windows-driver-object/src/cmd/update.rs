@@ -1,12 +1,10 @@
 use clap::Args;
 use rama_core::{error::BoxError, telemetry::tracing::info};
-use std::net::{SocketAddrV4, SocketAddrV6};
-
-use crate::common::{
-    DeviceHandle, IOCTL_CLEAR_IPV6_PROXY, IOCTL_SET_IPV4_PROXY,
-    IOCTL_SET_IPV6_PROXY, Ipv4ProxyConfigPayload,
-    Ipv6ProxyConfigPayload,
+use safechain_l4_proxy_windows_driver_object::common::{
+    DeviceHandle, IOCTL_CLEAR_IPV6_PROXY, IOCTL_SET_IPV4_PROXY, IOCTL_SET_IPV6_PROXY,
+    Ipv4ProxyConfigPayload, Ipv6ProxyConfigPayload,
 };
+use std::net::{SocketAddrV4, SocketAddrV6};
 
 #[derive(Debug, Args)]
 /// Update the running SafeChain Windows driver config.
@@ -66,10 +64,7 @@ pub fn run(args: UpdateArgs) -> Result<(), BoxError> {
         let Some(ipv4_proxy_pid) = args.ipv4_proxy_pid else {
             return Err("`--ipv4-proxy-pid` is required when `--ipv4-proxy` is provided".into());
         };
-        let payload = Ipv4ProxyConfigPayload::new(
-            ipv4_proxy,
-            ipv4_proxy_pid,
-        )
+        let payload = Ipv4ProxyConfigPayload::new(ipv4_proxy, ipv4_proxy_pid)
             .to_bytes()
             .map_err(|err| format!("failed to encode IPv4 proxy payload: {err}"))?;
         device.send_ioctl(IOCTL_SET_IPV4_PROXY, &payload)?;
@@ -78,10 +73,7 @@ pub fn run(args: UpdateArgs) -> Result<(), BoxError> {
         let Some(ipv6_proxy_pid) = args.ipv6_proxy_pid else {
             return Err("`--ipv6-proxy-pid` is required when `--ipv6-proxy` is provided".into());
         };
-        let payload = Ipv6ProxyConfigPayload::new(
-            ipv6_proxy,
-            ipv6_proxy_pid,
-        )
+        let payload = Ipv6ProxyConfigPayload::new(ipv6_proxy, ipv6_proxy_pid)
             .to_bytes()
             .map_err(|err| format!("failed to encode IPv6 proxy payload: {err}"))?;
         device.send_ioctl(IOCTL_SET_IPV6_PROXY, &payload)?;

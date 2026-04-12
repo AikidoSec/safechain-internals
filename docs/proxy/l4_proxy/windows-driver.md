@@ -183,8 +183,20 @@ e.g. after a code change, is:
 just windows-driver-package-install-fresh-debug
 ```
 
-After that you just need to "update" the driver with the proxy address(es)
-and off you go.
+After that reboot Windows so the newly installed driver package is active.
+
+Once Windows is back up, start `safechain-l4-proxy`.
+On Windows the L4 proxy now synchronizes its live listener address(es) and its current process pid
+into the driver runtime config automatically:
+- it always programs the active IPv4 listener;
+- it optionally also programs the active IPv6 listener when one is configured;
+- it clears the driver's IPv6 runtime config when no IPv6 listener is running.
+
+That means there is no longer a separate manual "step 2" for copying proxy addresses into the driver.
+The happy path is now:
+- install the driver package;
+- reboot Windows;
+- start the L4 proxy.
 
 ## Runtime Behavior Notes
 

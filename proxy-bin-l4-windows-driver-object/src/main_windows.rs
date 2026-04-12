@@ -1,7 +1,5 @@
 mod cmd;
-mod common;
 mod telemetry;
-mod wfp;
 
 use clap::Parser;
 use cmd::CommandKind;

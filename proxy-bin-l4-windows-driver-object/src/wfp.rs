@@ -1,6 +1,9 @@
 use std::ptr;
 
-use rama_core::{error::{BoxError, ErrorExt}, telemetry::tracing::{debug, info, warn}};
+use rama_core::{
+    error::{BoxError, ErrorExt},
+    telemetry::tracing::{debug, info, warn},
+};
 use safechain_proxy_lib_nostd::windows::driver_protocol::{
     WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4, WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
     WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V4, WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
@@ -256,7 +259,11 @@ fn add_filter(
     check_status(status, "FwpmFilterAdd0")
 }
 
-fn check_delete_status(status: u32, operation: &str, not_found_status: u32) -> Result<(), BoxError> {
+fn check_delete_status(
+    status: u32,
+    operation: &str,
+    not_found_status: u32,
+) -> Result<(), BoxError> {
     if status == ERROR_SUCCESS {
         debug!(operation, "WFP object removed");
         return Ok(());
