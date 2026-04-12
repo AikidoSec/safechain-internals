@@ -49,6 +49,7 @@ pub fn ensure_wfp_objects() -> Result<(), BoxError> {
         "Invokes the SafeChain IPv4 TCP connect-redirect callout.",
         IPPROTO_TCP,
         None,
+        FWP_ACTION_CALLOUT_INSPECTION,
     )?;
 
     add_callout(
@@ -67,6 +68,7 @@ pub fn ensure_wfp_objects() -> Result<(), BoxError> {
         "Invokes the SafeChain IPv6 TCP connect-redirect callout.",
         IPPROTO_TCP,
         None,
+        FWP_ACTION_CALLOUT_INSPECTION,
     )?;
 
     add_callout(
@@ -85,6 +87,7 @@ pub fn ensure_wfp_objects() -> Result<(), BoxError> {
         "Invokes the SafeChain IPv4 UDP auth-connect block callout.",
         IPPROTO_UDP,
         Some(443),
+        FWP_ACTION_CALLOUT_TERMINATING,
     )?;
 
     add_callout(
@@ -103,6 +106,7 @@ pub fn ensure_wfp_objects() -> Result<(), BoxError> {
         "Invokes the SafeChain IPv6 UDP auth-connect block callout.",
         IPPROTO_UDP,
         Some(443),
+        FWP_ACTION_CALLOUT_TERMINATING,
     )?;
 
     transaction.commit()
@@ -286,6 +290,7 @@ fn add_filter(
     description: &str,
     ip_protocol: u8,
     remote_port: Option<u16>,
+    action_type: u32,
 ) -> Result<(), BoxError> {
     debug!(name, "adding WFP filter");
     let mut name = WideString::new(name);
@@ -342,7 +347,7 @@ fn add_filter(
         numFilterConditions: num_filter_conditions,
         filterCondition: filter_condition,
         action: FWPM_ACTION0 {
-            r#type: FWP_ACTION_CALLOUT_INSPECTION,
+            r#type: action_type,
             Anonymous: FWPM_ACTION0_0 {
                 calloutKey: guid(callout_key),
             },

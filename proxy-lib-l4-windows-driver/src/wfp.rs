@@ -458,6 +458,10 @@ fn on_udp_auth_connect_classify(
                 if ((*classify_out).rights & FWPS_RIGHT_ACTION_WRITE) != 0 {
                     (*classify_out).actionType = FWP_ACTION_BLOCK;
                     (*classify_out).rights &= !FWPS_RIGHT_ACTION_WRITE;
+                } else {
+                    log::driver_log_warn!(
+                        "wfp: on_udp_auth_connect_classify: block decision could not be applied (missing FWPS_RIGHT_ACTION_WRITE; remote = {remote})",
+                    );
                 }
             }
         }
