@@ -1,9 +1,14 @@
 # Windows L4 Driver Production Release
 Production/release notes for the Windows L4 driver.
 
-This document is intentionally short. It is for colleagues preparing a signed release package, not for day-to-day driver development.
+This document is intentionally short. It is for colleagues preparing a signed release package,
+not for day-to-day driver development.
 
-For local/dev build, install, update, validation, and glossary notes, see [windows-driver.md](/C:/Users/glendc/Documents/GitHub/safechain-internals/docs/proxy/l4_proxy/windows-driver.md).
+For local/dev build, install, update, validation, and glossary notes, see [windows-driver.md](./windows-driver.md).
+
+> In contrast to the day-to-day dev document,
+> this document has not yet been used "in the field". The first colleagues
+> making releases of the windows (kernel) driver will want to update and improve this doc.
 
 ## Release Inputs
 
@@ -107,6 +112,7 @@ Minimum expectations before release:
 
 ## Notes
 
-- The source of truth for driver WFP GUIDs is [driver_protocol.rs](/C:/Users/glendc/Documents/GitHub/safechain-internals/proxy-lib-nostd/src/windows/driver_protocol.rs).
-- The outer Windows product installer can be built via [build-msi.ps1](/C:/Users/glendc/Documents/GitHub/safechain-internals/packaging/windows/build-msi.ps1), but that is separate from the kernel driver package signing step.
+- The source of truth for driver WFP GUIDs is [driver_protocol.rs](../../../proxy-lib-nostd/src/windows/driver_protocol.rs).
+- The outer Windows product installer can be built via [build-msi.ps1](../../../packaging/windows/build-msi.ps1),
+  but that is separate from the kernel driver package signing step.
 - If the org-level production signing path changes, update this document and the packaging scripts together.

@@ -1,7 +1,7 @@
 # Windows L4 Driver
 Kernel-mode WFP driver for the Windows L4 proxy.
 
-For production/release packaging and signing, see [windows-driver-prod.md](/C:/Users/glendc/Documents/GitHub/safechain-internals/docs/proxy/l4_proxy/windows-driver-prod.md).
+For production/release packaging and signing, see [windows-driver-prod.md](./windows-driver-prod.md).
 
 ## Scope
 
@@ -84,10 +84,14 @@ After install:
 1. Reboot Windows.
 2. Start `safechain-l4-proxy`.
 
-Once the proxy starts, it automatically synchronizes its live IPv4 bind and optional IPv6 bind into the driver runtime config. There is no separate manual runtime-config step anymore.
+Once the proxy starts, it automatically synchronizes its live IPv4 bind and optional IPv6 bind into the driver runtime config. There is no separate manual runtime-config step.
 
-In practice this means the `safechain-l4-proxy-windows-driver-object` CLI is no longer part of the normal install/start flow.
-It is now mostly optional extra tooling for inspection, manual experiments, or recovery scenarios.
+In practice this means the `safechain-l4-proxy-windows-driver-object` is not needed in the normal install/start flow.
+It can however still be used if you for some exceptional reason want to disable the driver or manually,
+disable ipv6 redirect (despite a proxy active) or set the ipv4/ipv6 socket addresses of the proxy manually.
+
+Disabling the proxy can also be done with the "default" windows tooling.
+
 Day-to-day usage should generally rely on:
 - the PowerShell packaging/install/update scripts for driver lifecycle;
 - `safechain-l4-proxy` for runtime registration;
@@ -112,6 +116,25 @@ After an update:
 If you want the most conservative dev update flow, use `just windows-driver-package-install-fresh-debug` instead.
 
 Again, the driver-object CLI is typically not needed for this update path.
+
+> NOTE: Given a code update of the driver (loading a new binary) requires
+> a (system) reboot, you will want to do this as little as possible. Luckily it is
+> only used for redirecting (and for now also still blocking UDP 443 chromium traffic).
+
+## Update L4 Proxy
+
+The L4 Proxy (in user space) probably does require more frequent updating.
+Luckily you can do so gracefully:
+
+1. Leave the old L4 Proxy (background) process running and just regiser a new background task (+ enable it)
+2. The new L4 Proxy will overwrite the (kernel) driver's runtime config with its new pid/addresses
+3. Confirm the new proxy is active and working
+   (Perhaps we should add version info to its hijack MITM page?)
+4. You can now gracefully shutdown, and once done, destroy the old (L4) proxy
+   Because the PID stored in the driver kernel no longer matches the old proxy,
+   it will _not_ wipe the runtime config... so all good.
+
+And that's it. For the most part a painless process. And ... not requiring a (system) reboot!
 
 ## Remove
 
@@ -154,7 +177,7 @@ The verification script checks these WFP GUIDs:
 - UDP auth-connect block filter v4: `{E4B805FC-B3AB-45E8-8F04-200DCBC00955}`
 - UDP auth-connect block filter v6: `{FCBAB31F-7DFB-4128-8196-559FE0E0E8B4}`
 
-Source of truth for these GUIDs is [driver_protocol.rs](/C:/Users/glendc/Documents/GitHub/safechain-internals/proxy-lib-nostd/src/windows/driver_protocol.rs).
+Source of truth for these GUIDs is [driver_protocol.rs](../../../proxy-lib-nostd/src/windows/driver_protocol.rs).
 
 ## Runtime Behavior
 
@@ -183,8 +206,7 @@ Useful manual checks:
 - `msinfo32` -> `Software Environment > System Drivers`
 - `services.msc` -> confirm `Base Filtering Engine` is running
 - `regedit` -> `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SafeChainL4Proxy`
-- Event Viewer -> `Windows Logs > System`
-- `netsh wfp show state file=%TEMP%\safechain_wfpstate.xml`
+- Debug Viewer (see tools below)
 
 ## Glossary
 
