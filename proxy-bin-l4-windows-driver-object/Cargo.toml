@@ -25,3 +25,6 @@ windows-sys = { workspace = true, features = [
     "Win32_System_Rpc",
     "Win32_System_Services",
 ] }
+
+[target.'cfg(target_os = "windows")'.build-dependencies]
+static_vcruntime = { workspace = true }
