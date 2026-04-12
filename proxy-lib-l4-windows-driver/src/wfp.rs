@@ -432,10 +432,14 @@ fn on_udp_auth_connect_classify(
     classify_out: *mut FWPS_CLASSIFY_OUT0,
 ) {
     if classify_out.is_null() {
+        log::driver_log_info!("wfp: on_udp_auth_connect_classify: classify out is null: ignore",);
         return;
     }
 
     let Some(remote) = auth_connect_remote_placeholder(in_fixed_values) else {
+        log::driver_log_info!(
+            "wfp: on_udp_auth_connect_classify: no remote (socketaddr) found: ignore",
+        );
         return;
     };
     let source_pid = source_pid_from_metadata(in_meta_values);
@@ -447,12 +451,20 @@ fn on_udp_auth_connect_classify(
         source_process_path,
     });
 
-    if let UdpAuthConnectDecision::Block = decision {
-        unsafe {
-            if ((*classify_out).rights & FWPS_RIGHT_ACTION_WRITE) != 0 {
-                (*classify_out).actionType = FWP_ACTION_BLOCK;
-                (*classify_out).rights &= !FWPS_RIGHT_ACTION_WRITE;
+    match decision {
+        UdpAuthConnectDecision::Block => {
+            log::driver_log_info!("wfp: on_udp_auth_connect_classify: block (remote = {remote})",);
+            unsafe {
+                if ((*classify_out).rights & FWPS_RIGHT_ACTION_WRITE) != 0 {
+                    (*classify_out).actionType = FWP_ACTION_BLOCK;
+                    (*classify_out).rights &= !FWPS_RIGHT_ACTION_WRITE;
+                }
             }
+        }
+        UdpAuthConnectDecision::Passthrough => {
+            log::driver_log_info!(
+                "wfp: on_udp_auth_connect_classify: passthrough (remote = {remote})",
+            );
         }
     }
 }

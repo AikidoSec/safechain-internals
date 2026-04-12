@@ -8,10 +8,11 @@ rust-version = { workspace = true }
 readme = "../docs/proxy.md"
 
 [features]
+windows-driver = ["dep:wdk-sys"]
 
 [dependencies]
 postcard = { workspace = true, features = ["alloc"] }
 serde = { workspace = true, features = ["derive", "alloc"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-wdk-sys = { workspace = true }
+wdk-sys = { workspace = true, optional = true }
