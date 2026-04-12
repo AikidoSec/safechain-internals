@@ -2903,7 +2903,6 @@ dependencies = [
  "rama",
  "safechain-l4-proxy-windows-driver-object",
  "safechain-proxy-lib",
- "safechain-proxy-lib-nostd",
  "static_vcruntime",
  "tikv-jemallocator",
  "tokio",

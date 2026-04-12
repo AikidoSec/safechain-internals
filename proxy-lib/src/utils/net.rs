@@ -15,12 +15,12 @@ pub fn get_app_source_bundle_id_from_ext(input: &impl ExtensionsRef) -> Option<&
         .and_then(|meta| meta.source_app_bundle_identifier.as_deref())
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(all(target_os = "windows", feature = "windows-driver")))]
 pub fn get_source_process_path_from_ext(_: &impl ExtensionsRef) -> Option<&str> {
     None
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-driver"))]
 pub fn get_source_process_path_from_ext(input: &impl ExtensionsRef) -> Option<&str> {
     input
         .extensions()

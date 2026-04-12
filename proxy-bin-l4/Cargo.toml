@@ -16,12 +16,11 @@ jemallocator = { workspace = true }
 mimalloc = { workspace = true }
 postcard = { workspace = true }
 safechain-l4-proxy-windows-driver-object = { path = "../proxy-bin-l4-windows-driver-object" }
-safechain-proxy-lib-nostd = { workspace = true, features = ["windows-driver"] }
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Networking_WinSock"] }
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
-safechain-proxy-lib = { workspace = true, features = ["pac"] }
+safechain-proxy-lib = { workspace = true, features = ["pac", "windows-driver"] }
 tokio = { workspace = true, features = ["full"] }
 
 [dependencies.rama]

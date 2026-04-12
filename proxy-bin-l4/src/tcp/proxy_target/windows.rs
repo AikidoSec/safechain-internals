@@ -19,7 +19,7 @@ use windows_sys::Win32::{
     },
 };
 
-pub use safechain_proxy_lib_nostd::windows::redirect_ctx::ProxyRedirectContext as L4ProxyRedirectContext;
+pub use safechain_proxy_lib::nostd::windows::redirect_ctx::ProxyRedirectContext as L4ProxyRedirectContext;
 
 pub type ProxyTargetFromInput<S> = ProxyTargetFromWfpContext<S, L4ProxyRedirectContextDecoder>;
 pub type ProxyTargetFromInputLayer = ProxyTargetFromWfpContextLayer<L4ProxyRedirectContextDecoder>;

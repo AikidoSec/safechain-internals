@@ -12,6 +12,7 @@ har = []
 pac = []
 test-utils = []
 apple-networkextension = []
+windows-driver = ["safechain-proxy-lib-nostd/windows-driver"]
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc = { workspace = true }
