@@ -270,10 +270,7 @@ windows-driver-package-stage profile="debug" *ARGS:
 windows-driver-package-install package_dir="dist/windows-driver-package/debug":
     ./packaging/windows/install-driver-package.ps1 -PackageDir {{package_dir}}
 
-windows-driver-package-install-fresh-debug *ARGS:
-    just windows-driver-package-install-fresh-debug-step1 {{ARGS}}
-
-windows-driver-package-install-fresh-debug-step1:
+windows-driver-package-install-fresh-debug:
     just rust-quick-qa
     just windows-driver-test
     just windows-driver-disable
@@ -291,8 +288,8 @@ windows-driver-package-verify *ARGS:
 windows-driver-package-remove:
     ./packaging/windows/remove-driver-package.ps1
 
-windows-install-root-crt:
-    ./packaging/windows/install-root-crt.ps1
+windows-install-root-crt *ARGS:
+    ./packaging/windows/install-root-crt.ps1 {{ARGS}}
 
 [working-directory: './proxy-lib-l4-windows-driver']
 windows-driver-check:

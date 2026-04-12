@@ -50,6 +50,15 @@ By default staging:
 - runs `Inf2Cat` when available;
 - signs the generated catalog with the configured local code-signing cert.
 
+> Hint:
+>
+> If you do not yet have a cert setup for local development (of windows kernel driver),
+> you can do so using a single command + a reboot:
+>
+> ```ps1
+> just windows-install-root-crt
+> ```
+
 ## Fresh Install
 
 Use this on a machine that does not already have the current driver package installed:
