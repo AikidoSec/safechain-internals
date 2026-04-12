@@ -266,6 +266,16 @@ impl ProxyDriverController {
             return UdpAuthConnectDecision::Passthrough;
         }
 
+        if self.proxy_endpoint_for(flow.remote).is_none() {
+            crate::log::driver_log_info!(
+                "udp: passthrough: no proxy configured for traffic: {} (source pid = {:?}, source process = {:?})",
+                flow.remote,
+                flow.source_pid,
+                flow.source_process_path,
+            );
+            return UdpAuthConnectDecision::Passthrough;
+        }
+
         let Some(source_process_path) = flow.source_process_path.as_deref() else {
             return UdpAuthConnectDecision::Passthrough;
         };

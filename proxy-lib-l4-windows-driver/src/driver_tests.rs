@@ -117,6 +117,7 @@ fn process_exit_clears_matching_proxy_runtime_config() {
 #[test]
 fn blocks_udp_443_for_chromium_family_browsers() {
     let controller = ProxyDriverController::new();
+    controller.configure_proxy_ipv4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 15000), 1234);
     let flow = WfpFlowMeta {
         remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
         source_pid: Some(42),
@@ -134,11 +135,47 @@ fn blocks_udp_443_for_chromium_family_browsers() {
 #[test]
 fn passes_udp_443_for_non_chromium_processes() {
     let controller = ProxyDriverController::new();
+    controller.configure_proxy_ipv4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 15000), 1234);
     let flow = WfpFlowMeta {
         remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
         source_pid: Some(42),
         source_process_path: Some(String::from(
             "\\Device\\HarddiskVolume4\\Windows\\System32\\curl.exe",
+        )),
+    };
+
+    assert!(matches!(
+        controller.classify_outbound_udp_connect(flow),
+        UdpAuthConnectDecision::Passthrough
+    ));
+}
+
+#[test]
+fn passes_udp_443_for_chromium_family_browsers_without_matching_proxy() {
+    let controller = ProxyDriverController::new();
+    let flow = WfpFlowMeta {
+        remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
+        source_pid: Some(42),
+        source_process_path: Some(String::from(
+            "\\Device\\HarddiskVolume4\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+        )),
+    };
+
+    assert!(matches!(
+        controller.classify_outbound_udp_connect(flow),
+        UdpAuthConnectDecision::Passthrough
+    ));
+}
+
+#[test]
+fn passes_udp_443_for_chromium_family_browsers_when_only_other_address_family_proxy_exists() {
+    let controller = ProxyDriverController::new();
+    controller.configure_proxy_ipv6(SocketAddrV6::new(Ipv6Addr::LOCALHOST, 15000, 0, 0), 5678);
+    let flow = WfpFlowMeta {
+        remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
+        source_pid: Some(42),
+        source_process_path: Some(String::from(
+            "\\Device\\HarddiskVolume4\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
         )),
     };
 
