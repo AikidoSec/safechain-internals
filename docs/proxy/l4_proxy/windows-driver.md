@@ -15,7 +15,7 @@ last miles TODO:
 
 - [x] how can we disable proxy runtime config when process on PID is "dead"
 - [x] how to get process path in windows driver, it is still missing
-- [ ] once we do have process path figure out how to block udp chrome traffic in windows driver for now
+- [x] once we do have process path figure out how to block udp chrome traffic in windows driver for now
 - [ ] document update flow (dev)
 - [ ] separate out production WIP notes into its own doc...
 - [x] fix CI And prepare PR
@@ -250,6 +250,10 @@ The verification checks these WFP GUIDs:
 * TCP connect redirect callout v6: `{4F05F1F8-9093-44F1-A8E7-2D841A3E2E5A}`
 * TCP connect redirect filter v4: `{DB5B9241-4532-4517-B0E0-6F85E4E631F8}`
 * TCP connect redirect filter v6: `{4B60D58C-85FD-4FB1-8256-8C4E6053E43A}`
+* UDP auth-connect block callout v4: `{87053C13-7C73-4E52-8DDD-F82B3856EF41}`
+* UDP auth-connect block callout v6: `{27B8A5FA-66B5-451C-A566-B79478B52A81}`
+* UDP auth-connect block filter v4: `{E4B805FC-B3AB-45E8-8F04-200DCBC00955}`
+* UDP auth-connect block filter v6: `{FCBAB31F-7DFB-4128-8196-559FE0E0E8B4}`
 
 A successful verification means the driver is not only installed, but also visible in the WFP state with the expected registration objects.
 
@@ -284,14 +288,25 @@ In our driver logs it is the numeric `FWPS_LAYER_*` value that Windows passes in
 For this driver the important ones are:
 - `FWPS_LAYER_ALE_CONNECT_REDIRECT_V4`
 - `FWPS_LAYER_ALE_CONNECT_REDIRECT_V6`
+- `FWPS_LAYER_ALE_AUTH_CONNECT_V4`
+- `FWPS_LAYER_ALE_AUTH_CONNECT_V6`
 
-Those are the ALE connect-redirect layers where Windows still lets a callout rewrite the
+The ALE connect-redirect layers are where Windows still lets a callout rewrite the
 outbound connect target before the socket connect is finalized.
+
+The ALE auth-connect layers are earlier policy/authorization checkpoints.
+We use those for UDP because right now the driver only makes a block-or-pass decision there;
+it never rewrites UDP destinations.
 
 ### `callout`
 
 A callout is the kernel callback implementation registered with WFP.
-Our driver registers one callout for IPv4 connect redirect and one for IPv6 connect redirect.
+Our driver currently registers four callouts:
+- IPv4 TCP connect redirect
+- IPv6 TCP connect redirect
+- IPv4 UDP auth-connect block
+- IPv6 UDP auth-connect block
+
 When a filter matches traffic at the target layer, WFP invokes that callout.
 
 ### `filter`
@@ -303,8 +318,10 @@ Without a filter, a registered callout exists but is never invoked for traffic.
 ### `classify callback`
 
 This is the driver function WFP calls for each matching flow or packet at a layer.
-In our code this is where we read the flow metadata, decide passthrough vs redirect,
-and optionally rewrite the remote target to the local L4 proxy.
+In our code this is where we read the flow metadata and decide one of:
+- passthrough
+- TCP redirect to the local L4 proxy
+- UDP block
 
 ### `redirect handle`
 

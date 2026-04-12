@@ -3,7 +3,10 @@ use core::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 
 use spin::RwLock;
 
-use crate::wfp::{TcpRedirectDecision, WfpFlowMeta, build_redirect_context, is_local_destination};
+use crate::wfp::{
+    TcpRedirectDecision, UdpAuthConnectDecision, WfpFlowMeta, build_redirect_context,
+    is_local_destination,
+};
 
 #[derive(Debug, Clone, Copy)]
 struct ProxyEndpoint {
@@ -255,6 +258,30 @@ impl ProxyDriverController {
             proxy_target: proxy_target.socket_addr,
             proxy_target_pid: proxy_target.process_id,
             redirect_context,
+        }
+    }
+
+    pub fn classify_outbound_udp_connect(&self, flow: WfpFlowMeta) -> UdpAuthConnectDecision {
+        if flow.remote.port() != 443 {
+            return UdpAuthConnectDecision::Passthrough;
+        }
+
+        let Some(source_process_path) = flow.source_process_path.as_deref() else {
+            return UdpAuthConnectDecision::Passthrough;
+        };
+
+        if safechain_proxy_lib_nostd::windows::browser::is_chromium_browser_process_path(
+            source_process_path,
+        ) {
+            crate::log::driver_log_info!(
+                "udp: block chromium-family udp/443 flow: {} (source pid = {:?}, source process = {:?})",
+                flow.remote,
+                flow.source_pid,
+                flow.source_process_path,
+            );
+            UdpAuthConnectDecision::Block
+        } else {
+            UdpAuthConnectDecision::Passthrough
         }
     }
 }

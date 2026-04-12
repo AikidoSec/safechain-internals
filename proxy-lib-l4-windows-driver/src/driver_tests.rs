@@ -1,7 +1,9 @@
 use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 
+use alloc::string::String;
+
 use super::{ProxyDriverConfigUpdate, ProxyDriverController};
-use crate::wfp::{TcpRedirectDecision, WfpFlowMeta};
+use crate::wfp::{TcpRedirectDecision, UdpAuthConnectDecision, WfpFlowMeta};
 
 #[test]
 fn passthrough_for_private_destinations() {
@@ -110,4 +112,38 @@ fn process_exit_clears_matching_proxy_runtime_config() {
             ))
             .is_none()
     );
+}
+
+#[test]
+fn blocks_udp_443_for_chromium_family_browsers() {
+    let controller = ProxyDriverController::new();
+    let flow = WfpFlowMeta {
+        remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
+        source_pid: Some(42),
+        source_process_path: Some(String::from(
+            "\\Device\\HarddiskVolume4\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+        )),
+    };
+
+    assert!(matches!(
+        controller.classify_outbound_udp_connect(flow),
+        UdpAuthConnectDecision::Block
+    ));
+}
+
+#[test]
+fn passes_udp_443_for_non_chromium_processes() {
+    let controller = ProxyDriverController::new();
+    let flow = WfpFlowMeta {
+        remote: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
+        source_pid: Some(42),
+        source_process_path: Some(String::from(
+            "\\Device\\HarddiskVolume4\\Windows\\System32\\curl.exe",
+        )),
+    };
+
+    assert!(matches!(
+        controller.classify_outbound_udp_connect(flow),
+        UdpAuthConnectDecision::Passthrough
+    ));
 }

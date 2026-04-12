@@ -62,6 +62,10 @@ $GuidMap = [ordered]@{
     "Callout TCP Redirect V6"  = "{4F05F1F8-9093-44F1-A8E7-2D841A3E2E5A}"
     "Filter TCP Redirect V4"   = "{DB5B9241-4532-4517-B0E0-6F85E4E631F8}"
     "Filter TCP Redirect V6"   = "{4B60D58C-85FD-4FB1-8256-8C4E6053E43A}"
+    "Callout UDP Block V4"     = "{87053C13-7C73-4E52-8DDD-F82B3856EF41}"
+    "Callout UDP Block V6"     = "{27B8A5FA-66B5-451C-A566-B79478B52A81}"
+    "Filter UDP Block V4"      = "{E4B805FC-B3AB-45E8-8F04-200DCBC00955}"
+    "Filter UDP Block V6"      = "{FCBAB31F-7DFB-4128-8196-559FE0E0E8B4}"
 }
 
 function Write-Section {

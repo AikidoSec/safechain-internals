@@ -6,7 +6,11 @@ use rama_core::{
 };
 use safechain_proxy_lib_nostd::windows::driver_protocol::{
     WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4, WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
+    WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4,
+    WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6,
     WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V4, WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
+    WFP_FILTER_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4,
+    WFP_FILTER_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6,
     WFP_PROVIDER_SAFECHAIN_L4_PROXY, WFP_SUBLAYER_SAFECHAIN_L4_PROXY, WindowsGuid,
 };
 use windows_sys::Win32::{
@@ -19,6 +23,7 @@ use windows_sys::Win32::{
 
 const RPC_C_AUTHN_DEFAULT: u32 = 0xffff_ffff;
 const IPPROTO_TCP: u8 = 6;
+const IPPROTO_UDP: u8 = 17;
 
 pub fn ensure_wfp_objects() -> Result<(), BoxError> {
     info!("ensuring dual-stack WFP provider/sublayer/callouts/filters are installed");
@@ -42,6 +47,8 @@ pub fn ensure_wfp_objects() -> Result<(), BoxError> {
         WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4,
         "SafeChain TCP Redirect Filter v4",
         "Invokes the SafeChain IPv4 TCP connect-redirect callout.",
+        IPPROTO_TCP,
+        None,
     )?;
 
     add_callout(
@@ -58,6 +65,44 @@ pub fn ensure_wfp_objects() -> Result<(), BoxError> {
         WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
         "SafeChain TCP Redirect Filter v6",
         "Invokes the SafeChain IPv6 TCP connect-redirect callout.",
+        IPPROTO_TCP,
+        None,
+    )?;
+
+    add_callout(
+        &engine,
+        WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4,
+        FWPM_LAYER_ALE_AUTH_CONNECT_V4,
+        "SafeChain UDP Auth Connect Block v4",
+        "Kernel callout for SafeChain IPv4 UDP/443 browser blocking.",
+    )?;
+    add_filter(
+        &engine,
+        WFP_FILTER_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4,
+        FWPM_LAYER_ALE_AUTH_CONNECT_V4,
+        WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4,
+        "SafeChain UDP Block Filter v4",
+        "Invokes the SafeChain IPv4 UDP auth-connect block callout.",
+        IPPROTO_UDP,
+        Some(443),
+    )?;
+
+    add_callout(
+        &engine,
+        WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6,
+        FWPM_LAYER_ALE_AUTH_CONNECT_V6,
+        "SafeChain UDP Auth Connect Block v6",
+        "Kernel callout for SafeChain IPv6 UDP/443 browser blocking.",
+    )?;
+    add_filter(
+        &engine,
+        WFP_FILTER_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6,
+        FWPM_LAYER_ALE_AUTH_CONNECT_V6,
+        WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6,
+        "SafeChain UDP Block Filter v6",
+        "Invokes the SafeChain IPv6 UDP auth-connect block callout.",
+        IPPROTO_UDP,
+        Some(443),
     )?;
 
     transaction.commit()
@@ -77,6 +122,22 @@ fn remove_wfp_objects_inner(engine: &EngineHandle) -> Result<(), BoxError> {
         check_delete_status(
             FwpmFilterDeleteByKey0(
                 engine.0,
+                &guid(WFP_FILTER_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6),
+            ),
+            "FwpmFilterDeleteByKey0(udp v6)",
+            FWP_E_FILTER_NOT_FOUND as u32,
+        )?;
+        check_delete_status(
+            FwpmFilterDeleteByKey0(
+                engine.0,
+                &guid(WFP_FILTER_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4),
+            ),
+            "FwpmFilterDeleteByKey0(udp v4)",
+            FWP_E_FILTER_NOT_FOUND as u32,
+        )?;
+        check_delete_status(
+            FwpmFilterDeleteByKey0(
+                engine.0,
                 &guid(WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V6),
             ),
             "FwpmFilterDeleteByKey0(v6)",
@@ -89,6 +150,22 @@ fn remove_wfp_objects_inner(engine: &EngineHandle) -> Result<(), BoxError> {
             ),
             "FwpmFilterDeleteByKey0(v4)",
             FWP_E_FILTER_NOT_FOUND as u32,
+        )?;
+        check_delete_status(
+            FwpmCalloutDeleteByKey0(
+                engine.0,
+                &guid(WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6),
+            ),
+            "FwpmCalloutDeleteByKey0(udp v6)",
+            FWP_E_CALLOUT_NOT_FOUND as u32,
+        )?;
+        check_delete_status(
+            FwpmCalloutDeleteByKey0(
+                engine.0,
+                &guid(WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4),
+            ),
+            "FwpmCalloutDeleteByKey0(udp v4)",
+            FWP_E_CALLOUT_NOT_FOUND as u32,
         )?;
         check_delete_status(
             FwpmCalloutDeleteByKey0(
@@ -199,6 +276,7 @@ fn add_callout(
     check_status(status, "FwpmCalloutAdd0")
 }
 
+#[allow(clippy::too_many_arguments)]
 fn add_filter(
     engine: &EngineHandle,
     filter_key: WindowsGuid,
@@ -206,19 +284,45 @@ fn add_filter(
     callout_key: WindowsGuid,
     name: &str,
     description: &str,
+    ip_protocol: u8,
+    remote_port: Option<u16>,
 ) -> Result<(), BoxError> {
     debug!(name, "adding WFP filter");
     let mut name = WideString::new(name);
     let mut description = WideString::new(description);
     let mut provider_key = guid(WFP_PROVIDER_SAFECHAIN_L4_PROXY);
-    let condition_value = FWP_CONDITION_VALUE0 {
+    let protocol_condition_value = FWP_CONDITION_VALUE0 {
         r#type: FWP_UINT8,
-        Anonymous: FWP_CONDITION_VALUE0_0 { uint8: IPPROTO_TCP },
+        Anonymous: FWP_CONDITION_VALUE0_0 { uint8: ip_protocol },
     };
-    let mut condition = FWPM_FILTER_CONDITION0 {
+    let protocol_condition = FWPM_FILTER_CONDITION0 {
         fieldKey: FWPM_CONDITION_IP_PROTOCOL,
         matchType: FWP_MATCH_EQUAL,
-        conditionValue: condition_value,
+        conditionValue: protocol_condition_value,
+    };
+    let remote_port_condition = remote_port.map(|port| FWPM_FILTER_CONDITION0 {
+        fieldKey: FWPM_CONDITION_IP_REMOTE_PORT,
+        matchType: FWP_MATCH_EQUAL,
+        conditionValue: FWP_CONDITION_VALUE0 {
+            r#type: FWP_UINT16,
+            Anonymous: FWP_CONDITION_VALUE0_0 { uint16: port },
+        },
+    });
+    let mut conditions = [
+        protocol_condition,
+        remote_port_condition.unwrap_or(FWPM_FILTER_CONDITION0 {
+            fieldKey: unsafe { core::mem::zeroed() },
+            matchType: 0,
+            conditionValue: FWP_CONDITION_VALUE0 {
+                r#type: FWP_EMPTY,
+                Anonymous: unsafe { core::mem::zeroed() },
+            },
+        }),
+    ];
+    let (filter_condition, num_filter_conditions) = if remote_port_condition.is_some() {
+        (conditions.as_mut_ptr(), 2)
+    } else {
+        (conditions.as_mut_ptr(), 1)
     };
     let filter = FWPM_FILTER0 {
         filterKey: guid(filter_key),
@@ -235,8 +339,8 @@ fn add_filter(
             r#type: FWP_EMPTY,
             Anonymous: unsafe { core::mem::zeroed() },
         },
-        numFilterConditions: 1,
-        filterCondition: &mut condition,
+        numFilterConditions: num_filter_conditions,
+        filterCondition: filter_condition,
         action: FWPM_ACTION0 {
             r#type: FWP_ACTION_CALLOUT_INSPECTION,
             Anonymous: FWPM_ACTION0_0 {

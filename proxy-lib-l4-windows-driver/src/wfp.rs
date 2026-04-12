@@ -35,7 +35,9 @@ use safechain_proxy_lib_nostd::{
     windows::{
         driver_protocol::{
             WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4,
-            WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6, WFP_PROVIDER_SAFECHAIN_L4_PROXY,
+            WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
+            WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4,
+            WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6, WFP_PROVIDER_SAFECHAIN_L4_PROXY,
             WindowsGuid,
         },
         redirect_ctx::ProxyRedirectContext,
@@ -70,6 +72,12 @@ pub enum TcpRedirectDecision {
     },
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum UdpAuthConnectDecision {
+    Passthrough,
+    Block,
+}
+
 pub fn build_redirect_context(flow: &WfpFlowMeta) -> Result<Vec<u8>, postcard::Error> {
     let ctx = ProxyRedirectContext::new(flow.remote)
         .with_source_pid(flow.source_pid)
@@ -84,8 +92,10 @@ pub fn is_local_destination(destination: SocketAddr) -> bool {
 
 #[derive(Clone, Copy)]
 struct KernelCalloutRegistration {
-    callout_id_v4: u32,
-    callout_id_v6: Option<u32>,
+    tcp_callout_id_v4: u32,
+    tcp_callout_id_v6: Option<u32>,
+    udp_callout_id_v4: u32,
+    udp_callout_id_v6: Option<u32>,
     redirect_handle: usize,
 }
 
@@ -110,9 +120,8 @@ pub fn register_callouts(device_object: *mut c_void) -> NTSTATUS {
         return redirect_status;
     }
 
-    let mut callout_id_v4 = 0_u32;
-
-    let callout_v4 = FWPS_CALLOUT1 {
+    let mut tcp_callout_id_v4 = 0_u32;
+    let tcp_callout_v4 = FWPS_CALLOUT1 {
         calloutKey: GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4,
         flags: 0,
         classifyFn: Some(on_callout_classify),
@@ -121,7 +130,7 @@ pub fn register_callouts(device_object: *mut c_void) -> NTSTATUS {
     };
     let status_v4 = unsafe {
         // SAFETY: arguments are valid pointers for the duration of the call.
-        FwpsCalloutRegister1(device_object, &callout_v4, &mut callout_id_v4)
+        FwpsCalloutRegister1(device_object, &tcp_callout_v4, &mut tcp_callout_id_v4)
     };
     if status_v4 != STATUS_SUCCESS {
         unsafe {
@@ -131,8 +140,8 @@ pub fn register_callouts(device_object: *mut c_void) -> NTSTATUS {
         return status_v4;
     }
 
-    let mut v6_id = 0_u32;
-    let callout_v6 = FWPS_CALLOUT1 {
+    let mut tcp_v6_id = 0_u32;
+    let tcp_callout_v6 = FWPS_CALLOUT1 {
         calloutKey: GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
         flags: 0,
         classifyFn: Some(on_callout_classify),
@@ -141,7 +150,7 @@ pub fn register_callouts(device_object: *mut c_void) -> NTSTATUS {
     };
     let status_v6 = unsafe {
         // SAFETY: arguments are valid pointers for the duration of the call.
-        FwpsCalloutRegister1(device_object, &callout_v6, &mut v6_id)
+        FwpsCalloutRegister1(device_object, &tcp_callout_v6, &mut tcp_v6_id)
     };
     if status_v6 != STATUS_SUCCESS {
         unsafe {
@@ -151,11 +160,53 @@ pub fn register_callouts(device_object: *mut c_void) -> NTSTATUS {
         }
         return status_v6;
     }
-    let callout_id_v6 = Some(v6_id);
+    let tcp_callout_id_v6 = Some(tcp_v6_id);
+
+    let mut udp_callout_id_v4 = 0_u32;
+    let udp_callout_v4 = FWPS_CALLOUT1 {
+        calloutKey: GUID_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4,
+        flags: 0,
+        classifyFn: Some(on_callout_classify),
+        notifyFn: Some(on_callout_notify),
+        flowDeleteFn: Some(on_callout_flow_delete),
+    };
+    let udp_status_v4 =
+        unsafe { FwpsCalloutRegister1(device_object, &udp_callout_v4, &mut udp_callout_id_v4) };
+    if udp_status_v4 != STATUS_SUCCESS {
+        unsafe {
+            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6);
+            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4);
+            FwpsRedirectHandleDestroy0(redirect_handle);
+        }
+        return udp_status_v4;
+    }
+
+    let mut udp_v6_id = 0_u32;
+    let udp_callout_v6 = FWPS_CALLOUT1 {
+        calloutKey: GUID_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6,
+        flags: 0,
+        classifyFn: Some(on_callout_classify),
+        notifyFn: Some(on_callout_notify),
+        flowDeleteFn: Some(on_callout_flow_delete),
+    };
+    let udp_status_v6 =
+        unsafe { FwpsCalloutRegister1(device_object, &udp_callout_v6, &mut udp_v6_id) };
+    if udp_status_v6 != STATUS_SUCCESS {
+        unsafe {
+            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4);
+            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6);
+            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4);
+            FwpsRedirectHandleDestroy0(redirect_handle);
+        }
+        return udp_status_v6;
+    }
+    let udp_callout_id_v6 = Some(udp_v6_id);
 
     *registration = Some(KernelCalloutRegistration {
-        callout_id_v4,
-        callout_id_v6,
+        tcp_callout_id_v4,
+        tcp_callout_id_v6,
+        udp_callout_id_v4,
+        udp_callout_id_v6,
         redirect_handle: redirect_handle as usize,
     });
 
@@ -164,9 +215,11 @@ pub fn register_callouts(device_object: *mut c_void) -> NTSTATUS {
     // - add FWPM_CALLOUT entries for these callout keys
     // - add ALE_CONNECT_REDIRECT v4/v6 filters that target these callouts
     log::driver_log_info!(
-        "kernel callouts registered for dual-stack redirect (v4_id={}, v6_id={:?})",
-        callout_id_v4,
-        callout_id_v6
+        "kernel callouts registered for tcp redirect and udp auth-connect block (tcp_v4_id={}, tcp_v6_id={:?}, udp_v4_id={}, udp_v6_id={:?})",
+        tcp_callout_id_v4,
+        tcp_callout_id_v6,
+        udp_callout_id_v4,
+        udp_callout_id_v6,
     );
     STATUS_SUCCESS
 }
@@ -178,7 +231,11 @@ pub fn unregister_callouts() {
 
     unsafe {
         // SAFETY: keys correspond to registered callouts from register_callouts.
-        if reg.callout_id_v6.is_some() {
+        if reg.udp_callout_id_v6.is_some() {
+            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6);
+        }
+        let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4);
+        if reg.tcp_callout_id_v6.is_some() {
             let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6);
         }
         let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4);
@@ -186,9 +243,11 @@ pub fn unregister_callouts() {
     }
 
     log::driver_log_info!(
-        "kernel callouts unregistered (v4_id={}, v6_id={:?})",
-        reg.callout_id_v4,
-        reg.callout_id_v6
+        "kernel callouts unregistered (tcp_v4_id={}, tcp_v6_id={:?}, udp_v4_id={}, udp_v6_id={:?})",
+        reg.tcp_callout_id_v4,
+        reg.tcp_callout_id_v6,
+        reg.udp_callout_id_v4,
+        reg.udp_callout_id_v6,
     );
 }
 
@@ -221,6 +280,16 @@ unsafe extern "system" fn on_callout_classify(
 ) {
     let layer_id = incoming_layer_id(in_fixed_values);
     log::driver_log_info!("wfp: classify callback invoked (layer_id={:?})", layer_id);
+
+    match layer_id.map(u32::from) {
+        Some(id)
+            if id == FWPS_LAYER_ALE_AUTH_CONNECT_V4 || id == FWPS_LAYER_ALE_AUTH_CONNECT_V6 =>
+        {
+            on_udp_auth_connect_classify(in_fixed_values, in_meta_values, classify_out);
+            return;
+        }
+        _ => {}
+    }
 
     if classify_context.is_null() || filter.is_null() || classify_out.is_null() {
         log::driver_log_warn!(
@@ -286,6 +355,11 @@ unsafe extern "system" fn on_callout_classify(
         return;
     };
 
+    if is_local_destination(remote) || remote.port() == 53 {
+        complete_writable_classify(classify_handle, writable_layer_data, classify_out);
+        return;
+    }
+
     let proxy_target = driver_controller().proxy_endpoint_for(remote);
     let Some(proxy_target) = proxy_target else {
         complete_writable_classify(classify_handle, writable_layer_data, classify_out);
@@ -294,11 +368,6 @@ unsafe extern "system" fn on_callout_classify(
 
     let source_pid = source_pid_from_metadata(in_meta_values);
     if source_pid == Some(proxy_target.process_id) {
-        complete_writable_classify(classify_handle, writable_layer_data, classify_out);
-        return;
-    }
-
-    if is_local_destination(remote) || remote.port() == 53 {
         complete_writable_classify(classify_handle, writable_layer_data, classify_out);
         return;
     }
@@ -355,6 +424,37 @@ unsafe extern "system" fn on_callout_classify(
     }
 
     complete_writable_classify(classify_handle, writable_layer_data, classify_out);
+}
+
+fn on_udp_auth_connect_classify(
+    in_fixed_values: *const FWPS_INCOMING_VALUES0,
+    in_meta_values: *const c_void,
+    classify_out: *mut FWPS_CLASSIFY_OUT0,
+) {
+    if classify_out.is_null() {
+        return;
+    }
+
+    let Some(remote) = auth_connect_remote_placeholder(in_fixed_values) else {
+        return;
+    };
+    let source_pid = source_pid_from_metadata(in_meta_values);
+    let source_process_path = source_pid.and_then(source_process_path_from_pid);
+
+    let decision = driver_controller().classify_outbound_udp_connect(WfpFlowMeta {
+        remote,
+        source_pid,
+        source_process_path,
+    });
+
+    if let UdpAuthConnectDecision::Block = decision {
+        unsafe {
+            if ((*classify_out).rights & FWPS_RIGHT_ACTION_WRITE) != 0 {
+                (*classify_out).actionType = FWP_ACTION_BLOCK;
+                (*classify_out).rights &= !FWPS_RIGHT_ACTION_WRITE;
+            }
+        }
+    }
 }
 
 fn source_pid_from_metadata(in_meta_values: *const c_void) -> Option<u32> {
@@ -423,6 +523,20 @@ fn incoming_layer_id(in_fixed_values: *const FWPS_INCOMING_VALUES0) -> Option<u1
         in_fixed_values.as_ref()?
     };
     Some(fixed_values.layerId)
+}
+
+fn auth_connect_remote_placeholder(
+    in_fixed_values: *const FWPS_INCOMING_VALUES0,
+) -> Option<SocketAddr> {
+    match u32::from(incoming_layer_id(in_fixed_values)?) {
+        FWPS_LAYER_ALE_AUTH_CONNECT_V4 => {
+            Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 443))
+        }
+        FWPS_LAYER_ALE_AUTH_CONNECT_V6 => {
+            Some(SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 443))
+        }
+        _ => None,
+    }
 }
 
 fn complete_writable_classify(
@@ -562,11 +676,17 @@ const STATUS_INVALID_PARAMETER: NTSTATUS = -1_073_741_811_i32;
 const FWPS_RIGHT_ACTION_WRITE: u32 = 0x0000_0001;
 /// `FWPS_METADATA_FIELD_PROCESS_ID` from `fwpsk.h`.
 const FWPS_METADATA_FIELD_PROCESS_ID: u32 = 0x0000_0020;
+/// `FWPS_LAYER_ALE_AUTH_CONNECT_V4` from `fwpsk.h`.
+const FWPS_LAYER_ALE_AUTH_CONNECT_V4: u32 = 48;
+/// `FWPS_LAYER_ALE_AUTH_CONNECT_V6` from `fwpsk.h`.
+const FWPS_LAYER_ALE_AUTH_CONNECT_V6: u32 = 49;
 /// `FWP_ACTION_PERMIT` from `fwptypes.h`.
 ///
 /// Used after rewriting the connect request so WFP allows the redirected flow.
 /// Docs: https://learn.microsoft.com/en-us/windows/win32/api/fwptypes/ne-fwptypes-fwp_action_type
 const FWP_ACTION_PERMIT: u32 = 0x0000_0002;
+/// `FWP_ACTION_BLOCK` from `fwptypes.h`.
+const FWP_ACTION_BLOCK: u32 = 0x0000_1001;
 /// `FWP_ACTION_CONTINUE` from `fwptypes.h`.
 ///
 /// Used when this callout leaves the decision unchanged.
@@ -605,6 +725,12 @@ const GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4: GUID =
 /// Callout GUID for outbound IPv6 TCP connect redirection.
 const GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6: GUID =
     guid(WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6);
+/// Callout GUID for outbound IPv4 UDP auth-connect blocking.
+const GUID_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4: GUID =
+    guid(WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4);
+/// Callout GUID for outbound IPv6 UDP auth-connect blocking.
+const GUID_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6: GUID =
+    guid(WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6);
 
 /// Helper for building `GUID` literals without expanding the entire WDK type
 /// surface into this module.
