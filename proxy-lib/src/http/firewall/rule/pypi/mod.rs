@@ -7,9 +7,8 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
+    utils::str::arcstr::{ArcStr, arcstr},
 };
-
-use rama::utils::str::arcstr::{ArcStr, arcstr};
 
 use crate::{
     endpoint_protection::{
@@ -33,8 +32,8 @@ use crate::http::firewall::pac::PacScriptGenerator;
 
 use super::{BlockedRequest, HttpRequestMatcherView, RequestAction, Rule};
 
-pub mod min_package_age;
-use min_package_age::MinPackageAgePyPI;
+mod min_package_age;
+use self::min_package_age::MinPackageAgePyPI;
 
 mod parser;
 use parser::{PackageInfo, parse_package_info_from_path};

@@ -32,7 +32,7 @@ mod html;
 mod json;
 
 #[derive(Debug, Clone)]
-pub(in crate::http::firewall) struct MinPackageAgePyPI {
+pub(super) struct MinPackageAgePyPI {
     notifier: Option<EventNotifier>,
 }
 

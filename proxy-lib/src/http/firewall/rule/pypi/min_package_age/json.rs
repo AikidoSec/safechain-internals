@@ -5,17 +5,19 @@ use rama::{
     utils::str::arcstr::{ArcStr, arcstr},
 };
 
-use crate::package::{
-    name_formatter::LowerCasePackageName,
-    released_packages_list::RemoteReleasedPackagesList,
-    version::{PackageVersion, PragmaticSemver},
+use crate::{
+    http::firewall::rule::pypi::parser::{
+        PackageInfo, normalize_package_name, parse_package_info_from_filename,
+        parse_package_info_from_url,
+    },
+    package::{
+        name_formatter::LowerCasePackageName,
+        released_packages_list::RemoteReleasedPackagesList,
+        version::{PackageVersion, PragmaticSemver},
+    },
+    utils::time::SystemTimestampMilliseconds,
 };
-use crate::utils::time::SystemTimestampMilliseconds;
 
-use super::super::parser::{
-    PackageInfo, normalize_package_name, parse_package_info_from_filename,
-    parse_package_info_from_url,
-};
 use super::JsonRewriteResult;
 
 #[derive(Debug)]
