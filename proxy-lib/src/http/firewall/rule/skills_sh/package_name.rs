@@ -1,7 +1,5 @@
 use rama::utils::str::arcstr::ArcStr;
 
-use crate::package::name_formatter::PackageName;
-
 /// Formats a skills.sh malware-list entry as `owner/repo` (lowercase).
 ///
 /// The malware list uses three-part names (`owner/repo/skill-name`) because a
@@ -23,14 +21,8 @@ fn skill_sh_package_name_from_str(s: &str) -> SkillsShPackageName {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(super) struct SkillsShPackageName(ArcStr);
 
-impl PackageName for SkillsShPackageName {
-    #[inline(always)]
-    fn normalize(package_name: &str) -> Self {
-        skill_sh_package_name_from_str(package_name)
-    }
-}
-
 crate::package::name_formatter::decl_arc_str_package_name!(
     SkillsShPackageName,
+    SkillsShPackageNameRef,
     skill_sh_package_name_from_str
 );

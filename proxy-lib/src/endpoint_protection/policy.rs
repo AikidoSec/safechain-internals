@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt, hash::Hash, sync::Arc};
+use std::{fmt, hash::Hash, sync::Arc};
 
 use arc_swap::ArcSwapOption;
 use rama::{graceful::ShutdownGuard, telemetry::tracing};
@@ -7,58 +7,15 @@ use tokio::sync::broadcast;
 use super::{EcosystemConfig, EndpointConfig, RemoteEndpointConfig};
 use crate::{
     endpoint_protection::EcosystemKey,
-    package::name_formatter::PackageName,
+    package::name_formatter::{GlobSet, PackageName},
     utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
-/// `*` matches any substring (including empty). Only `*` is special; this is glob-style, not full regex.
-fn glob_matches(pattern: &str, text: &str) -> bool {
-    if !pattern.contains('*') {
-        return pattern == text;
-    }
-
-    let parts: Vec<&str> = pattern.split('*').collect();
-    let mut rest = text;
-
-    if let Some(first) = parts.first()
-        && !first.is_empty()
-    {
-        if !rest.starts_with(first) {
-            return false;
-        }
-        rest = &rest[first.len()..];
-    }
-
-    for segment in &parts[1..parts.len() - 1] {
-        if segment.is_empty() {
-            continue;
-        }
-        match rest.find(segment) {
-            Some(idx) => rest = &rest[idx + segment.len()..],
-            None => return false,
-        }
-    }
-
-    let last = parts[parts.len() - 1];
-    if last.is_empty() {
-        true
-    } else {
-        rest.ends_with(last)
-    }
-}
-
-fn exception_list_matches<K>(entries: &HashSet<K>, package_name: &K) -> bool
+fn exception_list_matches<K>(entries: &GlobSet<K>, package_name: &K) -> bool
 where
-    K: Eq + Hash + fmt::Display,
+    K: PackageName + Eq + Hash + fmt::Display,
 {
-    // TODO: this logic is _very_ slow... glob_matches was introduced on main...
-    // even there it is a slow solution... we need to be smarter here...
-    entries.iter().any(|entry| {
-        glob_matches(
-            entry.to_string().as_str(),
-            package_name.to_string().as_str(),
-        )
-    })
+    entries.match_package_name(package_name)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,17 +32,17 @@ pub enum PackagePolicyDecision {
     RequestInstall,
 }
 
-pub struct PolicyEvaluator<K> {
+pub struct PolicyEvaluator<K: PackageName + Hash> {
     cached: Arc<ArcSwapOption<TypedEcosystemConfig<K>>>,
 }
 
-impl<K> fmt::Debug for PolicyEvaluator<K> {
+impl<K: PackageName + Hash> fmt::Debug for PolicyEvaluator<K> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PolicyEvaluator").finish()
     }
 }
 
-impl<K> Clone for PolicyEvaluator<K> {
+impl<K: PackageName + Hash> Clone for PolicyEvaluator<K> {
     fn clone(&self) -> Self {
         Self {
             cached: self.cached.clone(),
@@ -93,7 +50,7 @@ impl<K> Clone for PolicyEvaluator<K> {
     }
 }
 
-impl<K> PolicyEvaluator<K> {
+impl<K: PackageName + Hash> PolicyEvaluator<K> {
     pub fn new(guard: ShutdownGuard, ecosystem: EcosystemKey, config: RemoteEndpointConfig) -> Self
     where
         K: PackageName + Eq + Hash + Send + Sync + 'static,
@@ -203,7 +160,7 @@ impl<K> PolicyEvaluator<K> {
         package_name: &K,
     ) -> PackagePolicyDecision
     where
-        K: Eq + Hash + fmt::Display,
+        K: PackageName + Eq + Hash + fmt::Display,
     {
         // Explicitly rejected packages (exact match or `*` glob)
         if exception_list_matches(&ecosystem_cfg.rejected_packages, package_name) {
@@ -243,15 +200,17 @@ impl<K> PolicyEvaluator<K> {
     }
 }
 
-struct TypedEcosystemConfig<K> {
+struct TypedEcosystemConfig<K: PackageName + Hash> {
     block_all_installs: bool,
     request_installs: bool,
     minimum_allowed_age_timestamp: Option<SystemTimestampMilliseconds>,
-    allowed_packages: std::collections::HashSet<K>,
-    rejected_packages: std::collections::HashSet<K>,
+    // Keep exception matching centralized and typed. `GlobSet` stores exact
+    // patterns in a HashSet and wildcard patterns in a compiled graph.
+    allowed_packages: GlobSet<K>,
+    rejected_packages: GlobSet<K>,
 }
 
-impl<K> TypedEcosystemConfig<K> {
+impl<K: PackageName + Hash> TypedEcosystemConfig<K> {
     fn from_raw(raw: &EcosystemConfig) -> Self
     where
         K: PackageName + Eq + Hash,
@@ -273,12 +232,12 @@ impl<K> TypedEcosystemConfig<K> {
             allowed_packages: exceptions
                 .allowed_packages
                 .iter()
-                .map(|package| K::normalize(package.as_str()))
+                .map(|package| package.as_str())
                 .collect(),
             rejected_packages: exceptions
                 .rejected_packages
                 .iter()
-                .map(|package| K::normalize(package.as_str()))
+                .map(|package| package.as_str())
                 .collect(),
         }
     }
