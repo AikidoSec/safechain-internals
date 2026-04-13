@@ -24,6 +24,7 @@ const (
 type UIProvider interface {
 	Token() string
 	NotifyBlocked(ev any)
+	NotifyBlockedUpdated(ev any)
 	NotifyTlsTerminationFailed(ev any)
 	NotifyPermissionsUpdated(ev any)
 	StartSetupWizard(steps []string)

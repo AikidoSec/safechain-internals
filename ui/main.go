@@ -35,6 +35,7 @@ var setInstallWindowOnTop func(bool)
 
 func init() {
 	application.RegisterEvent[daemon.BlockEvent]("blocked")
+	application.RegisterEvent[daemon.BlockEvent]("blocked_updated")
 	application.RegisterEvent[daemon.TlsTerminationFailedEvent]("tls_termination_failed")
 	application.RegisterEvent[daemon.PermissionsResponse]("permissions_updated")
 	application.RegisterEvent[FocusEventPayload]("focus_event")
@@ -349,6 +350,10 @@ func startAppServer(app *application.App, wm *windowManager, statusCh chan<- app
 					Data:       map[string]interface{}{"eventId": ev.ID, "eventType": "block"},
 				})
 			}
+		},
+		func(ev daemon.BlockEvent) {
+			log.Println("Blocked event updated:", ev)
+			app.Event.Emit("blocked_updated", ev)
 		},
 		func(ev daemon.TlsTerminationFailedEvent) {
 			log.Println("TLS termination failed event:", ev)
