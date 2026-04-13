@@ -12,6 +12,8 @@
 //!   https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsacquirewritablelayerdatapointer0
 //! - `FwpsApplyModifiedLayerData0`:
 //!   https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsapplymodifiedlayerdata0
+//! - `FWPS_CONNECT_REQUEST0.localRedirectContext` ownership:
+//!   https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/ns-fwpsk-_fwps_connect_request0
 //! - `FwpsRedirectHandleCreate0`:
 //!   https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fwpsk/nf-fwpsk-fwpsredirecthandlecreate0
 //! - `FwpsQueryConnectionRedirectState0`:
@@ -244,6 +246,15 @@ fn allocate_redirect_context(bytes: &[u8]) -> *mut c_void {
 
     let ptr = unsafe {
         // SAFETY: allocation size matches the subsequent copy length.
+        //
+        // Ownership contract:
+        // - this driver owns the returned buffer until it is attached to a
+        //   writable `FWPS_CONNECT_REQUEST0` and handed back with
+        //   `FwpsApplyModifiedLayerData0`;
+        // - once applied, WFP owns `localRedirectContext` and frees it when the
+        //   proxied flow is removed (Windows 8+ per `FWPS_CONNECT_REQUEST0`
+        //   docs);
+        // - if we fail before attaching it, the caller must free it.
         ExAllocatePoolWithTag(NON_PAGED_POOL, bytes.len(), SAFECHAIN_POOL_TAG)
     };
     if ptr.is_null() {

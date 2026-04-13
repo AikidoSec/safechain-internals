@@ -40,6 +40,7 @@ use windows_sys::Win32::{
         CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_GENERIC_READ, FILE_GENERIC_WRITE, OPEN_EXISTING,
     },
     System::IO::DeviceIoControl,
+    System::Registry::{REG_EXPAND_SZ, REG_MULTI_SZ, REG_SZ},
 };
 
 pub use safechain_proxy_lib_nostd::windows::driver_protocol::{
@@ -50,6 +51,13 @@ pub use safechain_proxy_lib_nostd::windows::driver_protocol::{
 pub fn enable_device(service_name: &str) -> Result<(), BoxError> {
     debug!(service_name, "enabling device via PnP");
     let devices = find_devices_for_service(service_name)?;
+    if devices.is_empty() {
+        info!(
+            service_name,
+            "no matching PnP device found; treating enable as already complete"
+        );
+        return Ok(());
+    }
 
     for device in &devices {
         let restart_disable_cr = unsafe {
@@ -412,6 +420,12 @@ fn query_device_registry_string_property(
         return Err(BoxError::from("failed to read device registry property")
             .context_field("property", property)
             .context_field("win32", unsafe { GetLastError() }));
+    }
+
+    if !matches!(property_type, REG_SZ | REG_EXPAND_SZ | REG_MULTI_SZ) {
+        return Err(BoxError::from("device registry property was not a string value")
+            .context_field("property", property)
+            .context_field("property_type", property_type));
     }
 
     Ok(Some(from_wide_with_nul(&buffer)))

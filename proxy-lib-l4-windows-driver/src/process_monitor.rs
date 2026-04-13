@@ -27,9 +27,9 @@ pub fn register() -> NTSTATUS {
     STATUS_SUCCESS
 }
 
-pub fn unregister() {
+pub fn unregister() -> NTSTATUS {
     if !PROCESS_MONITOR_REGISTERED.swap(false, Ordering::AcqRel) {
-        return;
+        return STATUS_SUCCESS;
     }
 
     let status = unsafe {
@@ -46,6 +46,8 @@ pub fn unregister() {
             status
         );
     }
+
+    status
 }
 
 unsafe extern "C" fn on_process_notify(

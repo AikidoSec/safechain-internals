@@ -84,7 +84,13 @@ pub unsafe extern "system" fn driver_entry(
 
     let status = wfp::register_callouts(driver.DeviceObject.cast());
     if status != STATUS_SUCCESS {
-        process_monitor::unregister();
+        let unregister_status = process_monitor::unregister();
+        if unregister_status != STATUS_SUCCESS {
+            log::driver_log_warn!(
+                "process monitor rollback unregister failed with NTSTATUS={:#x}",
+                unregister_status
+            );
+        }
         device::cleanup(driver);
         log::driver_log_error!(
             "WFP callout registration failed with NTSTATUS={:#x}",
@@ -102,7 +108,13 @@ pub unsafe extern "system" fn driver_entry(
 /// Driver unload callback registered in `DriverEntry`.
 extern "C" fn driver_unload(_driver: *mut DRIVER_OBJECT) {
     wfp::unregister_callouts();
-    process_monitor::unregister();
+    let process_monitor_status = process_monitor::unregister();
+    if process_monitor_status != STATUS_SUCCESS {
+        log::driver_log_error!(
+            "driver unload continuing after process monitor unregister failed with NTSTATUS={:#x}; callback may still be registered",
+            process_monitor_status
+        );
+    }
     device::cleanup(_driver);
     DRIVER.clear_proxy_endpoint();
     log::driver_log_info!("driver unloaded (runtime config required, redirect-target-pid enabled)");

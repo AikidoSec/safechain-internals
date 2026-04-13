@@ -165,7 +165,7 @@ pub(crate) unsafe extern "C" fn on_callout_classify(
     let writable_connect_request = writable_layer_data.cast::<FWPS_CONNECT_REQUEST0>();
     let context_ptr = super::allocate_redirect_context(&redirect_context);
     if !redirect_context.is_empty() && context_ptr.is_null() {
-        complete_writable_classify(classify_handle, writable_layer_data, classify_out);
+        apply_and_release_writable_classify(classify_handle, writable_layer_data, classify_out);
         return;
     }
 
@@ -177,9 +177,13 @@ pub(crate) unsafe extern "C" fn on_callout_classify(
         (*writable_connect_request).localRedirectTargetPID = proxy_target_pid;
         (*writable_connect_request).localRedirectHandle =
             registration.redirect_handle as *mut c_void;
-        // WFP documentation for FWPS_CONNECT_REQUEST0 states the redirect context
-        // is attached here for the redirected flow and can later be queried from
-        // the proxy-side socket with SIO_QUERY_WFP_CONNECTION_REDIRECT_CONTEXT.
+        // Ownership handoff:
+        // - before this assignment, `context_ptr` is driver-owned pool memory;
+        // - after `FwpsApplyModifiedLayerData0` succeeds, WFP owns
+        //   `localRedirectContext` and the proxy can read it back with
+        //   `SIO_QUERY_WFP_CONNECTION_REDIRECT_CONTEXT`;
+        // - there is no pre-handoff failure path after this assignment because
+        //   the only remaining step is `FwpsApplyModifiedLayerData0`.
         (*writable_connect_request).localRedirectContext = context_ptr;
         (*writable_connect_request).localRedirectContextSize = redirect_context.len() as u64;
 
@@ -189,7 +193,7 @@ pub(crate) unsafe extern "C" fn on_callout_classify(
         }
     }
 
-    complete_writable_classify(classify_handle, writable_layer_data, classify_out);
+    apply_and_release_writable_classify(classify_handle, writable_layer_data, classify_out);
 }
 
 fn on_udp_auth_connect_classify(
@@ -296,12 +300,16 @@ fn continue_action(classify_out: *mut FWPS_CLASSIFY_OUT0) {
     }
 }
 
-fn complete_writable_classify(
+fn apply_and_release_writable_classify(
     classify_handle: u64,
     writable_layer_data: *mut c_void,
     classify_out: *mut FWPS_CLASSIFY_OUT0,
 ) {
     unsafe {
+        // `FwpsAcquireWritableLayerDataPointer0` requires the classify handle to
+        // be completed with `FwpsApplyModifiedLayerData0`, even when we leave the
+        // data unchanged. If a redirect context was attached to the writable
+        // connect request, this is the point where ownership transfers to WFP.
         FwpsApplyModifiedLayerData0(classify_handle, writable_layer_data, 0);
         FwpsReleaseClassifyHandle0(classify_handle);
         if !classify_out.is_null() && ((*classify_out).rights & FWPS_RIGHT_ACTION_WRITE) != 0 {

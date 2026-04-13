@@ -16,6 +16,22 @@ use crate::log;
 const DEVICE_NAME: &str = "\\Device\\SafechainL4Proxy";
 const DEVICE_SYMBOLIC_LINK: &str = "\\??\\SafechainL4Proxy";
 
+/// `METHOD_BUFFERED` from `devioctl.h`.
+///
+/// For `IRP_MJ_DEVICE_CONTROL`, the transfer method is encoded in the low two
+/// bits of the IOCTL value (`METHOD_FROM_CTL_CODE(ctrlCode) == ctrlCode & 3`).
+/// Microsoft documents `METHOD_BUFFERED` as value `0`.
+/// Docs:
+/// - https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/irp-based-ioctl-and-fsctl-operations
+/// - https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/defining-i-o-control-codes
+/// - https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/buffer-descriptions-for-i-o-control-codes
+const METHOD_BUFFERED: u32 = 0;
+
+#[inline(always)]
+fn ioctl_transfer_method(ioctl_code: u32) -> u32 {
+    ioctl_code & 0x3
+}
+
 /// Initialize kernel control device + symbolic link and wire dispatch table.
 ///
 /// WDK references (`ntddk.h`):
@@ -100,6 +116,16 @@ extern "C" fn dispatch_device_control(_device: PDEVICE_OBJECT, irp: PIRP) -> NTS
     }
 
     let dic = unsafe { (*irp_sp).Parameters.DeviceIoControl };
+    // Our private IOCTLs are defined with METHOD_BUFFERED, so `SystemBuffer` is
+    // only valid when the transfer method extracted from the IOCTL is `0`.
+    if ioctl_transfer_method(dic.IoControlCode) != METHOD_BUFFERED {
+        log::driver_log_warn!(
+            "device control request rejected due to unsupported transfer method (ioctl={:#x})",
+            dic.IoControlCode
+        );
+        return complete_request(irp, STATUS_INVALID_DEVICE_REQUEST, 0);
+    }
+
     let input_len = dic.InputBufferLength as usize;
     let input = unsafe {
         // SAFETY: for METHOD_BUFFERED, SystemBuffer points to input/output buffer owned by I/O manager.
