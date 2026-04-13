@@ -1,4 +1,7 @@
 #[cfg(target_os = "windows")]
+use std::path::PathBuf;
+
+#[cfg(target_os = "windows")]
 fn main() -> Result<(), wdk_build::ConfigError> {
     use std::{env, fs, path::PathBuf};
 
@@ -19,6 +22,8 @@ fn main() -> Result<(), wdk_build::ConfigError> {
         PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR must be set for build scripts"));
     let header_path = out_dir.join("wfp_bindings.h");
     let bindings_path = out_dir.join("wfp_bindings.rs");
+    let rc_path = out_dir.join("safechain_lib_l4_proxy_windows_driver.rc");
+    let res_path = out_dir.join("safechain_lib_l4_proxy_windows_driver.res");
 
     fs::write(&header_path, header_contents)
         .map_err(|source| wdk_build::IoError::with_path(&header_path, source))?;
@@ -56,8 +61,131 @@ fn main() -> Result<(), wdk_build::ConfigError> {
         .write_to_file(&bindings_path)
         .map_err(|source| wdk_build::IoError::with_path(&bindings_path, source))?;
 
+    let version = env!("CARGO_PKG_VERSION");
+    let [major, minor, patch] = parse_version_triplet(version);
+    let file_version_commas = format!("{major},{minor},{patch},0");
+    let file_version_dots = format!("{major}.{minor}.{patch}.0");
+    let rc_contents = format!(
+        r#"#include <winver.h>
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION {file_version_commas}
+ PRODUCTVERSION {file_version_commas}
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS VS_FF_DEBUG
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_DRV
+ FILESUBTYPE VFT2_DRV_SYSTEM
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "Aikido Security BV\0"
+            VALUE "FileDescription", "SafeChain L4 Proxy Windows Driver\0"
+            VALUE "FileVersion", "{file_version_dots}\0"
+            VALUE "InternalName", "safechain_lib_l4_proxy_windows_driver.sys\0"
+            VALUE "LegalCopyright", "Copyright (c) Aikido Security BV\0"
+            VALUE "OriginalFilename", "safechain_lib_l4_proxy_windows_driver.sys\0"
+            VALUE "ProductName", "SafeChain L4 Proxy\0"
+            VALUE "ProductVersion", "{file_version_dots}\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END
+"#
+    );
+    fs::write(&rc_path, rc_contents)
+        .map_err(|source| wdk_build::IoError::with_path(&rc_path, source))?;
+
+    let rc_exe = find_rc_exe().ok_or_else(|| {
+        wdk_build::ConfigError::from(wdk_build::IoError::with_path(
+            "rc.exe",
+            std::io::Error::new(std::io::ErrorKind::NotFound, "Windows rc.exe not found"),
+        ))
+    })?;
+    let mut rc_command = std::process::Command::new(&rc_exe);
+    rc_command
+        .arg("/nologo")
+        .arg(format!("/fo{}", res_path.display()));
+    for include_path in config.include_paths()? {
+        rc_command.arg(format!("/I{}", include_path.display()));
+    }
+    if let Some(include_root) = find_windows_sdk_include_root() {
+        rc_command.arg(format!("/I{}", include_root.join("shared").display()));
+        rc_command.arg(format!("/I{}", include_root.join("um").display()));
+    }
+    let status = rc_command
+        .arg(&rc_path)
+        .status()
+        .map_err(|source| wdk_build::IoError::with_path(&rc_exe, source))?;
+    if !status.success() {
+        return Err(wdk_build::ConfigError::from(wdk_build::IoError::with_path(
+            &rc_exe,
+            std::io::Error::other(format!("rc.exe failed with status {status}")),
+        )));
+    }
+
+    println!("cargo:rustc-link-arg-cdylib={}", res_path.display());
+
     Ok(())
 }
 
 #[cfg(not(target_os = "windows"))]
 fn main() {}
+
+#[cfg(target_os = "windows")]
+fn parse_version_triplet(version: &str) -> [u16; 3] {
+    let mut parts = version.split('.');
+    let parse = |part: Option<&str>| -> u16 {
+        part.expect("CARGO_PKG_VERSION should have three numeric parts")
+            .parse()
+            .expect("CARGO_PKG_VERSION should contain only numeric components")
+    };
+    [
+        parse(parts.next()),
+        parse(parts.next()),
+        parse(parts.next()),
+    ]
+}
+
+#[cfg(target_os = "windows")]
+fn find_rc_exe() -> Option<PathBuf> {
+    let kits_root = PathBuf::from(r"C:\Program Files (x86)\Windows Kits\10\bin");
+    let entries = std::fs::read_dir(kits_root).ok()?;
+    let mut candidates = entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().ok().is_some_and(|kind| kind.is_dir()))
+        .filter_map(|entry| {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            let valid = name
+                .split('.')
+                .all(|segment| !segment.is_empty() && segment.chars().all(|c| c.is_ascii_digit()));
+            valid.then_some(entry.path().join("x64").join("rc.exe"))
+        })
+        .collect::<Vec<_>>();
+    candidates.sort();
+    candidates.into_iter().rev().find(|path| path.exists())
+}
+
+#[cfg(target_os = "windows")]
+fn find_windows_sdk_include_root() -> Option<PathBuf> {
+    let include_root = PathBuf::from(r"C:\Program Files (x86)\Windows Kits\10\Include");
+    let entries = std::fs::read_dir(include_root).ok()?;
+    let mut candidates = entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().ok().is_some_and(|kind| kind.is_dir()))
+        .map(|entry| entry.path())
+        .filter(|path| path.join("um").join("winver.h").exists() && path.join("shared").exists())
+        .collect::<Vec<_>>();
+    candidates.sort();
+    candidates.pop()
+}

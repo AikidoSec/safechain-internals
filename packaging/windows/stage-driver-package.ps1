@@ -110,6 +110,7 @@ $ErrorActionPreference = "Stop"
 
 $ProjectDir = (Get-Item (Split-Path -Parent $MyInvocation.MyCommand.Path)).Parent.Parent.FullName
 $DriverDir = Join-Path $ProjectDir "proxy-lib-l4-windows-driver"
+$WorkspaceCargoToml = Join-Path $ProjectDir "Cargo.toml"
 $DefaultDriverSysPath = Join-Path $ProjectDir "target\$Profile\safechain_lib_l4_proxy_windows_driver.sys"
 $TemplatePath = Join-Path $DriverDir "safechain_lib_l4_proxy_windows_driver.inx"
 $OutputDir = if ($OutputDir) {
@@ -131,6 +132,21 @@ $DriverHardwareId = "Root\SafeChainL4Proxy"
 $InfPath = Join-Path $OutputDir $InfFileName
 $CatPath = Join-Path $OutputDir $CatFileName
 
+function Get-WorkspaceVersion {
+    param([string]$CargoTomlPath)
+
+    if (-not (Test-Path $CargoTomlPath)) {
+        throw "Workspace Cargo.toml not found: $CargoTomlPath"
+    }
+
+    $match = Select-String -Path $CargoTomlPath -Pattern '^\s*version = "([^"]+)"' | Select-Object -First 1
+    if (-not $match) {
+        throw "Could not determine workspace version from $CargoTomlPath"
+    }
+
+    return $match.Matches[0].Groups[1].Value
+}
+
 if (-not (Test-Path $TemplatePath)) {
     throw "INF template not found: $TemplatePath"
 }
@@ -143,11 +159,20 @@ New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 Copy-Item -LiteralPath $DriverSysPath -Destination (Join-Path $OutputDir $DriverFileName) -Force
 
 $infContents = Get-Content -LiteralPath $TemplatePath -Raw
+$workspaceVersion = Get-WorkspaceVersion -CargoTomlPath $WorkspaceCargoToml
+$driverVersion = "$workspaceVersion.0"
+$driverDate = Get-Date -Format 'MM/dd/yyyy'
+$infContents = [Regex]::Replace(
+    $infContents,
+    '(?m)^DriverVer\s*=.*$',
+    "DriverVer   = $driverDate,$driverVersion"
+)
 Set-Content -LiteralPath $InfPath -Value $infContents -Encoding ASCII
 
 Write-Host "Staged driver package:" -ForegroundColor Green
 Write-Host "  sys: $DriverSysPath"
 Write-Host "  inf: $InfPath"
+Write-Host "  driver date/version: $driverDate / $driverVersion"
 Write-Host "  out: $OutputDir"
 Write-Host "  service: $DriverServiceName"
 Write-Host "  hardware id: $DriverHardwareId"

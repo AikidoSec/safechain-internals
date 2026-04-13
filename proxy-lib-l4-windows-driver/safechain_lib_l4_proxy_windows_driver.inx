@@ -8,7 +8,7 @@ Signature   = "$WINDOWS NT$"
 Class       = System
 ClassGuid   = {4D36E97D-E325-11CE-BFC1-08002BE10318}
 Provider    = %ProviderString%
-DriverVer   = 04/09/2026,1.0.0.0
+DriverVer   = 04/13/2026,1.0.0.0
 CatalogFile.NTAMD64 = safechain_lib_l4_proxy_windows_driver.cat
 PnpLockDown = 1
 

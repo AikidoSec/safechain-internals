@@ -308,7 +308,7 @@ windows-driver-test *ARGS:
 windows-driver-build profile="dev" *ARGS:
    @cargo install cargo-wdk
    @cargo install cargo-make
-   cargo wdk build --profile {{profile}} {{ARGS}}
+   $env:STAMPINF_VERSION=((Get-Content '..\Cargo.toml' | Select-String '^version = "([^"]+)"').Matches[0].Groups[1].Value + '.0'); cargo wdk build --profile {{profile}} {{ARGS}}
 
 [working-directory: './proxy-lib-l4-windows-driver']
 windows-driver-build-verify profile="dev" *ARGS:
