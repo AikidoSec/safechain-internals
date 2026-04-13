@@ -84,21 +84,6 @@ lipo -create \
     -output "bin/endpoint-protection-ui-darwin-universal.app/Contents/MacOS/$APP_BINARY_NAME"
 echo "✓ Agent UI built: bin/endpoint-protection-ui-darwin-universal.app"
 
-echo "Building safechain-l7-proxy for x86_64-apple-darwin..."
-rustup target add x86_64-apple-darwin 2>/dev/null || true
-cargo build --release --bin safechain-l7-proxy --target x86_64-apple-darwin
-
-echo "Building safechain-l7-proxy for aarch64-apple-darwin..."
-rustup target add aarch64-apple-darwin 2>/dev/null || true
-cargo build --release --bin safechain-l7-proxy --target aarch64-apple-darwin
-
-echo "Creating universal proxy binary with lipo..."
-lipo -create \
-    target/x86_64-apple-darwin/release/safechain-l7-proxy \
-    target/aarch64-apple-darwin/release/safechain-l7-proxy \
-    -output bin/safechain-l7-proxy-darwin-universal
-echo "✓ L7 Proxy built: bin/safechain-l7-proxy-darwin-universal"
-
 if ! command -v xcodegen &> /dev/null; then
     echo "xcodegen could not be found. Please install it using:"
     echo "   brew install xcodegen"
@@ -150,7 +135,6 @@ echo "✓ L4 Network Extension app built: bin/Aikido Network Extension.app"
 
 lipo -info bin/endpoint-protection-darwin-universal
 lipo -info "bin/endpoint-protection-ui-darwin-universal.app/Contents/MacOS/$APP_BINARY_NAME"
-lipo -info bin/safechain-l7-proxy-darwin-universal
 echo ""
 
 # =============================================================================
@@ -188,18 +172,9 @@ if security find-identity -v -p codesigning | grep "Developer ID Application" > 
              "$PROJECT_DIR/bin/endpoint-protection-ui-darwin-universal.app"
     echo "✓ Agent UI signed"
 
-    codesign --sign "$CERT_IDENTITY" \
-             --force \
-             --timestamp \
-             --options runtime \
-             "$PROJECT_DIR/bin/safechain-l7-proxy-darwin-universal"
-    echo "✓ L7 Proxy signed"
-    echo ""
-
     echo "Verifying binary signatures..."
     codesign --verify --verbose "$PROJECT_DIR/bin/endpoint-protection-darwin-universal"
     codesign --verify --verbose "$PROJECT_DIR/bin/endpoint-protection-ui-darwin-universal.app"
-    codesign --verify --verbose "$PROJECT_DIR/bin/safechain-l7-proxy-darwin-universal"
     echo "✓ Binary signatures verified"
 
     echo "Verifying L4 proxy app signature (signed by Xcode)..."

@@ -72,12 +72,7 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 		return nil, fmt.Errorf("failed to create config")
 	}
 
-	var proxyManager proxy.ProxyManager
-	if cfg.GetProxyMode() == config.ProxyModeL4 {
-		proxyManager = proxy.NewL4()
-	} else {
-		proxyManager = proxy.NewL7()
-	}
+	proxyManager := proxy.NewL4()
 
 	d := &Daemon{
 		versionInfo: version.Info,
@@ -146,7 +141,7 @@ func (d *Daemon) Stop(ctx context.Context) error {
 
 		d.uiManager.Kill()
 
-		if err := setup.Teardown(ctx, d.config.GetProxyMode()); err != nil {
+		if err := setup.Teardown(ctx); err != nil {
 			log.Printf("Error teardown setup: %v", err)
 		}
 
@@ -205,7 +200,7 @@ func (d *Daemon) run(ctx context.Context) error {
 	ticker := time.NewTicker(constants.DaemonHeartbeatInterval)
 	defer ticker.Stop()
 
-	log.Printf("Daemon is running in %s proxy mode...", d.config.GetProxyMode())
+	log.Println("Daemon is running...")
 
 	if !proxy.ProxyCAInstalled() {
 		log.Println("First time we setup the proxy, uninstall previous setups...")
@@ -240,7 +235,7 @@ func (d *Daemon) run(ctx context.Context) error {
 		}
 	}
 
-	if err := setup.Install(ctx, d.config.GetProxyMode()); err != nil {
+	if err := setup.Install(ctx); err != nil {
 		platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to install setup: %v", err))
 		return fmt.Errorf("failed to install setup: %v", err)
 	}
@@ -343,7 +338,7 @@ func (d *Daemon) printDaemonStatus() {
 	log.Println("Daemon status:")
 	if d.proxy.IsRunning() {
 		proxyVersion, _ := d.proxy.Version()
-		log.Printf("\t- Proxy (%s): %s", d.config.GetProxyMode(), proxyVersion)
+		log.Printf("\t- Proxy: %s", proxyVersion)
 	} else {
 		log.Println("\t- Proxy: not running!")
 	}
@@ -511,7 +506,6 @@ func (d *Daemon) initLogging(ctx context.Context) {
 
 	reapableLogs := []string{
 		platform.GetUltimateLogPath(),
-		platform.GetProxyLogPath(),
 		platform.GetUILogPath(),
 	}
 	for _, path := range reapableLogs {

@@ -39,20 +39,6 @@ func ProxyCAInstalled() bool {
 
 const l4HijackCAURL = "http://mitm.ramaproxy.org/data/root.ca.pem"
 
-func DownloadCACertFromL7Proxy() error {
-	metaUrl, _, _, err := GetMetaUrls()
-	if err != nil {
-		return fmt.Errorf("failed to get meta url: %v", err)
-	}
-
-	if err := utils.DownloadBinary(context.Background(), metaUrl+"/ca", GetCaCertPath()); err != nil {
-		return fmt.Errorf("failed to download ca cert: %v", err)
-	}
-
-	log.Println("Downloaded CA cert from proxy:", GetCaCertPath())
-	return nil
-}
-
 func DownloadCACertFromL4Proxy(ctx context.Context) error {
 	if err := utils.DownloadBinary(ctx, l4HijackCAURL, GetCaCertPath()); err != nil {
 		return fmt.Errorf("failed to download CA cert from L4 proxy: %v", err)
@@ -77,14 +63,6 @@ func installDownloadedProxyCA(ctx context.Context) error {
 	log.Println("Installed CA cert successfully")
 
 	return nil
-}
-
-func InstallL7ProxyCA(ctx context.Context) error {
-	log.Println("Installing L7 proxy CA...")
-	if err := DownloadCACertFromL7Proxy(); err != nil {
-		return err
-	}
-	return installDownloadedProxyCA(ctx)
 }
 
 func InstallL4ProxyCA(ctx context.Context) error {

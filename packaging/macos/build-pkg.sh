@@ -65,7 +65,6 @@ echo "  Project directory: $PROJECT_DIR"
 # Verify binaries exist
 AGENT_BIN="$BIN_DIR/endpoint-protection-darwin-$ARCH"
 AGENT_UI_APP="$BIN_DIR/endpoint-protection-ui-darwin-$ARCH.app"
-PROXY_BIN="$BIN_DIR/safechain-l7-proxy-darwin-$ARCH"
 L4_PROXY_APP="$BIN_DIR/Aikido Network Extension.app"
 
 if [ ! -f "$AGENT_BIN" ]; then
@@ -75,11 +74,6 @@ fi
 
 if [ ! -d "$AGENT_UI_APP" ]; then
     echo "Error: endpoint-protection-ui app not found at $AGENT_UI_APP" >&2
-    exit 1
-fi
-
-if [ ! -f "$PROXY_BIN" ]; then
-    echo "Error: safechain-l7-proxy binary not found at $PROXY_BIN" >&2
     exit 1
 fi
 
@@ -117,13 +111,10 @@ chmod 644 "$LOGS_DIR/.keep"
 echo "Copying Aikido Endpoint Protection app bundle..."
 cp -R "$AGENT_UI_APP" "$EP_APP_DIR"
 
-# Embed daemon binary and L7 proxy inside the app bundle
 echo "Embedding binaries into app bundle..."
 mkdir -p "$EP_APP_DIR/Contents/Resources/bin"
 cp "$AGENT_BIN" "$EP_APP_DIR/Contents/Resources/bin/endpoint-protection"
-cp "$PROXY_BIN" "$EP_APP_DIR/Contents/Resources/bin/safechain-l7-proxy"
 chmod 755 "$EP_APP_DIR/Contents/Resources/bin/endpoint-protection"
-chmod 755 "$EP_APP_DIR/Contents/Resources/bin/safechain-l7-proxy"
 
 # Embed uninstall script into the app bundle
 echo "Embedding scripts into app bundle..."

@@ -80,11 +80,6 @@ update "$PREV_FILE" \
   "s/(MARKETING_VERSION: ).+/\1${VERSION}/" \
   "s/(CURRENT_PROJECT_VERSION: ).+/\1${VERSION}/"
 
-PREV_FILE="$REPO_ROOT/packaging/macos/xcode/l7-proxy/project.yml"
-update "$PREV_FILE" \
-  "s/(MARKETING_VERSION: ).+/\1${VERSION}/" \
-  "s/(CURRENT_PROJECT_VERSION: ).+/\1${VERSION}/"
-
 PREV_FILE="$REPO_ROOT/ui/build/windows/msix/app_manifest.xml"
 update "$PREV_FILE" \
   "s/([[:space:]]Version=\")[^\"]+(\")/\1${VERSION}\2/"

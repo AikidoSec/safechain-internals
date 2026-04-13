@@ -7,9 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/AikidoSec/safechain-internals/internal/config"
-	set_system_proxy "github.com/AikidoSec/safechain-internals/internal/setup/steps/01_set_system_proxy"
-	configure_maven "github.com/AikidoSec/safechain-internals/internal/setup/steps/02_configure_maven"
 	configure_certificate_trust "github.com/AikidoSec/safechain-internals/internal/setup/steps/03_configure_certificate_trust"
 )
 
@@ -18,13 +15,8 @@ type Runner struct {
 	uninstall bool
 }
 
-func NewRunner(proxyMode string, uninstall bool) *Runner {
-	// L4: cert trust only
-	// L7: system proxy + maven + cert trust
+func NewRunner(uninstall bool) *Runner {
 	steps := []Step{configure_certificate_trust.New()}
-	if proxyMode == config.ProxyModeL7 {
-		steps = append([]Step{set_system_proxy.New(), configure_maven.New()}, steps...)
-	}
 	return &Runner{steps: steps, uninstall: uninstall}
 }
 

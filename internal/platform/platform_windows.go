@@ -25,9 +25,6 @@ const (
 	EndpointProtectionErrLogName   = "EndpointProtection.err"
 	SafeChainUILogName             = "EndpointProtectionUI.log"
 	SafeChainUIAppName             = "EndpointProtectionUI.exe"
-	SafeChainL7ProxyBinaryName     = "SafeChainL7Proxy.exe"
-	SafeChainL7ProxyLogName        = "SafeChainL7Proxy.log"
-	SafeChainL7ProxyErrLogName     = "SafeChainL7Proxy.err"
 	SafeChainUIAppPath             = `C:\Program Files\AikidoSecurity\EndpointProtection\bin\EndpointProtectionUI.exe`
 	SafeChainSbomJSONName          = "EndpointProtectionSBOM.json"
 	SafeChainInstallScriptName     = "install-safe-chain.ps1"
@@ -263,7 +260,6 @@ func IsProxyCAInstalled(ctx context.Context) error {
 func UninstallProxyCA(ctx context.Context) error {
 	commandsToExecute := []utils.Command{
 		{Command: "certutil", Args: []string{"-delstore", "Root", "aikidosafechain.com"}},
-		{Command: "cmdkey", Args: []string{"/delete:safechain-l7-proxy.tls-root-ca-key"}},
 	}
 	_, err := utils.RunCommands(ctx, commandsToExecute)
 	if err != nil {

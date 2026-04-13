@@ -26,8 +26,6 @@ if [ -d "$EP_APP" ]; then
 else
     echo "Warning: App bundle not found at $EP_APP"
 fi
-chmod 755 "$EP_BIN_DIR/safechain-l7-proxy"
-
 if [ -d "$L4_APP" ]; then
     echo "Registering L4 proxy app..."
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$L4_APP"

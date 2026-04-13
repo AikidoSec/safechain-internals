@@ -10,25 +10,12 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
 
-const (
-	ProxyModeL4 = "l4"
-	ProxyModeL7 = "l7"
-)
-
 type ConfigInfo struct {
 	Token                   string    `json:"token"`
 	DeviceID                string    `json:"device_id"`
 	LastHeartbeatReportTime time.Time `json:"last_heartbeat_report_time"`
 	LastSBOMReportTime      time.Time `json:"last_sbom_report_time"`
 	BaseURL                 string    `json:"base_url,omitempty"`
-	ProxyMode               string    `json:"proxy_mode,omitempty"`
-}
-
-func (c *ConfigInfo) GetProxyMode() string {
-	if c.ProxyMode == ProxyModeL7 {
-		return ProxyModeL7
-	}
-	return ProxyModeL4
 }
 
 func (c *ConfigInfo) GetBaseURL() string {
