@@ -19,7 +19,10 @@ pub(crate) trait RemoteResourceSpec: Send + Sync + 'static {
     type Payload: Serialize + DeserializeOwned + Clone + Send + Sync + 'static;
     type State: Default + Send + Sync + 'static;
 
-    fn refresh_interval(&self) -> Duration;
+    #[inline(always)]
+    fn refresh_interval(&self) -> Duration {
+        Duration::from_mins(10)
+    }
 
     /// Build the base outbound request for fetching this remote resource.
     ///

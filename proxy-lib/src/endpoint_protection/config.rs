@@ -1,20 +1,20 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use rama::{
     Service,
     error::{BoxError, ErrorContext, extra::OpaqueError},
     graceful::ShutdownGuard,
-    http::{Body, Request, Response, Uri, header::AUTHORIZATION},
+    http::{Body, Request, Response, Uri},
     telemetry::tracing,
-    utils::str::arcstr::ArcStr,
 };
 use tokio::sync::broadcast;
 
 use crate::{
     endpoint_protection::EcosystemKey,
-    http::{firewall::notifier::EventNotifier, headers::X_DEVICE_ID},
+    http::firewall::notifier::EventNotifier,
     storage::SyncCompactDataStorage,
     utils::remote_resource::{self, RefreshHandle, RemoteResource, RemoteResourceSpec},
+    utils::token::AgentIdentity,
 };
 
 use super::types::{EcosystemConfig, EndpointConfig};
@@ -48,15 +48,13 @@ impl RemoteEndpointConfig {
     ///
     /// * `guard` - Graceful shutdown guard for background task
     /// * `uri` - Config endpoint URL
-    /// * `token` - Permission group token
-    /// * `device_id` - External device identifier sent as `X-Device-Id`
+    /// * `agent_identity` - Identity containing token and device id headers
     /// * `sync_storage` - Storage for caching config
     /// * `client` - HTTP client for fetching config
     pub async fn try_new<C>(
         guard: ShutdownGuard,
         uri: Uri,
-        token: ArcStr,
-        device_id: ArcStr,
+        agent_identity: AgentIdentity,
         sync_storage: SyncCompactDataStorage,
         client: C,
         notifier: Option<EventNotifier>,
@@ -71,8 +69,7 @@ impl RemoteEndpointConfig {
             client,
             Arc::new(EndpointConfigRemoteResource {
                 uri,
-                token,
-                device_id,
+                agent_identity,
                 notifier,
                 updates: updates.clone(),
             }),
@@ -130,8 +127,7 @@ impl RemoteEndpointConfig {
 
 struct EndpointConfigRemoteResource {
     uri: Uri,
-    token: ArcStr,
-    device_id: ArcStr,
+    agent_identity: AgentIdentity,
     notifier: Option<EventNotifier>,
     updates: broadcast::Sender<Arc<Option<EndpointConfig>>>,
 }
@@ -140,29 +136,12 @@ impl RemoteResourceSpec for EndpointConfigRemoteResource {
     type Payload = EndpointConfig;
     type State = Option<EndpointConfig>;
 
-    fn refresh_interval(&self) -> Duration {
-        Duration::from_secs(60)
-    }
-
     fn build_request(&self) -> Result<Request, BoxError> {
         let mut req = Request::builder()
             .uri(self.uri.clone())
             .body(Body::empty())
             .context("build endpoint protection config http request")?;
-        req.headers_mut().insert(
-            AUTHORIZATION,
-            self.token
-                .as_str()
-                .try_into()
-                .context("convert endpoint token into authorization header value")?,
-        );
-        req.headers_mut().insert(
-            X_DEVICE_ID,
-            self.device_id
-                .as_str()
-                .try_into()
-                .context("convert endpoint device_id into x-device-id header value")?,
-        );
+        self.agent_identity.add_request_headers(&mut req)?;
         Ok(req)
     }
 

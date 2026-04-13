@@ -20,7 +20,7 @@ use rama::{
     rt::Executor,
     service::BoxService,
     telemetry::tracing,
-    utils::{backoff::ExponentialBackoff, rng::HasherRng, str::arcstr::ArcStr},
+    utils::{backoff::ExponentialBackoff, rng::HasherRng},
 };
 
 #[cfg(feature = "pac")]
@@ -101,8 +101,7 @@ impl Firewall {
                 match RemoteEndpointConfig::try_new(
                     guard.clone(),
                     endpoint_config_uri.clone(),
-                    ArcStr::from(identity.token.as_ref()),
-                    ArcStr::from(identity.device_id.as_ref()),
+                    identity.clone(),
                     data.clone(),
                     layered_client.clone(),
                     notifier.clone(),
@@ -128,6 +127,7 @@ impl Firewall {
                     guard.clone(),
                     identity,
                     aikido_url,
+                    data.clone(),
                     layered_client.clone(),
                 )
                 .await

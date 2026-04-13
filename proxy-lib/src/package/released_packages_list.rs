@@ -1,4 +1,4 @@
-use std::{fmt, marker::PhantomData, sync::Arc, time::Duration};
+use std::{fmt, marker::PhantomData, sync::Arc};
 
 use rama::{
     Service,
@@ -119,10 +119,6 @@ where
 {
     type Payload = Vec<ReleasedPackageData>;
     type State = ReleasedPackagesTrie<K>;
-
-    fn refresh_interval(&self) -> Duration {
-        Duration::from_mins(10)
-    }
 
     fn build_request(&self) -> Result<Request, BoxError> {
         Request::builder()
