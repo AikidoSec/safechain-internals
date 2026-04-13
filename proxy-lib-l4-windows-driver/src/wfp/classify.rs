@@ -259,7 +259,7 @@ fn auth_connect_remote(in_fixed_values: *const FWPS_INCOMING_VALUES0) -> Option<
                 }
                 Ipv4Addr::from(addr.__bindgen_anon_1.uint32.to_be_bytes())
             };
-            let port = unsafe { u16::from_be(port.__bindgen_anon_1.uint16) };
+            let port = unsafe { port.__bindgen_anon_1.uint16 };
             Some(SocketAddr::new(IpAddr::V4(ip), port))
         }
         FWPS_LAYER_ALE_AUTH_CONNECT_V6 => {
@@ -276,7 +276,7 @@ fn auth_connect_remote(in_fixed_values: *const FWPS_INCOMING_VALUES0) -> Option<
                 let bytes: &FWP_BYTE_ARRAY16 = addr.__bindgen_anon_1.byteArray16.as_ref()?;
                 Ipv6Addr::from(bytes.byteArray16)
             };
-            let port = unsafe { u16::from_be(port.__bindgen_anon_1.uint16) };
+            let port = unsafe { port.__bindgen_anon_1.uint16 };
             Some(SocketAddr::new(IpAddr::V6(ip), port))
         }
         _ => None,
@@ -403,9 +403,7 @@ mod tests {
             FWPS_INCOMING_VALUE0 {
                 value: FWP_VALUE0 {
                     type_: FWP_UINT16,
-                    __bindgen_anon_1: FWP_VALUE0_0 {
-                        uint16: u16::to_be(443),
-                    },
+                    __bindgen_anon_1: FWP_VALUE0_0 { uint16: 443 },
                 },
             },
         ];
@@ -451,9 +449,7 @@ mod tests {
             FWPS_INCOMING_VALUE0 {
                 value: FWP_VALUE0 {
                     type_: FWP_UINT16,
-                    __bindgen_anon_1: FWP_VALUE0_0 {
-                        uint16: u16::to_be(443),
-                    },
+                    __bindgen_anon_1: FWP_VALUE0_0 { uint16: 443 },
                 },
             },
         ];
