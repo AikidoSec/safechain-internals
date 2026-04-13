@@ -93,6 +93,11 @@ struct KernelCalloutRegistration {
 
 static KERNEL_CALLOUT_REGISTRATION: Mutex<Option<KernelCalloutRegistration>> = Mutex::new(None);
 
+const TCP_REDIRECT_V4: &GUID = &GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4;
+const TCP_REDIRECT_V6: &GUID = &GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6;
+const UDP_AUTH_CONNECT_BLOCK_V4: &GUID = &GUID_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4;
+const UDP_AUTH_CONNECT_BLOCK_V6: &GUID = &GUID_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6;
+
 pub fn register_callouts(device_object: *mut c_void) -> NTSTATUS {
     if device_object.is_null() {
         return STATUS_INVALID_PARAMETER;
@@ -113,32 +118,17 @@ pub fn register_callouts(device_object: *mut c_void) -> NTSTATUS {
     }
 
     let mut tcp_callout_id_v4 = 0_u32;
-    let tcp_callout_v4 = FWPS_CALLOUT1 {
-        calloutKey: GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4,
-        flags: 0,
-        classifyFn: Some(on_callout_classify),
-        notifyFn: Some(on_callout_notify),
-        flowDeleteFn: Some(on_callout_flow_delete),
-    };
-    let status_v4 =
-        unsafe { FwpsCalloutRegister1(device_object, &tcp_callout_v4, &mut tcp_callout_id_v4) };
+    let status_v4 = register_callout(device_object, TCP_REDIRECT_V4, &mut tcp_callout_id_v4);
     if status_v4 != STATUS_SUCCESS {
         unsafe { FwpsRedirectHandleDestroy0(redirect_handle) };
         return status_v4;
     }
 
     let mut tcp_v6_id = 0_u32;
-    let tcp_callout_v6 = FWPS_CALLOUT1 {
-        calloutKey: GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
-        flags: 0,
-        classifyFn: Some(on_callout_classify),
-        notifyFn: Some(on_callout_notify),
-        flowDeleteFn: Some(on_callout_flow_delete),
-    };
-    let status_v6 = unsafe { FwpsCalloutRegister1(device_object, &tcp_callout_v6, &mut tcp_v6_id) };
+    let status_v6 = register_callout(device_object, TCP_REDIRECT_V6, &mut tcp_v6_id);
     if status_v6 != STATUS_SUCCESS {
         unsafe {
-            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4);
+            unregister_callouts_by_key(&[TCP_REDIRECT_V4]);
             FwpsRedirectHandleDestroy0(redirect_handle);
         }
         return status_v6;
@@ -146,39 +136,28 @@ pub fn register_callouts(device_object: *mut c_void) -> NTSTATUS {
     let tcp_callout_id_v6 = Some(tcp_v6_id);
 
     let mut udp_callout_id_v4 = 0_u32;
-    let udp_callout_v4 = FWPS_CALLOUT1 {
-        calloutKey: GUID_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4,
-        flags: 0,
-        classifyFn: Some(on_callout_classify),
-        notifyFn: Some(on_callout_notify),
-        flowDeleteFn: Some(on_callout_flow_delete),
-    };
-    let udp_status_v4 =
-        unsafe { FwpsCalloutRegister1(device_object, &udp_callout_v4, &mut udp_callout_id_v4) };
+    let udp_status_v4 = register_callout(
+        device_object,
+        UDP_AUTH_CONNECT_BLOCK_V4,
+        &mut udp_callout_id_v4,
+    );
     if udp_status_v4 != STATUS_SUCCESS {
         unsafe {
-            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6);
-            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4);
+            unregister_callouts_by_key(&[TCP_REDIRECT_V6, TCP_REDIRECT_V4]);
             FwpsRedirectHandleDestroy0(redirect_handle);
         }
         return udp_status_v4;
     }
 
     let mut udp_v6_id = 0_u32;
-    let udp_callout_v6 = FWPS_CALLOUT1 {
-        calloutKey: GUID_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6,
-        flags: 0,
-        classifyFn: Some(on_callout_classify),
-        notifyFn: Some(on_callout_notify),
-        flowDeleteFn: Some(on_callout_flow_delete),
-    };
-    let udp_status_v6 =
-        unsafe { FwpsCalloutRegister1(device_object, &udp_callout_v6, &mut udp_v6_id) };
+    let udp_status_v6 = register_callout(device_object, UDP_AUTH_CONNECT_BLOCK_V6, &mut udp_v6_id);
     if udp_status_v6 != STATUS_SUCCESS {
         unsafe {
-            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4);
-            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6);
-            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4);
+            unregister_callouts_by_key(&[
+                UDP_AUTH_CONNECT_BLOCK_V4,
+                TCP_REDIRECT_V6,
+                TCP_REDIRECT_V4,
+            ]);
             FwpsRedirectHandleDestroy0(redirect_handle);
         }
         return udp_status_v6;
@@ -210,13 +189,13 @@ pub fn unregister_callouts() {
 
     unsafe {
         if reg.udp_callout_id_v6.is_some() {
-            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6);
+            unregister_callouts_by_key(&[UDP_AUTH_CONNECT_BLOCK_V6]);
         }
-        let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4);
+        unregister_callouts_by_key(&[UDP_AUTH_CONNECT_BLOCK_V4]);
         if reg.tcp_callout_id_v6.is_some() {
-            let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6);
+            unregister_callouts_by_key(&[TCP_REDIRECT_V6]);
         }
-        let _ = FwpsCalloutUnregisterByKey0(&GUID_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4);
+        unregister_callouts_by_key(&[TCP_REDIRECT_V4]);
         FwpsRedirectHandleDestroy0(reg.redirect_handle as *mut c_void);
     }
 
@@ -238,6 +217,31 @@ unsafe extern "C" fn on_callout_notify(
 }
 
 unsafe extern "C" fn on_callout_flow_delete(_layer_id: u16, _callout_id: u32, _flow_context: u64) {}
+
+fn register_callout(
+    device_object: *mut c_void,
+    callout_key: &GUID,
+    callout_id: &mut u32,
+) -> NTSTATUS {
+    let callout = FWPS_CALLOUT1 {
+        calloutKey: *callout_key,
+        flags: 0,
+        classifyFn: Some(on_callout_classify),
+        notifyFn: Some(on_callout_notify),
+        flowDeleteFn: Some(on_callout_flow_delete),
+    };
+
+    unsafe { FwpsCalloutRegister1(device_object, &callout, callout_id) }
+}
+
+unsafe fn unregister_callouts_by_key(callout_keys: &[&GUID]) {
+    for callout_key in callout_keys {
+        let status = unsafe { FwpsCalloutUnregisterByKey0(*callout_key) };
+        if status != STATUS_SUCCESS {
+            log::driver_log_warn!("failed to unregister callout by key (status={:#x})", status);
+        }
+    }
+}
 
 fn allocate_redirect_context(bytes: &[u8]) -> *mut c_void {
     if bytes.is_empty() {

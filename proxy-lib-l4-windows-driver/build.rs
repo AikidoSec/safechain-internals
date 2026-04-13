@@ -158,34 +158,34 @@ fn parse_version_triplet(version: &str) -> [u16; 3] {
 
 #[cfg(target_os = "windows")]
 fn find_rc_exe() -> Option<PathBuf> {
-    let kits_root = PathBuf::from(r"C:\Program Files (x86)\Windows Kits\10\bin");
-    let entries = std::fs::read_dir(kits_root).ok()?;
-    let mut candidates = entries
-        .filter_map(Result::ok)
-        .filter(|entry| entry.file_type().ok().is_some_and(|kind| kind.is_dir()))
-        .filter_map(|entry| {
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            let valid = name
-                .split('.')
-                .all(|segment| !segment.is_empty() && segment.chars().all(|c| c.is_ascii_digit()));
-            valid.then_some(entry.path().join("x64").join("rc.exe"))
-        })
-        .collect::<Vec<_>>();
-    candidates.sort();
-    candidates.into_iter().rev().find(|path| path.exists())
+    newest_windows_kit_version_dir(r"C:\Program Files (x86)\Windows Kits\10\bin")
+        .map(|path| path.join("x64").join("rc.exe"))
+        .filter(|path| path.exists())
 }
 
 #[cfg(target_os = "windows")]
 fn find_windows_sdk_include_root() -> Option<PathBuf> {
-    let include_root = PathBuf::from(r"C:\Program Files (x86)\Windows Kits\10\Include");
-    let entries = std::fs::read_dir(include_root).ok()?;
-    let mut candidates = entries
+    newest_windows_kit_version_dir(r"C:\Program Files (x86)\Windows Kits\10\Include")
+        .filter(|path| path.join("um").join("winver.h").exists() && path.join("shared").exists())
+}
+
+#[cfg(target_os = "windows")]
+fn newest_windows_kit_version_dir(root: &str) -> Option<PathBuf> {
+    let mut candidates = std::fs::read_dir(root)
+        .ok()?
         .filter_map(Result::ok)
         .filter(|entry| entry.file_type().ok().is_some_and(|kind| kind.is_dir()))
-        .map(|entry| entry.path())
-        .filter(|path| path.join("um").join("winver.h").exists() && path.join("shared").exists())
+        .filter_map(|entry| is_windows_kit_version_dir(&entry).then_some(entry.path()))
         .collect::<Vec<_>>();
     candidates.sort();
     candidates.pop()
+}
+
+#[cfg(target_os = "windows")]
+fn is_windows_kit_version_dir(entry: &std::fs::DirEntry) -> bool {
+    entry
+        .file_name()
+        .to_string_lossy()
+        .split('.')
+        .all(|segment| !segment.is_empty() && segment.chars().all(|c| c.is_ascii_digit()))
 }

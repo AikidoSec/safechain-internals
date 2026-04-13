@@ -1,6 +1,6 @@
-use alloc::{format, string::String};
 use core::{
     ffi::c_void,
+    fmt,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     ptr,
 };
@@ -50,6 +50,52 @@ pub(crate) unsafe extern "C" fn on_callout_classify(
         _ => {}
     }
 
+    let Some(context) = validate_tcp_classify(layer_data, classify_context, filter, classify_out)
+    else {
+        return;
+    };
+
+    if should_skip_redirect(in_meta_values, context.registration, classify_out) {
+        return;
+    }
+
+    let Some(flow) = decode_tcp_flow_meta(in_meta_values, context.layer_data, classify_out) else {
+        return;
+    };
+    let decision = driver_controller().classify_outbound_tcp_connect(flow);
+
+    let TcpRedirectDecision::Redirect {
+        proxy_target,
+        proxy_target_pid,
+        redirect_context,
+    } = decision
+    else {
+        continue_action(classify_out);
+        return;
+    };
+
+    apply_tcp_redirect(
+        context,
+        proxy_target,
+        proxy_target_pid,
+        &redirect_context,
+        classify_out,
+    );
+}
+
+struct TcpClassifyContext {
+    layer_data: *mut c_void,
+    classify_context: *const c_void,
+    filter: *const FWPS_FILTER1,
+    registration: KernelCalloutRegistration,
+}
+
+fn validate_tcp_classify(
+    layer_data: *mut c_void,
+    classify_context: *const c_void,
+    filter: *const FWPS_FILTER1,
+    classify_out: *mut FWPS_CLASSIFY_OUT0,
+) -> Option<TcpClassifyContext> {
     if layer_data.is_null()
         || classify_context.is_null()
         || filter.is_null()
@@ -62,36 +108,54 @@ pub(crate) unsafe extern "C" fn on_callout_classify(
             filter.is_null(),
             classify_out.is_null(),
         );
-        return;
+        return None;
     }
 
     let registration = super::KERNEL_CALLOUT_REGISTRATION.lock().as_ref().copied();
     let Some(registration) = registration else {
         log::driver_log_warn!("wfp: classify callback invoked without callout registration");
-        return;
+        return None;
     };
 
-    if let Some(state) = query_connection_redirect_state(in_meta_values, registration) {
-        match state.state {
-            FWPS_CONNECTION_REDIRECTED_BY_SELF | FWPS_CONNECTION_PREVIOUSLY_REDIRECTED_BY_SELF => {
-                log::driver_log_info!(
-                    "wfp: skip tcp redirect due to redirect state {}",
-                    state.describe()
-                );
-                continue_action(classify_out);
-                return;
-            }
-            FWPS_CONNECTION_NOT_REDIRECTED | FWPS_CONNECTION_REDIRECTED_BY_OTHER => {}
-            _ => {
-                log::driver_log_warn!(
-                    "wfp: unknown redirect state {} (details: {})",
-                    state.state,
-                    state.describe()
-                );
-            }
+    Some(TcpClassifyContext {
+        layer_data,
+        classify_context,
+        filter,
+        registration,
+    })
+}
+
+fn should_skip_redirect(
+    in_meta_values: *const super::ffi::FWPS_INCOMING_METADATA_VALUES0,
+    registration: KernelCalloutRegistration,
+    classify_out: *mut FWPS_CLASSIFY_OUT0,
+) -> bool {
+    let Some(state) = query_connection_redirect_state(in_meta_values, registration) else {
+        return false;
+    };
+
+    match state.state {
+        FWPS_CONNECTION_REDIRECTED_BY_SELF | FWPS_CONNECTION_PREVIOUSLY_REDIRECTED_BY_SELF => {
+            log::driver_log_info!("wfp: skip tcp redirect due to redirect state {state}");
+            continue_action(classify_out);
+            true
+        }
+        FWPS_CONNECTION_NOT_REDIRECTED | FWPS_CONNECTION_REDIRECTED_BY_OTHER => false,
+        _ => {
+            log::driver_log_warn!(
+                "wfp: unknown redirect state {} (details: {state})",
+                state.state
+            );
+            false
         }
     }
+}
 
+fn decode_tcp_flow_meta(
+    in_meta_values: *const super::ffi::FWPS_INCOMING_METADATA_VALUES0,
+    layer_data: *mut c_void,
+    classify_out: *mut FWPS_CLASSIFY_OUT0,
+) -> Option<WfpFlowMeta> {
     let connect_request = layer_data.cast::<FWPS_CONNECT_REQUEST0>();
     let remote_storage = unsafe { &(*connect_request).remoteAddressAndPort };
     let remote = unsafe { sockaddr_storage_to_socket_addr(remote_storage) };
@@ -102,40 +166,36 @@ pub(crate) unsafe extern "C" fn on_callout_classify(
             family
         );
         continue_action(classify_out);
-        return;
+        return None;
     };
 
     let source_pid = source_pid_from_metadata(in_meta_values);
     let source_process_path = source_pid.and_then(source_process_path_from_pid);
     log::driver_log_info!(
-        "wfp: classify flow metadata (layer_id={:?}, remote={}, source_pid={:?}, source_process_path={:?})",
-        layer_id,
+        "wfp: classify flow metadata (remote={}, source_pid={:?}, source_process_path={:?})",
         remote,
         source_pid,
         source_process_path,
     );
 
-    let decision = driver_controller().classify_outbound_tcp_connect(WfpFlowMeta {
+    Some(WfpFlowMeta {
         remote,
         source_pid,
         source_process_path,
-    });
+    })
+}
 
-    let (proxy_target, proxy_target_pid, redirect_context) = match decision {
-        TcpRedirectDecision::Redirect {
-            proxy_target,
-            proxy_target_pid,
-            redirect_context,
-        } => (proxy_target, proxy_target_pid, redirect_context),
-        TcpRedirectDecision::Passthrough => {
-            continue_action(classify_out);
-            return;
-        }
-    };
-
+fn apply_tcp_redirect(
+    context: TcpClassifyContext,
+    proxy_target: SocketAddr,
+    proxy_target_pid: u32,
+    redirect_context: &[u8],
+    classify_out: *mut FWPS_CLASSIFY_OUT0,
+) {
     let mut classify_handle = 0_u64;
-    let status =
-        unsafe { FwpsAcquireClassifyHandle0(classify_context.cast_mut(), 0, &mut classify_handle) };
+    let status = unsafe {
+        FwpsAcquireClassifyHandle0(context.classify_context.cast_mut(), 0, &mut classify_handle)
+    };
     if status != wdk_sys::STATUS_SUCCESS {
         log::driver_log_warn!("failed to acquire classify handle (status={:#x})", status);
         return;
@@ -145,7 +205,7 @@ pub(crate) unsafe extern "C" fn on_callout_classify(
     let acquire_status = unsafe {
         FwpsAcquireWritableLayerDataPointer0(
             classify_handle,
-            (*filter).filterId,
+            (*context.filter).filterId,
             0,
             &mut writable_layer_data,
             classify_out,
@@ -163,7 +223,7 @@ pub(crate) unsafe extern "C" fn on_callout_classify(
     }
 
     let writable_connect_request = writable_layer_data.cast::<FWPS_CONNECT_REQUEST0>();
-    let context_ptr = super::allocate_redirect_context(&redirect_context);
+    let context_ptr = super::allocate_redirect_context(redirect_context);
     if !redirect_context.is_empty() && context_ptr.is_null() {
         apply_and_release_writable_classify(classify_handle, writable_layer_data, classify_out);
         return;
@@ -176,7 +236,7 @@ pub(crate) unsafe extern "C" fn on_callout_classify(
         );
         (*writable_connect_request).localRedirectTargetPID = proxy_target_pid;
         (*writable_connect_request).localRedirectHandle =
-            registration.redirect_handle as *mut c_void;
+            context.registration.redirect_handle as *mut c_void;
         // Ownership handoff:
         // - before this assignment, `context_ptr` is driver-owned pool memory;
         // - after `FwpsApplyModifiedLayerData0` succeeds, WFP owns
@@ -312,10 +372,8 @@ fn apply_and_release_writable_classify(
         // connect request, this is the point where ownership transfers to WFP.
         FwpsApplyModifiedLayerData0(classify_handle, writable_layer_data, 0);
         FwpsReleaseClassifyHandle0(classify_handle);
-        if !classify_out.is_null() && ((*classify_out).rights & FWPS_RIGHT_ACTION_WRITE) != 0 {
-            (*classify_out).actionType = FWP_ACTION_CONTINUE;
-        }
     }
+    continue_action(classify_out);
 }
 
 struct RedirectState {
@@ -325,11 +383,18 @@ struct RedirectState {
 }
 
 impl RedirectState {
-    fn describe(&self) -> String {
-        format!(
+    fn fmt_fields(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
             "state={}, original_destination={:?}, local_redirect_target_pid={:?}",
             self.state, self.original_destination, self.local_redirect_target_pid
         )
+    }
+}
+
+impl fmt::Display for RedirectState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_fields(f)
     }
 }
 
