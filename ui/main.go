@@ -334,7 +334,7 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 
 // --- App server (receives events from daemon) ----------------------------
 
-func handleBlockedEvent(app *application.App, notifier *notifications.NotificationService, ev daemon.BlockEvent) {
+func handleBlockedEventCreated(app *application.App, notifier *notifications.NotificationService, ev daemon.BlockEvent) {
 	log.Println("Blocked event:", ev)
 	app.Event.Emit("blocked", ev)
 	if authorized, _ := notifier.CheckNotificationAuthorization(); authorized {
@@ -348,7 +348,7 @@ func handleBlockedEvent(app *application.App, notifier *notifications.Notificati
 	}
 }
 
-func handleBlockedEventUpdated(app *application.App, ev daemon.BlockEvent) {
+func handleBlockedEventUpdate(app *application.App, ev daemon.BlockEvent) {
 	log.Println("Blocked event updated:", ev)
 	app.Event.Emit("blocked_updated", ev)
 }
@@ -357,8 +357,8 @@ func startAppServer(app *application.App, wm *windowManager, statusCh chan<- app
 	srv := appserver.New()
 	srv.SetHandlers(
 		func(ev appserver.ProxyStatusBody) { statusCh <- ev },
-		func(ev daemon.BlockEvent) { handleBlockedEvent(app, notifier, ev) },
-		func(ev daemon.BlockEvent) { handleBlockedEventUpdated(app, ev) },
+		func(ev daemon.BlockEvent) { handleBlockedEventCreated(app, notifier, ev) },
+		func(ev daemon.BlockEvent) { handleBlockedEventUpdate(app, ev) },
 		func(ev daemon.TlsTerminationFailedEvent) {
 			log.Println("TLS termination failed event:", ev)
 			app.Event.Emit("tls_termination_failed", ev)
