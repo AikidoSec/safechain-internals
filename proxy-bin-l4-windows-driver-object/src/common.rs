@@ -379,7 +379,10 @@ fn query_device_registry_string_property(
         )
     };
     if ok != 0 {
-        return Ok(Some(String::new()));
+        return Err(BoxError::from(
+            "unexpected success while probing device registry property size",
+        )
+        .context_field("property", property));
     }
 
     let code = unsafe { GetLastError() };
@@ -430,7 +433,9 @@ fn query_device_instance_id(
         )
     };
     if ok != 0 {
-        return Ok(String::new());
+        return Err(BoxError::from(
+            "unexpected success while probing device instance id size",
+        ));
     }
 
     let code = unsafe { GetLastError() };

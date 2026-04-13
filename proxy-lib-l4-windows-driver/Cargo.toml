@@ -12,6 +12,8 @@ driver-type = "WDM"
 
 [lib]
 crate-type = ["cdylib"]
+doctest = false
+bench = false
 
 [features]
 default = []
@@ -28,4 +30,5 @@ wdk-panic = { workspace = true }
 wdk-sys = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.build-dependencies]
+bindgen = { workspace = true }
 wdk-build = { workspace = true }
