@@ -11,13 +11,6 @@ use crate::{
     utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
-fn exception_list_matches<K>(entries: &GlobSet<K>, package_name: &K) -> bool
-where
-    K: PackageName + Eq + Hash + fmt::Display,
-{
-    entries.match_package_name(package_name)
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackagePolicyDecision {
     /// No policy rule matched — defer to the next check (e.g. the malware list).
@@ -162,8 +155,10 @@ impl<K: PackageName + Hash> PolicyEvaluator<K> {
     where
         K: PackageName + Eq + Hash + fmt::Display,
     {
-        // Explicitly rejected packages (exact match or `*` glob)
-        if exception_list_matches(&ecosystem_cfg.rejected_packages, package_name) {
+        if ecosystem_cfg
+            .rejected_packages
+            .match_package_name(package_name)
+        {
             tracing::info!(
                 package = %package_name,
                 "package is explicitly blocked by endpoint protection config"
@@ -171,8 +166,10 @@ impl<K: PackageName + Hash> PolicyEvaluator<K> {
             return PackagePolicyDecision::Rejected;
         }
 
-        // Explicitly allowed packages (exact match or `*` glob)
-        if exception_list_matches(&ecosystem_cfg.allowed_packages, package_name) {
+        if ecosystem_cfg
+            .allowed_packages
+            .match_package_name(package_name)
+        {
             tracing::info!(
                 package = %package_name,
                 "package is explicitly allowed by endpoint protection config"
@@ -204,8 +201,6 @@ struct TypedEcosystemConfig<K: PackageName + Hash> {
     block_all_installs: bool,
     request_installs: bool,
     minimum_allowed_age_timestamp: Option<SystemTimestampMilliseconds>,
-    // Keep exception matching centralized and typed. `GlobSet` stores exact
-    // patterns in a HashSet and wildcard patterns in a compiled graph.
     allowed_packages: GlobSet<K>,
     rejected_packages: GlobSet<K>,
 }

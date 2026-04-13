@@ -131,24 +131,27 @@ impl<K: PackageName + Hash> GlobSet<K> {
         false
     }
 
-    fn insert_glob_pattern(&mut self, raw_pattern: &str) {
-        let parsed = ParsedPattern::from_raw(raw_pattern);
+    fn insert_glob_pattern_or_exact(&mut self, raw_pattern: &str) {
+        let Some(parsed) = ParsedPattern::from_raw(raw_pattern) else {
+            self.exact.insert(K::normalize(raw_pattern));
+            return;
+        };
 
         let mut node_id = 0;
 
         if let Some(prefix) = parsed.prefix {
-            node_id = self.get_or_insert_edge(node_id, EdgeKind::Prefix, K::normalize(&prefix));
+            node_id = self.get_or_insert_edge(node_id, EdgeKind::Prefix, K::normalize(prefix));
         }
 
         for contains in parsed.contains {
-            node_id = self.get_or_insert_edge(node_id, EdgeKind::Contains, K::normalize(&contains));
+            node_id = self.get_or_insert_edge(node_id, EdgeKind::Contains, K::normalize(contains));
         }
 
         if let Some(suffix) = parsed.suffix {
             if suffix.is_empty() {
                 self.nodes[node_id].terminal = true;
             } else {
-                let suffix = K::normalize(&suffix);
+                let suffix = K::normalize(suffix);
                 if !self.nodes[node_id].suffix_accepts.contains(&suffix) {
                     self.nodes[node_id].suffix_accepts.push(suffix);
                 }
@@ -197,11 +200,7 @@ impl<K: PackageName + Hash, U: AsRef<str>> FromIterator<U> for GlobSet<K> {
         let mut set = Self::default();
         for raw_pattern in iter {
             let raw_pattern = raw_pattern.as_ref();
-            if raw_pattern.contains('*') {
-                set.insert_glob_pattern(raw_pattern);
-            } else {
-                set.exact.insert(K::normalize(raw_pattern));
-            }
+            set.insert_glob_pattern_or_exact(raw_pattern);
         }
         set
     }
@@ -214,33 +213,24 @@ enum EdgeKind {
 }
 
 #[derive(Debug, Clone)]
-struct ParsedPattern {
-    prefix: Option<String>,
-    contains: Vec<String>,
-    suffix: Option<String>,
+struct ParsedPattern<'a> {
+    prefix: Option<&'a str>,
+    contains: SmallVec<[&'a str; INLINE_EDGE_CAPACITY]>,
+    suffix: Option<&'a str>,
 }
 
-impl ParsedPattern {
-    fn from_raw(raw: &str) -> Self {
+impl<'a> ParsedPattern<'a> {
+    fn from_raw(raw: &'a str) -> Option<Self> {
         if !raw.contains('*') {
-            return Self {
-                prefix: Some(raw.to_owned()),
-                contains: Vec::new(),
-                suffix: Some(String::new()),
-            };
+            return None;
         }
 
         let starts_with_star = raw.starts_with('*');
         let ends_with_star = raw.ends_with('*');
         let parts: Vec<&str> = raw.split('*').collect();
 
-        let prefix = if starts_with_star {
-            None
-        } else {
-            Some(parts[0].to_owned())
-        };
+        let prefix = (!starts_with_star).then_some(parts[0]);
 
-        let mut contains = Vec::new();
         let contains_start = if starts_with_star { 0 } else { 1 };
         let contains_end = if ends_with_star {
             parts.len()
@@ -248,24 +238,22 @@ impl ParsedPattern {
             parts.len().saturating_sub(1)
         };
 
-        for segment in &parts[contains_start..contains_end] {
-            if segment.is_empty() {
-                continue;
-            }
-            contains.push((*segment).to_owned());
-        }
+        let contains = parts[contains_start..contains_end]
+            .iter()
+            .filter_map(|s| (!s.is_empty()).then_some(*s))
+            .collect();
 
         let suffix = if ends_with_star {
             None
         } else {
-            Some(parts[parts.len() - 1].to_owned())
+            Some(parts[parts.len() - 1])
         };
 
-        Self {
+        Some(Self {
             prefix,
             contains,
             suffix,
-        }
+        })
     }
 }
 
