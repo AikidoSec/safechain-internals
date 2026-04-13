@@ -104,24 +104,15 @@ func (r *chromeExtensionNameResolver) Lookup(ctx context.Context, extensionID st
 }
 
 func (r *chromeExtensionNameResolver) getCached(extensionID string) string {
-	now := r.now()
-
 	r.mu.RLock()
 	entry, ok := r.cache[extensionID]
 	r.mu.RUnlock()
 	if !ok {
 		return ""
 	}
-	if now.Sub(entry.cachedAt) <= chromeDisplayNameCacheTTL {
+	if r.now().Sub(entry.cachedAt) <= chromeDisplayNameCacheTTL {
 		return entry.name
 	}
-
-	r.mu.Lock()
-	entry, ok = r.cache[extensionID]
-	if ok && now.Sub(entry.cachedAt) > chromeDisplayNameCacheTTL {
-		delete(r.cache, extensionID)
-	}
-	r.mu.Unlock()
 
 	return ""
 }
