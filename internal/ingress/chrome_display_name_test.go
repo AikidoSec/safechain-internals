@@ -62,7 +62,8 @@ func TestChromeExtensionNameResolverLookupReturnsEmptyOnNonOKStatus(t *testing.T
 	resolver := &chromeExtensionNameResolver{
 		client:  server.Client(),
 		baseURL: server.URL + "/detail/%s",
-		cache:   make(map[string]string),
+		cache:   make(map[string]chromeExtensionNameCacheEntry),
+		now:     time.Now,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -89,7 +90,8 @@ func TestChromeExtensionNameResolverLookupCachesSuccessfulResponses(t *testing.T
 	resolver := &chromeExtensionNameResolver{
 		client:  server.Client(),
 		baseURL: server.URL + "/detail/%s",
-		cache:   make(map[string]string),
+		cache:   make(map[string]chromeExtensionNameCacheEntry),
+		now:     time.Now,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -112,5 +114,69 @@ func TestChromeExtensionNameResolverLookupCachesSuccessfulResponses(t *testing.T
 	}
 	if got := requests.Load(); got != 1 {
 		t.Fatalf("expected exactly one upstream request, got %d", got)
+	}
+}
+
+func TestChromeExtensionNameResolverLookupExpiresOldEntries(t *testing.T) {
+	var requests atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		fmt.Fprint(w, `<meta property="og:title" content="uBlock Origin - Chrome Web Store">`)
+	}))
+	defer server.Close()
+
+	now := time.Date(2026, time.January, 1, 12, 0, 0, 0, time.UTC)
+	resolver := &chromeExtensionNameResolver{
+		client:  server.Client(),
+		baseURL: server.URL + "/detail/%s",
+		cache: map[string]chromeExtensionNameCacheEntry{
+			"abcdefghijklmnopabcdefghijklmnop": {
+				name:     "stale",
+				cachedAt: now.Add(-chromeDisplayNameCacheTTL - time.Minute),
+			},
+		},
+		now: func() time.Time { return now },
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	name, err := resolver.Lookup(ctx, "abcdefghijklmnopabcdefghijklmnop")
+	if err != nil {
+		t.Fatalf("lookup failed: %v", err)
+	}
+	if name != "uBlock Origin" {
+		t.Fatalf("expected refreshed name, got %q", name)
+	}
+	if got := requests.Load(); got != 1 {
+		t.Fatalf("expected one upstream refresh after cache expiry, got %d", got)
+	}
+}
+
+func TestChromeExtensionNameResolverSetCachedEvictsOldestEntryWhenFull(t *testing.T) {
+	now := time.Date(2026, time.January, 1, 12, 0, 0, 0, time.UTC)
+	resolver := &chromeExtensionNameResolver{
+		cache: make(map[string]chromeExtensionNameCacheEntry, chromeDisplayNameCacheMaxEntries),
+		now:   func() time.Time { return now },
+	}
+
+	for i := range chromeDisplayNameCacheMaxEntries {
+		resolver.cache[fmt.Sprintf("ext-%04d", i)] = chromeExtensionNameCacheEntry{
+			name:     fmt.Sprintf("name-%04d", i),
+			cachedAt: now.Add(time.Duration(i) * time.Minute),
+		}
+	}
+
+	resolver.setCached("new-entry", "New Entry")
+
+	if len(resolver.cache) != chromeDisplayNameCacheMaxEntries {
+		t.Fatalf("expected cache size to stay at %d, got %d", chromeDisplayNameCacheMaxEntries, len(resolver.cache))
+	}
+	if _, ok := resolver.cache["ext-0000"]; ok {
+		t.Fatalf("expected oldest cache entry to be evicted")
+	}
+	if entry, ok := resolver.cache["new-entry"]; !ok || entry.name != "New Entry" {
+		t.Fatalf("expected new cache entry to be stored")
 	}
 }

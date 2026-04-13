@@ -23,8 +23,10 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 		cancel()
 		if err != nil {
 			log.Printf("failed to look up Chrome extension display name for %s: %v", event.Artifact.PackageName, err)
-		} else if displayName != "" {
-			event.Artifact.DisplayName = displayName
+		} else {
+			if displayName != "" {
+				event.Artifact.DisplayName = displayName
+			}
 		}
 	}
 
