@@ -48,7 +48,7 @@ if [ -x "$L4_HOST" ]; then
     if [ "$UPGRADE_MODE" = true ]; then
         "$L4_HOST" stop 2>/dev/null && echo "  ✓ L4 Proxy stopped" || echo "  L4 Proxy not running"
     else
-        "$L4_HOST" stop --clean-secrets 2>/dev/null && echo "  ✓ L4 Proxy stopped" || echo "  L4 Proxy not running"
+        "$L4_HOST" stop --clean-secrets --remove-profile --deactivate-extension 2>/dev/null && echo "  ✓ L4 Proxy stopped" || echo "  L4 Proxy not running"
     fi
 fi
 
