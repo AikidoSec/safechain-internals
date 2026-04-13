@@ -18,7 +18,7 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 	log.Println("Got block event:", event)
 
 	if event.Artifact.Product == "chrome" && event.Artifact.DisplayName == "" {
-		ctx, cancel := context.WithTimeout(r.Context(), 750*time.Millisecond)
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		displayName, err := s.chromeNames.Lookup(ctx, event.Artifact.PackageName)
 		cancel()
 		if err != nil {
