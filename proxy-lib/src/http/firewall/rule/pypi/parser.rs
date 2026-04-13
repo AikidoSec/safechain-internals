@@ -150,8 +150,9 @@ fn make_package_info(dist: &str, version: &str) -> Option<PackageInfo> {
         return None;
     }
 
+    let Ok(version) = PackageVersion::from_str(version);
     Some(PackageInfo {
         name: normalize_package_name(dist),
-        version: PackageVersion::from_str(version).unwrap(),
+        version,
     })
 }

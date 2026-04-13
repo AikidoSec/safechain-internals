@@ -56,25 +56,22 @@ impl<'a> Iterator for StrNeedleMatchesAfter<'a> {
             return Some(self.haystack);
         }
 
-        if self.scan_start <= self.haystack.len() {
-            let remaining = &self.haystack[self.scan_start..];
-            let relative_idx = remaining.find(self.needle)?;
-
-            let absolute_idx = self.scan_start + relative_idx;
-            let tail_start = absolute_idx + self.needle.len();
-
-            // Advance one UTF-8 character to allow overlapping matches.
-            let step = self.haystack[absolute_idx..]
-                .chars()
-                .next()
-                .map(|ch| ch.len_utf8())
-                .unwrap_or(1);
-            self.scan_start = absolute_idx + step;
-
-            return Some(&self.haystack[tail_start..]);
+        if self.scan_start > self.haystack.len() {
+            return None;
         }
 
-        None
+        let remaining = &self.haystack[self.scan_start..];
+        let relative_idx = remaining.find(self.needle)?;
+
+        let absolute_idx = self.scan_start + relative_idx;
+        let tail_start = absolute_idx + self.needle.len();
+
+        // Advance one UTF-8 character to allow overlapping matches.
+        let first_ch = self.haystack[absolute_idx..].chars().next()?;
+        let step = first_ch.len_utf8();
+        self.scan_start = absolute_idx + step;
+
+        Some(&self.haystack[tail_start..])
     }
 }
 
