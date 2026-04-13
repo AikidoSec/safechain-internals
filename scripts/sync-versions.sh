@@ -120,7 +120,7 @@ update "$PREV_FILE" \
 
 PREV_FILE="$REPO_ROOT/proxy-lib-l4-windows-driver/safechain_lib_l4_proxy_windows_driver.inx"
 update "$PREV_FILE" \
-  "s/^DriverVer[[:space:]]*=.*$/DriverVer   = ${DRIVER_DATE},${VERSION}.0/"
+  "s|^DriverVer[[:space:]]*=.*$|DriverVer   = ${DRIVER_DATE},${VERSION}.0|"
 
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   echo "version=$VERSION" >> "$GITHUB_OUTPUT"
