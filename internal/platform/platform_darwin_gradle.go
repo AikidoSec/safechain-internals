@@ -29,6 +29,8 @@ func InstallGradleSystemPropsOverride(homeDir string) error {
 	propsPath := filepath.Join(gradleDir, "gradle.properties")
 
 	content := ""
+	// Intentionally read the current user's fixed Gradle config file so we can
+	// append or replace only our managed trust block.
 	if data, err := os.ReadFile(propsPath); err == nil {
 		content = string(data)
 	} else if !os.IsNotExist(err) {
@@ -52,6 +54,8 @@ func InstallGradleSystemPropsOverride(homeDir string) error {
 func UninstallGradleSystemPropsOverride(homeDir string) error {
 	propsPath := filepath.Join(homeDir, ".gradle", "gradle.properties")
 
+	// Intentionally read the current user's fixed Gradle config file so we can
+	// remove only the trust block managed by Aikido.
 	data, err := os.ReadFile(propsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
