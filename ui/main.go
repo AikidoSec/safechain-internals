@@ -404,6 +404,14 @@ func main() {
 	statusCh := setupSystemTray(app, wm.showDashboard)
 	startAppServer(app, wm, statusCh, notifier)
 
+	// On macOS, clicking the app bundle while running triggers a default Wails
+	// listener that shows ALL hidden windows. Register a hook (runs before
+	// listeners and can cancel them) to show only the main window instead.
+	app.Event.RegisterApplicationEventHook(events.Mac.ApplicationShouldHandleReopen, func(event *application.ApplicationEvent) {
+		wm.showDashboard()
+		event.Cancel()
+	})
+
 	notifier.OnNotificationResponse(func(result notifications.NotificationResult) {
 		if result.Error != nil {
 			return
