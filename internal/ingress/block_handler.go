@@ -6,6 +6,10 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/AikidoSec/safechain-internals/internal/cloud"
+	"github.com/AikidoSec/safechain-internals/internal/sbom"
+	"github.com/AikidoSec/safechain-internals/internal/version"
 )
 
 func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
@@ -27,15 +31,19 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 	blocked := s.eventStore.Add(event)
 	go s.ui.NotifyBlocked(blocked)
 	if blocked.Artifact.Product == "chrome" && blocked.Artifact.DisplayName == "" {
-		go s.enrichChromeBlockDisplayName(blocked)
+		go func() {
+			s.sendBlockedActivity(s.enrichChromeBlockDisplayName(blocked))
+		}()
+	} else {
+		go s.sendBlockedActivity(blocked)
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) enrichChromeBlockDisplayName(event BlockEvent) {
+func (s *Server) enrichChromeBlockDisplayName(event BlockEvent) BlockEvent {
 	if event.Artifact.Product != "chrome" || event.Artifact.DisplayName != "" {
-		return
+		return event
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -44,17 +52,71 @@ func (s *Server) enrichChromeBlockDisplayName(event BlockEvent) {
 	displayName, err := s.chromeNames.Lookup(ctx, event.Artifact.PackageName)
 	if err != nil {
 		log.Printf("failed to look up Chrome extension display name for %s: %v", event.Artifact.PackageName, err)
-		return
+		return event
 	}
 	if displayName == "" {
-		return
+		return event
 	}
 
 	updated, ok := s.eventStore.UpdateDisplayName(event.ID, displayName)
 	if !ok {
-		return
+		return event
 	}
 
 	log.Printf("updated Chrome extension display name for %s: %q", event.Artifact.PackageName, displayName)
 	s.ui.NotifyBlockedUpdated(updated)
+	return updated
+}
+
+func (s *Server) sendBlockedActivity(event BlockEvent) {
+	action, ok := mapBlockReasonToActivityAction(event.BlockReason)
+	if !ok {
+		log.Printf("skipping block activity upload for unsupported block reason %q", event.BlockReason)
+		return
+	}
+
+	activityEvent := buildBlockedActivityEvent(event, action)
+	if err := cloud.SendActivity(context.Background(), s.config, activityEvent); err != nil {
+		log.Printf("failed to send blocked activity for %s: %v", event.ID, err)
+		return
+	}
+
+	log.Printf("blocked activity sent for %s with action=%s", event.ID, action)
+}
+
+func mapBlockReasonToActivityAction(reason string) (string, bool) {
+	switch reason {
+	case "malware":
+		return "malware_blocked", true
+	case "rejected", "block_all", "request_install", "new_package":
+		return "install_blocked", true
+	default:
+		return "", false
+	}
+}
+
+func buildBlockedActivityEvent(event BlockEvent, action string) *cloud.ActivityEvent {
+	name := event.Artifact.DisplayName
+	if name == "" {
+		name = event.Artifact.PackageName
+	}
+
+	return &cloud.ActivityEvent{
+		Action:      action,
+		VersionInfo: *version.Info,
+		SBOM: sbom.SBOM{
+			Entries: []sbom.EcosystemEntry{
+				{
+					Ecosystem: event.Artifact.Product,
+					Packages: []sbom.Package{
+						{
+							Id:      event.Artifact.PackageName,
+							Name:    name,
+							Version: event.Artifact.PackageVersion,
+						},
+					},
+				},
+			},
+		},
+	}
 }
