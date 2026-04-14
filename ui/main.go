@@ -126,7 +126,7 @@ func mainWindowOpts() application.WebviewWindowOptions {
 		Hidden:           true,
 		URL:              "/",
 		BackgroundColour: application.NewRGB(255, 255, 255),
-		AlwaysOnTop:      true,
+		AlwaysOnTop:      false,
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true,
 		},
