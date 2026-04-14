@@ -32,7 +32,8 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 	go s.ui.NotifyBlocked(blocked)
 	if blocked.Artifact.Product == "chrome" && blocked.Artifact.DisplayName == "" {
 		go func() {
-			s.sendBlockedActivity(s.enrichChromeBlockDisplayName(blocked))
+			enriched := s.enrichChromeBlockDisplayName(blocked)
+			s.sendBlockedActivity(enriched)
 		}()
 	} else {
 		go s.sendBlockedActivity(blocked)
