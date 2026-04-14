@@ -150,6 +150,13 @@ func (c *Client) NotifyBlocked(ev any) {
 	}
 }
 
+// NotifyBlockedUpdated sends an update for an existing blocked event to the UI.
+func (c *Client) NotifyBlockedUpdated(ev any) {
+	if err := c.post("/v1/blocked-update", ev); err != nil {
+		log.Printf("Failed to notify UI of blocked event update: %v (UI may not be running)", err)
+	}
+}
+
 // NotifyTlsTerminationFailed sends a TLS termination failure notification to the UI.
 func (c *Client) NotifyTlsTerminationFailed(ev any) {
 	if err := c.post("/v1/tls-termination-failed", ev); err != nil {

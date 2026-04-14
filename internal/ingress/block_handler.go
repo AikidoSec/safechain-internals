@@ -17,17 +17,6 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("Got block event:", event)
 
-	if event.Artifact.Product == "chrome" && event.Artifact.DisplayName == "" {
-		ctx, cancel := context.WithTimeout(r.Context(), 750*time.Millisecond)
-		displayName, err := s.chromeNames.Lookup(ctx, event.Artifact.PackageName)
-		cancel()
-		if err != nil {
-			log.Printf("failed to look up Chrome extension display name for %s: %v", event.Artifact.PackageName, err)
-		} else if displayName != "" {
-			event.Artifact.DisplayName = displayName
-		}
-	}
-
 	if event.Artifact.Product == "chrome" {
 		if s.eventStore.MergeChromeBlockIfDuplicate(event) {
 			w.WriteHeader(http.StatusOK)
@@ -37,6 +26,35 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 
 	blocked := s.eventStore.Add(event)
 	go s.ui.NotifyBlocked(blocked)
+	if blocked.Artifact.Product == "chrome" && blocked.Artifact.DisplayName == "" {
+		go s.enrichChromeBlockDisplayName(blocked)
+	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) enrichChromeBlockDisplayName(event BlockEvent) {
+	if event.Artifact.Product != "chrome" || event.Artifact.DisplayName != "" {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	displayName, err := s.chromeNames.Lookup(ctx, event.Artifact.PackageName)
+	if err != nil {
+		log.Printf("failed to look up Chrome extension display name for %s: %v", event.Artifact.PackageName, err)
+		return
+	}
+	if displayName == "" {
+		return
+	}
+
+	updated, ok := s.eventStore.UpdateDisplayName(event.ID, displayName)
+	if !ok {
+		return
+	}
+
+	log.Printf("updated Chrome extension display name for %s: %q", event.Artifact.PackageName, displayName)
+	s.ui.NotifyBlockedUpdated(updated)
 }
