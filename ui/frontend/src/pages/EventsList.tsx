@@ -6,6 +6,10 @@ import { listEvents } from "../api";
 import { BLOCK_REASON_LABEL, getToolIcon } from "../constants";
 import { formatEventTime, isConnectionError } from "../utils";
 
+function updateEventInList(events: BlockEvent[], updated: BlockEvent): BlockEvent[] {
+  return events.map((event) => (event.id === updated.id ? updated : event));
+}
+
 export function EventsList() {
   const navigate = useNavigate();
   const [events, setEvents] = useState<BlockEvent[]>([]);
@@ -41,6 +45,18 @@ export function EventsList() {
     const unsub = Events.On("blocked", (ev: unknown) => {
       const payload = (ev as { data?: BlockEvent }).data;
       if (payload) setEvents((prev) => [payload, ...prev]);
+    });
+    return () => {
+      unsub();
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsub = Events.On("blocked_updated", (ev: unknown) => {
+      const payload = (ev as { data?: BlockEvent }).data;
+      if (payload) {
+        setEvents((prev) => updateEventInList(prev, payload));
+      }
     });
     return () => {
       unsub();

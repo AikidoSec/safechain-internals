@@ -102,6 +102,16 @@ export function EventDetail() {
     return () => { unsub(); };
   }, [loadEvent]);
 
+  useEffect(() => {
+    const unsub = Events.On("blocked_updated", (ev: unknown) => {
+      const payload = (ev as { data?: BlockEvent }).data;
+      if (payload && payload.id === id) {
+        setEvent(payload);
+      }
+    });
+    return () => { unsub(); };
+  }, [id]);
+
   const handleRequestAccess = async () => {
     if (!id) return;
     setRequesting(true);

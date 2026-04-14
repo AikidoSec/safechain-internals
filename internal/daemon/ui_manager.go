@@ -155,6 +155,11 @@ func (m *UIManager) NotifyBlocked(ev any) {
 	m.Client.NotifyBlocked(ev)
 }
 
+// NotifyBlockedUpdated sends an updated blocked event to the UI.
+func (m *UIManager) NotifyBlockedUpdated(ev any) {
+	m.Client.NotifyBlockedUpdated(ev)
+}
+
 // NotifyTlsTerminationFailed sends a TLS termination failure notification to the UI.
 func (m *UIManager) NotifyTlsTerminationFailed(ev any) {
 	m.Client.NotifyTlsTerminationFailed(ev)

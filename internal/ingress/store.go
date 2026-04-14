@@ -82,3 +82,17 @@ func (e *eventStore) UpdateStatus(id, status string) bool {
 	}
 	return false
 }
+
+// UpdateDisplayName sets the artifact display name on the event with the given id.
+// Returns the updated event and true if the event was found.
+func (e *eventStore) UpdateDisplayName(id, displayName string) (BlockEvent, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for i, ev := range e.events {
+		if ev.ID == id {
+			e.events[i].Artifact.DisplayName = displayName
+			return e.events[i], true
+		}
+	}
+	return BlockEvent{}, false
+}

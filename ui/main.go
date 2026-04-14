@@ -35,6 +35,7 @@ var setInstallWindowOnTop func(bool)
 
 func init() {
 	application.RegisterEvent[daemon.BlockEvent]("blocked")
+	application.RegisterEvent[daemon.BlockEvent]("blocked_updated")
 	application.RegisterEvent[daemon.TlsTerminationFailedEvent]("tls_termination_failed")
 	application.RegisterEvent[daemon.PermissionsResponse]("permissions_updated")
 	application.RegisterEvent[FocusEventPayload]("focus_event")
@@ -333,23 +334,31 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 
 // --- App server (receives events from daemon) ----------------------------
 
+func handleBlockedEventCreated(app *application.App, notifier *notifications.NotificationService, ev daemon.BlockEvent) {
+	log.Println("Blocked event:", ev)
+	app.Event.Emit("blocked", ev)
+	if authorized, _ := notifier.CheckNotificationAuthorization(); authorized {
+		notifier.SendNotificationWithActions(notifications.NotificationOptions{
+			ID:         "block-" + ev.ID,
+			Title:      "Aikido Endpoint Protection blocked an event",
+			Body:       ev.Artifact.Product + ": " + ev.Artifact.PackageName,
+			CategoryID: "aikido-blocked",
+			Data:       map[string]interface{}{"eventId": ev.ID, "eventType": "block"},
+		})
+	}
+}
+
+func handleBlockedEventUpdate(app *application.App, ev daemon.BlockEvent) {
+	log.Println("Blocked event updated:", ev)
+	app.Event.Emit("blocked_updated", ev)
+}
+
 func startAppServer(app *application.App, wm *windowManager, statusCh chan<- appserver.ProxyStatusBody, notifier *notifications.NotificationService) {
 	srv := appserver.New()
 	srv.SetHandlers(
 		func(ev appserver.ProxyStatusBody) { statusCh <- ev },
-		func(ev daemon.BlockEvent) {
-			log.Println("Blocked event:", ev)
-			app.Event.Emit("blocked", ev)
-			if authorized, _ := notifier.CheckNotificationAuthorization(); authorized {
-				notifier.SendNotificationWithActions(notifications.NotificationOptions{
-					ID:         "block-" + ev.ID,
-					Title:      "Aikido Endpoint Protection blocked an event",
-					Body:       ev.Artifact.Product + ": " + ev.Artifact.PackageName,
-					CategoryID: "aikido-blocked",
-					Data:       map[string]interface{}{"eventId": ev.ID, "eventType": "block"},
-				})
-			}
-		},
+		func(ev daemon.BlockEvent) { handleBlockedEventCreated(app, notifier, ev) },
+		func(ev daemon.BlockEvent) { handleBlockedEventUpdate(app, ev) },
 		func(ev daemon.TlsTerminationFailedEvent) {
 			log.Println("TLS termination failed event:", ev)
 			app.Event.Emit("tls_termination_failed", ev)

@@ -38,6 +38,7 @@ type Server struct {
 	mu                     sync.Mutex
 	onStatusUpdate         func(ev ProxyStatusBody)
 	onBlocked              func(ev daemon.BlockEvent)
+	onBlockedUpdated       func(ev daemon.BlockEvent)
 	onTlsTerminationFailed func(ev daemon.TlsTerminationFailedEvent)
 	onPermissionsUpdated   func(ev daemon.PermissionsResponse)
 	onSetupWizard          func(steps []string)
@@ -50,6 +51,7 @@ func New() *Server {
 func (s *Server) SetHandlers(
 	onStatus func(ev ProxyStatusBody),
 	onBlocked func(daemon.BlockEvent),
+	onBlockedUpdated func(daemon.BlockEvent),
 	onTlsTerminationFailed func(daemon.TlsTerminationFailedEvent),
 	onPermissionsUpdated func(daemon.PermissionsResponse),
 	onSetupWizard func(steps []string),
@@ -58,6 +60,7 @@ func (s *Server) SetHandlers(
 	defer s.mu.Unlock()
 	s.onStatusUpdate = onStatus
 	s.onBlocked = onBlocked
+	s.onBlockedUpdated = onBlockedUpdated
 	s.onTlsTerminationFailed = onTlsTerminationFailed
 	s.onPermissionsUpdated = onPermissionsUpdated
 	s.onSetupWizard = onSetupWizard
@@ -68,6 +71,7 @@ func (s *Server) Start() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/proxy-status", s.handleProxyStatus)
 	mux.HandleFunc("POST /v1/blocked", s.handleBlocked)
+	mux.HandleFunc("POST /v1/blocked-update", s.handleBlockedUpdated)
 	mux.HandleFunc("POST /v1/tls-termination-failed", s.handleTlsTerminationFailed)
 	mux.HandleFunc("POST /v1/permissions", s.handlePermissionsUpdated)
 	mux.HandleFunc("POST /v1/setup-wizard", s.handleSetupWizard)
@@ -114,6 +118,28 @@ func (s *Server) handleBlocked(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	cb := s.onBlocked
+	s.mu.Unlock()
+	if cb != nil {
+		cb(ev)
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) handleBlockedUpdated(w http.ResponseWriter, r *http.Request) {
+	if !validateToken(w, r) {
+		return
+	}
+	var ev daemon.BlockEvent
+	if err := json.NewDecoder(r.Body).Decode(&ev); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if err := ev.Validate(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	cb := s.onBlockedUpdated
 	s.mu.Unlock()
 	if cb != nil {
 		cb(ev)
