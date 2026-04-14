@@ -1,19 +1,22 @@
 //go:build darwin
 
-package platform
+package certconfig
 
 import (
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
 
-func TestInstallGradleSystemPropsOverrideCreatesManagedBlock(t *testing.T) {
+func TestInstallGradleTrustCreatesManagedBlock(t *testing.T) {
 	homeDir := t.TempDir()
+	platform.GetConfig().HomeDir = homeDir
 
-	if err := InstallGradleSystemPropsOverride(homeDir); err != nil {
-		t.Fatalf("InstallGradleSystemPropsOverride failed: %v", err)
+	if err := installGradleTrust(t.Context()); err != nil {
+		t.Fatalf("installGradleTrust failed: %v", err)
 	}
 
 	data, err := os.ReadFile(filepath.Join(homeDir, ".gradle", "gradle.properties"))
@@ -33,8 +36,10 @@ func TestInstallGradleSystemPropsOverrideCreatesManagedBlock(t *testing.T) {
 	}
 }
 
-func TestInstallGradleSystemPropsOverridePreservesExistingContent(t *testing.T) {
+func TestInstallGradleTrustPreservesExistingContent(t *testing.T) {
 	homeDir := t.TempDir()
+	platform.GetConfig().HomeDir = homeDir
+
 	propsPath := filepath.Join(homeDir, ".gradle", "gradle.properties")
 	if err := os.MkdirAll(filepath.Dir(propsPath), 0o755); err != nil {
 		t.Fatal(err)
@@ -45,8 +50,8 @@ func TestInstallGradleSystemPropsOverridePreservesExistingContent(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	if err := InstallGradleSystemPropsOverride(homeDir); err != nil {
-		t.Fatalf("InstallGradleSystemPropsOverride failed: %v", err)
+	if err := installGradleTrust(t.Context()); err != nil {
+		t.Fatalf("installGradleTrust failed: %v", err)
 	}
 
 	data, err := os.ReadFile(propsPath)
@@ -59,8 +64,8 @@ func TestInstallGradleSystemPropsOverridePreservesExistingContent(t *testing.T) 
 		t.Fatalf("expected existing Gradle properties to be preserved, got %q", content)
 	}
 
-	if err := InstallGradleSystemPropsOverride(homeDir); err != nil {
-		t.Fatalf("second InstallGradleSystemPropsOverride failed: %v", err)
+	if err := installGradleTrust(t.Context()); err != nil {
+		t.Fatalf("second installGradleTrust failed: %v", err)
 	}
 
 	data, err = os.ReadFile(propsPath)
@@ -72,8 +77,10 @@ func TestInstallGradleSystemPropsOverridePreservesExistingContent(t *testing.T) 
 	}
 }
 
-func TestUninstallGradleSystemPropsOverrideRemovesOnlyManagedBlock(t *testing.T) {
+func TestUninstallGradleTrustRemovesOnlyManagedBlock(t *testing.T) {
 	homeDir := t.TempDir()
+	platform.GetConfig().HomeDir = homeDir
+
 	propsPath := filepath.Join(homeDir, ".gradle", "gradle.properties")
 	if err := os.MkdirAll(filepath.Dir(propsPath), 0o755); err != nil {
 		t.Fatal(err)
@@ -84,8 +91,8 @@ func TestUninstallGradleSystemPropsOverrideRemovesOnlyManagedBlock(t *testing.T)
 		t.Fatal(err)
 	}
 
-	if err := UninstallGradleSystemPropsOverride(homeDir); err != nil {
-		t.Fatalf("UninstallGradleSystemPropsOverride failed: %v", err)
+	if err := uninstallGradleTrust(t.Context()); err != nil {
+		t.Fatalf("uninstallGradleTrust failed: %v", err)
 	}
 
 	data, err := os.ReadFile(propsPath)
