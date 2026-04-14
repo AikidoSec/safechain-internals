@@ -39,7 +39,7 @@ func (e *eventStore) MergeChromeBlockIfDuplicate(ev BlockEvent) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for i := range e.events {
-		if e.events[i].Artifact == ev.Artifact {
+		if e.events[i].Artifact.PackageName == ev.Artifact.PackageName {
 			e.events[i].Count++
 			e.events[i].TsMs = ev.TsMs
 			return true
