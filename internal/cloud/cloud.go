@@ -73,6 +73,10 @@ func SendSBOM(ctx context.Context, config *config.ConfigInfo, event *SBOMEvent) 
 	return sendEvent(ctx, SBOMEndpoint, config, event)
 }
 
+func SendActivity(ctx context.Context, config *config.ConfigInfo, event *ActivityEvent) error {
+	return sendEvent(ctx, ActivityEndpoint, config, event)
+}
+
 func SendRequestPackageInstallation(ctx context.Context, config *config.ConfigInfo, event *RequestPackageInstallationEvent) error {
 	return sendEvent(ctx, RequestPackageInstallationEndpoint, config, event)
 }

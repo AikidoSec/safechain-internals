@@ -17,6 +17,12 @@ type SBOMEvent struct {
 	SBOM        sbom.SBOM           `json:"sbom"`
 }
 
+type ActivityEvent struct {
+	Action      string              `json:"action"`
+	VersionInfo version.VersionInfo `json:"version"`
+	SBOM        sbom.SBOM           `json:"sbom"`
+}
+
 // PackageInstallRequest represents a single package in an installation approval request.
 type PackageInstallRequest struct {
 	ID      string `json:"id"`
