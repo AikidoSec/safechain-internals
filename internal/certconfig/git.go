@@ -3,6 +3,7 @@ package certconfig
 import (
 	"context"
 	"fmt"
+	"log"
 )
 
 type gitTrustConfigurator interface {
@@ -28,7 +29,8 @@ func (c *gitConfigurator) Install(ctx context.Context) error {
 		return fmt.Errorf("git: could not find system CA bundle: %w", err)
 	}
 	if baseCACertBundle == "" {
-		return fmt.Errorf("git: no system CA bundle found")
+		log.Printf("git: no system CA bundle found, skipping http.sslCAInfo configuration")
+		return nil
 	}
 	if _, err := ensureSystemCombinedCABundle(baseCACertBundle); err != nil {
 		return err

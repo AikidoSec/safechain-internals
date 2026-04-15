@@ -4,8 +4,10 @@ package certconfig
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os/exec"
+	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
@@ -36,14 +38,25 @@ func (c *darwinGitTrustConfigurator) Uninstall(ctx context.Context) error {
 		log.Printf("git: git not found, skipping http.sslCAInfo cleanup")
 		return nil
 	}
+	current, err := platform.RunAsCurrentUser(ctx, gitPath, []string{
+		"config", "--global", "--get", "http.sslCAInfo",
+	})
+	// exit code 1 means the key is not set — nothing to do.
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(current) != c.bundlePath {
+		log.Printf("git: http.sslCAInfo points to a different bundle, skipping cleanup")
+		return nil
+	}
 	_, err = platform.RunAsCurrentUser(ctx, gitPath, []string{
 		"config", "--global", "--unset", "http.sslCAInfo",
 	})
-	// --unset exits with code 5 if the key doesn't exist — treat as success.
-	if err != nil {
-		log.Printf("git: http.sslCAInfo was not set, nothing to remove")
-	}
-	return nil
+	return err
 }
 
 // findSystemGitCABundle returns the system-level CA bundle that git uses when
