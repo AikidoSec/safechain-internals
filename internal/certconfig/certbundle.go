@@ -16,6 +16,7 @@ import (
 const (
 	nodeCombinedBundleName = "endpoint-protection-combined-ca.pem"
 	pipCombinedBundleName  = "endpoint-protection-pip-combined-ca.pem"
+	gitCombinedBundleName  = "endpoint-protection-git-combined-ca.pem"
 )
 
 func combinedCaBundlePath() string {
@@ -24,6 +25,10 @@ func combinedCaBundlePath() string {
 
 func pipCombinedCaBundlePath() string {
 	return filepath.Join(platform.GetRunDir(), pipCombinedBundleName)
+}
+
+func gitCombinedCaBundlePath() string {
+	return filepath.Join(platform.GetRunDir(), gitCombinedBundleName)
 }
 
 // ensureCombinedCABundle writes the combined CA bundle containing the SafeChain CA
@@ -40,8 +45,12 @@ func ensureCombinedCABundle(originalCACertsPath string) (string, error) {
 // entirely. baseCACertsPath must already point to a validated PEM bundle that
 // pip should continue trusting after the SafeChain CA is added.
 func ensurePipCombinedCABundle(baseCACertsPath string) (string, error) {
-	bundlePath := pipCombinedCaBundlePath()
+	return ensurePipCombinedCABundleAt(pipCombinedCaBundlePath(), baseCACertsPath)
+}
 
+// ensurePipCombinedCABundleAt builds a combined CA bundle at bundlePath containing
+// the SafeChain CA and the provided baseCACertsPath. Used by both pip and git.
+func ensurePipCombinedCABundleAt(bundlePath string, baseCACertsPath string) (string, error) {
 	safeChainCACertPath := proxy.GetCaCertPath()
 	safeChainPayload, err := readAndValidatePEMBundle(safeChainCACertPath)
 	if err != nil {
@@ -98,6 +107,14 @@ func removeCombinedCABundle() error {
 
 func removePipCombinedCABundle() error {
 	return removeCombinedCABundleAt(pipCombinedCaBundlePath())
+}
+
+func ensureGitCombinedCABundle(baseCACertsPath string) (string, error) {
+	return ensurePipCombinedCABundleAt(gitCombinedCaBundlePath(), baseCACertsPath)
+}
+
+func removeGitCombinedCABundle() error {
+	return removeCombinedCABundleAt(gitCombinedCaBundlePath())
 }
 
 func removeCombinedCABundleAt(path string) error {
