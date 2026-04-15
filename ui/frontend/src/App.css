@@ -1381,6 +1381,65 @@ body {
   line-height: 1.6;
 }
 
+.install-page__restart-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.install-page__restart-btn {
+  background: #dc2626;
+  color: #fff;
+}
+
+.install-page__restart-btn:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.install-page__restart-btn:disabled {
+  opacity: 0.65;
+}
+
+.install-page__confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+}
+
+.install-page__confirm-dialog {
+  background: #fff;
+  border-radius: 14px;
+  padding: 28px 32px 24px;
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+
+.install-page__confirm-title {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.install-page__confirm-body {
+  margin: 0 0 20px;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #4b5563;
+}
+
+.install-page__confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .install-page__finish-bar {
   position: fixed;
   bottom: 0;
