@@ -355,6 +355,14 @@ func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ..
 	return RunAsCurrentUser(ctx, binaryPath, args)
 }
 
+// RunNodeAsCurrentUser runs a Node.js binary as the current user.
+// On Windows, CreateEnvironmentBlock already provides the full user environment,
+// which includes NODE_EXTRA_CA_CERTS set at the User level by the node certconfig
+// step, so no additional environment manipulation is needed.
+func RunNodeAsCurrentUser(ctx context.Context, binaryPath string, args ...string) (string, error) {
+	return RunAsCurrentUser(ctx, binaryPath, args)
+}
+
 func RunInAuditSessionOfCurrentUser(ctx context.Context, binaryPath string, args []string) (string, error) {
 	return RunAsCurrentUser(ctx, binaryPath, args)
 }

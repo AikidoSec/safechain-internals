@@ -420,11 +420,11 @@ func RunAsCurrentUserWithEnv(ctx context.Context, env []string, binaryPath strin
 	return utils.RunCommand(ctx, "sudo", suArgs...)
 }
 
-// RunAsCurrentUserWithPathEnv runs a binary as the current user with the appropriate environment.
-// On macOS, sudo strips the environment when dropping privileges, so we
-// explicitly construct PATH to include the binary's directory (and its symlink
-// target) to ensure sibling tools (python3, node, etc.) remain discoverable.
-func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ...string) (string, error) {
+// buildPathEnv constructs a PATH value that includes the binary's own directory
+// and, when the binary is a symlink, the real directory of the resolved target.
+// This ensures sibling binaries (e.g. node alongside npm) remain discoverable
+// even when sudo strips the caller's environment.
+func buildPathEnv(binaryPath string) string {
 	binDir := filepath.Dir(binaryPath)
 	pathEnv := binDir
 
@@ -441,9 +441,40 @@ func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ..
 		}
 	}
 
-	pathEnv = pathEnv + string(os.PathListSeparator) + os.Getenv("PATH")
-	env := []string{"PATH=" + pathEnv}
+	return pathEnv + string(os.PathListSeparator) + os.Getenv("PATH")
+}
+
+// RunAsCurrentUserWithPathEnv runs a binary as the current user with the appropriate environment.
+// On macOS, sudo strips the environment when dropping privileges, so we
+// explicitly construct PATH to include the binary's directory (and its symlink
+// target) to ensure sibling tools (python3, node, etc.) remain discoverable.
+func RunAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, args ...string) (string, error) {
+	env := []string{"PATH=" + buildPathEnv(binaryPath)}
 	return RunAsCurrentUserWithEnv(ctx, env, binaryPath, args)
+}
+
+// RunNodeAsCurrentUser runs a Node.js binary as the current user. It behaves
+// like RunAsCurrentUserWithPathEnv but also passes NODE_EXTRA_CA_CERTS pointing
+// to the SafeChain combined CA bundle when it exists. This is necessary because
+// the daemon runs as root and sudo strips the user's shell environment, so the
+// NODE_EXTRA_CA_CERTS export written to shell startup files is never inherited
+// by child processes spawned directly by the daemon.
+func RunNodeAsCurrentUser(ctx context.Context, binaryPath string, args ...string) (string, error) {
+	env := []string{"PATH=" + buildPathEnv(binaryPath)}
+	if bundle := nodeExtraCACertsBundle(); bundle != "" {
+		env = append(env, "NODE_EXTRA_CA_CERTS="+bundle)
+	}
+	return RunAsCurrentUserWithEnv(ctx, env, binaryPath, args)
+}
+
+// nodeExtraCACertsBundle returns the path of the SafeChain combined CA bundle
+// used for Node.js trust, or an empty string if it has not been written yet.
+func nodeExtraCACertsBundle() string {
+	path := filepath.Join(GetRunDir(), "endpoint-protection-combined-ca.pem")
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	return path
 }
 
 // CommandAsCurrentUserWithPathEnv builds a long-lived command that should run
@@ -453,19 +484,7 @@ func CommandAsCurrentUserWithPathEnv(ctx context.Context, binaryPath string, arg
 		return nil, fmt.Errorf("binaryPath must be absolute, got %q", binaryPath)
 	}
 
-	binDir := filepath.Dir(binaryPath)
-	pathEnv := binDir
-
-	resolved, err := filepath.EvalSymlinks(binaryPath)
-	if err == nil {
-		resolvedDir := filepath.Dir(resolved)
-		if resolvedDir != binDir {
-			pathEnv = binDir + string(os.PathListSeparator) + resolvedDir
-		}
-	}
-
-	pathEnv = pathEnv + string(os.PathListSeparator) + os.Getenv("PATH")
-	env := []string{"PATH=" + pathEnv}
+	env := []string{"PATH=" + buildPathEnv(binaryPath)}
 
 	if !RunningAsRoot() {
 		// Use exec.CommandContext to avoid shell interpretation of arguments,
