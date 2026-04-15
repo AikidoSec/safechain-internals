@@ -114,7 +114,11 @@ export function InstallPage() {
     setErrorMsg("");
     try {
       await STEP_ACTIONS[currentStep](tokenInput.trim());
-      setPhase("done");
+      if (currentStep === "token") {
+        handleNext();
+      } else {
+        setPhase("done");
+      }
     } catch (e: unknown) {
       setPhase("error");
       setErrorMsg(e instanceof Error ? e.message : "Something went wrong. Please try again.");
