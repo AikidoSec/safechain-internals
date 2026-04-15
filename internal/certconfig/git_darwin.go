@@ -5,6 +5,7 @@ package certconfig
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os/exec"
 	"strings"
@@ -26,6 +27,17 @@ func (c *darwinGitTrustConfigurator) Install(ctx context.Context) error {
 		log.Printf("git: git not found, skipping http.sslCAInfo configuration")
 		return nil
 	}
+	baseCACertBundle, err := findSystemGitCABundle()
+	if err != nil {
+		return fmt.Errorf("git: could not find system CA bundle: %w", err)
+	}
+	if baseCACertBundle == "" {
+		log.Printf("git: no system CA bundle found, skipping http.sslCAInfo configuration")
+		return nil
+	}
+	if _, err := ensureSystemCombinedCABundle(baseCACertBundle); err != nil {
+		return err
+	}
 	_, err = platform.RunAsCurrentUser(ctx, gitPath, []string{
 		"config", "--global", "http.sslCAInfo", c.bundlePath,
 	})
@@ -36,7 +48,7 @@ func (c *darwinGitTrustConfigurator) Uninstall(ctx context.Context) error {
 	gitPath, err := findGitBinary()
 	if err != nil {
 		log.Printf("git: git not found, skipping http.sslCAInfo cleanup")
-		return nil
+		return removeSystemCombinedCABundle()
 	}
 	current, err := platform.RunAsCurrentUser(ctx, gitPath, []string{
 		"config", "--global", "--get", "http.sslCAInfo",
@@ -44,19 +56,21 @@ func (c *darwinGitTrustConfigurator) Uninstall(ctx context.Context) error {
 	// exit code 1 means the key is not set — nothing to do.
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-		return nil
+		return removeSystemCombinedCABundle()
 	}
 	if err != nil {
 		return err
 	}
 	if strings.TrimSpace(current) != c.bundlePath {
 		log.Printf("git: http.sslCAInfo points to a different bundle, skipping cleanup")
-		return nil
+	} else {
+		if _, err = platform.RunAsCurrentUser(ctx, gitPath, []string{
+			"config", "--global", "--unset", "http.sslCAInfo",
+		}); err != nil {
+			return err
+		}
 	}
-	_, err = platform.RunAsCurrentUser(ctx, gitPath, []string{
-		"config", "--global", "--unset", "http.sslCAInfo",
-	})
-	return err
+	return removeSystemCombinedCABundle()
 }
 
 // findSystemGitCABundle returns the system-level CA bundle that git uses when
