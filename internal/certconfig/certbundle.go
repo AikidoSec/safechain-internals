@@ -14,21 +14,16 @@ import (
 )
 
 const (
-	nodeCombinedBundleName = "endpoint-protection-combined-ca.pem"
-	pipCombinedBundleName  = "endpoint-protection-pip-combined-ca.pem"
-	gitCombinedBundleName  = "endpoint-protection-git-combined-ca.pem"
+	nodeCombinedBundleName   = "endpoint-protection-combined-ca.pem"
+	systemCombinedBundleName = "endpoint-protection-system-combined-ca.pem"
 )
 
 func combinedCaBundlePath() string {
 	return filepath.Join(platform.GetRunDir(), nodeCombinedBundleName)
 }
 
-func pipCombinedCaBundlePath() string {
-	return filepath.Join(platform.GetRunDir(), pipCombinedBundleName)
-}
-
-func gitCombinedCaBundlePath() string {
-	return filepath.Join(platform.GetRunDir(), gitCombinedBundleName)
+func systemCombinedCaBundlePath() string {
+	return filepath.Join(platform.GetRunDir(), systemCombinedBundleName)
 }
 
 // ensureCombinedCABundle writes the combined CA bundle containing the SafeChain CA
@@ -39,18 +34,12 @@ func ensureCombinedCABundle(originalCACertsPath string) (string, error) {
 	return ensureCombinedCABundleAt(combinedCaBundlePath(), originalCACertsPath)
 }
 
-// ensurePipCombinedCABundle builds the pip CA bundle.
-//
-// Unlike NODE_EXTRA_CA_CERTS (which appends), PIP_CERT replaces pip's bundle
-// entirely. baseCACertsPath must already point to a validated PEM bundle that
-// pip should continue trusting after the SafeChain CA is added.
-func ensurePipCombinedCABundle(baseCACertsPath string) (string, error) {
-	return ensurePipCombinedCABundleAt(pipCombinedCaBundlePath(), baseCACertsPath)
-}
-
-// ensurePipCombinedCABundleAt builds a combined CA bundle at bundlePath containing
-// the SafeChain CA and the provided baseCACertsPath. Used by both pip and git.
-func ensurePipCombinedCABundleAt(bundlePath string, baseCACertsPath string) (string, error) {
+// ensureSystemCombinedCABundle builds the shared system CA bundle used by tools
+// that replace their CA bundle entirely (e.g. PIP_CERT, http.sslCAInfo).
+// baseCACertsPath must point to a validated PEM bundle that should continue to
+// be trusted after the SafeChain CA is added.
+func ensureSystemCombinedCABundle(baseCACertsPath string) (string, error) {
+	bundlePath := systemCombinedCaBundlePath()
 	safeChainCACertPath := proxy.GetCaCertPath()
 	safeChainPayload, err := readAndValidatePEMBundle(safeChainCACertPath)
 	if err != nil {
@@ -61,12 +50,12 @@ func ensurePipCombinedCABundleAt(bundlePath string, baseCACertsPath string) (str
 
 	expanded := utils.ExpandHomePath(strings.TrimSpace(baseCACertsPath), platform.GetConfig().HomeDir)
 	if expanded == "" {
-		return "", fmt.Errorf("pip CA bundle path is empty")
+		return "", fmt.Errorf("base CA bundle path is empty")
 	}
 	if expanded != safeChainCACertPath && expanded != bundlePath {
 		payload, err := readAndValidatePEMBundle(expanded)
 		if err != nil {
-			return "", fmt.Errorf("failed to read pip base CA bundle: %w", err)
+			return "", fmt.Errorf("failed to read base CA bundle: %w", err)
 		}
 		parts = append(parts, payload)
 	}
@@ -105,16 +94,8 @@ func removeCombinedCABundle() error {
 	return removeCombinedCABundleAt(combinedCaBundlePath())
 }
 
-func removePipCombinedCABundle() error {
-	return removeCombinedCABundleAt(pipCombinedCaBundlePath())
-}
-
-func ensureGitCombinedCABundle(baseCACertsPath string) (string, error) {
-	return ensurePipCombinedCABundleAt(gitCombinedCaBundlePath(), baseCACertsPath)
-}
-
-func removeGitCombinedCABundle() error {
-	return removeCombinedCABundleAt(gitCombinedCaBundlePath())
+func removeSystemCombinedCABundle() error {
+	return removeCombinedCABundleAt(systemCombinedCaBundlePath())
 }
 
 func removeCombinedCABundleAt(path string) error {
