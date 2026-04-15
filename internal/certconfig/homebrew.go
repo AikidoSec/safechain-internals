@@ -49,7 +49,8 @@ func syncHomebrewCACerts(ctx context.Context) error {
 
 	out, err := platform.RunAsCurrentUserWithPathEnv(ctx, brewPath, "postinstall", "ca-certificates")
 	if err != nil {
-		return fmt.Errorf("brew postinstall ca-certificates: %w (output: %s)", err, out)
+		log.Printf("homebrew: brew postinstall ca-certificates failed (likely not installed), skipping: %v (output: %s)", err, out)
+		return nil
 	}
 	return nil
 }
