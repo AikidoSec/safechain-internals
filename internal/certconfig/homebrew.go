@@ -4,7 +4,6 @@ package certconfig
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os/exec"
 
