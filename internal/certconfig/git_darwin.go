@@ -5,7 +5,6 @@ package certconfig
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"os/exec"
 	"strings"
@@ -27,10 +26,7 @@ func (c *darwinGitTrustConfigurator) Install(ctx context.Context) error {
 		log.Printf("git: git not found, skipping http.sslCAInfo configuration")
 		return nil
 	}
-	baseCACertBundle, err := findSystemGitCABundle()
-	if err != nil {
-		return fmt.Errorf("git: could not find system CA bundle: %w", err)
-	}
+	baseCACertBundle := findSystemGitCABundle()
 	if baseCACertBundle == "" {
 		log.Printf("git: no system CA bundle found, skipping http.sslCAInfo configuration")
 		return nil
@@ -76,17 +72,17 @@ func (c *darwinGitTrustConfigurator) Uninstall(ctx context.Context) error {
 // findSystemGitCABundle returns the system-level CA bundle that git uses when
 // no http.sslCAInfo is configured. On macOS this is the system cert store at
 // /private/etc/ssl/cert.pem, which is always present.
-func findSystemGitCABundle() (string, error) {
+func findSystemGitCABundle() string {
 	candidates := []string{
 		"/private/etc/ssl/cert.pem",
 		"/etc/ssl/cert.pem",
 	}
 	for _, p := range candidates {
 		if _, err := readAndValidatePEMBundle(p); err == nil {
-			return p, nil
+			return p
 		}
 	}
-	return "", nil
+	return ""
 }
 
 func findGitBinary() (string, error) {
