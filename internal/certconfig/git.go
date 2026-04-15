@@ -16,7 +16,7 @@ type gitConfigurator struct {
 
 func newGitConfigurator() Configurator {
 	return &gitConfigurator{
-		trust: newGitTrustConfigurator(gitCombinedCaBundlePath()),
+		trust: newGitTrustConfigurator(systemCombinedCaBundlePath()),
 	}
 }
 
@@ -30,7 +30,7 @@ func (c *gitConfigurator) Install(ctx context.Context) error {
 	if baseCACertBundle == "" {
 		return fmt.Errorf("git: no system CA bundle found")
 	}
-	if _, err := ensureGitCombinedCABundle(baseCACertBundle); err != nil {
+	if _, err := ensureSystemCombinedCABundle(baseCACertBundle); err != nil {
 		return err
 	}
 	return c.trust.Install(ctx)
@@ -40,5 +40,5 @@ func (c *gitConfigurator) Uninstall(ctx context.Context) error {
 	if err := c.trust.Uninstall(ctx); err != nil {
 		return err
 	}
-	return removeGitCombinedCABundle()
+	return removeSystemCombinedCABundle()
 }
