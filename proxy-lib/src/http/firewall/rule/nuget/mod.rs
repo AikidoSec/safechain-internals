@@ -5,8 +5,7 @@ use rama::{
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{
-        Request, Response, Uri,
-        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
+        Request, Response, Uri, ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput}
     },
     net::address::Domain,
     telemetry::tracing,
@@ -16,9 +15,7 @@ use rama::{
 use crate::{
     endpoint_protection::{PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig},
     http::firewall::{
-        domain_matcher::DomainMatcher,
-        events::{Artifact, BlockReason},
-        rule::{BlockedRequest, RequestAction, Rule},
+        domain_matcher::DomainMatcher, events::{Artifact, BlockReason}, rule::{BlockedRequest, RequestAction, Rule, nuget::min_package_age::MinPackageAgeNuget}
     },
     package::{
         malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
@@ -32,11 +29,14 @@ use rama::utils::time::now_unix_ms;
 #[cfg(feature = "pac")]
 use crate::http::firewall::pac::PacScriptGenerator;
 
+pub mod min_package_age;
+
 pub(in crate::http::firewall) struct RuleNuget {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
     remote_released_packages_list: RemoteReleasedPackagesList,
     remote_endpoint_config: Option<RemoteEndpointConfig>,
+    maybe_min_package_age: Option<MinPackageAgeNuget>,
     policy_evaluator: Option<PolicyEvaluator>,
 }
 
@@ -74,8 +74,9 @@ impl RuleNuget {
         Ok(Self {
             target_domains: ["api.nuget.org", "www.nuget.org"].into_iter().collect(),
             remote_malware_list,
-            remote_released_packages_list,
+            remote_released_packages_list: remote_released_packages_list.clone(),
             remote_endpoint_config,
+            maybe_min_package_age: Some(MinPackageAgeNuget::new(remote_released_packages_list)),
             policy_evaluator,
         })
     }
@@ -178,7 +179,13 @@ impl Rule for RuleNuget {
 
     #[inline(always)]
     async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        Ok(resp)
+        let Some(min_package_age) = &self.maybe_min_package_age else {
+            return Ok(resp);
+        };
+
+        let cutoff_secs = self.get_package_age_cutoff_secs();
+
+        min_package_age.remove_new_packages(resp, cutoff_secs).await
     }
 
     #[inline(always)]
@@ -188,6 +195,14 @@ impl Rule for RuleNuget {
         data: WebSocketRelayOutput,
     ) -> Result<WebSocketRelayOutput, BoxError> {
         Ok(data)
+    }
+
+    #[inline(always)]
+    fn match_http_response_payload_inspection_request(
+        &self,
+        _: super::HttpRequestMatcherView<'_>,
+    ) -> bool {
+        self.maybe_min_package_age.is_some()
     }
 }
 

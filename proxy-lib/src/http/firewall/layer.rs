@@ -56,6 +56,7 @@ where
         };
 
         if let Some(http_rules) = maybe_http_rules {
+            let orig_uri = req.uri().clone();
             let mod_req = match http_rules.evaluate_http_request(req).await? {
                 RequestAction::Allow(mut allowed_mod_req) => {
                     allowed_mod_req.extensions_mut().insert(http_rules.clone());
@@ -69,7 +70,8 @@ where
                 }
             };
 
-            let resp = self.inner.serve(mod_req).await.into_box_error()?;
+            let mut resp = self.inner.serve(mod_req).await.into_box_error()?;
+            resp.extensions_mut().insert(orig_uri);
             Ok(http_rules.evaluate_http_response(resp).await?)
         } else {
             self.inner.serve(req).await.into_box_error()
