@@ -315,8 +315,21 @@ impl Firewall {
             .collect();
 
         if matched_rules.is_empty() {
+            tracing::debug!(
+                domain = %incoming_flow_info.domain,
+                bundle_id = %incoming_flow_info.app_bundle_id.unwrap_or("default"),
+                source_process_path = ?incoming_flow_info.source_process_path,
+                "skipping firewall because no rules matched"
+            );
             None
         } else {
+            let num_rules = matched_rules.len();
+            tracing::debug!(
+                domain = %incoming_flow_info.domain,
+                bundle_id = %incoming_flow_info.app_bundle_id.unwrap_or("default"),
+                source_process_path = ?incoming_flow_info.source_process_path,
+                "setting up firewall for {num_rules} rules"
+            );
             Some(FirewallHttpRules(matched_rules))
         }
     }
