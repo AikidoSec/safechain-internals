@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { setupRestart } from "../api";
 import { getToolIcon } from "../constants";
 
 /** Icon layout: alternating left / right / center column; keys match `constants` TOOL_ICONS. */
@@ -13,8 +15,55 @@ const FINISH_ECOSYSTEM_VISUAL: { id: string; align: "left" | "right" | "center" 
 ];
 
 export function InstallFinishPage() {
+  const [restarting, setRestarting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  function handleRestartClick() {
+    setConfirming(true);
+  }
+
+  function handleCancel() {
+    setConfirming(false);
+  }
+
+  async function handleConfirm() {
+    setConfirming(false);
+    setRestarting(true);
+    try {
+      await setupRestart();
+    } catch {
+      setRestarting(false);
+    }
+  }
+
   return (
     <div className="install-page__main">
+      {confirming && (
+        <div className="install-page__confirm-overlay">
+          <div className="install-page__confirm-dialog">
+            <p className="install-page__confirm-title">Restart now?</p>
+            <p className="install-page__confirm-body">
+              Your system will restart immediately. Make sure you&apos;ve saved any open work.
+            </p>
+            <div className="install-page__confirm-actions">
+              <button
+                type="button"
+                className="button-brand button--tertiary button--normal button--rounded"
+                onClick={handleCancel}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="button-brand button--normal button--rounded install-page__restart-btn"
+                onClick={handleConfirm}
+              >
+                Restart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="install-page__finish-grid">
         <div className="install-page__finish-col install-page__finish-col--left">
           <div className="install-page__finish-hero install-page__finish-hero--split">
@@ -39,10 +88,21 @@ export function InstallFinishPage() {
             </div>
           </div>
           <div className="install-page__restart-card install-page__restart-card--emphasized">
-            <p className="install-page__restart-card-title">Restart apps if connections act up</p>
+            <p className="install-page__restart-card-title">System restart is highly recommended</p>
             <p className="install-page__restart-card-body">
-              If you experience connection issues in any running application, restarting it will resolve the problem.
+              A restart ensures all applications pick up the new certificate and network settings. You can restart now or
+              do it later from your system menu.
             </p>
+            <div className="install-page__restart-card-actions">
+              <button
+                type="button"
+                className="button-brand button--normal button--rounded install-page__restart-btn"
+                disabled={restarting}
+                onClick={handleRestartClick}
+              >
+                {restarting ? "Restarting…" : "Restart"}
+              </button>
+            </div>
           </div>
         </div>
 

@@ -71,6 +71,10 @@ export async function getSetupSteps(): Promise<string[]> {
   return DaemonService.GetSetupSteps();
 }
 
+export async function setupRestart(): Promise<void> {
+  return DaemonService.SetupRestart();
+}
+
 export async function closeInstallWindow(): Promise<void> {
   return DaemonService.CloseInstallWindow();
 }
