@@ -13,6 +13,7 @@ import {
   isVpnAllowed,
   openExtensionSettings,
   setInstallWindowOnTop,
+  setupRestart,
 } from "../api";
 import type { Phase } from "./SetupStepLayout";
 import { InstallFinishPage } from "./InstallFinishPage";
@@ -75,6 +76,8 @@ export function InstallPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [tokenInput, setTokenInput] = useState("");
   const [showFinish, setShowFinish] = useState(false);
+  const [confirmingRestart, setConfirmingRestart] = useState(false);
+  const [restarting, setRestarting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,8 +139,26 @@ export function InstallPage() {
     }
   }
 
-  async function handleFinish() {
+  async function handleRestartLater() {
     await closeInstallWindow();
+  }
+
+  function handleRestartNow() {
+    setConfirmingRestart(true);
+  }
+
+  function handleRestartCancel() {
+    setConfirmingRestart(false);
+  }
+
+  async function handleRestartConfirm() {
+    setConfirmingRestart(false);
+    setRestarting(true);
+    try {
+      await setupRestart();
+    } catch {
+      setRestarting(false);
+    }
   }
 
   if (steps.length === 0) {
@@ -224,13 +245,24 @@ export function InstallPage() {
         <div className="install-page__finish-bar">
           <div className="install-page__finish-bar-inner">
             {showFinish ? (
-              <button
-                type="button"
-                className="button-brand button--primary button--normal button--rounded"
-                onClick={handleFinish}
-              >
-                Finish
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="button-brand button--tertiary button--normal button--rounded"
+                  disabled={restarting}
+                  onClick={handleRestartLater}
+                >
+                  Restart Later
+                </button>
+                <button
+                  type="button"
+                  className="button-brand button--primary button--normal button--rounded"
+                  disabled={restarting}
+                  onClick={handleRestartNow}
+                >
+                  {restarting ? "Restarting…" : "Restart Now"}
+                </button>
+              </>
             ) : (
               <button
                 type="button"
@@ -240,6 +272,33 @@ export function InstallPage() {
                 Next
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {confirmingRestart && (
+        <div className="install-page__confirm-overlay">
+          <div className="install-page__confirm-dialog">
+            <p className="install-page__confirm-title">Restart now?</p>
+            <p className="install-page__confirm-body">
+              Your system will restart immediately. Make sure you&apos;ve saved any open work.
+            </p>
+            <div className="install-page__confirm-actions">
+              <button
+                type="button"
+                className="button-brand button--tertiary button--normal button--rounded"
+                onClick={handleRestartCancel}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="button-brand button--normal button--rounded install-page__restart-btn"
+                onClick={handleRestartConfirm}
+              >
+                Restart
+              </button>
+            </div>
           </div>
         </div>
       )}

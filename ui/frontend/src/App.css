@@ -1366,8 +1366,46 @@ body {
   margin-top: 44px;
 }
 
+.install-page__restart-card--info {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: #f0f4ff;
+  border: 1px solid #d4daf0;
+  border-left-width: 4px;
+  border-left-color: #6551f3;
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-top: 44px;
+}
+
+.install-page__restart-card--info .install-page__restart-card-title {
+  color: #111827;
+  font-weight: 700;
+  font-size: 0.9375rem;
+}
+
+.install-page__restart-card--info .install-page__restart-card-body {
+  color: #4b5563;
+  font-size: 0.875rem;
+}
+
+.install-page__restart-card-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.install-page__restart-card-content {
+  flex: 1;
+  min-width: 0;
+}
+
 @media (min-width: 801px) {
   .install-page__finish-grid .install-page__restart-card--emphasized {
+    margin-top: auto;
+  }
+
+  .install-page__finish-grid .install-page__restart-card--info {
     margin-top: auto;
   }
 }
@@ -1476,6 +1514,8 @@ body {
   width: 100%;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
 }
 
 .install-page__action-btn {
