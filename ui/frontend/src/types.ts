@@ -23,5 +23,6 @@ export interface TlsTerminationFailedEvent {
   ts_ms: number;
   sni: string;
   app?: string;
+  app_path?: string;
   error: string;
 }

@@ -54,7 +54,7 @@ where
                 self.firewall.match_http_rules(&super::IncomingFlowInfo {
                     domain: &domain,
                     app_bundle_id: get_app_source_bundle_id_from_ext(&req),
-                    source_process_path: get_source_process_path_from_ext(&req),
+                    source_process_path: get_source_process_path_from_ext(&req).as_deref(),
                 })
             }),
         };

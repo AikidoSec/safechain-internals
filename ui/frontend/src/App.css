@@ -784,7 +784,7 @@ body {
 }
 
 .tls-detail-info {
-  margin: 0 0 20px;
+  margin: 0;
   padding: 0;
 }
 
@@ -816,6 +816,10 @@ body {
 }
 
 .tls-detail-error-section {
+  margin-top: 20px;
+}
+
+.tls-detail-error-section:first-of-type {
   margin-top: auto;
 }
 
