@@ -1,6 +1,5 @@
-set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
+set windows-shell := ["powershell.exe", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command"]
 
-export RUSTFLAGS := "-D warnings"
 export RUSTDOCFLAGS := "-D rustdoc::broken-intra-doc-links"
 
 l7_team_id := "7VPF8GD6J4"
@@ -29,44 +28,87 @@ xcode_l4_installed_app_exe := xcode_l4_installed_app + "/Contents/MacOS/Aikido N
 xcode_l4_installed_sysext := xcode_l4_installed_app + "/Contents/Library/SystemExtensions/" + l4_dev_extension_bundle_id + ".systemextension"
 
 rust-quick-qa:
+    @just _rust-quick-qa-{{ os() }}
+
+_rust-quick-qa-windows: rust-quick-qa-crossplatform windows-driver-quick-qa
+
+_rust-quick-qa-linux: rust-quick-qa-crossplatform
+
+_rust-quick-qa-macos: rust-quick-qa-crossplatform
+
+rust-fmt:
     cargo fmt
     @cargo install cargo-sort
     cargo sort --grouped --workspace
-    cargo doc --all-features --workspace --no-deps
-    cargo check --all-features --workspace --all-targets
-    cargo clippy --all-features --workspace --all-targets
+
+rust-quick-qa-crossplatform:
+    cargo fmt --all --check
+    @cargo install cargo-sort
+    cargo sort --workspace --grouped --check
+    cargo doc --all-features --workspace --no-deps \
+        --exclude safechain-lib-l4-proxy-windows-driver \
+        --exclude safechain-l4-proxy-windows-driver-object
+    cargo check --all-features --workspace --all-targets \
+        --exclude safechain-lib-l4-proxy-windows-driver \
+        --exclude safechain-l4-proxy-windows-driver-object
+    cargo clippy \
+        --all-features --workspace --all-targets \
+        --exclude safechain-lib-l4-proxy-windows-driver \
+        --exclude safechain-l4-proxy-windows-driver-object \
+        -- -D warnings
 
 rust-test *ARGS:
-    cargo test --all-features --workspace {{ARGS}}
-
-rust-qa: rust-quick-qa rust-test rust-fuzz-check
-
-rust-fuzz-check:
-    @cargo install cargo-fuzz
-    CARGO_PROFILE_RELEASE_LTO=false \
-        cargo +nightly fuzz check --fuzz-dir ./proxy-fuzz
-
-rust-fuzz *ARGS:
-    @cargo install cargo-fuzz
-    CARGO_PROFILE_RELEASE_LTO=false \
-        cargo +nightly fuzz run --fuzz-dir ./proxy-fuzz -j 8 parse_pragmatic_semver_version -- -max_total_time=60
-
-rust-qa-full: rust-qa rust-fuzz
-    cargo test --all-features --workspace -- --ignored
-
-run-l4-proxy *ARGS:
-    mkdir -p .aikido/safechain-l4-proxy
-    RUST_LOG=info,safechain_l4_proxy=debug,safechain_proxy_lib=debug \
-    cargo run \
-        --bin safechain-l4-proxy \
-        --features har \
-        -- \
-        --secrets .aikido/safechain-l4-proxy \
+    cargo test --all-features --workspace \
+        --exclude safechain-lib-l4-proxy-windows-driver \
+        --exclude safechain-l4-proxy-windows-driver-object \
         {{ARGS}}
 
-run-l7-proxy *ARGS:
-    mkdir -p .aikido/safechain-l7-proxy
-    RUST_LOG=info,safechain_l7_proxy=debug,safechain_proxy_lib=debug \
+rust-qa: rust-quick-qa rust-test rust-fuzz-check
+    @just _rust-qa-{{ os() }}
+
+_rust-qa-windows: windows-driver-build
+    cargo test --all-features \
+        -p safechain-l4-proxy-windows-driver-object
+
+_rust-qa-linux:
+
+_rust-qa-macos:
+
+rust-fuzz-check:
+    @just _rust-fuzz-check-{{os_family()}}
+
+_rust-fuzz-check-unix $CARGO_PROFILE_RELEASE_LTO="false":
+    @cargo install cargo-fuzz
+    cargo +nightly fuzz check --fuzz-dir ./proxy-fuzz
+
+_rust-fuzz-check-windows:
+
+rust-fuzz:
+    @just _rust-fuzz-{{os_family()}}
+
+_rust-fuzz-unix $CARGO_PROFILE_RELEASE_LTO="false" *ARGS:
+    @cargo install cargo-fuzz
+    cargo +nightly fuzz run --fuzz-dir ./proxy-fuzz -j 8 parse_pragmatic_semver_version -- -max_total_time=60
+
+_rust-fuzz-windows:
+
+rust-qa-full: rust-qa
+    cargo test --all-features --workspace \
+        --exclude safechain-lib-l4-proxy-windows-driver \
+        --exclude safechain-l4-proxy-windows-driver-object \
+        -- --ignored
+
+run-l4-proxy $RUST_LOG="debug" *ARGS:
+    cargo run \
+        --bin safechain-l4-proxy \
+        -- \
+        --bind-ipv4 '127.0.0.1:0' \
+        --bind-ipv6 '[::1]:0' \
+        --secrets .aikido/safechain-l4-proxy \
+        --output .aikido/safechain-l4-proxy.log \
+        {{ARGS}}
+
+run-l7-proxy $RUST_LOG="info,safechain_l4_proxy=debug,safechain_proxy_lib=debug" *ARGS:
     cargo run \
         --bin safechain-l7-proxy \
         --features har \
@@ -208,3 +250,128 @@ macos-l4-stop:
 
 run-macos-l4-proxy *ARGS: macos-l4-install-signed
     just macos-l4-start {{ARGS}}
+
+windows-driver-quick-qa: windows-driver-check windows-driver-clippy windows-driver-test
+    cargo doc --all-features --no-deps \
+        -p safechain-l4-proxy-windows-driver-object
+    cargo check --all-features --all-targets \
+        -p safechain-l4-proxy-windows-driver-object
+    cargo clippy --all-features --all-targets \
+        -p safechain-l4-proxy-windows-driver-object \
+        -- -D warnings
+
+windows-driver-qa: windows-driver-quick-qa windows-driver-build
+    cargo test --all-features \
+        -p safechain-l4-proxy-windows-driver-object
+
+windows-driver-package-stage profile="debug" *ARGS:
+    ./packaging/windows/stage-driver-package.ps1 -Profile {{profile}} {{ARGS}}
+
+windows-driver-package-install package_dir="dist/windows-driver-package/debug":
+    ./packaging/windows/install-driver-package.ps1 -PackageDir {{package_dir}}
+
+windows-driver-package-install-fresh-debug:
+    just rust-quick-qa
+    just windows-driver-test
+    just windows-driver-disable
+    just windows-driver-package-remove
+    just windows-driver-build
+    just windows-driver-package-stage
+    just windows-driver-package-install
+    @Write-Host ""
+    @Write-Host "Reboot Windows to activate the new driver package." -ForegroundColor Yellow
+    @Write-Host "After reboot, start safechain-l4-proxy; it will automatically synchronize its IPv4/IPv6 listener addresses into the Windows driver runtime config." -ForegroundColor Yellow
+
+windows-driver-package-verify *ARGS:
+    ./packaging/windows/verify-driver-install.ps1 {{ARGS}}
+
+windows-driver-package-remove:
+    ./packaging/windows/remove-driver-package.ps1
+
+windows-install-root-crt *ARGS:
+    ./packaging/windows/install-root-crt.ps1 {{ARGS}}
+
+[working-directory: './proxy-lib-l4-windows-driver']
+windows-driver-check:
+    cargo check
+
+[working-directory: './proxy-lib-l4-windows-driver']
+windows-driver-clippy:
+    cargo clippy \
+        -- -D warnings
+
+[working-directory: './proxy-lib-l4-windows-driver']
+windows-driver-test *ARGS:
+    cargo test {{ARGS}}
+
+[working-directory: './proxy-lib-l4-windows-driver']
+windows-driver-build profile="dev" *ARGS:
+   @cargo install cargo-wdk
+   @cargo install cargo-make
+   $env:STAMPINF_VERSION=((Get-Content '..\Cargo.toml' | Select-String '^version = "([^"]+)"').Matches[0].Groups[1].Value + '.0'); cargo wdk build --profile {{profile}} {{ARGS}}
+
+[working-directory: './proxy-lib-l4-windows-driver']
+windows-driver-build-verify profile="dev" *ARGS:
+    just windows-driver-build {{profile}} --verify-signature {{ARGS}}
+
+run-windows-driver-cli *ARGS:
+    cargo run \
+        --bin safechain-l4-proxy-windows-driver-object \
+        -- \
+        {{ARGS}}
+
+windows-driver-enable IPV4_PROXY *ARGS:
+    just run-windows-driver-cli enable \
+        --ipv4-proxy {{IPV4_PROXY}} \
+        --ipv4-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV4_PROXY}}')" \
+        {{ARGS}}
+
+windows-driver-enable-dual-stack IPV4_PROXY IPV6_PROXY *ARGS:
+    just run-windows-driver-cli enable \
+        --ipv4-proxy {{IPV4_PROXY}} \
+        --ipv4-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV4_PROXY}}')" \
+        --ipv6-proxy {{IPV6_PROXY}} \
+        --ipv6-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV6_PROXY}}')" \
+        {{ARGS}}
+
+windows-driver-disable *ARGS:
+    just run-windows-driver-cli disable \
+        --force-remove-on-veto \
+        {{ARGS}}
+
+windows-driver-update-ipv4 IPV4_PROXY *ARGS:
+    just run-windows-driver-cli update \
+        --ipv4-proxy {{IPV4_PROXY}} \
+        --ipv4-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV4_PROXY}}')" \
+        {{ARGS}}
+
+windows-driver-update-ipv6 IPV6_PROXY *ARGS:
+    just run-windows-driver-cli update \
+        --ipv6-proxy {{IPV6_PROXY}} \
+        --ipv6-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV6_PROXY}}')" \
+        {{ARGS}}
+
+windows-driver-update-dual-stack IPV4_PROXY IPV6_PROXY *ARGS:
+    just run-windows-driver-cli update \
+        --ipv4-proxy {{IPV4_PROXY}} \
+        --ipv4-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV4_PROXY}}')" \
+        --ipv6-proxy {{IPV6_PROXY}} \
+        --ipv6-proxy-pid "$(& ./packaging/windows/resolve-proxy-pid.ps1 -BindAddress '{{IPV6_PROXY}}')" \
+        {{ARGS}}
+
+windows-driver-enable-dev *ARGS:
+    just windows-driver-enable-dual-stack \
+        "$([System.IO.File]::ReadAllText('.aikido/safechain-l4-proxy/l4_proxy.addr.v4.txt').Trim())" \
+        "$([System.IO.File]::ReadAllText('.aikido/safechain-l4-proxy/l4_proxy.addr.v6.txt').Trim())" \
+        {{ARGS}}
+
+windows-driver-update-dev *ARGS:
+    just windows-driver-update-dual-stack \
+        "$([System.IO.File]::ReadAllText('.aikido/safechain-l4-proxy/l4_proxy.addr.v4.txt').Trim())" \
+        "$([System.IO.File]::ReadAllText('.aikido/safechain-l4-proxy/l4_proxy.addr.v6.txt').Trim())" \
+        {{ARGS}}
+
+windows-driver-clear-ipv6 *ARGS:
+    just run-windows-driver-cli update \
+        --clear-ipv6 \
+        {{ARGS}}

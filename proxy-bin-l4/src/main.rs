@@ -5,7 +5,7 @@
 )]
 
 use std::{
-    net::SocketAddr,
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -26,6 +26,14 @@ use safechain_proxy_lib::{
     utils::{self as safechain_utils, token::AgentIdentity},
 };
 
+#[cfg(target_os = "windows")]
+use ::{
+    safechain_l4_proxy_windows_driver_object::runtime_config::{
+        DriverRuntimeConfig, apply_runtime_config,
+    },
+    std::net::IpAddr,
+};
+
 #[cfg(target_family = "unix")]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
@@ -43,9 +51,13 @@ pub mod utils;
 #[command(bin_name = "safechain-l4-proxy")]
 #[command(version, about, long_about = None)]
 pub struct Args {
-    /// network interface to bind the transparent proxy to
-    #[arg(long, default_value = "127.0.0.1:0")]
-    pub bind: SocketAddr,
+    /// IPv4 network interface to bind the transparent proxy to
+    #[arg(long, default_value_t = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0))]
+    pub bind_ipv4: SocketAddrV4,
+
+    /// Optional IPv6 network interface to bind the transparent proxy to
+    #[arg(long)]
+    pub bind_ipv6: Option<SocketAddrV6>,
 
     /// secrets storage to use (e.g. for root CA)
     #[arg(
@@ -154,11 +166,31 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
     let graceful = graceful::Shutdown::default();
 
     let agent_identity = AgentIdentity::load(&args.data);
+    let peek_duration = Duration::from_secs_f64(args.peek_duration.max(0.05));
 
-    let tcp_server_addr = self::tcp::start_tcp_server(
-        args.bind,
+    let maybe_tcp_server_addr_v6 = if let Some(bind_ipv6) = args.bind_ipv6 {
+        Some(
+            self::tcp::start_tcp_server(
+                SocketAddr::V6(bind_ipv6),
+                Executor::graceful(graceful.guard()),
+                peek_duration,
+                agent_identity.clone(),
+                args.reporting_endpoint.clone(),
+                args.aikido_url.clone(),
+                data_storage.clone(),
+                secret_storage.clone(),
+            )
+            .await
+            .context("start tcp services (v6)")?,
+        )
+    } else {
+        None
+    };
+
+    let tcp_server_addr_v4 = self::tcp::start_tcp_server(
+        SocketAddr::V4(args.bind_ipv4),
         Executor::graceful(graceful.guard()),
-        Duration::from_secs_f64(args.peek_duration.max(0.05)),
+        peek_duration,
         agent_identity,
         args.reporting_endpoint,
         args.aikido_url,
@@ -166,17 +198,25 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
         secret_storage,
     )
     .await
-    .context("start tcp services")?;
+    .context("start tcp services (v4)")?;
 
-    tracing::info!(
-        address = %tcp_server_addr,
-        "tcp server up and running",
-    );
+    tracing::info!(address = %tcp_server_addr_v4, "tcp server (v4) up and running");
+    if let Some(tcp_server_addr_v6) = maybe_tcp_server_addr_v6 {
+        tracing::info!(address = %tcp_server_addr_v6, "tcp server (v6) up and running");
+    }
 
-    write_server_socket_address_as_file(&args.data, tcp_server_addr)
-        .await
-        .context("write server addr to fs")
-        .context_debug_field("dir", args.data)?;
+    #[cfg(target_os = "windows")]
+    sync_windows_driver_runtime_config(tcp_server_addr_v4, maybe_tcp_server_addr_v6)
+        .context("synchronize SafeChain Windows driver runtime config with running L4 proxy")?;
+
+    write_server_socket_addresses_as_files(
+        &args.data,
+        tcp_server_addr_v4,
+        maybe_tcp_server_addr_v6,
+    )
+    .await
+    .context("write server addrs to fs")
+    .context_debug_field("dir", args.data)?;
 
     let delay = match graceful_timeout {
         Some(duration) => graceful.shutdown_with_limit(duration).await?,
@@ -187,15 +227,104 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
     Ok(())
 }
 
-async fn write_server_socket_address_as_file(
+async fn write_server_socket_addresses_as_files(
     dir: &Path,
-    addr: SocketAddress,
+    addr_ipv4: SocketAddress,
+    maybe_addr_ipv6: Option<SocketAddress>,
 ) -> Result<(), BoxError> {
-    let kind = if addr.ip_addr.is_ipv4() { "v4" } else { "v6" };
-    let path = dir.join(format!("l4_proxy.addr.{kind}.txt"));
-    tokio::fs::write(&path, addr.to_string())
+    remove_stale_server_socket_address_files(dir).await?;
+
+    for addr in [addr_ipv4].iter().chain(maybe_addr_ipv6.iter()) {
+        let file_name = if addr.ip_addr.is_ipv4() {
+            "l4_proxy.addr.v4.txt"
+        } else {
+            "l4_proxy.addr.v6.txt"
+        };
+        let path = dir.join(file_name);
+        tokio::fs::write(&path, addr.to_string())
+            .await
+            .context("write server's socket address to file")
+            .context_field("address", *addr)
+            .with_context_debug_field("path", || path.to_owned())?;
+    }
+
+    Ok(())
+}
+
+async fn remove_stale_server_socket_address_files(dir: &Path) -> Result<(), BoxError> {
+    let mut entries = tokio::fs::read_dir(dir)
         .await
-        .context("write server's socket address to file")
-        .context_field("address", addr)
-        .with_context_debug_field("path", || path.to_owned())
+        .context("read data directory while clearing stale socket address files")
+        .with_context_debug_field("path", || dir.to_owned())?;
+
+    while let Some(entry) = entries
+        .next_entry()
+        .await
+        .context("iterate data directory while clearing stale socket address files")?
+    {
+        let Some(file_name) = entry.file_name().to_str().map(str::to_owned) else {
+            continue;
+        };
+
+        let is_socket_address_file =
+            file_name.starts_with("l4_proxy.addr.v4") || file_name.starts_with("l4_proxy.addr.v6");
+        if !is_socket_address_file || !file_name.ends_with(".txt") {
+            continue;
+        }
+
+        let path = entry.path();
+        tokio::fs::remove_file(&path)
+            .await
+            .context("remove stale socket address file")
+            .with_context_debug_field("path", || path.clone())?;
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn sync_windows_driver_runtime_config(
+    addr_ipv4: SocketAddress,
+    maybe_addr_ipv6: Option<SocketAddress>,
+) -> Result<(), BoxError> {
+    let mut ipv4_proxy = None;
+    let mut ipv6_proxy = None;
+
+    for addr in [addr_ipv4].iter().chain(maybe_addr_ipv6.iter()) {
+        let socket_addr = socket_address_to_std(addr)?;
+        match socket_addr {
+            SocketAddr::V4(v4) => {
+                if ipv4_proxy.replace(v4).is_some() {
+                    return Err("expected exactly one IPv4 listener for Windows driver sync".into());
+                }
+            }
+            SocketAddr::V6(v6) => {
+                if ipv6_proxy.replace(v6).is_some() {
+                    return Err("expected at most one IPv6 listener for Windows driver sync".into());
+                }
+            }
+        }
+    }
+
+    let Some(ipv4_proxy) = ipv4_proxy else {
+        return Err("missing IPv4 listener for Windows driver sync".into());
+    };
+    let pid = std::process::id();
+    let config = DriverRuntimeConfig {
+        device_path: "\\\\.\\SafechainL4Proxy",
+        ipv4_proxy,
+        ipv4_proxy_pid: pid,
+        ipv6_proxy,
+        ipv6_proxy_pid: ipv6_proxy.map(|_| pid),
+    };
+
+    apply_runtime_config(&config)
+}
+
+#[cfg(target_os = "windows")]
+fn socket_address_to_std(addr: &SocketAddress) -> Result<SocketAddr, BoxError> {
+    Ok(match addr.ip_addr {
+        IpAddr::V4(ip) => SocketAddr::V4(SocketAddrV4::new(ip, addr.port)),
+        IpAddr::V6(ip) => SocketAddr::V6(SocketAddrV6::new(ip, addr.port, 0, 0)),
+    })
 }
