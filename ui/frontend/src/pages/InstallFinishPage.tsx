@@ -1,8 +1,5 @@
-import { useState } from "react";
-import { setupRestart } from "../api";
 import { getToolIcon } from "../constants";
 
-/** Icon layout: alternating left / right / center column; keys match `constants` TOOL_ICONS. */
 const FINISH_ECOSYSTEM_VISUAL: { id: string; align: "left" | "right" | "center" }[] = [
   { id: "pypi", align: "left" },
   { id: "vscode", align: "right" },
@@ -15,55 +12,8 @@ const FINISH_ECOSYSTEM_VISUAL: { id: string; align: "left" | "right" | "center" 
 ];
 
 export function InstallFinishPage() {
-  const [restarting, setRestarting] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-
-  function handleRestartClick() {
-    setConfirming(true);
-  }
-
-  function handleCancel() {
-    setConfirming(false);
-  }
-
-  async function handleConfirm() {
-    setConfirming(false);
-    setRestarting(true);
-    try {
-      await setupRestart();
-    } catch {
-      setRestarting(false);
-    }
-  }
-
   return (
     <div className="install-page__main">
-      {confirming && (
-        <div className="install-page__confirm-overlay">
-          <div className="install-page__confirm-dialog">
-            <p className="install-page__confirm-title">Restart now?</p>
-            <p className="install-page__confirm-body">
-              Your system will restart immediately. Make sure you&apos;ve saved any open work.
-            </p>
-            <div className="install-page__confirm-actions">
-              <button
-                type="button"
-                className="button-brand button--tertiary button--normal button--rounded"
-                onClick={handleCancel}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="button-brand button--normal button--rounded install-page__restart-btn"
-                onClick={handleConfirm}
-              >
-                Restart
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       <div className="install-page__finish-grid">
         <div className="install-page__finish-col install-page__finish-col--left">
           <div className="install-page__finish-hero install-page__finish-hero--split">
@@ -73,35 +23,20 @@ export function InstallFinishPage() {
               This device now trusts the Aikido Endpoint certificate. Endpoint Protection can secure traffic from your
               browsers, editors, and package managers while you work.
             </p>
-            <div className="install-page__finish-check-wrap">
-              <div className="install-page__finish-check" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M20 6L9 17l-5-5"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-            </div>
           </div>
-          <div className="install-page__restart-card install-page__restart-card--emphasized">
-            <p className="install-page__restart-card-title">System restart is highly recommended</p>
-            <p className="install-page__restart-card-body">
-              A restart ensures all applications pick up the new certificate and network settings. You can restart now or
-              do it later from your system menu.
-            </p>
-            <div className="install-page__restart-card-actions">
-              <button
-                type="button"
-                className="button-brand button--normal button--rounded install-page__restart-btn"
-                disabled={restarting}
-                onClick={handleRestartClick}
-              >
-                {restarting ? "Restarting…" : "Restart"}
-              </button>
+          <div className="install-page__restart-card install-page__restart-card--info">
+            <div className="install-page__restart-card-icon">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="10" cy="10" r="10" fill="#6551f3" />
+                <text x="10" y="14.5" textAnchor="middle" fill="#fff" fontSize="13" fontWeight="600" fontFamily="system-ui, sans-serif">i</text>
+              </svg>
+            </div>
+            <div className="install-page__restart-card-content">
+              <p className="install-page__restart-card-title">System restart recommended</p>
+              <p className="install-page__restart-card-body">
+                A restart ensures all applications pick up the new certificate and network settings. You can restart now
+                or do it later from your system menu.
+              </p>
             </div>
           </div>
         </div>
