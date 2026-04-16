@@ -13,7 +13,7 @@ type gitConfigurator struct {
 
 func newGitConfigurator() Configurator {
 	return &gitConfigurator{
-		trust: newGitTrustConfigurator(systemCombinedCaBundlePath()),
+		trust: newGitTrustConfigurator(gitCombinedCaBundlePath()),
 	}
 }
 

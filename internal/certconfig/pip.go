@@ -28,7 +28,7 @@ type pipCertSetting struct {
 
 func newPipConfigurator() Configurator {
 	return &pipConfigurator{
-		trust: newPipTrustConfigurator(systemCombinedCaBundlePath()),
+		trust: newPipTrustConfigurator(pipCombinedCaBundlePath()),
 	}
 }
 
@@ -78,7 +78,7 @@ func (c *pipConfigurator) Install(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, err := ensureSystemCombinedCABundle(baseCACertBundle); err != nil {
+	if _, err := ensurePipCombinedCABundle(baseCACertBundle); err != nil {
 		return err
 	}
 	return c.trust.Install(ctx)
@@ -89,7 +89,7 @@ func (c *pipConfigurator) Uninstall(ctx context.Context) error {
 		return err
 	}
 	_ = os.Remove(originalPipCertPath())
-	return removeSystemCombinedCABundle()
+	return removePipCombinedCABundle()
 }
 
 func parseSavedPipCertSetting(data []byte) (pipCertSetting, error) {
