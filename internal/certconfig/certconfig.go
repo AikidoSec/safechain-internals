@@ -24,6 +24,7 @@ func New() *CertConfig {
 			newMavenConfigurator(),
 			newHomebrewConfigurator(),
 			newGradleConfigurator(),
+			newGitConfigurator(),
 		},
 	}
 }
