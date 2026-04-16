@@ -20,8 +20,12 @@ func (c *homebrewConfigurator) Install(ctx context.Context) error {
 	return syncHomebrewCACerts(ctx)
 }
 
-func (c *homebrewConfigurator) Uninstall(ctx context.Context) error {
-	return syncHomebrewCACerts(ctx)
+func (c *homebrewConfigurator) Uninstall(_ context.Context) error {
+	// brew postinstall ca-certificates re-merges the macOS keychain into
+	// Homebrew's CA bundle. On uninstall the SafeChain CA is removed from the
+	// keychain by proxy.UninstallProxyCA, so there is nothing to clean up here.
+	// Running brew on teardown is slow and would block later configurators.
+	return nil
 }
 
 // knownBrewPaths lists the canonical Homebrew binary locations.
