@@ -44,16 +44,14 @@ func newPipTrustConfigurator(bundlePath string) pipTrustConfigurator {
 		uvNativeTLSEnvVar,
 	)
 
-	homeDir := platform.GetConfig().HomeDir
-
 	return &darwinPipTrustConfigurator{
 		targets: []darwinShellTarget{
-			{path: filepath.Join(homeDir, ".zshrc"), body: posix},
-			{path: filepath.Join(homeDir, ".zprofile"), body: posix},
-			{path: filepath.Join(homeDir, ".bash_profile"), body: posix},
-			{path: filepath.Join(homeDir, ".bashrc"), body: posix},
-			{path: filepath.Join(homeDir, ".profile"), body: posix},
-			{path: filepath.Join(homeDir, ".config", "fish", "config.fish"), body: fish, createIfMissing: true},
+			{path: filepath.Join(platform.GetConfig().HomeDir, ".zshrc"), body: posix},
+			{path: filepath.Join(platform.GetConfig().HomeDir, ".zprofile"), body: posix},
+			{path: filepath.Join(platform.GetConfig().HomeDir, ".bash_profile"), body: posix},
+			{path: filepath.Join(platform.GetConfig().HomeDir, ".bashrc"), body: posix},
+			{path: filepath.Join(platform.GetConfig().HomeDir, ".profile"), body: posix},
+			{path: filepath.Join(platform.GetConfig().HomeDir, ".config", "fish", "config.fish"), body: fish, createIfMissing: true},
 		},
 	}
 }
@@ -85,4 +83,22 @@ func (c *darwinPipTrustConfigurator) Uninstall(_ context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (c *darwinPipTrustConfigurator) NeedsRepair(_ context.Context) bool {
+	for _, target := range c.targets {
+		present, err := hasManagedBlock(target.path, pipShellManagedBlockFormat)
+		if err != nil {
+			return true
+		}
+		if present {
+			continue
+		}
+		if _, err := os.Stat(target.path); err == nil || target.createIfMissing {
+			return true
+		} else if !os.IsNotExist(err) {
+			return true
+		}
+	}
+	return false
 }

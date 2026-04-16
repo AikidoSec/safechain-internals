@@ -5,11 +5,19 @@ package certconfig
 import (
 	"strings"
 	"testing"
+
+	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
 
 func TestNewPipTrustConfiguratorManagedBlockContent(t *testing.T) {
 	const bundle = "/some/bundle.pem"
-	cfg := newPipTrustConfigurator(bundle).(*darwinPipTrustConfigurator)
+	cfg := platform.GetConfig()
+	originalHome := cfg.HomeDir
+	t.Cleanup(func() {
+		cfg.HomeDir = originalHome
+	})
+	cfg.HomeDir = "/tmp/test-home"
+	configurator := newPipTrustConfigurator(bundle).(*darwinPipTrustConfigurator)
 
 	// Every shell target should export all required vars.
 	requiredPosix := []string{
@@ -27,7 +35,7 @@ func TestNewPipTrustConfiguratorManagedBlockContent(t *testing.T) {
 		bundle,
 	}
 
-	for _, target := range cfg.targets {
+	for _, target := range configurator.targets {
 		isFish := strings.HasSuffix(target.path, "config.fish")
 		required := requiredPosix
 		if isFish {
@@ -42,8 +50,14 @@ func TestNewPipTrustConfiguratorManagedBlockContent(t *testing.T) {
 }
 
 func TestNewPipTrustConfiguratorDoesNotSetSSLCertFile(t *testing.T) {
-	cfg := newPipTrustConfigurator("/some/bundle.pem").(*darwinPipTrustConfigurator)
-	for _, target := range cfg.targets {
+	cfg := platform.GetConfig()
+	originalHome := cfg.HomeDir
+	t.Cleanup(func() {
+		cfg.HomeDir = originalHome
+	})
+	cfg.HomeDir = "/tmp/test-home"
+	configurator := newPipTrustConfigurator("/some/bundle.pem").(*darwinPipTrustConfigurator)
+	for _, target := range configurator.targets {
 		if strings.Contains(target.body, "SSL_CERT_FILE") {
 			t.Errorf("shell target %s: body must not set SSL_CERT_FILE (too broad)\ngot:\n%s", target.path, target.body)
 		}

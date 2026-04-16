@@ -248,6 +248,9 @@ func (d *Daemon) run(ctx context.Context) error {
 	d.wg.Add(1)
 	go d.runDockerCALoop(ctx)
 
+	d.wg.Add(1)
+	go d.runCertconfigHealthLoop(ctx)
+
 	if err := d.registry.InstallAll(ctx); err != nil {
 		platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to install scanners: %v", err))
 		return fmt.Errorf("failed to install all scanners: %v", err)

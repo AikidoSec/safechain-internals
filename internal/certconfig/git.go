@@ -5,6 +5,7 @@ import "context"
 type gitTrustConfigurator interface {
 	Install(context.Context) error
 	Uninstall(context.Context) error
+	NeedsRepair(context.Context) bool
 }
 
 type gitConfigurator struct {
@@ -21,6 +22,16 @@ func (c *gitConfigurator) Name() string { return "git" }
 
 func (c *gitConfigurator) Install(ctx context.Context) error {
 	return c.trust.Install(ctx)
+}
+
+func (c *gitConfigurator) NeedsRepair(ctx context.Context) bool {
+	health, ok := c.trust.(interface {
+		NeedsRepair(context.Context) bool
+	})
+	if !ok {
+		return false
+	}
+	return health.NeedsRepair(ctx)
 }
 
 func (c *gitConfigurator) Uninstall(ctx context.Context) error {

@@ -86,6 +86,7 @@ func TestNodeExtraCACertsShellLookups(t *testing.T) {
 
 			home := t.TempDir()
 			t.Setenv("HOME", home)
+			t.Setenv("NODE_EXTRA_CA_CERTS", "")
 
 			configPath := filepath.Join(home, tt.configFile)
 			if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {

@@ -50,6 +50,14 @@ func (c *windowsNodeTrustConfigurator) Uninstall(ctx context.Context) error {
 	return runPowerShellAsCurrentUser(ctx, script)
 }
 
+func (c *windowsNodeTrustConfigurator) NeedsRepair(ctx context.Context) bool {
+	current, err := runNodeExtraCACertsLookup(ctx)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(current) != c.bundlePath
+}
+
 func runPowerShellAsCurrentUser(ctx context.Context, script string) error {
 	_, err := platform.RunAsCurrentUser(ctx, "powershell", []string{
 		"-NoProfile",

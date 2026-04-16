@@ -36,6 +36,16 @@ func (c *firefoxConfigurator) Install(_ context.Context) error {
 	return nil
 }
 
+func (c *firefoxConfigurator) NeedsRepair(_ context.Context) bool {
+	for _, profile := range firefoxProfiles() {
+		present, err := hasManagedBlock(filepath.Join(profile, "user.js"), firefoxManagedBlockFormat)
+		if err != nil || !present {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *firefoxConfigurator) Uninstall(_ context.Context) error {
 	for _, profile := range firefoxProfiles() {
 		path := filepath.Join(profile, "user.js")

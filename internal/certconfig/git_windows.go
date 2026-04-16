@@ -60,6 +60,24 @@ func (c *windowsGitTrustConfigurator) Uninstall(ctx context.Context) error {
 	return err
 }
 
+func (c *windowsGitTrustConfigurator) NeedsRepair(ctx context.Context) bool {
+	gitPath, err := findGitBinary()
+	if err != nil {
+		return false
+	}
+	current, err := platform.RunAsCurrentUser(ctx, gitPath, []string{
+		"config", "--global", "--get", "http.sslBackend",
+	})
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return true
+		}
+		return false
+	}
+	return strings.TrimSpace(current) != "schannel"
+}
+
 func findGitBinary() (string, error) {
 	return exec.LookPath("git")
 }
