@@ -56,6 +56,7 @@ pub mod npm;
 pub mod nuget;
 pub mod open_vsx;
 pub mod pypi;
+pub mod ruby;
 pub mod skills_sh;
 pub mod vscode;
 
