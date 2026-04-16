@@ -155,7 +155,7 @@ func installWindowOpts() application.WebviewWindowOptions {
 		Hidden:           true,
 		DisableResize:    true,
 		URL:              "/#/install",
-		AlwaysOnTop:      false,
+		AlwaysOnTop:      true,
 		BackgroundColour: application.NewRGB(255, 255, 255),
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true,
