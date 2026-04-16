@@ -90,6 +90,10 @@ func (s *DaemonService) SetInstallWindowOnTop(onTop bool) {
 	}
 }
 
+func (s *DaemonService) SetupRestart() error {
+	return daemon.SetupRestart()
+}
+
 // CloseInstallWindow hides the certificate install window.
 func (s *DaemonService) CloseInstallWindow() {
 	if closeInstallWindow != nil {

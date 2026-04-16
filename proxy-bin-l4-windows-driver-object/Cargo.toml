@@ -1,0 +1,30 @@
+[package]
+name = "safechain-l4-proxy-windows-driver-object"
+description = "User-space controller for the SafeChain Windows L4 proxy driver"
+version = { workspace = true }
+edition = { workspace = true }
+publish = false
+rust-version = { workspace = true }
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+hex = "0.4"
+rama-core = { workspace = true }
+safechain-proxy-lib-nostd = { workspace = true, features = ["windows-driver"] }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_Foundation",
+    "Win32_NetworkManagement_WindowsFilteringPlatform",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Registry",
+    "Win32_System_Rpc",
+    "Win32_System_Services",
+] }
+
+[target.'cfg(target_os = "windows")'.build-dependencies]
+static_vcruntime = { workspace = true }

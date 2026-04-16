@@ -39,11 +39,12 @@ func (e *BlockEvent) Validate() error {
 
 // TlsTerminationFailedEvent represents a TLS MITM handshake failure.
 type TlsTerminationFailedEvent struct {
-	ID    string `json:"id,omitempty"`
-	TsMs  int64  `json:"ts_ms"`
-	SNI   string `json:"sni"`
-	App   string `json:"app,omitempty"`
-	Error string `json:"error"`
+	ID      string `json:"id,omitempty"`
+	TsMs    int64  `json:"ts_ms"`
+	SNI     string `json:"sni"`
+	App     string `json:"app,omitempty"`
+	AppPath string `json:"app_path,omitempty"`
+	Error   string `json:"error"`
 }
 
 type EcosystemExceptions struct {

@@ -13,11 +13,12 @@ type tlsEventStore struct {
 
 func (e *tlsEventStore) Add(ev TlsTerminationFailedEvent) TlsTerminationFailedEvent {
 	stored := TlsTerminationFailedEvent{
-		ID:    uuid.New().String(),
-		TsMs:  ev.TsMs,
-		SNI:   ev.SNI,
-		App:   ev.App,
-		Error: ev.Error,
+		ID:      uuid.New().String(),
+		TsMs:    ev.TsMs,
+		SNI:     ev.SNI,
+		App:     ev.App,
+		AppPath: ev.AppPath,
+		Error:   ev.Error,
 	}
 	e.mu.Lock()
 	e.events = append(e.events, stored)

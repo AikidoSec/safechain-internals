@@ -12,9 +12,16 @@ Other proxy docs:
   and specifically how to pass a user config when connecting to the safechain proxy.
 - [./proxy/pac.md](./proxy/pac.md): learn more about Proxy Auto Configuration
   and how the safechain proxy project supports this flow.
-- [./proxy/transparent.md](./proxy/transparent.md): macOS transparent proxy packaging,
-  CLI usage, and developer build instructions.
 - [`./proxy/troubleshooting.md](./proxy/troubleshooting.md): proxy troubleshooting doc.
+
+Specifically for L4 Proxies you can find following docs:
+
+- [./proxy/l4_proxy.md](./proxy/l4_proxy.md):
+  learn more about L4 proxies, what they are and how they differ from L7 proxies.
+- [./proxy/l4_proxy/apple.md](./proxy/l4_proxy/apple.md): macOS transparent proxy packaging,
+  CLI usage, and developer build instructions.
+- [./proxy/l4_proxy/windows-driver.md](./proxy/l4_proxy/windows-driver.md):
+  windows (kernel) driver docs specifically for the Windows L4 proxy.
 
 ## Quick Start
 

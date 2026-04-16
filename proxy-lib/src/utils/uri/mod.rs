@@ -1,6 +1,3 @@
-#[cfg(test)]
-mod tests;
-
 use rama::{http::Uri, utils::str::arcstr::ArcStr};
 
 /// Convert a URI to a safe filename for caching.
@@ -11,3 +8,6 @@ pub fn uri_to_filename(uri: &Uri) -> ArcStr {
         .collect::<String>()
         .into()
 }
+
+#[cfg(test)]
+mod tests;

@@ -46,7 +46,7 @@ body {
 
 .dashboard {
   padding: 0;
-  max-width: 640px;
+  max-width: 820px;
   margin: 0 auto;
   width: 100%;
   flex: 1;
@@ -134,7 +134,6 @@ body {
 
 .events-list table {
   width: 100%;
-  min-width: 500px;
   border-collapse: collapse;
   font-size: 13px;
   table-layout: fixed;
@@ -148,10 +147,9 @@ body {
   vertical-align: middle;
 }
 
-.events-list th:nth-child(1) { width: 40px; } 
-.events-list th:nth-child(2) { width: 140px; }
-.events-list th:nth-child(3) { width: 30%; }
-.events-list th:nth-child(4) { width: 150px; }
+/* columns: Package (flex) | Time | Status */
+.events-list th:nth-child(2) { width: 80px; }
+.events-list th:nth-child(3) { width: 200px; }
 
 .events-list thead tr {
   border-bottom: 1px solid var(--carbon-20);
@@ -171,29 +169,37 @@ body {
 
 .events-list .event-time { white-space: nowrap; }
 
-.events-list td:nth-child(4) {
+.events-list td:nth-child(3) {
   white-space: nowrap;
   overflow: visible;
 }
-.events-list .event-product { vertical-align: middle; }
 .events-list .event-product-icon {
   height: 16px;
-  width: auto;
+  width: 16px;
+  flex: 0 0 16px;
+  object-fit: contain;
   display: block;
   vertical-align: middle;
 }
 
 .events-list .event-identifier {
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .events-list .event-identifier-content {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  max-width: 100%;
+}
+
+.events-list .event-identifier-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .events-list .row-clickable {
@@ -480,6 +486,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   min-width: 24px;
   height: 20px;
   padding: 0 8px;
@@ -784,7 +791,7 @@ body {
 }
 
 .tls-detail-info {
-  margin: 0 0 20px;
+  margin: 0;
   padding: 0;
 }
 
@@ -816,6 +823,10 @@ body {
 }
 
 .tls-detail-error-section {
+  margin-top: 20px;
+}
+
+.tls-detail-error-section:first-of-type {
   margin-top: auto;
 }
 
@@ -852,6 +863,13 @@ body {
   padding: 24px 24px 32px;
   max-width: 100%;
   min-width: 0;
+}
+
+.protected-ecosystems h1 {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 24px;
+  color: var(--primary-aik-140);
 }
 
 .protected-ecosystems-table-wrap {
@@ -1379,6 +1397,65 @@ body {
   font-weight: 500;
   color: #431407;
   line-height: 1.6;
+}
+
+.install-page__restart-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.install-page__restart-btn {
+  background: #dc2626;
+  color: #fff;
+}
+
+.install-page__restart-btn:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.install-page__restart-btn:disabled {
+  opacity: 0.65;
+}
+
+.install-page__confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+}
+
+.install-page__confirm-dialog {
+  background: #fff;
+  border-radius: 14px;
+  padding: 28px 32px 24px;
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+
+.install-page__confirm-title {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.install-page__confirm-body {
+  margin: 0 0 20px;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #4b5563;
+}
+
+.install-page__confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .install-page__finish-bar {
