@@ -48,7 +48,10 @@ use safechain_proxy_lib::{
         ws_relay::WebSocketMitmRelayService,
     },
     storage::{SyncCompactDataStorage, SyncSecrets},
-    tcp::new_tcp_connector_service_for_proxy,
+    tcp::{
+        concurrency_limit::{ConcurrencyLimitLayer, default_max_concurrent_connections},
+        new_tcp_connector_service_for_proxy,
+    },
     tls::{self, mitm_relay_policy::TlsMitmRelayPolicyLayer},
     utils::token::AgentIdentity,
 };
@@ -184,6 +187,10 @@ async fn try_new_tcp_service(
         ca_crt_pem_bytes,
         false,
     );
+
+    let max_conns = default_max_concurrent_connections();
+    tracing::info!(max_conns, "L4 proxy concurrency limit configured");
+    let mitm_svc = ConcurrencyLimitLayer::new(max_conns).into_layer(mitm_svc);
 
     Ok(Arc::new(
         (
