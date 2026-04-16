@@ -133,6 +133,7 @@ async fn try_new_tcp_listener(
     TcpListener::try_from_socket(socket, executor).context("create tcp listener from tcp socket")
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn try_new_tcp_service(
     executor: Executor,
     peek_duration: Duration,
@@ -169,6 +170,7 @@ async fn try_new_tcp_service(
     .await?;
 
     tracing::debug!("creating middleware and other services");
+    let proxy_connector = new_tcp_connector_service_for_proxy(executor.clone());
 
     let tls_mitm_relay_policy = TlsMitmRelayPolicyLayer::new(firewall.clone());
     let tls_mitm_relay = TlsMitmRelay::new_cached_in_memory(ca_crt, ca_key);
@@ -187,9 +189,7 @@ async fn try_new_tcp_service(
         (
             ConsumeErrLayer::trace_as_debug(),
             self::proxy_target::new_proxy_target_from_input_layer(),
-            IoToProxyBridgeIoLayer::extension_proxy_target_with_connector(
-                new_tcp_connector_service_for_proxy(executor),
-            ),
+            IoToProxyBridgeIoLayer::extension_proxy_target_with_connector(proxy_connector),
         )
             .into_layer(mitm_svc),
     ))

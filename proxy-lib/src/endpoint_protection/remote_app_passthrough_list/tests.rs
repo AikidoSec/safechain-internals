@@ -23,6 +23,7 @@ fn flow<'a>(domain: &'a Domain, app_bundle_id: Option<&'a str>) -> IncomingFlowI
     IncomingFlowInfo {
         domain,
         app_bundle_id,
+        source_process_path: None,
     }
 }
 

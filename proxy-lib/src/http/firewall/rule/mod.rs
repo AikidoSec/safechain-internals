@@ -91,6 +91,8 @@ pub struct WebSocketHandshakeInfo<'a> {
     pub domain: Option<&'a Domain>,
     /// App source bundle id from which the traffic originated
     pub app_source_bundle_id: Option<&'a str>,
+    /// Source process path from which the traffic originated (windows only for now).
+    pub source_process_path: Option<&'a str>,
     /// Parsed HTTP request metadata for the upgrade handshake.
     pub req_headers: Option<&'a request::Parts>,
 }
@@ -205,6 +207,7 @@ pub trait Rule: Sized + Send + Sync + 'static {
     fn match_ws_handshake<'a>(&self, info: WebSocketHandshakeInfo<'a>) -> bool {
         tracing::debug!(
             app_source_bundle_id = ?info.app_source_bundle_id,
+            source_process_path = ?info.source_process_path,
             domain = ?info.domain,
             path = info.req_headers.as_ref().map(|p| p.uri.path()),
             "WS handshake not matched (default impl)",
