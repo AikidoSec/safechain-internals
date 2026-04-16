@@ -4,7 +4,7 @@ import type { BlockEvent } from "../types";
 import { Events } from "@wailsio/runtime";
 import { listEvents } from "../api";
 import { BLOCK_REASON_LABEL, getToolIcon } from "../constants";
-import { formatEventTime, isConnectionError } from "../utils";
+import { formatEventTimeShort, isConnectionError } from "../utils";
 
 function updateEventInList(events: BlockEvent[], updated: BlockEvent): BlockEvent[] {
   return events.map((event) => (event.id === updated.id ? updated : event));
@@ -68,7 +68,7 @@ export function EventsList() {
 
   return (
     <div className="events-list">
-      <h1>Recent Blocked Events</h1>
+      <h1>Events</h1>
       {loading && <p className="events-list-loading">Loading…</p>}
       {error && !connectionFailed && (
         <div className="events-list-error-inline">
@@ -96,9 +96,8 @@ export function EventsList() {
           <table>
             <thead>
               <tr>
-                <th>Tool</th>
+                <th>Package</th>
                 <th>Time</th>
-                <th>Identifier</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -112,24 +111,24 @@ export function EventsList() {
                   role="button"
                   className="row-clickable"
                 >
-                  <td className="event-product">
-                    <img
-                      src={getToolIcon(ev.artifact.product)}
-                      alt={ev.artifact.product}
-                      className="event-product-icon"
-                    />
-                  </td>
-                  <td className="event-time">{formatEventTime(ev.ts_ms)}</td>
-                  <td className="event-identifier" title={ev.artifact.identifier}>
+                  <td className="event-identifier">
                     <span className="event-identifier-content">
+                      <img
+                        src={getToolIcon(ev.artifact.product)}
+                        alt={ev.artifact.product}
+                        className="event-product-icon"
+                      />
+                      <span className="event-identifier-text">
+                        {ev.artifact.display_name ?? ev.artifact.identifier}
+                      </span>
                       {ev.count !== undefined && ev.count > 1 && (
                         <span className="event-count-badge" aria-label={`${ev.count} blocked events`}>
                           x{ev.count}
                         </span>
                       )}
-                      {ev.artifact.display_name ?? ev.artifact.identifier}
                     </span>
                   </td>
+                  <td className="event-time">{formatEventTimeShort(ev.ts_ms)}</td>
                   <td>
                     {ev.status === "request_approved" ? (
                       <span className="status status-approved">approved</span>
