@@ -816,6 +816,10 @@ body {
 }
 
 .tls-detail-error-section {
+  margin-top: 20px;
+}
+
+.tls-detail-error-section:first-of-type {
   margin-top: auto;
 }
 

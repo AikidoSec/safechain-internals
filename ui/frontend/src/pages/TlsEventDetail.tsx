@@ -103,6 +103,13 @@ export function TlsEventDetail() {
           <h3 className="tls-detail-error-label">Error Details</h3>
           <pre className="tls-detail-error-block"><code>{event.error}</code></pre>
         </div>
+
+        {event.app_path && (
+          <div className="tls-detail-error-section">
+            <h3 className="tls-detail-error-label">Process Path</h3>
+            <pre className="tls-detail-error-block"><code>{event.app_path}</code></pre>
+          </div>
+        )}
       </div>
     </div>
   );

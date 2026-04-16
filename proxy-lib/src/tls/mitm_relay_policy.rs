@@ -21,7 +21,7 @@ use rama::{
 
 use crate::{
     http::firewall::{Firewall, IncomingFlowInfo, events::TlsTerminationFailedEvent},
-    utils::net::get_app_source_bundle_id_from_ext,
+    utils::net::{get_app_source_bundle_id_from_ext, get_app_source_process_path_from_ext},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -146,6 +146,8 @@ where
         let maybe_server_name = client_hello.ext_server_name().cloned();
         let source_app_bundle_id =
             get_app_source_bundle_id_from_ext(&bridge_io).map(|s| s.to_smolstr());
+        let source_app_process_path =
+            get_app_source_process_path_from_ext(&bridge_io).map(|s| SmolStr::new(s));
 
         if client_hello
             .extensions()
@@ -246,6 +248,7 @@ where
                         ts_ms: rama::utils::time::now_unix_ms(),
                         sni: sni.clone(),
                         app: source_app_bundle_id.clone(),
+                        app_path: source_app_process_path.clone(),
                         error: err.to_string(),
                     });
 
