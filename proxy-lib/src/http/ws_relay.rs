@@ -61,7 +61,7 @@ where
                     .as_ref()
                     .and_then(|target| target.0.host.as_domain()),
                 app_source_bundle_id: get_app_source_bundle_id_from_ext(&bridge_io),
-                source_process_path: get_source_process_path_from_ext(&bridge_io),
+                source_process_path: get_source_process_path_from_ext(&bridge_io).as_deref(),
                 req_headers: bridge_io
                     .extensions()
                     .get::<HttpWebSocketRelayHandshakeRequest>()
