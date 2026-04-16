@@ -47,10 +47,16 @@ func ensureGitCombinedCABundle(baseCACertsPath string) (string, error) {
 	return ensureReplacementCABundleAt(gitCombinedCaBundlePath(), baseCACertsPath)
 }
 
-// ensureReplacementCABundleAt builds a combined CA bundle at bundlePath containing
-// the SafeChain CA and baseCACertsPath. Used by tools that replace their CA bundle
-// entirely (e.g. PIP_CERT, http.sslCAInfo) rather than appending to it.
-// baseCACertsPath must point to a validated PEM bundle.
+// ensureReplacementCABundleAt writes a PEM file at bundlePath that concatenates
+// the SafeChain CA (first) and the contents of baseCACertsPath (second).
+//
+// It is intended for tools that accept a single CA bundle path and use it as
+// their complete trust store — replacing rather than appending to the default
+// (e.g. PIP_CERT, git http.sslCAInfo). Both the SafeChain CA and baseCACertsPath
+// are required: if either is missing or invalid the call returns an error and
+// no file is written.
+//
+// Returns the path of the written bundle on success.
 func ensureReplacementCABundleAt(bundlePath, baseCACertsPath string) (string, error) {
 	safeChainCACertPath := proxy.GetCaCertPath()
 	safeChainPayload, err := readAndValidatePEMBundle(safeChainCACertPath)
