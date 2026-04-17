@@ -74,6 +74,9 @@ func writeManagedBlock(path string, body string, perm os.FileMode, format manage
 // profile directories discovered by the daemon itself — no user-supplied input
 // reaches this function.
 func hasManagedBlock(path string, format managedBlockFormat) (bool, error) {
+	if strings.Contains(path, "..") {
+		return false, fmt.Errorf("invalid file path")
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
