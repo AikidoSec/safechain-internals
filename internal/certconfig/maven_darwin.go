@@ -4,9 +4,7 @@ package certconfig
 
 import (
 	"context"
-	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
@@ -16,18 +14,18 @@ const (
 	mavenManagedMarkerEnd   = "# aikido-safe-chain-end"
 )
 
+var mavenManagedBlockFormat = managedBlockFormat{
+	startMarker: mavenManagedMarkerStart,
+	endMarker:   mavenManagedMarkerEnd,
+}
+
 func installMavenTrust(_ context.Context) error {
 	return platform.InstallMavenOptsOverride(platform.GetConfig().HomeDir)
 }
 
 func isMavenTrustManaged() bool {
-	data, err := os.ReadFile(filepath.Join(platform.GetConfig().HomeDir, ".mavenrc"))
-	if err != nil {
-		return false
-	}
-
-	content := string(data)
-	return strings.Contains(content, mavenManagedMarkerStart) && strings.Contains(content, mavenManagedMarkerEnd)
+	present, _ := hasManagedBlock(filepath.Join(platform.GetConfig().HomeDir, ".mavenrc"), mavenManagedBlockFormat)
+	return present
 }
 
 func uninstallMavenTrust(_ context.Context) error {

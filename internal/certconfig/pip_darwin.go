@@ -44,14 +44,15 @@ func newPipTrustConfigurator(bundlePath string) pipTrustConfigurator {
 		uvNativeTLSEnvVar,
 	)
 
+	homeDir := platform.GetConfig().HomeDir
 	return &darwinPipTrustConfigurator{
 		targets: []darwinShellTarget{
-			{path: filepath.Join(platform.GetConfig().HomeDir, ".zshrc"), body: posix},
-			{path: filepath.Join(platform.GetConfig().HomeDir, ".zprofile"), body: posix},
-			{path: filepath.Join(platform.GetConfig().HomeDir, ".bash_profile"), body: posix},
-			{path: filepath.Join(platform.GetConfig().HomeDir, ".bashrc"), body: posix},
-			{path: filepath.Join(platform.GetConfig().HomeDir, ".profile"), body: posix},
-			{path: filepath.Join(platform.GetConfig().HomeDir, ".config", "fish", "config.fish"), body: fish, createIfMissing: true},
+			{path: filepath.Join(homeDir, ".zshrc"), body: posix},
+			{path: filepath.Join(homeDir, ".zprofile"), body: posix},
+			{path: filepath.Join(homeDir, ".bash_profile"), body: posix},
+			{path: filepath.Join(homeDir, ".bashrc"), body: posix},
+			{path: filepath.Join(homeDir, ".profile"), body: posix},
+			{path: filepath.Join(homeDir, ".config", "fish", "config.fish"), body: fish, createIfMissing: true},
 		},
 	}
 }
