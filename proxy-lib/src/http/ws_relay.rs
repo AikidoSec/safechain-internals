@@ -14,7 +14,7 @@ use rama::{
 
 use crate::{
     http::firewall::{FirewallHttpRules, rule::WebSocketHandshakeInfo},
-    utils::net::get_app_source_bundle_id_from_ext,
+    utils::net::{get_app_source_bundle_id_from_ext, get_source_process_path_from_ext},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -52,6 +52,8 @@ where
         let proxy_target = bridge_io.extensions().get::<ProxyTarget>().cloned();
         let source_app_bundle_id =
             get_app_source_bundle_id_from_ext(&bridge_io).map(|s| s.to_smolstr());
+        let source_process_path =
+            get_source_process_path_from_ext(&bridge_io).map(|s| s.to_smolstr());
 
         if let Some(http_rules) = bridge_io.extensions().get::<FirewallHttpRules>()
             && let Some(ws_rules) = http_rules.match_ws_rules(WebSocketHandshakeInfo {
@@ -59,6 +61,7 @@ where
                     .as_ref()
                     .and_then(|target| target.0.host.as_domain()),
                 app_source_bundle_id: get_app_source_bundle_id_from_ext(&bridge_io),
+                source_process_path: get_source_process_path_from_ext(&bridge_io).as_deref(),
                 req_headers: bridge_io
                     .extensions()
                     .get::<HttpWebSocketRelayHandshakeRequest>()
@@ -67,6 +70,7 @@ where
         {
             tracing::debug!(
                 ?source_app_bundle_id,
+                ?source_process_path,
                 ?proxy_target,
                 "relay WS traffic (matched ws rules)"
             );
@@ -75,10 +79,12 @@ where
                 .await
                 .context("relay WS traffic (MITM) (matched ws rules)")
                 .context_debug_field("source_app_bundle_id", source_app_bundle_id)
+                .context_debug_field("source_process_path", source_process_path)
                 .context_debug_field("proxy_target", proxy_target)
         } else if self.mitm_all {
             tracing::debug!(
                 ?source_app_bundle_id,
+                ?source_process_path,
                 ?proxy_target,
                 "relay WS traffic (mitm_all)"
             );
@@ -87,10 +93,12 @@ where
                 .await
                 .context("relay WS traffic (MITM) (mitm all)")
                 .context_debug_field("source_app_bundle_id", source_app_bundle_id)
+                .context_debug_field("source_process_path", source_process_path)
                 .context_debug_field("proxy_target", proxy_target)
         } else {
             tracing::debug!(
                 ?source_app_bundle_id,
+                ?source_process_path,
                 ?proxy_target,
                 "WS traffic is not to be relayed... IO forwarding instead..."
             );
@@ -99,6 +107,7 @@ where
                 .await
                 .context("Io-forward WS traffic (no MITM)")
                 .context_debug_field("source_app_bundle_id", source_app_bundle_id)
+                .context_debug_field("source_process_path", source_process_path)
                 .context_debug_field("proxy_target", proxy_target)
         }
     }

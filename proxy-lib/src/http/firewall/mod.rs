@@ -70,6 +70,7 @@ pub struct Firewall {
 pub struct IncomingFlowInfo<'a> {
     pub domain: &'a Domain,
     pub app_bundle_id: Option<&'a str>,
+    pub source_process_path: Option<&'a str>,
 }
 
 impl Firewall {
@@ -253,6 +254,7 @@ impl Firewall {
             tracing::debug!(
                 domain = %incoming_flow_info.domain,
                 bundle_id = %incoming_flow_info.app_bundle_id.unwrap_or("default"),
+                source_process_path = ?incoming_flow_info.source_process_path,
                 "skipping firewall for passthrough app and bundle"
             );
             return None;
@@ -266,8 +268,21 @@ impl Firewall {
             .collect();
 
         if matched_rules.is_empty() {
+            tracing::debug!(
+                domain = %incoming_flow_info.domain,
+                bundle_id = %incoming_flow_info.app_bundle_id.unwrap_or("default"),
+                source_process_path = ?incoming_flow_info.source_process_path,
+                "skipping firewall because no rules matched"
+            );
             None
         } else {
+            let num_rules = matched_rules.len();
+            tracing::debug!(
+                domain = %incoming_flow_info.domain,
+                bundle_id = %incoming_flow_info.app_bundle_id.unwrap_or("default"),
+                source_process_path = ?incoming_flow_info.source_process_path,
+                "setting up firewall for {num_rules} rules"
+            );
             Some(FirewallHttpRules(matched_rules))
         }
     }

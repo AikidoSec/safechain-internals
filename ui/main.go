@@ -35,6 +35,7 @@ var setInstallWindowOnTop func(bool)
 
 func init() {
 	application.RegisterEvent[daemon.BlockEvent]("blocked")
+	application.RegisterEvent[daemon.BlockEvent]("blocked_updated")
 	application.RegisterEvent[daemon.TlsTerminationFailedEvent]("tls_termination_failed")
 	application.RegisterEvent[daemon.PermissionsResponse]("permissions_updated")
 	application.RegisterEvent[FocusEventPayload]("focus_event")
@@ -125,7 +126,7 @@ func mainWindowOpts() application.WebviewWindowOptions {
 		Hidden:           true,
 		URL:              "/",
 		BackgroundColour: application.NewRGB(255, 255, 255),
-		AlwaysOnTop:      true,
+		AlwaysOnTop:      false,
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true,
 		},
@@ -333,39 +334,34 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 
 // --- App server (receives events from daemon) ----------------------------
 
+func handleBlockedEventCreated(app *application.App, notifier *notifications.NotificationService, ev daemon.BlockEvent) {
+	log.Println("Blocked event:", ev)
+	app.Event.Emit("blocked", ev)
+	if authorized, _ := notifier.CheckNotificationAuthorization(); authorized {
+		notifier.SendNotificationWithActions(notifications.NotificationOptions{
+			ID:         "block-" + ev.ID,
+			Title:      "Aikido Endpoint Protection blocked an event",
+			Body:       ev.Artifact.Product + ": " + ev.Artifact.PackageName,
+			CategoryID: "aikido-blocked",
+			Data:       map[string]interface{}{"eventId": ev.ID, "eventType": "block"},
+		})
+	}
+}
+
+func handleBlockedEventUpdate(app *application.App, ev daemon.BlockEvent) {
+	log.Println("Blocked event updated:", ev)
+	app.Event.Emit("blocked_updated", ev)
+}
+
 func startAppServer(app *application.App, wm *windowManager, statusCh chan<- appserver.ProxyStatusBody, notifier *notifications.NotificationService) {
 	srv := appserver.New()
 	srv.SetHandlers(
 		func(ev appserver.ProxyStatusBody) { statusCh <- ev },
-		func(ev daemon.BlockEvent) {
-			log.Println("Blocked event:", ev)
-			app.Event.Emit("blocked", ev)
-			if authorized, _ := notifier.CheckNotificationAuthorization(); authorized {
-				notifier.SendNotificationWithActions(notifications.NotificationOptions{
-					ID:         "block-" + ev.ID,
-					Title:      "Aikido Endpoint Protection blocked an event",
-					Body:       ev.Artifact.Product + ": " + ev.Artifact.PackageName,
-					CategoryID: "aikido-blocked",
-					Data:       map[string]interface{}{"eventId": ev.ID, "eventType": "block"},
-				})
-			}
-		},
+		func(ev daemon.BlockEvent) { handleBlockedEventCreated(app, notifier, ev) },
+		func(ev daemon.BlockEvent) { handleBlockedEventUpdate(app, ev) },
 		func(ev daemon.TlsTerminationFailedEvent) {
 			log.Println("TLS termination failed event:", ev)
 			app.Event.Emit("tls_termination_failed", ev)
-			if authorized, _ := notifier.CheckNotificationAuthorization(); authorized {
-				body := "SNI: " + ev.SNI
-				if ev.App != "" {
-					body += " (" + ev.App + ")"
-				}
-				notifier.SendNotificationWithActions(notifications.NotificationOptions{
-					ID:         "tls-fail-" + ev.ID,
-					Title:      "TLS termination failed",
-					Body:       body,
-					CategoryID: "aikido-blocked",
-					Data:       map[string]interface{}{"eventId": ev.ID, "eventType": "tls"},
-				})
-			}
 		},
 		func(ev daemon.PermissionsResponse) {
 			log.Println("Permissions updated")
@@ -394,6 +390,14 @@ func main() {
 
 	statusCh := setupSystemTray(app, wm.showDashboard)
 	startAppServer(app, wm, statusCh, notifier)
+
+	// On macOS, clicking the app bundle while running triggers a default Wails
+	// listener that shows ALL hidden windows. Register a hook (runs before
+	// listeners and can cancel them) to show only the main window instead.
+	app.Event.RegisterApplicationEventHook(events.Mac.ApplicationShouldHandleReopen, func(event *application.ApplicationEvent) {
+		wm.showDashboard()
+		event.Cancel()
+	})
 
 	notifier.OnNotificationResponse(func(result notifications.NotificationResult) {
 		if result.Error != nil {

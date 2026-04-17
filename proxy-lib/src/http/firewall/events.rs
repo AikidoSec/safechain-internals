@@ -69,6 +69,8 @@ pub struct TlsTerminationFailedEvent {
     pub sni: Domain,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app: Option<SmolStr>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub app_path: Option<SmolStr>,
     pub error: String,
 }
 

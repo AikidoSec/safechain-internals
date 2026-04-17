@@ -1,11 +1,13 @@
 [workspace]
 members = [
     "proxy-bin-l4",
+    "proxy-bin-l4-windows-driver-object",
     "proxy-bin-l7",
     "proxy-fuzz",
     "proxy-lib",
     "proxy-lib-l4-macos",
-    "proxy-lib-windows-core",
+    "proxy-lib-l4-windows-driver",
+    "proxy-lib-nostd",
 ]
 resolver = "3"
 
@@ -17,6 +19,7 @@ rust-version = "1.93"
 [workspace.dependencies]
 apple-native-keyring-store = "0.2"
 arc-swap = "1.7"
+bindgen = "0.71"
 clap = { version = "4.5" }
 humantime = "2.3"
 jemallocator = { package = "tikv-jemallocator", version = "0.6" }
@@ -34,21 +37,33 @@ radix_trie = "0.3"
 rand = "0.10"
 rustls-platform-verifier = "0.6"
 safechain-proxy-lib = { path = "./proxy-lib" }
-safechain-proxy-lib-windows-core = { path = "./proxy-lib-windows-core" }
+safechain-proxy-lib-nostd = { path = "./proxy-lib-nostd" }
 secrecy = "0.10"
 serde = { version = "1.0", default-features = false }
 serde_html_form = "0.4"
 serde_json = "1"
 serde_test = "1"
+spin = "0.9"
 static_vcruntime = "3.0"
 sudo = "0.6"
 sync_wrapper = "1"
 tokio = { version = "1.48" }
 tracing-oslog = "0.3"
+tracing-subscriber = "0.3"
 tracing-test = "0.2"
+wdk = "0.4.1"
+wdk-alloc = "0.4.1"
+wdk-build = "0.5.1"
+wdk-panic = "0.4.1"
+wdk-sys = "0.5.1"
 windows-native-keyring-store = "0.5"
+windows-sys = "0.61"
 
 [workspace.dependencies.rama]
+git = "https://github.com/plabayo/rama"
+rev = "59f6863b01f4eeaf6afc32208a95081415ef3196"
+
+[workspace.dependencies.rama-core]
 git = "https://github.com/plabayo/rama"
 rev = "59f6863b01f4eeaf6afc32208a95081415ef3196"
 

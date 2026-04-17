@@ -1,6 +1,5 @@
 import { getToolIcon } from "../constants";
 
-/** Icon layout: alternating left / right / center column; keys match `constants` TOOL_ICONS. */
 const FINISH_ECOSYSTEM_VISUAL: { id: string; align: "left" | "right" | "center" }[] = [
   { id: "pypi", align: "left" },
   { id: "vscode", align: "right" },
@@ -24,25 +23,21 @@ export function InstallFinishPage() {
               This device now trusts the Aikido Endpoint certificate. Endpoint Protection can secure traffic from your
               browsers, editors, and package managers while you work.
             </p>
-            <div className="install-page__finish-check-wrap">
-              <div className="install-page__finish-check" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M20 6L9 17l-5-5"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-            </div>
           </div>
-          <div className="install-page__restart-card install-page__restart-card--emphasized">
-            <p className="install-page__restart-card-title">Restart apps if connections act up</p>
-            <p className="install-page__restart-card-body">
-              If you experience connection issues in any running application, restarting it will resolve the problem.
-            </p>
+          <div className="install-page__restart-card install-page__restart-card--info">
+            <div className="install-page__restart-card-icon">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="10" cy="10" r="10" fill="#6551f3" />
+                <text x="10" y="14.5" textAnchor="middle" fill="#fff" fontSize="13" fontWeight="600" fontFamily="system-ui, sans-serif">i</text>
+              </svg>
+            </div>
+            <div className="install-page__restart-card-content">
+              <p className="install-page__restart-card-title">System restart recommended</p>
+              <p className="install-page__restart-card-body">
+                A restart ensures all applications pick up the new certificate and network settings. You can restart now
+                or do it later from your system menu.
+              </p>
+            </div>
           </div>
         </div>
 

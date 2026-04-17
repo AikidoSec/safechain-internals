@@ -1,0 +1,18 @@
+[package]
+name = "safechain-proxy-lib-nostd"
+description = "SafeChain Common NoSTD Proxy Lib"
+version = { workspace = true }
+edition = { workspace = true }
+publish = false
+rust-version = { workspace = true }
+readme = "../docs/proxy.md"
+
+[features]
+windows-driver = ["dep:wdk-sys"]
+
+[dependencies]
+postcard = { workspace = true, features = ["alloc"] }
+serde = { workspace = true, features = ["derive", "alloc"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+wdk-sys = { workspace = true, optional = true }

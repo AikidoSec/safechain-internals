@@ -383,6 +383,19 @@ func SetupStart() error {
 	return nil
 }
 
+func SetupRestart() error {
+	resp, err := doRequest(http.MethodPost, "/v1/setup/restart", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("setup restart: %s: %s", resp.Status, strings.TrimSpace(string(b)))
+	}
+	return nil
+}
+
 // RequestAccess sends POST /v1/events/:id/request-access
 func RequestAccess(eventID string) error {
 	if err := validateEventID(eventID); err != nil {

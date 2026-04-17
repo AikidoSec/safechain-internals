@@ -24,6 +24,7 @@ const (
 type UIProvider interface {
 	Token() string
 	NotifyBlocked(ev any)
+	NotifyBlockedUpdated(ev any)
 	NotifyTlsTerminationFailed(ev any)
 	NotifyPermissionsUpdated(ev any)
 	StartSetupWizard(steps []string)
@@ -91,6 +92,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	mux.HandleFunc("GET /v1/setup/check", s.handleSetupCheck)
 	mux.HandleFunc("POST /v1/setup/start", s.handleSetupStart)
+	mux.HandleFunc("POST /v1/setup/restart", s.handleSetupRestart)
 
 	listener, err := net.Listen("tcp", DefaultBind)
 	if err != nil {

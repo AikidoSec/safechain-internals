@@ -438,15 +438,20 @@ func (d *Daemon) heartbeat() error {
 		if d.config.Token == "" {
 			return fmt.Errorf("Token is not set, skipping heartbeat report")
 		}
-		if err := cloud.SendHeartbeat(d.ctx, d.config, &cloud.HeartbeatEvent{
-			DeviceInfo:  *d.deviceInfo,
-			VersionInfo: *d.versionInfo,
-		}); err != nil {
-			return fmt.Errorf("Failed to report heartbeat: %v", err)
+		missingSteps := ingress.ComputeSetupSteps(d.ctx, d.config)
+		if len(missingSteps) == 0 && !d.proxy.IsRunning() {
+			missingSteps = []string{"start-proxy"}
 		}
 		heartbeatEvent := &cloud.HeartbeatEvent{
 			DeviceInfo:  *d.deviceInfo,
 			VersionInfo: *d.versionInfo,
+			Status: cloud.Status{
+				Protected:         len(missingSteps) == 0,
+				MissingSetupSteps: missingSteps,
+			},
+		}
+		if err := cloud.SendHeartbeat(d.ctx, d.config, heartbeatEvent); err != nil {
+			return fmt.Errorf("Failed to report heartbeat: %v", err)
 		}
 		eventJSON, _ := json.MarshalIndent(heartbeatEvent, "", "  ")
 		log.Printf("Heartbeat report sent successfully: %s", string(eventJSON))

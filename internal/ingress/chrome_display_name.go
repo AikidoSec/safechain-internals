@@ -9,9 +9,15 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 )
 
 const chromeWebStoreLookupURL = "https://chromewebstore.google.com/detail/%s"
+
+const (
+	chromeDisplayNameCacheTTL        = 7 * 24 * time.Hour
+	chromeDisplayNameCacheMaxEntries = 1000
+)
 
 var (
 	// metaTagRegexp matches any <meta ...> tag, including self-closing variants.
@@ -32,14 +38,21 @@ type chromeExtensionNameResolver struct {
 	baseURL string
 
 	mu    sync.RWMutex
-	cache map[string]string
+	cache map[string]chromeExtensionNameCacheEntry
+	now   func() time.Time
+}
+
+type chromeExtensionNameCacheEntry struct {
+	name     string
+	cachedAt time.Time
 }
 
 func newChromeExtensionNameResolver() *chromeExtensionNameResolver {
 	return &chromeExtensionNameResolver{
 		client:  &http.Client{},
 		baseURL: chromeWebStoreLookupURL,
-		cache:   make(map[string]string),
+		cache:   make(map[string]chromeExtensionNameCacheEntry),
+		now:     time.Now,
 	}
 }
 
@@ -55,10 +68,7 @@ func (r *chromeExtensionNameResolver) Lookup(ctx context.Context, extensionID st
 		return "", nil
 	}
 
-	r.mu.RLock()
-	cached := r.cache[extensionID]
-	r.mu.RUnlock()
-	if cached != "" {
+	if cached := r.getCached(extensionID); cached != "" {
 		return cached, nil
 	}
 
@@ -88,11 +98,60 @@ func (r *chromeExtensionNameResolver) Lookup(ctx context.Context, extensionID st
 		return "", nil
 	}
 
-	r.mu.Lock()
-	r.cache[extensionID] = name
-	r.mu.Unlock()
+	r.setCached(extensionID, name)
 
 	return name, nil
+}
+
+func (r *chromeExtensionNameResolver) getCached(extensionID string) string {
+	r.mu.RLock()
+	entry, ok := r.cache[extensionID]
+	r.mu.RUnlock()
+	if !ok {
+		return ""
+	}
+	if r.now().Sub(entry.cachedAt) <= chromeDisplayNameCacheTTL {
+		return entry.name
+	}
+
+	return ""
+}
+
+func (r *chromeExtensionNameResolver) setCached(extensionID, name string) {
+	now := r.now()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.pruneCacheLocked(now)
+	r.cache[extensionID] = chromeExtensionNameCacheEntry{
+		name:     name,
+		cachedAt: now,
+	}
+}
+
+func (r *chromeExtensionNameResolver) pruneCacheLocked(now time.Time) {
+	var (
+		oldestID    string
+		oldestAt    time.Time
+		foundOldest bool
+	)
+
+	for extensionID, entry := range r.cache {
+		if now.Sub(entry.cachedAt) > chromeDisplayNameCacheTTL {
+			delete(r.cache, extensionID)
+			continue
+		}
+		if !foundOldest || entry.cachedAt.Before(oldestAt) {
+			oldestID = extensionID
+			oldestAt = entry.cachedAt
+			foundOldest = true
+		}
+	}
+
+	if len(r.cache) >= chromeDisplayNameCacheMaxEntries && foundOldest {
+		delete(r.cache, oldestID)
+	}
 }
 
 // extractChromeWebStoreDisplayName parses the og:title meta tag from a Chrome Web
@@ -121,12 +180,11 @@ func extractChromeWebStoreDisplayNameFromMetaTag(tag string) string {
 	}
 
 	content := strings.TrimSpace(attrs["content"])
-	if content == "" {
-		return ""
-	}
-
 	name, ok := strings.CutSuffix(content, chromeWebStoreSuffix)
 	if !ok {
+		// If the title does not end with the Chrome Web Store suffix, we may have
+		// fetched an unexpected HTML page instead of the extension detail page, so
+		// avoid returning a potentially incorrect display name.
 		return ""
 	}
 
