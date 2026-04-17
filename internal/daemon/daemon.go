@@ -147,10 +147,6 @@ func (d *Daemon) Stop(ctx context.Context) error {
 
 		d.uiManager.Kill()
 
-		if err := setup.Teardown(ctx, d.config.GetProxyMode()); err != nil {
-			log.Printf("Error teardown setup: %v", err)
-		}
-
 		if err := d.proxy.Stop(); err != nil {
 			log.Printf("Error stopping proxy: %v", err)
 		}
@@ -241,14 +237,6 @@ func (d *Daemon) run(ctx context.Context) error {
 		}
 	}
 
-	if err := setup.Install(ctx, d.config.GetProxyMode()); err != nil {
-		platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to install setup: %v", err))
-		return fmt.Errorf("failed to install setup: %v", err)
-	}
-
-	d.wg.Add(1)
-	go d.runDockerCALoop(ctx)
-
 	if proxy.ProxyCAInstalled() {
 		if certconfig.NeedsRepair(ctx) {
 			log.Print("certconfig health: drift detected, reapplying configuration")
@@ -257,6 +245,9 @@ func (d *Daemon) run(ctx context.Context) error {
 			}
 		}
 	}
+
+	d.wg.Add(1)
+	go d.runDockerCALoop(ctx)
 
 	if err := d.registry.InstallAll(ctx); err != nil {
 		platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to install scanners: %v", err))
@@ -288,6 +279,10 @@ func (d *Daemon) Uninstall(ctx context.Context, removeScanners bool) error {
 		if err := d.registry.UninstallAll(ctx); err != nil {
 			log.Printf("Error uninstalling scanners: %v", err)
 		}
+	}
+
+	if err := setup.Teardown(ctx, d.config.GetProxyMode()); err != nil {
+		log.Printf("Error tearing down setup: %v", err)
 	}
 
 	if err := proxy.UninstallProxyCA(ctx); err != nil {
