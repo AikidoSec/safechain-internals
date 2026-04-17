@@ -8,6 +8,7 @@ import (
 type Configurator interface {
 	Name() string
 	Install(context.Context) error
+	NeedsRepair(context.Context) bool
 	Uninstall(context.Context) error
 }
 
@@ -53,10 +54,7 @@ func (c *CertConfig) Install(ctx context.Context) error {
 
 func (c *CertConfig) NeedsRepair(ctx context.Context) bool {
 	for _, cfg := range c.configurators {
-		health, ok := cfg.(interface {
-			NeedsRepair(context.Context) bool
-		})
-		if ok && health.NeedsRepair(ctx) {
+		if cfg.NeedsRepair(ctx) {
 			return true
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/utils"
@@ -52,6 +53,18 @@ func installGradleTrust(_ context.Context) error {
 	}
 
 	return os.WriteFile(propsPath, []byte(content+gradlePropsBlock), gradlePropsFilePerm)
+}
+
+func isGradleTrustManaged() bool {
+	propsPath := filepath.Join(platform.GetConfig().HomeDir, ".gradle", "gradle.properties")
+
+	data, err := os.ReadFile(propsPath)
+	if err != nil {
+		return false
+	}
+
+	content := string(data)
+	return strings.Contains(content, gradlePropsMarkerStart) && strings.Contains(content, gradlePropsMarkerEnd)
 }
 
 func uninstallGradleTrust(_ context.Context) error {

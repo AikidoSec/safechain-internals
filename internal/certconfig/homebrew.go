@@ -5,9 +5,13 @@ package certconfig
 import (
 	"context"
 	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/proxy"
 )
 
 type homebrewConfigurator struct{}
@@ -18,6 +22,26 @@ func (c *homebrewConfigurator) Name() string { return "homebrew" }
 
 func (c *homebrewConfigurator) Install(ctx context.Context) error {
 	return syncHomebrewCACerts(ctx)
+}
+
+func (c *homebrewConfigurator) NeedsRepair(_ context.Context) bool {
+	brewPath := findBrew()
+	if brewPath == "" {
+		return false
+	}
+
+	bundlePath := filepath.Join(filepath.Dir(filepath.Dir(brewPath)), "etc", "ca-certificates", "cert.pem")
+	bundleData, err := os.ReadFile(bundlePath)
+	if err != nil {
+		return true
+	}
+
+	safeChainCA, err := os.ReadFile(proxy.GetCaCertPath())
+	if err != nil {
+		return true
+	}
+
+	return !strings.Contains(string(bundleData), strings.TrimSpace(string(safeChainCA)))
 }
 
 func (c *homebrewConfigurator) Uninstall(_ context.Context) error {

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AikidoSec/safechain-internals/internal/certconfig"
 	"github.com/AikidoSec/safechain-internals/internal/cloud"
 	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
@@ -248,8 +249,14 @@ func (d *Daemon) run(ctx context.Context) error {
 	d.wg.Add(1)
 	go d.runDockerCALoop(ctx)
 
-	d.wg.Add(1)
-	go d.runCertconfigHealthLoop(ctx)
+	if proxy.ProxyCAInstalled() {
+		if certconfig.NeedsRepair(ctx) {
+			log.Print("certconfig health: drift detected, reapplying configuration")
+			if err := certconfig.Install(ctx); err != nil {
+				log.Printf("certconfig health: install failed: %v", err)
+			}
+		}
+	}
 
 	if err := d.registry.InstallAll(ctx); err != nil {
 		platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to install scanners: %v", err))
