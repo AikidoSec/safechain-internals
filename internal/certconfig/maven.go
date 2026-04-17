@@ -1,12 +1,6 @@
 package certconfig
 
-import (
-	"context"
-	"os"
-	"path/filepath"
-
-	"github.com/AikidoSec/safechain-internals/internal/platform"
-)
+import "context"
 
 type mavenConfigurator struct{}
 
@@ -19,12 +13,7 @@ func (c *mavenConfigurator) Install(ctx context.Context) error {
 }
 
 func (c *mavenConfigurator) NeedsRepair(_ context.Context) bool {
-	if isMavenTrustManaged() {
-		return false
-	}
-
-	_, err := os.Stat(filepath.Join(platform.GetConfig().HomeDir, ".mavenrc"))
-	return err == nil
+	return mavenNeedsRepair()
 }
 
 func (c *mavenConfigurator) Uninstall(ctx context.Context) error {

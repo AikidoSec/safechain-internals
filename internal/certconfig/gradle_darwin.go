@@ -66,6 +66,14 @@ func isGradleTrustManaged() bool {
 	return present
 }
 
+func gradleNeedsRepair() bool {
+	if isGradleTrustManaged() {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(platform.GetConfig().HomeDir, ".gradle", "gradle.properties"))
+	return err == nil
+}
+
 func uninstallGradleTrust(_ context.Context) error {
 	propsPath := filepath.Join(platform.GetConfig().HomeDir, ".gradle", "gradle.properties")
 

@@ -25,13 +25,7 @@ func (c *gitConfigurator) Install(ctx context.Context) error {
 }
 
 func (c *gitConfigurator) NeedsRepair(ctx context.Context) bool {
-	health, ok := c.trust.(interface {
-		NeedsRepair(context.Context) bool
-	})
-	if !ok {
-		return false
-	}
-	return health.NeedsRepair(ctx)
+	return c.trust.NeedsRepair(ctx)
 }
 
 func (c *gitConfigurator) Uninstall(ctx context.Context) error {

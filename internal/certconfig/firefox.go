@@ -26,10 +26,9 @@ func (c *firefoxConfigurator) Name() string {
 }
 
 func (c *firefoxConfigurator) Install(_ context.Context) error {
-	for _, profile := range firefoxProfiles() {
-		path := filepath.Join(profile, "user.js")
-		body := `user_pref("security.enterprise_roots.enabled", true);`
-		if err := writeManagedBlock(path, body, 0o644, firefoxManagedBlockFormat); err != nil {
+	body := `user_pref("security.enterprise_roots.enabled", true);`
+	for _, userJS := range firefoxUserJSPaths() {
+		if err := writeManagedBlock(userJS, body, 0o644, firefoxManagedBlockFormat); err != nil {
 			return err
 		}
 	}
@@ -37,8 +36,8 @@ func (c *firefoxConfigurator) Install(_ context.Context) error {
 }
 
 func (c *firefoxConfigurator) NeedsRepair(_ context.Context) bool {
-	for _, profile := range firefoxProfiles() {
-		present, err := hasManagedBlock(filepath.Join(profile, "user.js"), firefoxManagedBlockFormat)
+	for _, userJS := range firefoxUserJSPaths() {
+		present, err := hasManagedBlock(userJS, firefoxManagedBlockFormat)
 		if err != nil || !present {
 			return true
 		}
@@ -47,13 +46,21 @@ func (c *firefoxConfigurator) NeedsRepair(_ context.Context) bool {
 }
 
 func (c *firefoxConfigurator) Uninstall(_ context.Context) error {
-	for _, profile := range firefoxProfiles() {
-		path := filepath.Join(profile, "user.js")
-		if err := utils.RemoveManagedBlock(path, 0o644, firefoxManagedBlockFormat.startMarker, firefoxManagedBlockFormat.endMarker); err != nil {
+	for _, userJS := range firefoxUserJSPaths() {
+		if err := utils.RemoveManagedBlock(userJS, 0o644, firefoxManagedBlockFormat.startMarker, firefoxManagedBlockFormat.endMarker); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func firefoxUserJSPaths() []string {
+	profiles := firefoxProfiles()
+	paths := make([]string, len(profiles))
+	for i, profile := range profiles {
+		paths[i] = filepath.Join(profile, "user.js")
+	}
+	return paths
 }
 
 func firefoxProfiles() []string {

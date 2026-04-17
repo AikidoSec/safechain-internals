@@ -8,4 +8,6 @@ func installGradleTrust(_ context.Context) error { return nil }
 
 func isGradleTrustManaged() bool { return false }
 
+func gradleNeedsRepair() bool { return false }
+
 func uninstallGradleTrust(_ context.Context) error { return nil }

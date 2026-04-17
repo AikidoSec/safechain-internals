@@ -32,7 +32,9 @@ func (c *darwinGitTrustConfigurator) Install(ctx context.Context) error {
 		log.Printf("git: no system CA bundle found, skipping http.sslCAInfo configuration")
 		return nil
 	}
-	if _, err := ensureReplacementCABundleAt(gitCombinedCaBundlePath(), baseCACertBundle); err != nil {
+	bundlePath := gitCombinedCaBundlePath()
+	_, err = ensureReplacementCABundleAt(bundlePath, baseCACertBundle)
+	if err != nil {
 		return err
 	}
 	_, err = platform.RunAsCurrentUser(ctx, gitPath, []string{

@@ -17,10 +17,13 @@ type nodeTrustConfigurator interface {
 }
 
 type nodeConfigurator struct {
+	trust nodeTrustConfigurator
 }
 
 func newNodeConfigurator() Configurator {
-	return &nodeConfigurator{}
+	return &nodeConfigurator{
+		trust: newNodeTrustConfigurator(combinedCaBundlePath()),
+	}
 }
 
 func (c *nodeConfigurator) Name() string {
@@ -71,18 +74,18 @@ func (c *nodeConfigurator) Install(ctx context.Context) error {
 	if _, err := ensureCombinedCABundleAt(combinedCaBundlePath(), original); err != nil {
 		return err
 	}
-	return newNodeTrustConfigurator(combinedCaBundlePath()).Install(ctx)
+	return c.trust.Install(ctx)
 }
 
 func (c *nodeConfigurator) NeedsRepair(ctx context.Context) bool {
 	if _, err := os.Stat(combinedCaBundlePath()); err != nil {
 		return true
 	}
-	return newNodeTrustConfigurator(combinedCaBundlePath()).NeedsRepair(ctx)
+	return c.trust.NeedsRepair(ctx)
 }
 
 func (c *nodeConfigurator) Uninstall(ctx context.Context) error {
-	if err := newNodeTrustConfigurator(combinedCaBundlePath()).Uninstall(ctx); err != nil {
+	if err := c.trust.Uninstall(ctx); err != nil {
 		return err
 	}
 	_ = os.Remove(originalNodeExtraCACertsPath())

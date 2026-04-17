@@ -6,4 +6,5 @@ import "context"
 
 func installMavenTrust(_ context.Context) error   { return nil }
 func isMavenTrustManaged() bool                   { return false }
+func mavenNeedsRepair() bool                      { return false }
 func uninstallMavenTrust(_ context.Context) error { return nil }

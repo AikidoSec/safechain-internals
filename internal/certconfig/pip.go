@@ -19,6 +19,7 @@ type pipTrustConfigurator interface {
 }
 
 type pipConfigurator struct {
+	trust pipTrustConfigurator
 }
 
 type pipCertSetting struct {
@@ -27,7 +28,9 @@ type pipCertSetting struct {
 }
 
 func newPipConfigurator() Configurator {
-	return &pipConfigurator{}
+	return &pipConfigurator{
+		trust: newPipTrustConfigurator(pipCombinedCaBundlePath()),
+	}
 }
 
 func (c *pipConfigurator) Name() string {
@@ -79,18 +82,18 @@ func (c *pipConfigurator) Install(ctx context.Context) error {
 	if _, err := ensureReplacementCABundleAt(pipCombinedCaBundlePath(), baseCACertBundle); err != nil {
 		return err
 	}
-	return newPipTrustConfigurator(pipCombinedCaBundlePath()).Install(ctx)
+	return c.trust.Install(ctx)
 }
 
 func (c *pipConfigurator) NeedsRepair(ctx context.Context) bool {
 	if _, err := os.Stat(pipCombinedCaBundlePath()); err != nil {
 		return true
 	}
-	return newPipTrustConfigurator(pipCombinedCaBundlePath()).NeedsRepair(ctx)
+	return c.trust.NeedsRepair(ctx)
 }
 
 func (c *pipConfigurator) Uninstall(ctx context.Context) error {
-	if err := newPipTrustConfigurator(pipCombinedCaBundlePath()).Uninstall(ctx); err != nil {
+	if err := c.trust.Uninstall(ctx); err != nil {
 		return err
 	}
 	_ = os.Remove(originalPipCertPath())

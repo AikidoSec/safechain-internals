@@ -1,12 +1,6 @@
 package certconfig
 
-import (
-	"context"
-	"os"
-	"path/filepath"
-
-	"github.com/AikidoSec/safechain-internals/internal/platform"
-)
+import "context"
 
 type gradleConfigurator struct{}
 
@@ -19,12 +13,7 @@ func (c *gradleConfigurator) Install(ctx context.Context) error {
 }
 
 func (c *gradleConfigurator) NeedsRepair(_ context.Context) bool {
-	if isGradleTrustManaged() {
-		return false
-	}
-
-	_, err := os.Stat(filepath.Join(platform.GetConfig().HomeDir, ".gradle", "gradle.properties"))
-	return err == nil
+	return gradleNeedsRepair()
 }
 
 func (c *gradleConfigurator) Uninstall(ctx context.Context) error {
