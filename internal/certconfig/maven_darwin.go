@@ -4,6 +4,7 @@ package certconfig
 
 import (
 	"context"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -25,7 +26,10 @@ func installMavenTrust(_ context.Context) error {
 }
 
 func isMavenTrustManaged() bool {
-	present, _ := hasManagedBlock(filepath.Join(platform.GetConfig().HomeDir, ".mavenrc"), mavenManagedBlockFormat)
+	present, err := hasManagedBlock(filepath.Join(platform.GetConfig().HomeDir, ".mavenrc"), mavenManagedBlockFormat)
+	if err != nil {
+		log.Printf("maven: failed to check managed block: %v", err)
+	}
 	return present
 }
 

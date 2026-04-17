@@ -68,6 +68,11 @@ func writeManagedBlock(path string, body string, perm os.FileMode, format manage
 	return os.WriteFile(path, []byte(stripped+buildManagedBlock(body, format, newline)), perm)
 }
 
+// hasManagedBlock reports whether the file at path contains the managed block
+// delimiters defined by format. All callers construct path from the daemon's
+// own config (HomeDir) and hardcoded relative filenames, or from Firefox
+// profile directories discovered by the daemon itself — no user-supplied input
+// reaches this function.
 func hasManagedBlock(path string, format managedBlockFormat) (bool, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

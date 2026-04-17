@@ -80,15 +80,14 @@ func (c *darwinGitTrustConfigurator) NeedsRepair(ctx context.Context) bool {
 	if _, err := os.Stat(c.bundlePath); err != nil {
 		return true
 	}
-
 	current, err := platform.RunAsCurrentUser(ctx, gitPath, []string{
 		"config", "--global", "--get", "http.sslCAInfo",
 	})
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return true
+	}
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-			return true
-		}
 		return false
 	}
 	return strings.TrimSpace(current) != c.bundlePath

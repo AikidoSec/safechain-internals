@@ -5,6 +5,7 @@ package certconfig
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -60,10 +61,13 @@ var gradleManagedBlockFormat = managedBlockFormat{
 }
 
 func isGradleTrustManaged() bool {
-	present, _ := hasManagedBlock(
+	present, err := hasManagedBlock(
 		filepath.Join(platform.GetConfig().HomeDir, ".gradle", "gradle.properties"),
 		gradleManagedBlockFormat,
 	)
+	if err != nil {
+		log.Printf("gradle: failed to check managed block: %v", err)
+	}
 	return present
 }
 

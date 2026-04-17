@@ -64,11 +64,11 @@ func (c *windowsGitTrustConfigurator) NeedsRepair(ctx context.Context) bool {
 		return false
 	}
 	current, err := runGitSSLBackendLookup(ctx, gitPath)
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return true
+	}
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-			return true
-		}
 		return false
 	}
 	return strings.TrimSpace(current) != "schannel"
