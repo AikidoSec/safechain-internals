@@ -3,8 +3,8 @@ use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
 use rama::{
     Layer, Service,
     combinators::Either,
-    error::{BoxError, ErrorContext as _},
-    extensions::ExtensionsMut,
+    error::{BoxError, ErrorContext as _, ErrorExt as _},
+    extensions::ExtensionsRef,
     graceful::ShutdownGuard,
     http::{
         Request, Response, Uri,
@@ -25,15 +25,20 @@ use rama::{
     layer::{ArcLayer, ConsumeErrLayer, HijackLayer},
     net::{
         apple::networkextension::{TcpFlow, tproxy::TransparentProxyServiceContext},
+        client::{ConnectorService, EstablishedClientConnection},
         http::server::HttpPeekRouter,
-        proxy::IoForwardService,
+        proxy::{IoForwardService, ProxyTarget},
         tls::server::PeekTlsClientHelloService,
     },
     proxy::socks5::{proxy::mitm::Socks5MitmRelayService, server::Socks5PeekRouter},
     rt::Executor,
-    tcp::proxy::IoToProxyBridgeIoLayer,
     telemetry::tracing,
-    tls::boring::proxy::{TlsMitmRelay, cert_issuer::BoringMitmCertIssuer},
+    tls::boring::proxy::{
+        TlsMitmRelay,
+        cert_issuer::{
+            BoringMitmCertIssuer, CachedBoringMitmCertIssuer, InMemoryBoringMitmCertIssuer,
+        },
+    },
 };
 
 use safechain_proxy_lib::{
@@ -51,63 +56,89 @@ use safechain_proxy_lib::{
 
 use crate::config::ProxyConfig;
 
-pub(super) async fn try_new_service(
-    ctx: TransparentProxyServiceContext,
-) -> Result<impl Service<TcpFlow, Output = (), Error = Infallible>, BoxError> {
-    let config = ProxyConfig::from_opaque_config(ctx.opaque_config())
-        .context("decode proxy config (json)")?;
+type TcpTlsMitmRelay = TlsMitmRelay<CachedBoringMitmCertIssuer<InMemoryBoringMitmCertIssuer>>;
 
-    let executor = ctx.executor.clone();
-    let data_path = crate::utils::storage::storage_dir().context("(app) data path is missing")?;
-    let root_ca = RootCaKeyPair::try_form_pem(&config.ca_cert_pem, &config.ca_key_pem)
-        .context("load config-provided ca crt/key pair")?;
+#[derive(Clone)]
+pub(super) struct TcpMitmService {
+    proxy_config: ProxyConfig,
+    tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
+    tls_mitm_relay: TcpTlsMitmRelay,
+    firewall: Firewall,
+    ca_crt_pem_bytes: &'static [u8],
+}
 
-    let ca_crt_pem_bytes: &[u8] = root_ca
-        .certificate()
-        .to_pem()
-        .context("convert cert to pem")?
-        .leak();
+impl TcpMitmService {
+    pub(super) async fn try_new(ctx: TransparentProxyServiceContext) -> Result<Self, BoxError> {
+        let proxy_config = ProxyConfig::from_opaque_config(ctx.opaque_config())
+            .context("decode proxy config (json)")?;
 
-    let (ca_crt, ca_key) = root_ca.into_pair();
+        let data_path =
+            crate::utils::storage::storage_dir().context("(app) data path is missing")?;
+        let root_ca =
+            RootCaKeyPair::try_form_pem(&proxy_config.ca_cert_pem, &proxy_config.ca_key_pem)
+                .context("load config-provided ca crt/key pair")?;
 
-    let guard = ctx
-        .executor
-        .guard()
-        .cloned()
-        .context("L4 engine runtime is expected to inject shutdown guard")?;
+        let ca_crt_pem_bytes: &[u8] = root_ca
+            .certificate()
+            .to_pem()
+            .context("convert cert to pem")?
+            .leak();
 
-    tracing::debug!("creating firewall state for transparent proxy extension");
-    let firewall = create_firewall(
-        guard,
-        Some(data_path),
-        config.agent_identity.clone(),
-        config.reporting_endpoint.clone(),
-        config.aikido_url.clone(),
-    )
-    .await?;
+        let (ca_crt, ca_key) = root_ca.into_pair();
 
-    tracing::debug!("creating middleware and other services");
+        let guard = ctx
+            .executor
+            .guard()
+            .cloned()
+            .context("L4 engine runtime is expected to inject shutdown guard")?;
 
-    let tls_mitm_relay_policy = TlsMitmRelayPolicyLayer::new(firewall.clone());
-    let tls_mitm_relay = TlsMitmRelay::new_cached_in_memory(ca_crt, ca_key);
+        tracing::debug!("creating firewall state for transparent proxy extension");
+        let firewall = create_firewall(
+            guard,
+            Some(data_path),
+            proxy_config.agent_identity.clone(),
+            proxy_config.reporting_endpoint.clone(),
+            proxy_config.aikido_url.clone(),
+        )
+        .await?;
 
-    let mitm_svc = new_tcp_service_inner(
-        executor.clone(),
-        config,
-        tls_mitm_relay_policy,
-        tls_mitm_relay,
-        firewall,
-        ca_crt_pem_bytes,
-        false,
-    );
+        tracing::debug!("creating tcp mitm state for transparent proxy extension");
 
-    Ok((
-        ConsumeErrLayer::trace_as_debug(),
-        IoToProxyBridgeIoLayer::extension_proxy_target_with_connector(
-            new_tcp_connector_service_for_proxy(executor),
-        ),
-    )
-        .into_layer(mitm_svc))
+        Ok(Self {
+            proxy_config,
+            tls_mitm_relay_policy: TlsMitmRelayPolicyLayer::new(firewall.clone()),
+            tls_mitm_relay: TlsMitmRelay::new_cached_in_memory(ca_crt, ca_key),
+            firewall,
+            ca_crt_pem_bytes,
+        })
+    }
+
+    pub(super) fn new_intercept_service(&self, exec: Executor) -> TcpInterceptService {
+        TcpInterceptService {
+            mitm: self.clone(),
+            exec,
+        }
+    }
+
+    fn new_bridge_service<Ingress, Egress>(
+        &self,
+        exec: Executor,
+        within_connect_tunnel: bool,
+    ) -> impl Service<BridgeIo<Ingress, Egress>, Output = (), Error = Infallible> + Clone
+    where
+        Ingress: Io + Unpin + ExtensionsRef,
+        Egress: Io + Unpin + ExtensionsRef,
+    {
+        new_tcp_service_inner(
+            exec,
+            self.proxy_config.clone(),
+            self.tls_mitm_relay_policy.clone(),
+            self.tls_mitm_relay.clone(),
+            self.firewall.clone(),
+            self.ca_crt_pem_bytes,
+            within_connect_tunnel,
+        )
+    }
 }
 
 fn new_tcp_service_inner<Issuer, Ingress, Egress>(
@@ -121,8 +152,8 @@ fn new_tcp_service_inner<Issuer, Ingress, Egress>(
 ) -> impl Service<BridgeIo<Ingress, Egress>, Output = (), Error = Infallible> + Clone
 where
     Issuer: BoringMitmCertIssuer<Error: Into<BoxError>> + Clone,
-    Ingress: Io + Unpin + ExtensionsMut,
-    Egress: Io + Unpin + ExtensionsMut,
+    Ingress: Io + Unpin + ExtensionsRef,
+    Egress: Io + Unpin + ExtensionsRef,
 {
     let peek_duration = Duration::from_secs_f64(proxy_config.peek_duration_s.max(0.05));
 
@@ -262,5 +293,46 @@ async fn create_firewall(
                 "shutdown initiated prior to firewall created; exit process immediately",
             ))
         }
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct TcpInterceptService {
+    mitm: TcpMitmService,
+    exec: Executor,
+}
+
+impl Service<TcpFlow> for TcpInterceptService {
+    type Output = ();
+    type Error = Infallible;
+
+    async fn serve(&self, ingress: TcpFlow) -> Result<Self::Output, Self::Error> {
+        let Some(ProxyTarget(egress_addr)) = ingress.extensions().get_ref().cloned() else {
+            tracing::debug!("missing ProxyTarget in transparent proxy tcp service");
+            return Ok(());
+        };
+
+        let connector = new_tcp_connector_service_for_proxy(self.exec.clone());
+        let tcp_req = rama::tcp::client::Request::new_with_extensions(
+            egress_addr.clone(),
+            ingress.extensions().clone(),
+        );
+
+        let EstablishedClientConnection { conn: egress, .. } =
+            match connector.connect(tcp_req).await {
+                Ok(connection) => connection,
+                Err(err) => {
+                    tracing::debug!(
+                        address = %egress_addr,
+                        error = %err.into_box_error(),
+                        "transparent proxy tcp connect failed"
+                    );
+                    return Ok(());
+                }
+            };
+
+        let mitm_svc = self.mitm.new_bridge_service(self.exec.clone(), false);
+        let _ = mitm_svc.serve(BridgeIo(ingress, egress)).await;
+        Ok(())
     }
 }

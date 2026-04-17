@@ -7,7 +7,7 @@ use std::{
 use rama::{
     Layer, Service,
     error::{BoxError, ErrorContext as _},
-    extensions::ExtensionsMut,
+    extensions::ExtensionsRef,
     net::proxy::ProxyTarget,
     telemetry::tracing,
 };
@@ -90,7 +90,7 @@ pub struct ProxyTargetFromWfpContext<S, D> {
 impl<S, Input, D> Service<Input> for ProxyTargetFromWfpContext<S, D>
 where
     S: Service<Input, Error: Into<BoxError>>,
-    Input: AsRawSocket + ExtensionsMut + Send + 'static,
+    Input: AsRawSocket + ExtensionsRef + Send + 'static,
     D: WfpContextDecoder,
 {
     type Output = S::Output;

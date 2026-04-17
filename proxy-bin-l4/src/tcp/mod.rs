@@ -4,7 +4,7 @@ use rama::{
     Layer, Service,
     combinators::Either,
     error::{BoxError, ErrorContext as _},
-    extensions::ExtensionsMut,
+    extensions::ExtensionsRef,
     graceful::ShutdownGuard,
     http::{
         Request, Response, Uri,
@@ -206,8 +206,8 @@ fn new_tcp_service_inner<Issuer, Ingress, Egress>(
 ) -> impl Service<BridgeIo<Ingress, Egress>, Output = (), Error = Infallible> + Clone
 where
     Issuer: BoringMitmCertIssuer<Error: Into<BoxError>> + Clone,
-    Ingress: Io + Unpin + ExtensionsMut,
-    Egress: Io + Unpin + ExtensionsMut,
+    Ingress: Io + Unpin + ExtensionsRef,
+    Egress: Io + Unpin + ExtensionsRef,
 {
     let http_mitm_svc =
         HttpMitmRelay::new(exec.clone()).with_http_middleware(http_relay_middleware(
