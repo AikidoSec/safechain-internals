@@ -3,8 +3,8 @@ use rama::{
     http::{
         Body, Response,
         body::util::BodyExt as _,
-        headers::{CacheControl, ContentType, HeaderMapExt as _},
         header,
+        headers::{CacheControl, ContentType, HeaderMapExt as _},
         layer::remove_header::{
             remove_cache_policy_headers, remove_cache_validation_response_headers,
         },
