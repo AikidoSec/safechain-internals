@@ -1,0 +1,234 @@
+use std::time::SystemTime;
+
+use rama::{
+    error::{BoxError, ErrorContext as _},
+    http::{
+        Body, Response,
+        body::util::BodyExt as _,
+        header,
+        headers::{CacheControl, ContentType, HeaderMapExt as _},
+        layer::remove_header::{
+            remove_cache_policy_headers, remove_cache_validation_response_headers,
+        },
+    },
+    telemetry::tracing,
+    utils::{str::arcstr::ArcStr, time::now_unix_ms},
+};
+
+use crate::{
+    http::{
+        KnownContentType,
+        firewall::{
+            events::{Artifact, MinPackageAgeEvent},
+            notifier::EventNotifier,
+        },
+    },
+    package::version::PackageVersion,
+};
+
+#[derive(Debug, Clone)]
+pub(in crate::http::firewall) struct MinPackageAgeVSCode {
+    notifier: Option<EventNotifier>,
+}
+
+impl MinPackageAgeVSCode {
+    pub fn new(notifier: Option<EventNotifier>) -> Self {
+        Self { notifier }
+    }
+
+    pub async fn remove_new_versions(
+        &self,
+        resp: Response,
+        cutoff_secs: i64,
+    ) -> Result<Response, BoxError> {
+        if resp
+            .headers()
+            .typed_get::<ContentType>()
+            .clone()
+            .and_then(KnownContentType::detect_from_content_type_header)
+            != Some(KnownContentType::Json)
+        {
+            return Ok(resp);
+        }
+
+        let (mut parts, body) = resp.into_parts();
+        let bytes = body
+            .collect()
+            .await
+            .context("collect VSCode marketplace metadata response body")?
+            .to_bytes();
+
+        if bytes.is_empty() {
+            return Ok(Response::from_parts(parts, Body::from(bytes)));
+        }
+
+        let Some(rewrite) = rewrite_json(&bytes, cutoff_secs) else {
+            return Ok(Response::from_parts(parts, Body::from(bytes)));
+        };
+
+        tracing::info!(
+            suppressed_versions = ?rewrite.suppressed,
+            "VSCode marketplace metadata rewritten: suppressed too-young versions"
+        );
+
+        self.notify_rewrites(&rewrite.suppressed).await;
+
+        remove_cache_policy_headers(&mut parts.headers);
+        remove_cache_validation_response_headers(&mut parts.headers);
+        parts.headers.remove(header::CONTENT_LENGTH);
+        parts
+            .headers
+            .typed_insert(CacheControl::new().with_no_cache());
+
+        Ok(Response::from_parts(parts, Body::from(rewrite.bytes)))
+    }
+
+    async fn notify_rewrites(&self, suppressed: &[(ArcStr, PackageVersion)]) {
+        let Some(notifier) = &self.notifier else {
+            return;
+        };
+
+        // Group suppressed versions by extension ID before notifying.
+        let mut by_extension: std::collections::HashMap<ArcStr, Vec<PackageVersion>> =
+            std::collections::HashMap::new();
+        for (ext_id, version) in suppressed {
+            by_extension
+                .entry(ext_id.clone())
+                .or_default()
+                .push(version.clone());
+        }
+        for (ext_id, versions) in by_extension {
+            let event = MinPackageAgeEvent {
+                ts_ms: now_unix_ms(),
+                artifact: Artifact {
+                    product: "vscode".into(),
+                    identifier: ext_id.clone(),
+                    display_name: Some(ext_id),
+                    version: None,
+                },
+                suppressed_versions: versions,
+            };
+            notifier.notify_min_package_age(event).await;
+        }
+    }
+}
+
+struct RewriteResult {
+    bytes: Vec<u8>,
+    suppressed: Vec<(ArcStr, PackageVersion)>,
+}
+
+fn rewrite_json(bytes: &[u8], cutoff_secs: i64) -> Option<RewriteResult> {
+    let mut json: serde_json::Value = match serde_json::from_slice(bytes) {
+        Ok(v) => v,
+        Err(err) => {
+            tracing::debug!("VSCode marketplace response is not valid JSON, passing through: {err}");
+            return None;
+        }
+    };
+
+    let mut suppressed: Vec<(ArcStr, PackageVersion)> = Vec::new();
+
+    // Handle extensionquery batch response: {"results": [{"extensions": [...]}]}
+    if let Some(results) = json.get_mut("results").and_then(|r| r.as_array_mut()) {
+        for result in results.iter_mut() {
+            if let Some(extensions) =
+                result.get_mut("extensions").and_then(|e| e.as_array_mut())
+            {
+                for extension in extensions.iter_mut() {
+                    filter_extension_versions(extension, cutoff_secs, &mut suppressed);
+                }
+            }
+        }
+    } else {
+        // Handle single-extension response: {"publisher": {...}, "extensionName": "...", "versions": [...]}
+        filter_extension_versions(&mut json, cutoff_secs, &mut suppressed);
+    }
+
+    if suppressed.is_empty() {
+        return None;
+    }
+
+    let new_bytes = match serde_json::to_vec(&json) {
+        Ok(b) => b,
+        Err(err) => {
+            tracing::warn!("failed to serialize modified VSCode marketplace response: {err}");
+            return None;
+        }
+    };
+
+    Some(RewriteResult {
+        bytes: new_bytes,
+        suppressed,
+    })
+}
+
+fn filter_extension_versions(
+    extension: &mut serde_json::Value,
+    cutoff_secs: i64,
+    suppressed: &mut Vec<(ArcStr, PackageVersion)>,
+) {
+    let publisher_name = extension
+        .get("publisher")
+        .and_then(|p| p.get("publisherName"))
+        .and_then(|n| n.as_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    let extension_name = extension
+        .get("extensionName")
+        .and_then(|n| n.as_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    if publisher_name.is_empty() || extension_name.is_empty() {
+        return;
+    }
+
+    let extension_id: ArcStr = format!("{publisher_name}.{extension_name}").into();
+
+    let Some(versions) = extension
+        .get_mut("versions")
+        .and_then(|v| v.as_array_mut())
+    else {
+        return;
+    };
+
+    let indices_to_remove: Vec<usize> = versions
+        .iter()
+        .enumerate()
+        .filter_map(|(i, v)| {
+            let last_updated = v.get("lastUpdated")?.as_str()?;
+            let published_secs = parse_rfc3339_to_epoch_secs(last_updated)?;
+            let too_new = published_secs > cutoff_secs;
+            if too_new { Some(i) } else { None }
+        })
+        .collect();
+
+    for &i in indices_to_remove.iter().rev() {
+        let v = versions.remove(i);
+        if let Some(version_str) = v.get("version").and_then(|s| s.as_str()) {
+            // PackageVersion::from_str is infallible
+            let version = version_str.parse().unwrap_or_else(|e| match e {});
+            suppressed.push((extension_id.clone(), version));
+        }
+    }
+}
+
+fn parse_rfc3339_to_epoch_secs(timestamp: &str) -> Option<i64> {
+    match humantime::parse_rfc3339(timestamp) {
+        Ok(t) => t
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .ok(),
+        Err(err) => {
+            tracing::debug!(
+                "failed to parse VSCode version timestamp '{timestamp}': {err}"
+            );
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;

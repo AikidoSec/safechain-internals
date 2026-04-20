@@ -33,6 +33,23 @@ fn test_is_extension_install_asset_path() {
 }
 
 #[test]
+fn test_is_metadata_request_path() {
+    assert!(RuleVSCode::is_metadata_request_path(
+        "/_apis/public/gallery/extensionquery"
+    ));
+    assert!(RuleVSCode::is_metadata_request_path(
+        "_ApIs/PuBlIc/GaLlErY/ExTeNsIoNqUeRy"
+    ));
+
+    assert!(!RuleVSCode::is_metadata_request_path(
+        "/extensions/ms-python/python/1.0.0/Microsoft.VisualStudio.Code.Manifest"
+    ));
+    assert!(!RuleVSCode::is_metadata_request_path(
+        "/files/ms-python/python/1.0.0/ms-python.python-1.0.0.vsix"
+    ));
+}
+
+#[test]
 fn test_parse_extension_id_from_path() {
     let test_cases = vec![
         (

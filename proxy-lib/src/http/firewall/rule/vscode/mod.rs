@@ -33,7 +33,10 @@ use crate::{
 #[cfg(feature = "pac")]
 use crate::http::firewall::pac::PacScriptGenerator;
 
-use super::{BlockedRequest, RequestAction, Rule};
+use super::{BlockedRequest, HttpRequestMatcherView, RequestAction, Rule};
+
+pub mod min_package_age;
+use min_package_age::MinPackageAgeVSCode;
 
 pub(in crate::http::firewall) struct RuleVSCode {
     target_domains: DomainMatcher,
@@ -41,6 +44,7 @@ pub(in crate::http::firewall) struct RuleVSCode {
     remote_released_packages_list: RemoteReleasedPackagesList,
     remote_endpoint_config: Option<RemoteEndpointConfig>,
     policy_evaluator: Option<PolicyEvaluator>,
+    min_package_age: Option<MinPackageAgeVSCode>,
 }
 
 impl RuleVSCode {
@@ -49,6 +53,7 @@ impl RuleVSCode {
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<PolicyEvaluator>,
+        min_package_age: Option<MinPackageAgeVSCode>,
         remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
@@ -88,6 +93,7 @@ impl RuleVSCode {
             remote_released_packages_list,
             remote_endpoint_config,
             policy_evaluator,
+            min_package_age,
         })
     }
 }
@@ -201,6 +207,39 @@ impl Rule for RuleVSCode {
 
         Ok(RequestAction::Allow(req))
     }
+
+    fn match_http_response_payload_inspection_request(
+        &self,
+        req: HttpRequestMatcherView<'_>,
+    ) -> bool {
+        if self.min_package_age.is_none() {
+            return false;
+        }
+
+        let path = req.uri.path();
+        if Self::is_extension_install_asset_path(path) {
+            return false;
+        }
+        let matched = Self::is_metadata_request_path(path);
+        if matched {
+            tracing::debug!(
+                http.url.path = %path,
+                http.method = %req.method,
+                "VSCode gallery metadata request — will inspect response"
+            );
+        }
+        matched
+    }
+
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
+        let Some(min_package_age) = self.min_package_age.as_ref() else {
+            return Ok(resp);
+        };
+
+        min_package_age
+            .remove_new_versions(resp, self.get_package_age_cutoff_secs())
+            .await
+    }
 }
 
 impl RuleVSCode {
@@ -232,6 +271,12 @@ impl RuleVSCode {
             .find_entries(&vscode_extension.extension_id)
             .entries()
             .is_some()
+    }
+
+    /// Returns true for Marketplace metadata requests that can carry version lists.
+    fn is_metadata_request_path(path: &str) -> bool {
+        path.trim_start_matches('/')
+            .eq_ignore_ascii_case("_apis/public/gallery/extensionquery")
     }
 
     fn is_extension_install_asset_path(path: &str) -> bool {
