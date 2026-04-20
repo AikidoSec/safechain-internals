@@ -3,10 +3,10 @@ use rama::{
     http::{
         Body, Response,
         body::util::BodyExt as _,
+        header,
         headers::{CacheControl, ContentType, HeaderMapExt as _},
         layer::remove_header::{
             remove_cache_policy_headers, remove_cache_validation_response_headers,
-            remove_payload_metadata_headers,
         },
     },
     telemetry::tracing,
@@ -111,7 +111,7 @@ impl MinPackageAgePyPI {
     fn make_uncacheable(headers: &mut rama::http::HeaderMap) {
         remove_cache_policy_headers(headers);
         remove_cache_validation_response_headers(headers);
-        remove_payload_metadata_headers(headers);
+        headers.remove(header::CONTENT_LENGTH);
         headers.typed_insert(CacheControl::new().with_no_cache());
     }
 
