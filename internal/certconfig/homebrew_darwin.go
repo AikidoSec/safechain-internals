@@ -30,7 +30,8 @@ func (c *homebrewConfigurator) NeedsRepair(_ context.Context) bool {
 		return false
 	}
 
-	bundlePath := filepath.Join(filepath.Dir(filepath.Dir(brewPath)), "etc", "ca-certificates", "cert.pem")
+	brewPrefix := filepath.Dir(filepath.Dir(brewPath)) // /opt/homebrew/bin/brew → /opt/homebrew
+	bundlePath := filepath.Join(brewPrefix, "etc", "ca-certificates", "cert.pem")
 	bundleData, err := os.ReadFile(bundlePath)
 	if err != nil {
 		return true
@@ -38,7 +39,8 @@ func (c *homebrewConfigurator) NeedsRepair(_ context.Context) bool {
 
 	safeChainCA, err := os.ReadFile(proxy.GetCaCertPath())
 	if err != nil {
-		return true
+		// CA not installed yet — brew postinstall can't fix this, skip repair.
+		return false
 	}
 
 	return !strings.Contains(string(bundleData), strings.TrimSpace(string(safeChainCA)))

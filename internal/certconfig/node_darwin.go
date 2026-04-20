@@ -66,11 +66,12 @@ func (c *darwinNodeTrustConfigurator) NeedsRepair(_ context.Context) bool {
 		if present {
 			continue
 		}
-		if _, err := os.Stat(target.path); err == nil || target.createIfMissing {
-			return true
-		} else if !os.IsNotExist(err) {
-			return true
+		// Block is absent. Skip targets that don't exist and won't be created.
+		_, statErr := os.Stat(target.path)
+		if os.IsNotExist(statErr) && !target.createIfMissing {
+			continue
 		}
+		return true
 	}
 	return false
 }
