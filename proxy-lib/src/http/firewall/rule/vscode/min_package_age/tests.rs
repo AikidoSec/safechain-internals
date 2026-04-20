@@ -17,7 +17,11 @@ fn cutoff_secs_ago(hours: u64) -> i64 {
     now - (hours as i64 * 3600)
 }
 
-fn make_single_extension_response(publisher: &str, extension: &str, versions: &[(&str, &str)]) -> Response {
+fn make_single_extension_response(
+    publisher: &str,
+    extension: &str,
+    versions: &[(&str, &str)],
+) -> Response {
     let versions_json: String = versions
         .iter()
         .map(|(ver, ts)| format!(r#"{{"version":"{ver}","lastUpdated":"{ts}"}}"#))
@@ -32,7 +36,11 @@ fn make_single_extension_response(publisher: &str, extension: &str, versions: &[
         .unwrap()
 }
 
-fn make_extensionquery_response(publisher: &str, extension: &str, versions: &[(&str, &str)]) -> Response {
+fn make_extensionquery_response(
+    publisher: &str,
+    extension: &str,
+    versions: &[(&str, &str)],
+) -> Response {
     let versions_json: String = versions
         .iter()
         .map(|(ver, ts)| format!(r#"{{"version":"{ver}","lastUpdated":"{ts}"}}"#))
@@ -91,7 +99,8 @@ async fn single_keeps_version_older_than_cutoff() {
 #[tokio::test]
 async fn single_removes_all_versions_when_all_too_new() {
     let recent = timestamp_hours_ago(1);
-    let resp = make_single_extension_response("pub", "ext", &[("1.0.0", &recent), ("1.0.1", &recent)]);
+    let resp =
+        make_single_extension_response("pub", "ext", &[("1.0.0", &recent), ("1.0.1", &recent)]);
     let min_package_age = MinPackageAgeVSCode::new(None);
     let result = min_package_age
         .remove_new_versions(resp, cutoff_secs_ago(24))
@@ -164,8 +173,14 @@ async fn strips_cache_headers_when_response_is_rewritten() {
         .remove_new_versions(resp, cutoff_secs_ago(24))
         .await
         .unwrap();
-    assert!(result.headers().get("etag").is_none(), "etag should be stripped");
-    assert!(result.headers().get("last-modified").is_none(), "last-modified should be stripped");
+    assert!(
+        result.headers().get("etag").is_none(),
+        "etag should be stripped"
+    );
+    assert!(
+        result.headers().get("last-modified").is_none(),
+        "last-modified should be stripped"
+    );
     assert_eq!(result.headers().get("cache-control").unwrap(), "no-cache");
 }
 
@@ -186,7 +201,10 @@ async fn preserves_cache_headers_when_nothing_removed() {
         .await
         .unwrap();
     assert_eq!(result.headers().get("etag").unwrap(), "abc123");
-    assert_eq!(result.headers().get("cache-control").unwrap(), "max-age=3600");
+    assert_eq!(
+        result.headers().get("cache-control").unwrap(),
+        "max-age=3600"
+    );
 }
 
 // --- passthrough tests ---

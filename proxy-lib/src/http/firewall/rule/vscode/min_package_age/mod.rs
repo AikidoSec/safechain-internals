@@ -67,11 +67,11 @@ impl MinPackageAgeVSCode {
         };
 
         tracing::info!(
-            suppressed_versions = ?rewrite.suppressed,
+            suppressed_versions = ?rewrite.suppressed_versions,
             "VSCode marketplace metadata rewritten: suppressed too-young versions"
         );
 
-        self.notify_rewrites(&rewrite.suppressed).await;
+        self.notify_rewrites(&rewrite.suppressed_versions).await;
 
         remove_cache_policy_headers(&mut parts.headers);
         remove_cache_validation_response_headers(&mut parts.headers);
@@ -113,16 +113,19 @@ impl MinPackageAgeVSCode {
     }
 }
 
+#[derive(Debug)]
 struct RewriteResult {
     bytes: Vec<u8>,
-    suppressed: Vec<(ArcStr, PackageVersion)>,
+    suppressed_versions: Vec<(ArcStr, PackageVersion)>,
 }
 
 fn rewrite_json(bytes: &[u8], cutoff_secs: i64) -> Option<RewriteResult> {
     let mut json: serde_json::Value = match serde_json::from_slice(bytes) {
         Ok(v) => v,
         Err(err) => {
-            tracing::debug!("VSCode marketplace response is not valid JSON, passing through: {err}");
+            tracing::debug!(
+                "VSCode marketplace response is not valid JSON, passing through: {err}"
+            );
             return None;
         }
     };
@@ -130,18 +133,23 @@ fn rewrite_json(bytes: &[u8], cutoff_secs: i64) -> Option<RewriteResult> {
     let mut suppressed: Vec<(ArcStr, PackageVersion)> = Vec::new();
 
     // Handle extensionquery batch response: {"results": [{"extensions": [...]}]}
-    if let Some(results) = json.get_mut("results").and_then(|r| r.as_array_mut()) {
-        for result in results.iter_mut() {
-            if let Some(extensions) =
-                result.get_mut("extensions").and_then(|e| e.as_array_mut())
-            {
-                for extension in extensions.iter_mut() {
-                    filter_extension_versions(extension, cutoff_secs, &mut suppressed);
-                }
-            }
+    // Fall back to single-extension response: {"publisher": {...}, "extensionName": "...", "versions": [...]}
+    let batch_extensions: Option<Vec<&mut serde_json::Value>> = json
+        .get_mut("results")
+        .and_then(|r| r.as_array_mut())
+        .map(|results| {
+            results
+                .iter_mut()
+                .filter_map(|r| r.get_mut("extensions").and_then(|e| e.as_array_mut()))
+                .flatten()
+                .collect()
+        });
+
+    if let Some(extensions) = batch_extensions {
+        for extension in extensions {
+            filter_extension_versions(extension, cutoff_secs, &mut suppressed);
         }
     } else {
-        // Handle single-extension response: {"publisher": {...}, "extensionName": "...", "versions": [...]}
         filter_extension_versions(&mut json, cutoff_secs, &mut suppressed);
     }
 
@@ -159,7 +167,7 @@ fn rewrite_json(bytes: &[u8], cutoff_secs: i64) -> Option<RewriteResult> {
 
     Some(RewriteResult {
         bytes: new_bytes,
-        suppressed,
+        suppressed_versions: suppressed,
     })
 }
 
@@ -187,10 +195,7 @@ fn filter_extension_versions(
 
     let extension_id: ArcStr = format!("{publisher_name}.{extension_name}").into();
 
-    let Some(versions) = extension
-        .get_mut("versions")
-        .and_then(|v| v.as_array_mut())
-    else {
+    let Some(versions) = extension.get_mut("versions").and_then(|v| v.as_array_mut()) else {
         return;
     };
 
@@ -208,13 +213,13 @@ fn filter_extension_versions(
     for &i in indices_to_remove.iter().rev() {
         let v = versions.remove(i);
         if let Some(version_str) = v.get("version").and_then(|s| s.as_str()) {
-            // PackageVersion::from_str is infallible
-            let version = version_str.parse().unwrap_or_else(|e| match e {});
+            let version: PackageVersion = version_str.parse().unwrap();
             suppressed.push((extension_id.clone(), version));
         }
     }
 }
 
+/// Parse an RFC 3339 timestamp string into Unix epoch seconds, returning `None` on failure.
 fn parse_rfc3339_to_epoch_secs(timestamp: &str) -> Option<i64> {
     match humantime::parse_rfc3339(timestamp) {
         Ok(t) => t
@@ -222,9 +227,7 @@ fn parse_rfc3339_to_epoch_secs(timestamp: &str) -> Option<i64> {
             .map(|d| d.as_secs() as i64)
             .ok(),
         Err(err) => {
-            tracing::debug!(
-                "failed to parse VSCode version timestamp '{timestamp}': {err}"
-            );
+            tracing::debug!("failed to parse VSCode version timestamp '{timestamp}': {err}");
             None
         }
     }

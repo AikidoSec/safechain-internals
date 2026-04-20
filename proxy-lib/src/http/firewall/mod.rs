@@ -48,9 +48,7 @@ use crate::{
         remote_app_passthrough_list::RemoteAppPassthroughList,
     },
     http::firewall::rule::{
-        DynRule,
-        npm::min_package_age::MinPackageAge,
-        pypi::min_package_age::MinPackageAgePyPI,
+        DynRule, npm::min_package_age::MinPackageAge, pypi::min_package_age::MinPackageAgePyPI,
         vscode::min_package_age::MinPackageAgeVSCode,
     },
     storage::SyncCompactDataStorage,
