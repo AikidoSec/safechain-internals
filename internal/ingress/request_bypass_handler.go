@@ -20,7 +20,12 @@ func (s *Server) handleRequestBypass(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Received request-bypass event: name=%s, version=%s, product=%s", event.Artifact.PackageName, event.Artifact.PackageVersion, event.Artifact.Product)
-	s.eventStore.UpdateStatus(id, "request_pending")
+
+	for _, e := range s.eventStore.List() {
+		if e.Artifact == event.Artifact {
+			s.eventStore.UpdateStatus(e.ID, "request_pending")
+		}
+	}
 
 	go s.sendInstallationRequest(event)
 
