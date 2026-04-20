@@ -66,7 +66,7 @@ func (c *darwinNodeTrustConfigurator) NeedsRepair(_ context.Context) bool {
 		if present {
 			continue
 		}
-		// Block is absent. Skip targets that don't exist and won't be created.
+		// Skip non-existent optional files to avoid triggering repair for shell configs the user doesn't use.
 		_, statErr := os.Stat(target.path)
 		if os.IsNotExist(statErr) && !target.createIfMissing {
 			continue
