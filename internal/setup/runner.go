@@ -11,6 +11,7 @@ import (
 	set_system_proxy "github.com/AikidoSec/safechain-internals/internal/setup/steps/01_set_system_proxy"
 	configure_maven "github.com/AikidoSec/safechain-internals/internal/setup/steps/02_configure_maven"
 	configure_certificate_trust "github.com/AikidoSec/safechain-internals/internal/setup/steps/03_configure_certificate_trust"
+	uninstall_safechain "github.com/AikidoSec/safechain-internals/internal/setup/steps/04_uninstall_safechain"
 )
 
 type Runner struct {
@@ -19,9 +20,9 @@ type Runner struct {
 }
 
 func NewRunner(proxyMode string, uninstall bool) *Runner {
-	// L4: cert trust only
-	// L7: system proxy + maven + cert trust
-	steps := []Step{configure_certificate_trust.New()}
+	// L4: cert trust + safe-chain cleanup
+	// L7: system proxy + maven + cert trust + safe-chain cleanup
+	steps := []Step{configure_certificate_trust.New(), uninstall_safechain.New()}
 	if proxyMode == config.ProxyModeL7 {
 		steps = append([]Step{set_system_proxy.New(), configure_maven.New()}, steps...)
 	}
