@@ -95,7 +95,7 @@ func (c *darwinPipTrustConfigurator) NeedsRepair(_ context.Context) bool {
 		if present {
 			continue
 		}
-		// Block is absent. Skip targets that don't exist and won't be created.
+		// Avoid triggering repair for shell configs the user doesn't have and we won't auto-create.
 		_, statErr := os.Stat(target.path)
 		if os.IsNotExist(statErr) && !target.createIfMissing {
 			continue
