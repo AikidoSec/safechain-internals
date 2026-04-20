@@ -21,7 +21,7 @@ use rama::{
 
 use crate::{
     http::firewall::{Firewall, IncomingFlowInfo, events::TlsTerminationFailedEvent},
-    utils::net::get_app_source_bundle_id_from_ext,
+    utils::net::{get_app_source_bundle_id_from_ext, get_source_process_path_from_ext},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -146,6 +146,8 @@ where
         let maybe_server_name = client_hello.ext_server_name().cloned();
         let source_app_bundle_id =
             get_app_source_bundle_id_from_ext(&bridge_io).map(|s| s.to_smolstr());
+        let source_process_path =
+            get_source_process_path_from_ext(&bridge_io).map(|s| s.to_smolstr());
 
         if client_hello
             .extensions()
@@ -154,6 +156,7 @@ where
         {
             tracing::debug!(
                 ?source_app_bundle_id,
+                ?source_process_path,
                 "ingress TLS handshake contains ECH, plain-text server name might be missing or invalid; SNI = {maybe_server_name:?}"
             )
         }
@@ -162,6 +165,7 @@ where
             let incoming_flow_info = IncomingFlowInfo {
                 domain: &server_name,
                 app_bundle_id: source_app_bundle_id.as_deref(),
+                source_process_path: source_process_path.as_deref(),
             };
 
             match self.firewall.match_http_rules(&incoming_flow_info) {
@@ -173,6 +177,7 @@ where
                 None => {
                     tracing::debug!(
                         ?source_app_bundle_id,
+                        ?source_process_path,
                         "serving via fallback IO due to no firewall rule being mached; SNI = {server_name}"
                     );
                     let server_name = server_name.clone();
@@ -197,6 +202,7 @@ where
             {
                 tracing::debug!(
                     ?source_app_bundle_id,
+                    ?source_process_path,
                     "serving via fallback IO due to exception in cache for SNI = {server_name}"
                 );
                 return self
@@ -209,6 +215,7 @@ where
         } else if !self.mitm_all {
             tracing::debug!(
                 ?source_app_bundle_id,
+                ?source_process_path,
                 "serving via fallback IO due to no SNI found",
             );
             return self
@@ -220,6 +227,7 @@ where
 
         tracing::debug!(
             ?source_app_bundle_id,
+            ?source_process_path,
             mitm_all = self.mitm_all,
             "tls-MITM traffic",
         );
@@ -236,6 +244,7 @@ where
             {
                 tracing::debug!(
                     ?source_app_bundle_id,
+                    ?source_process_path,
                     %sni,
                     %err,
                     "adding SNI exception for follow-up tls relay inputs due to Handshake Relay Issue"
@@ -246,6 +255,7 @@ where
                         ts_ms: rama::utils::time::now_unix_ms(),
                         sni: sni.clone(),
                         app: source_app_bundle_id.clone(),
+                        app_path: source_process_path.clone(),
                         error: err.to_string(),
                     });
 
@@ -262,7 +272,8 @@ where
             return Err(err
                 .context("serve via tls relay")
                 .context_debug_field("sni", sni)
-                .context_debug_field("app", source_app_bundle_id));
+                .context_debug_field("app", source_app_bundle_id)
+                .context_debug_field("source_process_path", source_process_path));
         }
 
         Ok(())

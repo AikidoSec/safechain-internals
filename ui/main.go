@@ -362,19 +362,6 @@ func startAppServer(app *application.App, wm *windowManager, statusCh chan<- app
 		func(ev daemon.TlsTerminationFailedEvent) {
 			log.Println("TLS termination failed event:", ev)
 			app.Event.Emit("tls_termination_failed", ev)
-			if authorized, _ := notifier.CheckNotificationAuthorization(); authorized {
-				body := "SNI: " + ev.SNI
-				if ev.App != "" {
-					body += " (" + ev.App + ")"
-				}
-				notifier.SendNotificationWithActions(notifications.NotificationOptions{
-					ID:         "tls-fail-" + ev.ID,
-					Title:      "TLS termination failed",
-					Body:       body,
-					CategoryID: "aikido-blocked",
-					Data:       map[string]interface{}{"eventId": ev.ID, "eventType": "tls"},
-				})
-			}
 		},
 		func(ev daemon.PermissionsResponse) {
 			log.Println("Permissions updated")

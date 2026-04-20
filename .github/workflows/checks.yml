@@ -24,31 +24,24 @@ jobs:
           - runner: ubuntu-24.04-arm
 
     runs-on: ${{ matrix.runner }}
-    env:
-      RUSTFLAGS: -D warnings
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561
         with:
           toolchain: stable
           components: clippy, rustfmt
+      - name: Install Windows SDK + WDK
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          winget install --source winget --exact --id Microsoft.WindowsSDK.10.0.26100 --accept-package-agreements --accept-source-agreements --disable-interactivity
+          winget install --source winget --exact --id Microsoft.WindowsWDK.10.0.26100 --accept-package-agreements --accept-source-agreements --disable-interactivity
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
         with:
           env-vars: "RUST_TOOLCHAIN=stable"
-      - name: clippy
-        run: |
-          cargo clippy --all-features --workspace
-      - name: doc
-        run: |
-          cargo doc --all-features --workspace --no-deps
-        env:
-          RUSTDOCFLAGS: "-D rustdoc::broken-intra-doc-links"
-      - name: test
-        run: |
-          cargo test --all-features --workspace
-      - name: test (--ignored)
-        run: |
-          cargo test --all-features --workspace -- --ignored
+      - run: |
+          just rust-qa-full
 
   proxy-build-check-musl:
     strategy:
@@ -62,8 +55,6 @@ jobs:
             target: aarch64-unknown-linux-musl
 
     runs-on: ${{ matrix.os }}
-    env:
-      RUSTFLAGS: -D warnings
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561

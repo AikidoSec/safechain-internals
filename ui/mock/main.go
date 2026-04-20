@@ -384,6 +384,11 @@ func (s *server) handleSetupStart(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, map[string][]string{"steps": steps})
 }
 
+func (s *server) handleSetupRestart(w http.ResponseWriter, r *http.Request) {
+	log.Printf("mock: setup restart")
+	s.writeJSON(w, map[string]string{"status": "restarting"})
+}
+
 func main() {
 	blocks, tlsEvents := seedData()
 	s := &server{blocks: blocks, tlsEvents: tlsEvents, permissions: seedPermissions()}
@@ -411,6 +416,7 @@ func main() {
 
 	mux.HandleFunc("GET /v1/setup/check", s.handleSetupCheck)
 	mux.HandleFunc("POST /v1/setup/start", s.handleSetupStart)
+	mux.HandleFunc("POST /v1/setup/restart", s.handleSetupRestart)
 
 	addr := "127.0.0.1:7878"
 	fmt.Printf("Mock daemon listening on %s\n", addr)

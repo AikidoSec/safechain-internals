@@ -16,6 +16,7 @@ import (
 const (
 	nodeCombinedBundleName = "endpoint-protection-combined-ca.pem"
 	pipCombinedBundleName  = "endpoint-protection-pip-combined-ca.pem"
+	gitCombinedBundleName  = "endpoint-protection-git-combined-ca.pem"
 )
 
 func combinedCaBundlePath() string {
@@ -26,6 +27,10 @@ func pipCombinedCaBundlePath() string {
 	return filepath.Join(platform.GetRunDir(), pipCombinedBundleName)
 }
 
+func gitCombinedCaBundlePath() string {
+	return filepath.Join(platform.GetRunDir(), gitCombinedBundleName)
+}
+
 // ensureCombinedCABundle writes the combined CA bundle containing the SafeChain CA
 // and, if non-empty, the user's pre-existing originalCACertsPath. The SafeChain CA
 // is mandatory — the call fails if it can't be read. The original is silently skipped
@@ -34,14 +39,25 @@ func ensureCombinedCABundle(originalCACertsPath string) (string, error) {
 	return ensureCombinedCABundleAt(combinedCaBundlePath(), originalCACertsPath)
 }
 
-// ensurePipCombinedCABundle builds the pip CA bundle.
-//
-// Unlike NODE_EXTRA_CA_CERTS (which appends), PIP_CERT replaces pip's bundle
-// entirely. baseCACertsPath must already point to a validated PEM bundle that
-// pip should continue trusting after the SafeChain CA is added.
 func ensurePipCombinedCABundle(baseCACertsPath string) (string, error) {
-	bundlePath := pipCombinedCaBundlePath()
+	return ensureReplacementCABundleAt(pipCombinedCaBundlePath(), baseCACertsPath)
+}
 
+func ensureGitCombinedCABundle(baseCACertsPath string) (string, error) {
+	return ensureReplacementCABundleAt(gitCombinedCaBundlePath(), baseCACertsPath)
+}
+
+// ensureReplacementCABundleAt writes a PEM file at bundlePath that concatenates
+// the SafeChain CA (first) and the contents of baseCACertsPath (second).
+//
+// It is intended for tools that accept a single CA bundle path and use it as
+// their complete trust store — replacing rather than appending to the default
+// (e.g. PIP_CERT, git http.sslCAInfo). Both the SafeChain CA and baseCACertsPath
+// are required: if either is missing or invalid the call returns an error and
+// no file is written.
+//
+// Returns the path of the written bundle on success.
+func ensureReplacementCABundleAt(bundlePath, baseCACertsPath string) (string, error) {
 	safeChainCACertPath := proxy.GetCaCertPath()
 	safeChainPayload, err := readAndValidatePEMBundle(safeChainCACertPath)
 	if err != nil {
@@ -52,12 +68,12 @@ func ensurePipCombinedCABundle(baseCACertsPath string) (string, error) {
 
 	expanded := utils.ExpandHomePath(strings.TrimSpace(baseCACertsPath), platform.GetConfig().HomeDir)
 	if expanded == "" {
-		return "", fmt.Errorf("pip CA bundle path is empty")
+		return "", fmt.Errorf("base CA bundle path is empty")
 	}
 	if expanded != safeChainCACertPath && expanded != bundlePath {
 		payload, err := readAndValidatePEMBundle(expanded)
 		if err != nil {
-			return "", fmt.Errorf("failed to read pip base CA bundle: %w", err)
+			return "", fmt.Errorf("failed to read base CA bundle: %w", err)
 		}
 		parts = append(parts, payload)
 	}
@@ -98,6 +114,10 @@ func removeCombinedCABundle() error {
 
 func removePipCombinedCABundle() error {
 	return removeCombinedCABundleAt(pipCombinedCaBundlePath())
+}
+
+func removeGitCombinedCABundle() error {
+	return removeCombinedCABundleAt(gitCombinedCaBundlePath())
 }
 
 func removeCombinedCABundleAt(path string) error {

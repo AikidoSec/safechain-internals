@@ -51,7 +51,7 @@ function DashboardLayout() {
       </header>
       <nav className="app-tabs">
         <NavLink to="/events" className={() => `app-tab${eventsTabActive ? " app-tab--active" : ""}`}>
-          Blocked Events
+          Events
         </NavLink>
         <NavLink to="/tls-events" className={({ isActive }) => `app-tab${isActive ? " app-tab--active" : ""}`}>
           Logs

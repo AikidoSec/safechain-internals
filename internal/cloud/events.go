@@ -6,13 +6,25 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/version"
 )
 
+type Status struct {
+	Protected         bool     `json:"protected"`
+	MissingSetupSteps []string `json:"missing_setup_steps"`
+}
+
 type HeartbeatEvent struct {
 	DeviceInfo  device.DeviceInfo   `json:"device"`
 	VersionInfo version.VersionInfo `json:"version"`
+	Status      Status              `json:"status"`
 }
 
 type SBOMEvent struct {
 	DeviceInfo  device.DeviceInfo   `json:"device"`
+	VersionInfo version.VersionInfo `json:"version"`
+	SBOM        sbom.SBOM           `json:"sbom"`
+}
+
+type ActivityEvent struct {
+	Action      string              `json:"action"`
 	VersionInfo version.VersionInfo `json:"version"`
 	SBOM        sbom.SBOM           `json:"sbom"`
 }

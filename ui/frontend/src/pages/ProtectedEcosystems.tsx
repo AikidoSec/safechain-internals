@@ -25,6 +25,7 @@ const ECOSYSTEMS: EcosystemRow[] = [
 export function ProtectedEcosystems() {
   return (
     <div className="protected-ecosystems">
+      <h1>Protected Ecosystems</h1>
       <div className="protected-ecosystems-table-wrap">
         <table className="protected-ecosystems-table">
           <tbody>

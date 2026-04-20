@@ -12,3 +12,5 @@ pub mod storage;
 pub mod tcp;
 pub mod tls;
 pub mod utils;
+
+pub use ::safechain_proxy_lib_nostd as nostd;

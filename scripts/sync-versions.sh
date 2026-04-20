@@ -43,6 +43,8 @@ if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 
+DRIVER_DATE="$(date +%m/%d/%Y)"
+
 echo "Syncing all versions to $VERSION"
 echo ""
 
@@ -115,6 +117,10 @@ update "$PREV_FILE" \
 PREV_FILE="$REPO_ROOT/ui/build/windows/wails.exe.manifest"
 update "$PREV_FILE" \
   "s/(name=\"com\.aikido[^\"]*\" version=\")[^\"]+(\")/\1${VERSION}\2/"
+
+PREV_FILE="$REPO_ROOT/proxy-lib-l4-windows-driver/safechain_lib_l4_proxy_windows_driver.inx"
+update "$PREV_FILE" \
+  "s|^DriverVer[[:space:]]*=.*$|DriverVer   = ${DRIVER_DATE},${VERSION}.0|"
 
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   echo "version=$VERSION" >> "$GITHUB_OUTPUT"

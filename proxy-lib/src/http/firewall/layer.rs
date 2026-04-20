@@ -5,7 +5,10 @@ use rama::{
     http::{Request, Response},
 };
 
-use crate::{http::try_get_domain_for_req, utils::net::get_app_source_bundle_id_from_ext};
+use crate::{
+    http::try_get_domain_for_req,
+    utils::net::{get_app_source_bundle_id_from_ext, get_source_process_path_from_ext},
+};
 
 use super::{Firewall, rule::RequestAction};
 
@@ -51,6 +54,7 @@ where
                 self.firewall.match_http_rules(&super::IncomingFlowInfo {
                     domain: &domain,
                     app_bundle_id: get_app_source_bundle_id_from_ext(&req),
+                    source_process_path: get_source_process_path_from_ext(&req).as_deref(),
                 })
             }),
         };
