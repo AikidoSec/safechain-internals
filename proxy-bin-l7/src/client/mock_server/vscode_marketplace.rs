@@ -12,14 +12,16 @@ use super::malware_list::{
 };
 
 pub(super) fn web_svc() -> impl Service<Request, Output = Response, Error = Infallible> + Clone {
-    service_fn(|req: Request| async move {
-        let path = req.uri().path().trim_start_matches('/');
-        if path.eq_ignore_ascii_case("_apis/public/gallery/extensionquery") {
-            Ok(extension_query_response())
-        } else {
-            Ok(StatusCode::NOT_FOUND.into_response())
-        }
-    })
+    service_fn(handle)
+}
+
+async fn handle(req: Request) -> Result<Response, Infallible> {
+    let path = req.uri().path().trim_start_matches('/');
+    if path.eq_ignore_ascii_case("_apis/public/gallery/extensionquery") {
+        Ok(extension_query_response())
+    } else {
+        Ok(StatusCode::NOT_FOUND.into_response())
+    }
 }
 
 fn extension_query_response() -> Response {
