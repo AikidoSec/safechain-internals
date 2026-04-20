@@ -620,6 +620,14 @@ func GetOSVersion() string {
 }
 
 func GetRawDeviceID() (string, error) {
+	return readIOPlatformProperty("IOPlatformUUID")
+}
+
+func GetDeviceSerialNumber() (string, error) {
+	return readIOPlatformProperty("IOPlatformSerialNumber")
+}
+
+func readIOPlatformProperty(key string) (string, error) {
 	output, err := exec.Command("ioreg", "-rd1", "-c", "IOPlatformExpertDevice").Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to run ioreg: %w", err)
@@ -627,21 +635,21 @@ func GetRawDeviceID() (string, error) {
 
 	for _, line := range strings.Split(string(output), "\n") {
 		line = strings.TrimSpace(line)
-		if !strings.Contains(line, "IOPlatformUUID") {
+		if !strings.Contains(line, key) {
 			continue
 		}
 		parts := strings.SplitN(line, "=", 2)
 		if len(parts) != 2 {
 			continue
 		}
-		uuid := strings.TrimSpace(parts[1])
-		uuid = strings.Trim(uuid, "\"")
-		if uuid != "" {
-			return uuid, nil
+		value := strings.TrimSpace(parts[1])
+		value = strings.Trim(value, "\"")
+		if value != "" {
+			return value, nil
 		}
 	}
 
-	return "", fmt.Errorf("IOPlatformUUID not found in ioreg output")
+	return "", fmt.Errorf("%s not found in ioreg output", key)
 }
 
 func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
