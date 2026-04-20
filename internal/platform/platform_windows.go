@@ -427,6 +427,10 @@ func GetRawDeviceID() (string, error) {
 	return readRegistryValue(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Cryptography`, "MachineGuid")
 }
 
+func GetDeviceSerialNumber() (string, error) {
+	return readRegistryValue(registry.LOCAL_MACHINE, `HARDWARE\DESCRIPTION\System\BIOS`, "SystemSerialNumber")
+}
+
 func UninstallSafeChain(ctx context.Context, repoURL, version string) error {
 	return downloadAndRunSafeChainPowerShellScript(
 		ctx,
