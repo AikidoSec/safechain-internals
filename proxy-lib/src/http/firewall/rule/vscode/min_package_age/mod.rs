@@ -216,6 +216,10 @@ fn filter_extension_versions(
         return;
     };
 
+    // Track which version numbers have already been recorded to avoid duplicates
+    // from platform-specific entries (e.g. darwin-arm64, darwin-x64, win32-x64).
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+
     versions.retain(|v| {
         let Some(last_updated) = v.get("lastUpdated").and_then(|t| t.as_str()) else {
             return true;
@@ -225,7 +229,9 @@ fn filter_extension_versions(
         };
         let too_new = published_secs > cutoff_secs;
         let version_str_opt = v.get("version").and_then(|s| s.as_str());
-        if too_new && let Some(version_str) = version_str_opt {
+        if too_new && let Some(version_str) = version_str_opt
+            && seen.insert(version_str.to_owned())
+        {
             let version: PackageVersion = version_str.parse().unwrap();
             suppressed.push((extension_id.clone(), version));
         }
