@@ -81,6 +81,10 @@ fn flow_action(meta: &TransparentProxyFlowMeta) -> TransparentProxyFlowAction {
 }
 
 fn flow_action_tcp(meta: &TransparentProxyFlowMeta) -> TransparentProxyFlowAction {
+    if is_forti_startup_helper(meta) {
+        return TransparentProxyFlowAction::Passthrough;
+    }
+
     tracing::debug!(
         protocol = ?meta.protocol,
         remote = ?meta.remote_endpoint,
@@ -198,6 +202,42 @@ fn is_ip_remote_host_passthrough(meta: &TransparentProxyFlowMeta) -> Option<Host
     }
 
     Some(target.clone())
+}
+
+fn is_forti_startup_helper(meta: &TransparentProxyFlowMeta) -> bool {
+    let matches_identifier = meta
+        .source_app_bundle_identifier
+        .as_deref()
+        .map(is_forti_startup_helper_identifier)
+        .unwrap_or_default()
+        || meta
+            .source_app_signing_identifier
+            .as_deref()
+            .map(is_forti_startup_helper_identifier)
+            .unwrap_or_default();
+
+    if matches_identifier {
+        return true;
+    }
+
+    let Some(pid) = meta.source_app_pid else {
+        return false;
+    };
+
+    let Some(Some(path)) = (unsafe { apple_ne::process::pid_path(pid) }).ok() else {
+        return false;
+    };
+
+    let Ok(path) = path.into_os_string().into_string() else {
+        return false;
+    };
+
+    path.starts_with("/Library/Application Support/Fortinet/FortiClient/bin/")
+        && (path.ends_with("/ztnafw") || path.ends_with("/epctrl") || path.ends_with("/fctupdate"))
+}
+
+fn is_forti_startup_helper_identifier(identifier: &str) -> bool {
+    any_starts_with_ignore_ascii_case(identifier, ["ztnafw", "epctrl2", "fctupdate"])
 }
 
 apple_ne::transparent_proxy_ffi! {
