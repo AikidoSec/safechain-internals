@@ -17,9 +17,10 @@ jemallocator = { workspace = true }
 moka = { workspace = true }
 rustls-platform-verifier = { workspace = true }
 safechain-proxy-lib = { workspace = true, features = ["apple-networkextension"] }
+security-framework = { workspace = true }
 serde = { workspace = true, features = ["std", "derive"] }
 serde_json = { workspace = true }
-tokio = { version = "1.52", features = ["net", "io-std"] }
+tokio = { workspace = true, features = ["net", "io-std"] }
 tracing-oslog = { workspace = true }
 
 [dependencies.rama]
