@@ -5,11 +5,7 @@ use rama::{
     http::{
         Body, Response,
         body::util::BodyExt as _,
-        header,
-        headers::{CacheControl, ContentType, HeaderMapExt as _},
-        layer::remove_header::{
-            remove_cache_policy_headers, remove_cache_validation_response_headers,
-        },
+        headers::{ContentType, HeaderMapExt as _},
     },
     telemetry::tracing,
     utils::{str::arcstr::ArcStr, time::now_unix_ms},
@@ -73,12 +69,7 @@ impl MinPackageAgeVSCode {
 
         self.notify_rewrites(&rewrite.suppressed_versions).await;
 
-        remove_cache_policy_headers(&mut parts.headers);
-        remove_cache_validation_response_headers(&mut parts.headers);
-        parts.headers.remove(header::CONTENT_LENGTH);
-        parts
-            .headers
-            .typed_insert(CacheControl::new().with_no_cache());
+        super::super::make_response_uncacheable(&mut parts.headers);
 
         Ok(Response::from_parts(parts, Body::from(rewrite.bytes)))
     }
