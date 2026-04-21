@@ -1,11 +1,12 @@
-use std::{fmt, str::FromStr};
+use std::fmt;
 
 use rama::utils::time::now_unix_ms;
 use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
+    extensions::ExtensionsRef as _,
     graceful::ShutdownGuard,
-    http::{Request, Response, Uri},
+    http::{Request, Response, StatusCode, Uri},
     net::address::Domain,
     telemetry::tracing,
     utils::str::arcstr::{ArcStr, arcstr},
@@ -16,11 +17,12 @@ use crate::{
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
+        layer::OriginalRequestUri,
     },
     package::{
         malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
         released_packages_list::{LowerCaseReleasedPackageFormatter, RemoteReleasedPackagesList},
-        version::{PackageVersion, PragmaticSemver},
+        version::PackageVersion,
     },
     storage::SyncCompactDataStorage,
 };
@@ -28,7 +30,15 @@ use crate::{
 #[cfg(feature = "pac")]
 use crate::http::firewall::pac::PacScriptGenerator;
 
-use super::{BlockedRequest, RequestAction, Rule};
+use super::{
+    BlockedRequest, HttpRequestMatcherView, HttpResponseMatcherView, RequestAction, Rule,
+};
+
+mod parser;
+use parser::{GoPackage, is_zip_download, parse_package_from_path};
+
+pub mod min_package_age;
+use min_package_age::MinPackageAgeGolang;
 
 #[cfg(test)]
 mod tests;
@@ -39,6 +49,7 @@ pub(in crate::http::firewall) struct RuleGolang {
     remote_released_packages_list: RemoteReleasedPackagesList,
     remote_endpoint_config: Option<RemoteEndpointConfig>,
     policy_evaluator: Option<PolicyEvaluator>,
+    maybe_min_package_age: Option<MinPackageAgeGolang>,
 }
 
 impl RuleGolang {
@@ -48,6 +59,7 @@ impl RuleGolang {
         sync_storage: SyncCompactDataStorage,
         policy_evaluator: Option<PolicyEvaluator>,
         remote_endpoint_config: Option<RemoteEndpointConfig>,
+        min_package_age: Option<MinPackageAgeGolang>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
@@ -78,6 +90,7 @@ impl RuleGolang {
             remote_released_packages_list,
             remote_endpoint_config,
             policy_evaluator,
+            maybe_min_package_age: min_package_age,
         })
     }
 }
@@ -108,6 +121,43 @@ impl Rule for RuleGolang {
             return Ok(RequestAction::Allow(req));
         }
         self.evaluate_zip_request(req).await
+    }
+
+    fn match_http_response_payload_inspection_request(
+        &self,
+        req: HttpRequestMatcherView<'_>,
+    ) -> bool {
+        self.maybe_min_package_age.is_some()
+            && parser::parse_module_from_list_path(req.uri.path()).is_some()
+    }
+
+    fn match_http_response_payload_inspection_response(
+        &self,
+        resp: HttpResponseMatcherView<'_>,
+    ) -> bool {
+        resp.status == StatusCode::OK
+    }
+
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
+        let Some(min_package_age) = &self.maybe_min_package_age else {
+            return Ok(resp);
+        };
+        let Some(OriginalRequestUri(uri)) =
+            resp.extensions().get::<OriginalRequestUri>().cloned()
+        else {
+            return Ok(resp);
+        };
+        let Some(module_name) = parser::parse_module_from_list_path(uri.path()) else {
+            return Ok(resp);
+        };
+        min_package_age
+            .rewrite_list_response(
+                resp,
+                &module_name,
+                &self.remote_released_packages_list,
+                self.get_package_age_cutoff_secs(),
+            )
+            .await
     }
 }
 

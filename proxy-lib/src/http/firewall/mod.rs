@@ -48,7 +48,10 @@ use crate::{
         remote_app_passthrough_list::RemoteAppPassthroughList,
     },
     http::firewall::rule::{
-        DynRule, npm::min_package_age::MinPackageAge, pypi::min_package_age::MinPackageAgePyPI,
+        DynRule,
+        golang::min_package_age::MinPackageAgeGolang,
+        npm::min_package_age::MinPackageAge,
+        pypi::min_package_age::MinPackageAgePyPI,
     },
     storage::SyncCompactDataStorage,
     utils::{env::network_service_identifier, token::AgentIdentity},
@@ -268,6 +271,7 @@ impl Firewall {
                     data.clone(),
                     policy_evaluator.clone(),
                     remote_endpoint_config.clone(),
+                    Some(MinPackageAgeGolang::new(notifier.clone())),
                 )
                 .await
                 .context("create block rule: golang")?
