@@ -388,6 +388,56 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
                 "rejected_packages": []
             }
         }),
+        _ => default_ecosystem_policy.clone(),
+    };
+
+    let golang_policy = match token {
+        "policy-block-golang" => json!({
+            "block_all_installs": true,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
+        "policy-allow-gorilla-mux-golang" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": ["github.com/gorilla/mux"], // listed as malware in mock list
+                "rejected_packages": []
+            }
+        }),
+        "policy-reject-gin-golang" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": ["github.com/gin-gonic/gin"]
+            }
+        }),
+        "policy-request-installs-golang" => json!({
+            "block_all_installs": false,
+            "request_installs": true,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
+        "policy-bypass-new-package-golang" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
+            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
         _ => default_ecosystem_policy,
     };
 
@@ -404,7 +454,8 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
             "nuget": nuget_policy,
             "chrome": chrome_policy,
             "open_vsx": open_vsx_policy,
-            "skills_sh": skills_sh_policy
+            "skills_sh": skills_sh_policy,
+            "golang": golang_policy
         }
     }))
     .into_response()
