@@ -25,7 +25,7 @@ pub fn get_source_process_path_from_ext(_: &impl ExtensionsRef) -> Option<String
 pub fn get_source_process_path_from_ext(input: &impl ExtensionsRef) -> Option<String> {
     input
         .extensions()
-        .get::<safechain_proxy_lib_nostd::windows::redirect_ctx::ProxyRedirectContext>()
+        .get_ref::<safechain_proxy_lib_nostd::windows::redirect_ctx::ProxyRedirectContext>()
         .and_then(|ctx| ctx.source_process_path())
         .map(|s| s.to_owned())
 }
