@@ -229,7 +229,8 @@ fn filter_extension_versions(
         };
         let too_new = published_secs > cutoff_secs;
         let version_str_opt = v.get("version").and_then(|s| s.as_str());
-        if too_new && let Some(version_str) = version_str_opt
+        if too_new
+            && let Some(version_str) = version_str_opt
             && seen.insert(version_str.to_owned())
         {
             let version: PackageVersion = version_str.parse().unwrap();
