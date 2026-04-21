@@ -119,6 +119,23 @@ struct RewriteResult {
     suppressed_versions: Vec<(ArcStr, PackageVersion)>,
 }
 
+/// Filters out too-recent versions from a VSCode Marketplace JSON response.
+/// # Example input (batch)
+/// ```json
+/// {
+///   "results": [{
+///     "extensions": [{
+///       "publisher": { "publisherName": "rust-lang" },
+///       "extensionName": "rust-analyzer",
+///       "versions": [
+///         { "version": "0.4.0", "lastUpdated": "9999-01-01T00:00:00Z" },
+///         { "version": "0.3.0", "lastUpdated": "2020-01-01T00:00:00Z" }
+///       ]
+///     }]
+///   }]
+/// }
+/// ```
+/// Given a `cutoff_secs` in the past, `0.4.0` is stripped and `0.3.0` is kept.
 fn rewrite_json(bytes: &[u8], cutoff_secs: i64) -> Option<RewriteResult> {
     let mut json: serde_json::Value = match serde_json::from_slice(bytes) {
         Ok(v) => v,
@@ -199,24 +216,21 @@ fn filter_extension_versions(
         return;
     };
 
-    let indices_to_remove: Vec<usize> = versions
-        .iter()
-        .enumerate()
-        .filter_map(|(i, v)| {
-            let last_updated = v.get("lastUpdated")?.as_str()?;
-            let published_secs = parse_rfc3339_to_epoch_secs(last_updated)?;
-            let too_new = published_secs > cutoff_secs;
-            if too_new { Some(i) } else { None }
-        })
-        .collect();
-
-    for &i in indices_to_remove.iter().rev() {
-        let v = versions.remove(i);
-        if let Some(version_str) = v.get("version").and_then(|s| s.as_str()) {
+    versions.retain(|v| {
+        let Some(last_updated) = v.get("lastUpdated").and_then(|t| t.as_str()) else {
+            return true;
+        };
+        let Some(published_secs) = parse_rfc3339_to_epoch_secs(last_updated) else {
+            return true;
+        };
+        let too_new = published_secs > cutoff_secs;
+        let version_str_opt = v.get("version").and_then(|s| s.as_str());
+        if too_new && let Some(version_str) = version_str_opt {
             let version: PackageVersion = version_str.parse().unwrap();
             suppressed.push((extension_id.clone(), version));
         }
-    }
+        !too_new
+    });
 }
 
 /// Parse an RFC 3339 timestamp string into Unix epoch seconds, returning `None` on failure.
