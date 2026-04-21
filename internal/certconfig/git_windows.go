@@ -39,9 +39,7 @@ func (c *windowsGitTrustConfigurator) Uninstall(ctx context.Context) error {
 		log.Printf("git: git not found, skipping http.sslBackend cleanup")
 		return nil
 	}
-	current, err := platform.RunAsCurrentUser(ctx, gitPath, []string{
-		"config", "--global", "--get", "http.sslBackend",
-	})
+	current, err := runGitSSLBackendLookup(ctx, gitPath)
 	// exit code 1 means the key is not set — nothing to do.
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
@@ -58,6 +56,28 @@ func (c *windowsGitTrustConfigurator) Uninstall(ctx context.Context) error {
 		"config", "--global", "--unset", "http.sslBackend",
 	})
 	return err
+}
+
+func (c *windowsGitTrustConfigurator) NeedsRepair(ctx context.Context) bool {
+	gitPath, err := findGitBinary()
+	if err != nil {
+		return false
+	}
+	current, err := runGitSSLBackendLookup(ctx, gitPath)
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return true
+	}
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(current) != "schannel"
+}
+
+func runGitSSLBackendLookup(ctx context.Context, gitPath string) (string, error) {
+	return platform.RunAsCurrentUser(ctx, gitPath, []string{
+		"config", "--global", "--get", "http.sslBackend",
+	})
 }
 
 func findGitBinary() (string, error) {

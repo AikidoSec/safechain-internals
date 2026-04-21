@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
 
 func TestExtractMarkedCertValue(t *testing.T) {
@@ -86,6 +88,7 @@ func TestNodeExtraCACertsShellLookups(t *testing.T) {
 
 			home := t.TempDir()
 			t.Setenv("HOME", home)
+			t.Setenv("NODE_EXTRA_CA_CERTS", "")
 
 			configPath := filepath.Join(home, tt.configFile)
 			if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
@@ -120,5 +123,69 @@ func TestNodeExtraCACertsShellLookups(t *testing.T) {
 				}
 			})
 		})
+	}
+}
+
+func TestNodeConfiguratorNeedsRepairWhenBundleMissing(t *testing.T) {
+	cfg := platform.GetConfig()
+	origRunDir, origHomeDir := cfg.RunDir, cfg.HomeDir
+	t.Cleanup(func() {
+		cfg.RunDir = origRunDir
+		cfg.HomeDir = origHomeDir
+	})
+	cfg.RunDir = t.TempDir()
+	cfg.HomeDir = t.TempDir()
+
+	if !newNodeConfigurator().NeedsRepair(t.Context()) {
+		t.Fatal("expected NeedsRepair=true when combined CA bundle is missing")
+	}
+}
+
+func TestNodeConfiguratorNeedsRepairFalseWhenInstalled(t *testing.T) {
+	cfg := platform.GetConfig()
+	origRunDir, origHomeDir := cfg.RunDir, cfg.HomeDir
+	t.Cleanup(func() {
+		cfg.RunDir = origRunDir
+		cfg.HomeDir = origHomeDir
+	})
+	cfg.RunDir = t.TempDir()
+	cfg.HomeDir = t.TempDir()
+
+	bundlePath := combinedCaBundlePath()
+	if err := os.WriteFile(bundlePath, []byte(mustCreateTestCertificatePEM(t, "node-ca")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := newNodeTrustConfigurator(bundlePath).Install(t.Context()); err != nil {
+		t.Fatalf("Install failed: %v", err)
+	}
+
+	if newNodeConfigurator().NeedsRepair(t.Context()) {
+		t.Fatal("expected NeedsRepair=false after install")
+	}
+}
+
+func TestNodeConfiguratorNeedsRepairWhenShellBlockMissing(t *testing.T) {
+	cfg := platform.GetConfig()
+	origRunDir, origHomeDir := cfg.RunDir, cfg.HomeDir
+	t.Cleanup(func() {
+		cfg.RunDir = origRunDir
+		cfg.HomeDir = origHomeDir
+	})
+	cfg.RunDir = t.TempDir()
+	cfg.HomeDir = t.TempDir()
+
+	bundlePath := combinedCaBundlePath()
+	if err := os.WriteFile(bundlePath, []byte(mustCreateTestCertificatePEM(t, "node-shell")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create .zshrc without the managed block — NeedsRepair must detect the gap.
+	if err := os.WriteFile(filepath.Join(cfg.HomeDir, ".zshrc"), []byte("# existing zshrc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if !newNodeConfigurator().NeedsRepair(t.Context()) {
+		t.Fatal("expected NeedsRepair=true when shell config exists but managed block is absent")
 	}
 }

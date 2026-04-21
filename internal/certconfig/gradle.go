@@ -12,6 +12,10 @@ func (c *gradleConfigurator) Install(ctx context.Context) error {
 	return installGradleTrust(ctx)
 }
 
+func (c *gradleConfigurator) NeedsRepair(_ context.Context) bool {
+	return gradleNeedsRepair()
+}
+
 func (c *gradleConfigurator) Uninstall(ctx context.Context) error {
 	return uninstallGradleTrust(ctx)
 }

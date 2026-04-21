@@ -57,6 +57,25 @@ func (c *darwinNodeTrustConfigurator) Uninstall(_ context.Context) error {
 	return nil
 }
 
+func (c *darwinNodeTrustConfigurator) NeedsRepair(_ context.Context) bool {
+	for _, target := range c.targets {
+		present, err := hasManagedBlock(target.path, shellManagedBlockFormat)
+		if err != nil {
+			return true
+		}
+		if present {
+			continue
+		}
+		// Skip non-existent optional files to avoid triggering repair for shell configs the user doesn't use.
+		_, statErr := os.Stat(target.path)
+		if os.IsNotExist(statErr) && !target.createIfMissing {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 func darwinShellTargets(bundlePath string) []darwinShellTarget {
 	homeDir := platform.GetConfig().HomeDir
 	comment := "# Allow Node.js tooling to trust the SafeChain MITM CA while preserving public roots."
