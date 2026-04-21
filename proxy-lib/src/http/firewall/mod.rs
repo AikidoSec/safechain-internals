@@ -262,6 +262,16 @@ impl Firewall {
                 .await
                 .context("create block rule: open vsx")?
                 .into_dyn(),
+                self::rule::golang::RuleGolang::try_new(
+                    guard.clone(),
+                    layered_client.clone(),
+                    data.clone(),
+                    policy_evaluator.clone(),
+                    remote_endpoint_config.clone(),
+                )
+                .await
+                .context("create block rule: golang")?
+                .into_dyn(),
                 self::rule::skills_sh::RuleSkillsSh::try_new(
                     guard,
                     layered_client,
