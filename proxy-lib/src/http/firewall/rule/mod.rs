@@ -5,7 +5,11 @@ use rama::{
     extensions::{Extensions, ExtensionsRef as _},
     http::{
         Method, Request, Response, StatusCode, Uri, Version,
-        header::{HeaderMap, HeaderValue},
+        header::{self, HeaderMap, HeaderValue},
+        headers::{CacheControl, HeaderMapExt as _},
+        layer::remove_header::{
+            remove_cache_policy_headers, remove_cache_validation_response_headers,
+        },
         request,
         ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
     },
@@ -44,6 +48,17 @@ pub(crate) fn block_reason_for(decision: PackagePolicyDecision) -> BlockReason {
             unreachable!("Allow and Defer are not blocking decisions")
         }
     }
+}
+
+/// Strips all caching headers and inserts `Cache-Control: no-cache`.
+///
+/// Used by min-package-age rules after rewriting a response body so that
+/// the client cannot serve a stale, unfiltered copy from its own cache.
+pub(in crate::http::firewall) fn make_response_uncacheable(headers: &mut HeaderMap) {
+    remove_cache_policy_headers(headers);
+    remove_cache_validation_response_headers(headers);
+    headers.remove(header::CONTENT_LENGTH);
+    headers.typed_insert(CacheControl::new().with_no_cache());
 }
 
 #[cfg(feature = "pac")]
