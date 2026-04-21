@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -31,7 +32,9 @@ func (c *darwinGitTrustConfigurator) Install(ctx context.Context) error {
 		log.Printf("git: no system CA bundle found, skipping http.sslCAInfo configuration")
 		return nil
 	}
-	if _, err := ensureGitCombinedCABundle(baseCACertBundle); err != nil {
+	bundlePath := gitCombinedCaBundlePath()
+	_, err = ensureReplacementCABundleAt(bundlePath, baseCACertBundle)
+	if err != nil {
 		return err
 	}
 	_, err = platform.RunAsCurrentUser(ctx, gitPath, []string{
@@ -67,6 +70,27 @@ func (c *darwinGitTrustConfigurator) Uninstall(ctx context.Context) error {
 		}
 	}
 	return removeGitCombinedCABundle()
+}
+
+func (c *darwinGitTrustConfigurator) NeedsRepair(ctx context.Context) bool {
+	gitPath, err := findGitBinary()
+	if err != nil {
+		return false
+	}
+	if _, err := os.Stat(c.bundlePath); err != nil {
+		return true
+	}
+	current, err := platform.RunAsCurrentUser(ctx, gitPath, []string{
+		"config", "--global", "--get", "http.sslCAInfo",
+	})
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return true
+	}
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(current) != c.bundlePath
 }
 
 // findSystemGitCABundle returns the system-level CA bundle that git uses when

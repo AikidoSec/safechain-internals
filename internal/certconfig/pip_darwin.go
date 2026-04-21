@@ -45,7 +45,6 @@ func newPipTrustConfigurator(bundlePath string) pipTrustConfigurator {
 	)
 
 	homeDir := platform.GetConfig().HomeDir
-
 	return &darwinPipTrustConfigurator{
 		targets: []darwinShellTarget{
 			{path: filepath.Join(homeDir, ".zshrc"), body: posix},
@@ -85,4 +84,23 @@ func (c *darwinPipTrustConfigurator) Uninstall(_ context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (c *darwinPipTrustConfigurator) NeedsRepair(_ context.Context) bool {
+	for _, target := range c.targets {
+		present, err := hasManagedBlock(target.path, pipShellManagedBlockFormat)
+		if err != nil {
+			return true
+		}
+		if present {
+			continue
+		}
+		// Avoid triggering repair for shell configs the user doesn't have and we won't auto-create.
+		_, statErr := os.Stat(target.path)
+		if os.IsNotExist(statErr) && !target.createIfMissing {
+			continue
+		}
+		return true
+	}
+	return false
 }

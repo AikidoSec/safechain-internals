@@ -15,6 +15,7 @@ import (
 type pipTrustConfigurator interface {
 	Install(context.Context) error
 	Uninstall(context.Context) error
+	NeedsRepair(context.Context) bool
 }
 
 type pipConfigurator struct {
@@ -78,10 +79,17 @@ func (c *pipConfigurator) Install(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, err := ensurePipCombinedCABundle(baseCACertBundle); err != nil {
+	if _, err := ensureReplacementCABundleAt(pipCombinedCaBundlePath(), baseCACertBundle); err != nil {
 		return err
 	}
 	return c.trust.Install(ctx)
+}
+
+func (c *pipConfigurator) NeedsRepair(ctx context.Context) bool {
+	if _, err := os.Stat(pipCombinedCaBundlePath()); err != nil {
+		return true
+	}
+	return c.trust.NeedsRepair(ctx)
 }
 
 func (c *pipConfigurator) Uninstall(ctx context.Context) error {

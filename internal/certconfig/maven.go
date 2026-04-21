@@ -12,6 +12,10 @@ func (c *mavenConfigurator) Install(ctx context.Context) error {
 	return installMavenTrust(ctx)
 }
 
+func (c *mavenConfigurator) NeedsRepair(_ context.Context) bool {
+	return mavenNeedsRepair()
+}
+
 func (c *mavenConfigurator) Uninstall(ctx context.Context) error {
 	return uninstallMavenTrust(ctx)
 }
