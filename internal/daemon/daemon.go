@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AikidoSec/safechain-internals/internal/certconfig"
 	"github.com/AikidoSec/safechain-internals/internal/cloud"
 	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/constants"
@@ -146,10 +147,6 @@ func (d *Daemon) Stop(ctx context.Context) error {
 
 		d.uiManager.Kill()
 
-		if err := setup.Teardown(ctx, d.config.GetProxyMode()); err != nil {
-			log.Printf("Error teardown setup: %v", err)
-		}
-
 		if err := d.proxy.Stop(); err != nil {
 			log.Printf("Error stopping proxy: %v", err)
 		}
@@ -240,9 +237,13 @@ func (d *Daemon) run(ctx context.Context) error {
 		}
 	}
 
-	if err := setup.Install(ctx, d.config.GetProxyMode()); err != nil {
-		platform.ShowErrorDialog(ctx, fmt.Sprintf("Failed to install setup: %v", err))
-		return fmt.Errorf("failed to install setup: %v", err)
+	if proxy.ProxyCAInstalled() {
+		if certconfig.NeedsRepair(ctx) {
+			log.Print("certconfig health: drift detected, reapplying configuration")
+			if err := certconfig.Install(ctx); err != nil {
+				log.Printf("certconfig health: install failed: %v", err)
+			}
+		}
 	}
 
 	d.wg.Add(1)
@@ -278,6 +279,10 @@ func (d *Daemon) Uninstall(ctx context.Context, removeScanners bool) error {
 		if err := d.registry.UninstallAll(ctx); err != nil {
 			log.Printf("Error uninstalling scanners: %v", err)
 		}
+	}
+
+	if err := setup.Teardown(ctx, d.config.GetProxyMode()); err != nil {
+		log.Printf("Error tearing down setup: %v", err)
 	}
 
 	if err := proxy.UninstallProxyCA(ctx); err != nil {

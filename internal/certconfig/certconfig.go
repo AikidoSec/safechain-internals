@@ -8,6 +8,7 @@ import (
 type Configurator interface {
 	Name() string
 	Install(context.Context) error
+	NeedsRepair(context.Context) bool
 	Uninstall(context.Context) error
 }
 
@@ -37,6 +38,10 @@ func Teardown(ctx context.Context) error {
 	return New().Teardown(ctx)
 }
 
+func NeedsRepair(ctx context.Context) bool {
+	return New().NeedsRepair(ctx)
+}
+
 func (c *CertConfig) Install(ctx context.Context) error {
 	for _, cfg := range c.configurators {
 		log.Printf("Configuring certificate trust for %s", cfg.Name())
@@ -45,6 +50,15 @@ func (c *CertConfig) Install(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (c *CertConfig) NeedsRepair(ctx context.Context) bool {
+	for _, cfg := range c.configurators {
+		if cfg.NeedsRepair(ctx) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *CertConfig) Teardown(ctx context.Context) error {

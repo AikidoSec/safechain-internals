@@ -13,6 +13,7 @@ import (
 type nodeTrustConfigurator interface {
 	Install(context.Context) error
 	Uninstall(context.Context) error
+	NeedsRepair(context.Context) bool
 }
 
 type nodeConfigurator struct {
@@ -70,10 +71,17 @@ func (c *nodeConfigurator) Install(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, err := ensureCombinedCABundle(original); err != nil {
+	if _, err := ensureCombinedCABundleAt(combinedCaBundlePath(), original); err != nil {
 		return err
 	}
 	return c.trust.Install(ctx)
+}
+
+func (c *nodeConfigurator) NeedsRepair(ctx context.Context) bool {
+	if _, err := os.Stat(combinedCaBundlePath()); err != nil {
+		return true
+	}
+	return c.trust.NeedsRepair(ctx)
 }
 
 func (c *nodeConfigurator) Uninstall(ctx context.Context) error {

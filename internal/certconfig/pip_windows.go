@@ -41,6 +41,14 @@ func (c *windowsPipTrustConfigurator) Uninstall(ctx context.Context) error {
 	return runPowerShellAsCurrentUser(ctx, script)
 }
 
+func (c *windowsPipTrustConfigurator) NeedsRepair(ctx context.Context) bool {
+	current, err := runPipCertLookup(ctx)
+	if err != nil {
+		return false
+	}
+	return current.Path != c.bundlePath
+}
+
 func restoreWindowsPipEnvScript(original pipCertSetting) string {
 	path := escapePowerShellSingleQuoted(original.Path)
 
