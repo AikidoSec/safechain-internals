@@ -50,6 +50,7 @@ pub(crate) fn block_reason_for(decision: PackagePolicyDecision) -> BlockReason {
 pub use super::pac::PacScriptGenerator;
 
 pub mod chrome;
+pub mod golang;
 pub mod hijack;
 pub mod maven;
 pub mod npm;
