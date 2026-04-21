@@ -1,5 +1,4 @@
-use rama::extensions::{Extension, ExtensionsRef};
-use std::sync::Arc;
+use rama::extensions::ExtensionsRef;
 
 #[cfg(not(all(feature = "apple-networkextension", target_os = "macos")))]
 pub fn get_app_source_bundle_id_from_ext(_: &impl ExtensionsRef) -> Option<&str> {
@@ -22,9 +21,10 @@ pub fn get_source_process_path_from_ext(_: &impl ExtensionsRef) -> Option<String
     None
 }
 
-#[derive(Debug, Clone, Extension)]
+#[cfg(all(target_os = "windows", feature = "windows-driver"))]
+#[derive(Debug, Clone, rama::extensions::Extension)]
 pub struct ProxyRedirectContextExt(
-    pub Arc<safechain_proxy_lib_nostd::windows::redirect_ctx::ProxyRedirectContext>,
+    pub std::sync::Arc<safechain_proxy_lib_nostd::windows::redirect_ctx::ProxyRedirectContext>,
 );
 
 #[cfg(all(target_os = "windows", feature = "windows-driver"))]
