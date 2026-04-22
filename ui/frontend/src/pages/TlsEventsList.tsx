@@ -29,10 +29,10 @@ export function TlsEventsList() {
     setCollectMessage(null);
     try {
       await collectLogs();
-      setCollectMessage("Logs collected successfully.");
+      setCollectMessage("Logs uploaded successfully.");
     } catch (e) {
       setCollectMessage(
-        `Failed to collect logs: ${e instanceof Error ? e.message : String(e)}`,
+        `Failed to upload logs: ${e instanceof Error ? e.message : String(e)}`,
       );
     } finally {
       setCollecting(false);
@@ -78,7 +78,7 @@ export function TlsEventsList() {
           onClick={handleCollectLogsClick}
           disabled={collecting}
         >
-          {collecting ? "Collecting…" : "Collect Logs"}
+          {collecting ? "Uploading…" : "Upload Logs"}
         </button>
       </div>
       {collectMessage && (
@@ -152,7 +152,7 @@ export function TlsEventsList() {
       {confirmingCollect && (
         <div className="confirm-overlay" role="dialog" aria-modal="true">
           <div className="confirm-dialog">
-            <p className="confirm-title">Collect logs?</p>
+            <p className="confirm-title">Upload logs?</p>
             <p className="confirm-body">
               Endpoint Protection will gather diagnostic logs from this device and securely upload them to Aikido so we can help investigate any issues. Continue?
             </p>
@@ -169,7 +169,7 @@ export function TlsEventsList() {
                 className="button-brand button--primary button--normal button--rounded"
                 onClick={handleCollectConfirm}
               >
-                Collect &amp; Upload
+                Upload
               </button>
             </div>
           </div>
