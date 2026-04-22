@@ -108,3 +108,33 @@ func TestUninstallGradleTrustRemovesOnlyManagedBlock(t *testing.T) {
 		t.Fatalf("expected unmanaged content preserved, got %q", content)
 	}
 }
+
+func TestGradleConfiguratorNeedsRepairWhenManagedBlockMissing(t *testing.T) {
+	homeDir := t.TempDir()
+	platform.GetConfig().HomeDir = homeDir
+
+	propsPath := filepath.Join(homeDir, ".gradle", "gradle.properties")
+	if err := os.MkdirAll(filepath.Dir(propsPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(propsPath, []byte("org.gradle.parallel=true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if !newGradleConfigurator().NeedsRepair(t.Context()) {
+		t.Fatal("expected Gradle trust repair to be required when managed block is missing")
+	}
+}
+
+func TestGradleConfiguratorNeedsRepairFalseWhenManagedBlockPresent(t *testing.T) {
+	homeDir := t.TempDir()
+	platform.GetConfig().HomeDir = homeDir
+
+	if err := installGradleTrust(t.Context()); err != nil {
+		t.Fatalf("installGradleTrust failed: %v", err)
+	}
+
+	if newGradleConfigurator().NeedsRepair(t.Context()) {
+		t.Fatal("expected Gradle trust to be healthy when managed block is present")
+	}
+}

@@ -1,9 +1,11 @@
 use std::time::{Duration, SystemTime};
 
-use rama::utils::time::now_unix_ms;
-
-use crate::package::released_packages_list::{
-    PyPINormalizedReleasedPackageFormatter, ReleasedPackageData, RemoteReleasedPackagesList,
+use crate::{
+    package::{
+        name_formatter::LowerCasePackageName,
+        released_packages_list::{ReleasedPackageData, RemoteReleasedPackagesList},
+    },
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
 use super::*;
@@ -13,26 +15,25 @@ fn timestamp_hours_ago(hours: u64) -> String {
     humantime::format_rfc3339(t).to_string()
 }
 
-fn released(entries: &[(&str, &str, i64)]) -> RemoteReleasedPackagesList {
-    let now_secs = now_unix_ms() / 1000;
+fn released(entries: &[(&str, &str, i64)]) -> RemoteReleasedPackagesList<LowerCasePackageName> {
+    let now_ts = SystemTimestampMilliseconds::now();
     RemoteReleasedPackagesList::from_entries_for_tests(
         entries
             .iter()
             .map(|(name, version, hours_ago)| ReleasedPackageData {
                 package_name: (*name).to_owned(),
                 version: version.parse().unwrap(),
-                released_on: now_secs - (*hours_ago * 3600),
+                released_on: now_ts - SystemDuration::hours((*hours_ago).max(0) as u16),
             })
             .collect(),
-        now_secs,
-        PyPINormalizedReleasedPackageFormatter,
+        now_ts,
     )
 }
 
 fn rewrite(json: serde_json::Value, entries: &[(&str, &str, i64)]) -> Option<serde_json::Value> {
     let bytes = serde_json::to_vec(&json).unwrap();
     let list = released(entries);
-    let cutoff = now_unix_ms() / 1000 - 48 * 3600;
+    let cutoff = SystemTimestampMilliseconds::now() - SystemDuration::hours(48);
     let result = rewrite_response(&bytes, cutoff, &list)?;
     serde_json::from_slice(&result.1.bytes).ok()
 }
@@ -154,7 +155,7 @@ fn legacy_non_latest_version_filtered_leaves_info_version_unchanged() {
 fn parse_package_from_metadata_file_uses_filename() {
     let file = serde_json::json!({"filename": "requests-2.31.0.tar.gz"});
     let info = parse_package_from_metadata_file(&file).unwrap();
-    assert_eq!(info.name.as_str(), "requests");
+    assert_eq!(info.name.to_string(), "requests");
     assert_eq!(info.version.to_string(), "2.31.0");
 }
 
@@ -164,7 +165,7 @@ fn parse_package_from_metadata_file_falls_back_to_url() {
         "url": "https://files.pythonhosted.org/packages/source/r/requests/requests-2.31.0.tar.gz"
     });
     let info = parse_package_from_metadata_file(&file).unwrap();
-    assert_eq!(info.name.as_str(), "requests");
+    assert_eq!(info.name.to_string(), "requests");
     assert_eq!(info.version.to_string(), "2.31.0");
 }
 

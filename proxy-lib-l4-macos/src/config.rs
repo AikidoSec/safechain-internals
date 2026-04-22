@@ -48,10 +48,11 @@ pub struct ProxyConfig {
     #[serde(deserialize_with = "deserialize_uri")]
     pub aikido_url: Uri,
 
-    /// CA Tls Certificate
-    pub ca_cert_pem: String,
-    /// CA Tls Certificate Key
-    pub ca_key_pem: String,
+    /// PEM-encoded root CA certificate supplied by the host.
+    pub ca_cert_pem: Option<String>,
+
+    /// PEM-encoded root CA private key supplied by the host.
+    pub ca_key_pem: Option<String>,
 }
 
 impl Default for ProxyConfig {
@@ -61,8 +62,8 @@ impl Default for ProxyConfig {
             agent_identity: None,
             reporting_endpoint: None,
             aikido_url: Uri::from_static("https://app.aikido.dev"),
-            ca_cert_pem: Default::default(),
-            ca_key_pem: Default::default(),
+            ca_cert_pem: None,
+            ca_key_pem: None,
         }
     }
 }

@@ -55,3 +55,69 @@ func TestFirefoxProfilesFiltersDirectories(t *testing.T) {
 		t.Fatalf("expected profile %q, got %q", valid, got[0])
 	}
 }
+
+func TestFirefoxConfiguratorNeedsRepairFalseWhenNoProfiles(t *testing.T) {
+	cfg := platform.GetConfig()
+	originalHome := cfg.HomeDir
+	t.Cleanup(func() { cfg.HomeDir = originalHome })
+	cfg.HomeDir = t.TempDir()
+
+	if newFirefoxConfigurator().NeedsRepair(t.Context()) {
+		t.Fatal("expected NeedsRepair=false when no Firefox profiles exist")
+	}
+}
+
+func TestFirefoxConfiguratorNeedsRepairFalseWhenBlockPresent(t *testing.T) {
+	cfg := platform.GetConfig()
+	originalHome := cfg.HomeDir
+	t.Cleanup(func() { cfg.HomeDir = originalHome })
+	cfg.HomeDir = t.TempDir()
+
+	root := firefoxProfilesRoot()
+	if root == "" {
+		t.Skip("unsupported OS for firefoxProfilesRoot")
+	}
+	profile := filepath.Join(root, "abc123.default")
+	if err := os.MkdirAll(profile, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Mark directory as a Firefox profile.
+	if err := os.WriteFile(filepath.Join(profile, "prefs.js"), []byte("// prefs\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := newFirefoxConfigurator().Install(t.Context()); err != nil {
+		t.Fatalf("Install failed: %v", err)
+	}
+
+	if newFirefoxConfigurator().NeedsRepair(t.Context()) {
+		t.Fatal("expected NeedsRepair=false when managed block is present in user.js")
+	}
+}
+
+func TestFirefoxConfiguratorNeedsRepairWhenBlockMissing(t *testing.T) {
+	cfg := platform.GetConfig()
+	originalHome := cfg.HomeDir
+	t.Cleanup(func() { cfg.HomeDir = originalHome })
+	cfg.HomeDir = t.TempDir()
+
+	root := firefoxProfilesRoot()
+	if root == "" {
+		t.Skip("unsupported OS for firefoxProfilesRoot")
+	}
+	profile := filepath.Join(root, "abc123.default")
+	if err := os.MkdirAll(profile, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(profile, "prefs.js"), []byte("// prefs\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// user.js exists but has no managed block.
+	if err := os.WriteFile(filepath.Join(profile, "user.js"), []byte("// user prefs\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if !newFirefoxConfigurator().NeedsRepair(t.Context()) {
+		t.Fatal("expected NeedsRepair=true when user.js exists but managed block is absent")
+	}
+}

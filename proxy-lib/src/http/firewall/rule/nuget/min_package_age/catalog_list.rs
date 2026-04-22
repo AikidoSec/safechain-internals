@@ -4,9 +4,10 @@ use rama::{
     telemetry::tracing,
 };
 
-use crate::package::{
-    released_packages_list::RemoteReleasedPackagesList,
-    version::{PackageVersion, PragmaticSemver},
+use crate::{
+    http::firewall::rule::nuget::NugetRemoteReleasedPackageList,
+    package::{name_formatter::LowerCasePackageName, version::{PackageVersion, PragmaticSemver}},
+    utils::time::SystemTimestampMilliseconds,
 };
 
 pub struct CatalogList {}
@@ -15,7 +16,7 @@ impl CatalogList {
     pub fn match_uri<'a>(&self, uri: &'a Uri) -> Option<&'a str> {
         let path = uri.path();
 
-        let (segment, path) = path.trim_start_matches("/").split_once("/")?; 
+        let (segment, path) = path.trim_start_matches("/").split_once("/")?;
         if !segment.eq_ignore_ascii_case("v3") {
             return None;
         }
@@ -32,8 +33,8 @@ impl CatalogList {
         &self,
         resp: Response,
         _: &str,
-        remote_released_packages_list: &RemoteReleasedPackagesList,
-        cutoff_secs: i64,
+        remote_released_packages_list: &NugetRemoteReleasedPackageList,
+        cutoff_secs: SystemTimestampMilliseconds,
     ) -> Result<Response, BoxError> {
         let (parts, body) = resp.into_parts();
 
@@ -63,10 +64,9 @@ impl CatalogList {
 
     fn handle_items_collection(
         json: &mut serde_json::Value,
-        remote_released_packages_list: &RemoteReleasedPackagesList,
-        cutoff_secs: i64,
+        remote_released_packages_list: &NugetRemoteReleasedPackageList,
+        cutoff_secs: SystemTimestampMilliseconds,
     ) {
-
         let Some(serde_json::Value::Array(items)) = json.get_mut("items") else {
             return;
         };
@@ -84,7 +84,7 @@ impl CatalogList {
             Self::handle_items_collection(item, remote_released_packages_list, cutoff_secs);
             true
         });
-        
+
         let new_count = items.len();
         if let Some(count) = json.get_mut("count") {
             if count.as_u64() != Some(new_count as u64) {
@@ -106,8 +106,8 @@ impl CatalogList {
 
     fn should_remove_package(
         package_json: &serde_json::Value,
-        remote_released_packages_list: &RemoteReleasedPackagesList,
-        cutoff_secs: i64,
+        remote_released_packages_list: &NugetRemoteReleasedPackageList,
+        cutoff_secs: SystemTimestampMilliseconds,
     ) -> bool {
         let serde_json::Value::Object(package) = package_json else {
             return false;
@@ -121,14 +121,16 @@ impl CatalogList {
         let Some(serde_json::Value::String(package_version)) = catalog_entry.get("version") else {
             return false;
         };
-        
+
         let version = match PragmaticSemver::parse(package_version) {
             Ok(version_semver) => PackageVersion::Semver(version_semver),
             Err(_) => PackageVersion::Unknown(package_version.into()),
         };
 
+        let normalized_package_name = LowerCasePackageName::from(package_name);
+
         remote_released_packages_list.is_recently_released(
-            package_name,
+            &normalized_package_name,
             Some(&version),
             cutoff_secs,
         )

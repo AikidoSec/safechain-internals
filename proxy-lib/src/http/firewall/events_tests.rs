@@ -2,14 +2,14 @@ use std::str::FromStr;
 
 use rama::utils::str::arcstr::arcstr;
 
-use crate::package::version::PackageVersion;
+use crate::{package::version::PackageVersion, utils::time::SystemDuration};
 
 use super::*;
 
 #[test]
 fn blocked_event_serializes_with_expected_keys() {
     let event = BlockedEvent {
-        ts_ms: 42,
+        ts_ms: SystemTimestampMilliseconds::EPOCH + SystemDuration::milliseconds(42),
         artifact: Artifact {
             product: arcstr!("npm"),
             identifier: arcstr!("foo"),
@@ -41,7 +41,7 @@ fn blocked_event_from_info_sets_timestamp_and_copies_artifact() {
         block_reason: BlockReason::Malware,
     });
 
-    assert!(event.ts_ms > 0);
+    assert!(event.ts_ms.is_positive_epoch_msg());
     assert_eq!(event.artifact.product.as_ref() as &str, "npm");
     assert_eq!(event.artifact.identifier.as_ref() as &str, "foo");
 }

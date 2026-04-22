@@ -6,7 +6,6 @@ import (
 	"log"
 
 	"github.com/AikidoSec/safechain-internals/internal/scanner"
-	"github.com/AikidoSec/safechain-internals/internal/scanner/safechain"
 )
 
 type Registry struct {
@@ -18,7 +17,6 @@ func NewRegistry() *Registry {
 		scanners: make(map[string]scanner.Scanner),
 	}
 
-	registry.Register(safechain.New())
 	return registry
 }
 

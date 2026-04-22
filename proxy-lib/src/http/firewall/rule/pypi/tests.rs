@@ -1,5 +1,3 @@
-use rama::utils::str::smol_str::SmolStr;
-
 use crate::package::version::{PackageVersion, PragmaticSemver};
 
 use super::parser::{
@@ -105,7 +103,11 @@ fn test_parse_wheel_filename() {
             continue;
         };
         let info = result.unwrap_or_else(|| panic!("Expected Some for: {input}"));
-        assert_eq!(info.name, expected_name, "Failed for input: {input}");
+        assert_eq!(
+            info.name.to_string(),
+            expected_name,
+            "Failed for input: {input}"
+        );
         assert_eq!(info.version, expected_version, "Failed for input: {input}");
     }
 }
@@ -227,7 +229,11 @@ fn test_parse_sdist_filename() {
             continue;
         };
         let info = result.unwrap_or_else(|| panic!("Expected Some for: {input}"));
-        assert_eq!(info.name, expected_name, "Failed for input: {input}");
+        assert_eq!(
+            info.name.to_string(),
+            expected_name,
+            "Failed for input: {input}"
+        );
         assert_eq!(info.version, expected_version, "Failed for input: {input}");
     }
 }
@@ -246,7 +252,7 @@ fn test_normalize_package_name() {
 
     for (input, expected) in test_cases {
         assert_eq!(
-            normalize_package_name(input),
+            normalize_package_name(input).to_string(),
             expected,
             "Failed for input: {}",
             input
@@ -257,19 +263,19 @@ fn test_normalize_package_name() {
 #[test]
 fn test_package_info_is_metadata_request() {
     let metadata_info = PackageInfo {
-        name: SmolStr::from("requests"),
+        name: "requests".into(),
         version: PackageVersion::None,
     };
     assert!(metadata_info.is_metadata_request());
 
     let file_info = PackageInfo {
-        name: SmolStr::from("requests"),
+        name: "requests".into(),
         version: PackageVersion::Semver(PragmaticSemver::new_semver(2, 31, 0)),
     };
     assert!(!file_info.is_metadata_request());
 
     let any_version_info = PackageInfo {
-        name: SmolStr::from("requests"),
+        name: "requests".into(),
         version: PackageVersion::Any,
     };
     assert!(!any_version_info.is_metadata_request());
@@ -328,7 +334,11 @@ fn test_extract_package_info() {
         };
         let info = result.unwrap_or_else(|| panic!("Expected Some for URI: {uri}"));
         let expected_version = maybe_semver.map_or(PackageVersion::None, PackageVersion::Semver);
-        assert_eq!(info.name, expected_name, "Failed for URI: {uri}");
+        assert_eq!(
+            info.name.to_string(),
+            expected_name,
+            "Failed for URI: {uri}"
+        );
         assert_eq!(info.version, expected_version, "Failed for URI: {uri}");
         assert_eq!(
             info.is_metadata_request(),
@@ -341,7 +351,7 @@ fn test_extract_package_info() {
 #[test]
 fn test_parse_package_info_from_filename() {
     let info = parse_package_info_from_filename("requests-2.31.0.tar.gz").unwrap();
-    assert_eq!(info.name, "requests");
+    assert_eq!(info.name.to_string(), "requests");
     assert_eq!(
         info.version,
         PackageVersion::Semver(PragmaticSemver::new_semver(2, 31, 0))
@@ -356,7 +366,7 @@ fn test_parse_package_info_from_url() {
         "https://files.pythonhosted.org/packages/source/r/requests/requests-2.31.0.tar.gz",
     )
     .unwrap();
-    assert_eq!(info.name, "requests");
+    assert_eq!(info.name.to_string(), "requests");
     assert_eq!(
         info.version,
         PackageVersion::Semver(PragmaticSemver::new_semver(2, 31, 0))

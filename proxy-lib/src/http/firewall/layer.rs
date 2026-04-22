@@ -1,8 +1,8 @@
 use rama::{
     Layer, Service,
     error::{BoxError, ErrorContext},
-    extensions::{ExtensionsMut, ExtensionsRef},
-    http::{Request, Response},
+    extensions::ExtensionsRef,
+    http::{Request, Response, Uri},
 };
 
 use crate::{
@@ -48,7 +48,7 @@ where
     async fn serve(&self, req: Request) -> Result<Self::Output, Self::Error> {
         // If the request already had a TLS handshake we just take the rules that have been matched
         // if not the case (e.g. insecure http traffic), we match here with match_http_rules (same function being used during tls handshake)
-        let maybe_http_rules = match req.extensions().get().cloned() {
+        let maybe_http_rules = match req.extensions().get_ref().cloned() {
             Some(rules) => Some(rules),
             None => try_get_domain_for_req(&req).and_then(|domain| {
                 self.firewall.match_http_rules(&super::IncomingFlowInfo {
@@ -60,10 +60,9 @@ where
         };
 
         if let Some(http_rules) = maybe_http_rules {
-            let orig_uri = req.uri().clone();
             let mod_req = match http_rules.evaluate_http_request(req).await? {
-                RequestAction::Allow(mut allowed_mod_req) => {
-                    allowed_mod_req.extensions_mut().insert(http_rules.clone());
+                RequestAction::Allow(allowed_mod_req) => {
+                    allowed_mod_req.extensions().insert(http_rules.clone());
                     allowed_mod_req
                 }
                 RequestAction::Block(blocked) => {
@@ -74,9 +73,9 @@ where
                 }
             };
 
-            let mut resp = self.inner.serve(mod_req).await.into_box_error()?;
-            resp.extensions_mut().insert(orig_uri);
-            Ok(http_rules.evaluate_http_response(resp).await?)
+            let req_uri: Uri = mod_req.uri().clone();
+            let resp = self.inner.serve(mod_req).await.into_box_error()?;
+            Ok(http_rules.evaluate_http_response(resp, &req_uri).await?)
         } else {
             self.inner.serve(req).await.into_box_error()
         }

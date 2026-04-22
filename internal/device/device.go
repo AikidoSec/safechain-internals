@@ -20,6 +20,7 @@ const (
 type DeviceInfo struct {
 	Version         int    `json:"version"`
 	ID              string `json:"id"`
+	SerialNumber    string `json:"serial_number"`
 	Hostname        string `json:"hostname"`
 	User            string `json:"user"`
 	Group           string `json:"group"`
@@ -56,6 +57,13 @@ func NewDeviceInfo() *DeviceInfo {
 	rawDeviceID = strings.ToUpper(rawDeviceID)
 	hashedDeviceID := sha256.Sum256([]byte(rawDeviceID))
 	d.ID = hex.EncodeToString(hashedDeviceID[:])
+
+	if serialNumber, err := platform.GetDeviceSerialNumber(); err != nil {
+		log.Println("failed to get device serial number:", err)
+	} else {
+		d.SerialNumber = serialNumber
+	}
+
 	return d
 }
 

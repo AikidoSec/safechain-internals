@@ -1,4 +1,5 @@
 use parking_lot::RwLock;
+use rama::error::extra::OpaqueError;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::{path::PathBuf, str::FromStr};
@@ -157,7 +158,9 @@ impl FromStr for StorageKind {
 
         let dir = PathBuf::from(s);
         if dir.as_os_str().is_empty() {
-            return Err(BoxError::from("empty secrets value is not allowed"));
+            return Err(
+                OpaqueError::from_static_str("empty secrets value is not allowed").into_box_error(),
+            );
         }
 
         let meta = std::fs::metadata(&dir)
@@ -166,7 +169,8 @@ impl FromStr for StorageKind {
 
         if !meta.is_dir() {
             return Err(
-                BoxError::from("secrets path is not a directory").context_debug_field("path", dir)
+                OpaqueError::from_static_str("secrets path is not a directory")
+                    .context_debug_field("path", dir),
             );
         }
 
@@ -386,9 +390,10 @@ fn parse_apple_protected_storage_kind(s: &str) -> Result<Option<StorageKind>, Bo
                 match key {
                     "access-group" => {
                         if value.is_empty() {
-                            return Err(BoxError::from(
+                            return Err(OpaqueError::from_static_str(
                                 "protected secrets storage requires non-empty access-group value",
-                            ));
+                            )
+                            .into_box_error());
                         }
                         access_group = Some(value.to_string());
                     }
@@ -396,23 +401,24 @@ fn parse_apple_protected_storage_kind(s: &str) -> Result<Option<StorageKind>, Bo
                         "true" => cloud_sync = true,
                         "false" => cloud_sync = false,
                         _ => {
-                            return Err(BoxError::from(
+                            return Err(OpaqueError::from_static_str(
                                 "protected secrets storage cloud-sync must be either true or false",
-                            ));
+                            )
+                            .into_box_error());
                         }
                     },
                     _ => {
-                        return Err(BoxError::from(
+                        return Err(OpaqueError::from_static_str(
                             "unsupported protected secrets option; supported: access-group, cloud-sync",
-                        ));
+                        ).into_box_error());
                     }
                 }
             } else if access_group.is_none() {
                 access_group = Some(token.to_string());
             } else {
-                return Err(BoxError::from(
+                return Err(OpaqueError::from_static_str(
                     "invalid protected secrets storage syntax; expected 'protected[:access-group=<group>][,cloud-sync=true|false]'",
-                ));
+                ).into_box_error());
             }
         }
     }

@@ -1,19 +1,23 @@
-use std::{str::FromStr, time::UNIX_EPOCH};
+use std::str::FromStr;
 
 use rama::{
     telemetry::tracing,
     utils::str::arcstr::{ArcStr, arcstr},
 };
 
-use crate::package::{
-    released_packages_list::RemoteReleasedPackagesList,
-    version::{PackageVersion, PragmaticSemver},
+use crate::{
+    http::firewall::rule::pypi::parser::{
+        PackageInfo, normalize_package_name, parse_package_info_from_filename,
+        parse_package_info_from_url,
+    },
+    package::{
+        name_formatter::LowerCasePackageName,
+        released_packages_list::RemoteReleasedPackagesList,
+        version::{PackageVersion, PragmaticSemver},
+    },
+    utils::time::SystemTimestampMilliseconds,
 };
 
-use super::super::parser::{
-    PackageInfo, normalize_package_name, parse_package_info_from_filename,
-    parse_package_info_from_url,
-};
 use super::JsonRewriteResult;
 
 #[derive(Debug)]
@@ -38,17 +42,17 @@ enum FileDecision {
 /// - simple JSON via `/simple/<package>/`: exposes `files`
 pub(super) fn rewrite_response(
     bytes: &[u8],
-    cutoff_secs: i64,
-    released_packages: &RemoteReleasedPackagesList,
+    cutoff_ts: SystemTimestampMilliseconds,
+    released_packages: &RemoteReleasedPackagesList<LowerCasePackageName>,
 ) -> Option<(JsonRewriteKind, JsonRewriteResult)> {
     let json: serde_json::Value = serde_json::from_slice(bytes).ok()?;
 
     if json.get("releases").and_then(|r| r.as_object()).is_some() {
-        return rewrite_legacy(json, cutoff_secs, released_packages)
+        return rewrite_legacy(json, cutoff_ts, released_packages)
             .map(|rewrite| (JsonRewriteKind::Legacy, rewrite));
     }
 
-    rewrite_simple(json, cutoff_secs, released_packages)
+    rewrite_simple(json, cutoff_ts, released_packages)
         .map(|rewrite| (JsonRewriteKind::Simple, rewrite))
 }
 
@@ -58,8 +62,8 @@ pub(super) fn rewrite_response(
 /// `urls` are downgraded to the newest remaining stable version.
 fn rewrite_legacy(
     mut json: serde_json::Value,
-    cutoff_secs: i64,
-    released_packages: &RemoteReleasedPackagesList,
+    cutoff_ts: SystemTimestampMilliseconds,
+    released_packages: &RemoteReleasedPackagesList<LowerCasePackageName>,
 ) -> Option<JsonRewriteResult> {
     let package_name = package_name_from_legacy_json(&json);
     let mut suppressed: Vec<PackageVersion> = Vec::new();
@@ -71,7 +75,7 @@ fn rewrite_legacy(
                 package_name.as_str(),
                 version,
                 files,
-                cutoff_secs,
+                cutoff_ts,
                 released_packages,
                 &mut suppressed,
             )
@@ -89,15 +93,20 @@ fn legacy_keep_release(
     package_name: &str,
     version: &str,
     files: &serde_json::Value,
-    cutoff_secs: i64,
-    released_packages: &RemoteReleasedPackagesList,
+    cutoff_ts: SystemTimestampMilliseconds,
+    released_packages: &RemoteReleasedPackagesList<LowerCasePackageName>,
     suppressed: &mut Vec<PackageVersion>,
 ) -> bool {
     let version =
         PackageVersion::from_str(version).unwrap_or(PackageVersion::Unknown(version.into()));
+    let normalized_package_name = LowerCasePackageName::from(package_name.replace('_', "-"));
     // Check time stamp, fall back to new package list file if time can't be parsed
-    let is_recent = earliest_upload_secs(files).is_some_and(|t| t > cutoff_secs)
-        || released_packages.is_recently_released(package_name, Some(&version), cutoff_secs);
+    let is_recent = earliest_upload_ts(files).is_some_and(|t| t > cutoff_ts)
+        || released_packages.is_recently_released(
+            &normalized_package_name,
+            Some(&version),
+            cutoff_ts,
+        );
 
     if is_recent && !suppressed.contains(&version) {
         suppressed.push(version);
@@ -106,7 +115,7 @@ fn legacy_keep_release(
     !is_recent
 }
 
-/// Returns the earliest upload time (in seconds) across all distribution files for a release.
+/// Returns the earliest upload timestamp across all distribution files for a release.
 ///
 /// A single PyPI release version ships multiple files: typically a platform-independent
 /// wheel (`.whl`) and a source distribution (`.tar.gz`), and sometimes additional
@@ -116,19 +125,22 @@ fn legacy_keep_release(
 /// We take the minimum so that a version is only suppressed when *all* of its files
 /// postdate the cutoff — a freshly added platform wheel cannot slip through just because
 /// the source dist was uploaded days earlier.
-fn earliest_upload_secs(files: &serde_json::Value) -> Option<i64> {
+fn earliest_upload_ts(files: &serde_json::Value) -> Option<SystemTimestampMilliseconds> {
     files
         .as_array()?
         .iter()
-        .filter_map(|f| parse_upload_time_secs(f, "upload_time_iso_8601"))
+        .filter_map(|f| parse_upload_time_ts(f, "upload_time_iso_8601"))
         .min()
 }
 
-fn parse_upload_time_secs(file: &serde_json::Value, field: &str) -> Option<i64> {
+fn parse_upload_time_ts(
+    file: &serde_json::Value,
+    field: &str,
+) -> Option<SystemTimestampMilliseconds> {
     let ts = file.get(field)?.as_str()?;
-    let t = humantime::parse_rfc3339(ts).ok()?;
-    let secs = t.duration_since(UNIX_EPOCH).ok()?.as_secs();
-    Some(secs as i64)
+    humantime::parse_rfc3339(ts)
+        .ok()
+        .map(SystemTimestampMilliseconds::from)
 }
 
 /// Rewrite the simple `/simple/<package>/` JSON response shape.
@@ -136,14 +148,14 @@ fn parse_upload_time_secs(file: &serde_json::Value, field: &str) -> Option<i64> 
 /// Too-young distributions are removed from the `files` array.
 fn rewrite_simple(
     mut json: serde_json::Value,
-    cutoff_secs: i64,
-    released_packages: &RemoteReleasedPackagesList,
+    cutoff_ts: SystemTimestampMilliseconds,
+    released_packages: &RemoteReleasedPackagesList<LowerCasePackageName>,
 ) -> Option<JsonRewriteResult> {
     let mut suppressed: Vec<PackageVersion> = Vec::new();
     let mut package_name: Option<ArcStr> = None;
 
     json.get_mut("files")?.as_array_mut()?.retain(|file| {
-        match simple_keep_file(file, cutoff_secs, released_packages) {
+        match simple_keep_file(file, cutoff_ts, released_packages) {
             FileDecision::Keep => true,
             FileDecision::Remove {
                 package_name: removed_package_name,
@@ -167,27 +179,23 @@ fn rewrite_simple(
 
 fn simple_keep_file(
     file: &serde_json::Value,
-    cutoff_secs: i64,
-    released_packages: &RemoteReleasedPackagesList,
+    cutoff_ts: SystemTimestampMilliseconds,
+    released_packages: &RemoteReleasedPackagesList<LowerCasePackageName>,
 ) -> FileDecision {
     let Some(package) = parse_package_from_metadata_file(file) else {
         return FileDecision::Keep;
     };
 
     // Check time stamp, fall back to new package list file if time can't be parsed
-    let is_recent = parse_upload_time_secs(file, "upload-time").is_some_and(|t| t > cutoff_secs)
-        || released_packages.is_recently_released(
-            package.name.as_str(),
-            Some(&package.version),
-            cutoff_secs,
-        );
+    let is_recent = parse_upload_time_ts(file, "upload-time").is_some_and(|t| t > cutoff_ts)
+        || released_packages.is_recently_released(&package.name, Some(&package.version), cutoff_ts);
 
     if !is_recent {
         return FileDecision::Keep;
     }
 
     FileDecision::Remove {
-        package_name: ArcStr::from(package.name.as_str()),
+        package_name: package.name.into_arcstr(),
         version: package.version,
     }
 }
@@ -231,7 +239,7 @@ fn package_name_from_legacy_json(json: &serde_json::Value) -> ArcStr {
     json.get("info")
         .and_then(|info| info.get("name"))
         .and_then(|name| name.as_str())
-        .map(|package_name| ArcStr::from(normalize_package_name(package_name).as_str()))
+        .map(|package_name| normalize_package_name(package_name).into_arcstr())
         .unwrap_or_else(|| arcstr!("unknown-package"))
 }
 

@@ -1,20 +1,19 @@
 use parking_lot::Mutex;
-use rama::{
-    http::{Body, body::util::BodyExt as _},
-    utils::time::now_unix_ms,
-};
+use rama::http::{Body, body::util::BodyExt as _};
 
 use crate::package::{
-    released_packages_list::{
-        PyPINormalizedReleasedPackageFormatter, ReleasedPackageData, RemoteReleasedPackagesList,
-    },
+    name_formatter::LowerCasePackageName,
+    released_packages_list::{ReleasedPackageData, RemoteReleasedPackagesList},
     version::PackageVersion,
 };
+use crate::utils::time::{SystemDuration, SystemTimestampMilliseconds};
 
 use super::{AnchorDecision, HtmlRewriteOutcome, analyze_anchor_href, rewrite_body};
 
-fn make_released_packages(entries: &[(&str, &str, u64)]) -> RemoteReleasedPackagesList {
-    let now_secs = now_unix_ms() / 1000;
+fn make_released_packages(
+    entries: &[(&str, &str, u64)],
+) -> RemoteReleasedPackagesList<LowerCasePackageName> {
+    let now_ts = SystemTimestampMilliseconds::now();
 
     RemoteReleasedPackagesList::from_entries_for_tests(
         entries
@@ -22,16 +21,15 @@ fn make_released_packages(entries: &[(&str, &str, u64)]) -> RemoteReleasedPackag
             .map(|(package_name, version, hours_ago)| ReleasedPackageData {
                 package_name: (*package_name).to_owned(),
                 version: version.parse().unwrap(),
-                released_on: now_secs - (*hours_ago as i64 * 3600),
+                released_on: now_ts - SystemDuration::hours(*hours_ago as u16),
             })
             .collect(),
-        now_secs,
-        PyPINormalizedReleasedPackageFormatter,
+        now_ts,
     )
 }
 
-fn default_cutoff_secs() -> i64 {
-    (now_unix_ms() / 1000) - (48 * 3600)
+fn default_cutoff_ts() -> SystemTimestampMilliseconds {
+    SystemTimestampMilliseconds::now() - SystemDuration::hours(48)
 }
 
 // ── analyze_anchor_href unit tests ───────────────────────────────────────────
@@ -43,7 +41,7 @@ fn analyze_anchor_href_keeps_unparseable_href() {
     assert!(matches!(
         analyze_anchor_href(
             "https://example.test/not-a-package",
-            default_cutoff_secs(),
+            default_cutoff_ts(),
             &list
         ),
         AnchorDecision::Keep
@@ -56,7 +54,7 @@ fn analyze_anchor_href_removes_recent_package_href() {
 
     match analyze_anchor_href(
         "https://files.pythonhosted.org/packages/source/m/my-package/my_package-2.0.0.tar.gz",
-        default_cutoff_secs(),
+        default_cutoff_ts(),
         &list,
     ) {
         AnchorDecision::Keep => panic!("expected recent package href to be removed"),
@@ -74,10 +72,10 @@ fn analyze_anchor_href_removes_recent_package_href() {
 
 async fn rewrite_html(
     html: &str,
-    list: RemoteReleasedPackagesList,
+    list: RemoteReleasedPackagesList<LowerCasePackageName>,
 ) -> Option<(String, String, Vec<PackageVersion>)> {
     let outcome = std::sync::Arc::new(Mutex::new(None::<HtmlRewriteOutcome>));
-    let body = rewrite_body(Body::from(html.to_owned()), default_cutoff_secs(), list, {
+    let body = rewrite_body(Body::from(html.to_owned()), default_cutoff_ts(), list, {
         let outcome = outcome.clone();
         move |rewrite| {
             *outcome.lock() = rewrite;

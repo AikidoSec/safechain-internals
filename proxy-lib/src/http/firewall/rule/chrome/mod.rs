@@ -7,24 +7,23 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
-    utils::{
-        str::arcstr::{ArcStr, arcstr},
-        time::now_unix_ms,
-    },
+    utils::str::arcstr::{ArcStr, arcstr},
 };
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig},
+    endpoint_protection::{
+        EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
+    },
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
     },
     package::{
-        malware_list::RemoteMalwareList,
-        released_packages_list::{LowerCaseReleasedPackageFormatter, RemoteReleasedPackagesList},
+        malware_list::RemoteMalwareList, released_packages_list::RemoteReleasedPackagesList,
         version::PackageVersion,
     },
     storage::SyncCompactDataStorage,
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
 #[cfg(feature = "pac")]
@@ -32,15 +31,21 @@ use crate::http::firewall::pac::PacScriptGenerator;
 
 use super::{BlockedRequest, RequestAction, Rule};
 
-mod malware_key;
+mod package_name;
 mod parser;
+use self::package_name::ChromePackageName;
+
+type ChromeRemoteMalwareList = RemoteMalwareList<ChromePackageName>;
+type ChromeRemoteReleasedPackageList = RemoteReleasedPackagesList<ChromePackageName>;
+
+const CHROME_PRODUCT_KEY: ArcStr = arcstr!("chrome");
+const CHROME_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("chrome");
 
 pub(in crate::http::firewall) struct RuleChrome {
     target_domains: DomainMatcher,
-    remote_malware_list: RemoteMalwareList,
-    remote_released_packages_list: RemoteReleasedPackagesList,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
-    policy_evaluator: Option<PolicyEvaluator>,
+    remote_malware_list: ChromeRemoteMalwareList,
+    remote_released_packages_list: ChromeRemoteReleasedPackageList,
+    policy_evaluator: Option<PolicyEvaluator<ChromePackageName>>,
 }
 
 impl RuleChrome {
@@ -48,31 +53,32 @@ impl RuleChrome {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<PolicyEvaluator>,
         remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_chrome.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            malware_key::ChromeMalwareListEntryFormatter,
         )
         .await
         .context("create remote malware list for chrome block rule")?;
 
         let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/releases/chrome.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCaseReleasedPackageFormatter,
         )
         .await
         .context("create remote released packages list for chrome block rule")?;
+
+        let policy_evaluator = remote_endpoint_config.map(|config| {
+            PolicyEvaluator::new(guard.clone(), CHROME_ECOSYSTEM_KEY.clone(), config)
+        });
 
         Ok(Self {
             target_domains: [
@@ -86,7 +92,6 @@ impl RuleChrome {
             .collect(),
             remote_malware_list,
             remote_released_packages_list,
-            remote_endpoint_config,
             policy_evaluator,
         })
     }
@@ -118,7 +123,7 @@ impl Rule for RuleChrome {
     }
 
     async fn evaluate_request(&self, req: Request) -> Result<RequestAction, BoxError> {
-        let Some((extension_id, version)) = Self::parse_crx_download_url(&req) else {
+        let Some(package_info) = PackageInfo::from_http_req(&req) else {
             tracing::debug!(
                 http.url.full = %req.uri(),
                 http.request.method = %req.method(),
@@ -130,58 +135,62 @@ impl Rule for RuleChrome {
         tracing::debug!(
             http.url.full = %req.uri(),
             http.request.method = %req.method(),
-            "CRX download - extension id: {extension_id}, version: {:?}",
-            version
+            "CRX download - extension id: {}, version: {}",
+            package_info.extension_id,
+            package_info.version,
         );
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision =
-                policy_evaluator.evaluate_package_install("chrome", extension_id.as_str());
+            let decision = policy_evaluator.evaluate_package_install(&package_info.extension_id);
 
             match decision {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Defer => {}
-                decision => {
+                PackagePolicyDecision::BlockAll
+                | PackagePolicyDecision::Rejected
+                | PackagePolicyDecision::RequestInstall => {
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        Self::blocked_artifact(&extension_id, &version),
+                        package_info.into_blocked_artifact(),
                         super::block_reason_for(decision),
                     )));
                 }
             }
         }
 
-        if self.matches_malware_entry(extension_id.as_str(), &version) {
+        if self.matches_malware_entry(&package_info) {
             tracing::info!(
                 http.url.full = %req.uri(),
                 http.request.method = %req.method(),
-                "blocked Chrome extension from CRX URL: {extension_id}, version: {:?}",
-                version
+                "blocked Chrome extension from CRX URL: {}, version: {}",
+                package_info.extension_id,
+                package_info.version,
             );
 
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&extension_id, &version),
+                package_info.into_blocked_artifact(),
                 BlockReason::Malware,
             )));
         }
 
-        let cutoff_secs = self.get_package_age_cutoff_secs();
-        let normalized_id = extension_id.to_ascii_lowercase();
+        let cutoff_ts = self.get_package_age_cutoff_ts();
         if self.remote_released_packages_list.is_recently_released(
-            &normalized_id,
-            None,
-            cutoff_secs,
+            &package_info.extension_id,
+            Some(&package_info.version),
+            cutoff_ts,
         ) {
             tracing::debug!(
                 http.url.full = %req.uri(),
-                "blocked Chrome extension: released too recently: {extension_id}"
+                "blocked Chrome extension: released too recently: {}, version: {}",
+                package_info.extension_id,
+                package_info.version,
             );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&extension_id, &version),
+                package_info.into_blocked_artifact(),
                 BlockReason::NewPackage,
             )));
         }
@@ -191,41 +200,53 @@ impl Rule for RuleChrome {
 }
 
 impl RuleChrome {
-    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 48 * 3600;
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 
-    fn get_package_age_cutoff_secs(&self) -> i64 {
-        let maybe_ts = self.remote_endpoint_config.as_ref().and_then(|c| {
-            c.get_ecosystem_config("chrome")
-                .config()
-                .and_then(|cfg| cfg.minimum_allowed_age_timestamp)
-        });
-        if let Some(ts_secs) = maybe_ts {
-            return ts_secs;
-        }
-        (now_unix_ms()) / 1000 - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
+    fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
+        self.policy_evaluator
+            .as_ref()
+            .map(|c| c.package_age_cutoff_ts(Self::DEFAULT_MIN_PACKAGE_AGE))
+            .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 
-    fn blocked_artifact(extension_id: &ArcStr, version: &PackageVersion) -> Artifact {
-        Artifact {
-            product: arcstr!("chrome"),
-            identifier: extension_id.clone(),
-            display_name: None,
-            version: Some(version.clone()),
-        }
-    }
-
-    fn matches_malware_entry(&self, extension_id: &str, version: &PackageVersion) -> bool {
-        let normalized_id = extension_id.to_ascii_lowercase();
-        let entries = self.remote_malware_list.find_entries(&normalized_id);
+    fn matches_malware_entry(&self, package_info: &PackageInfo) -> bool {
+        let entries = self
+            .remote_malware_list
+            .find_entries(&package_info.extension_id);
         let Some(entries) = entries.entries() else {
             return false;
         };
 
-        entries.iter().any(|e| e.version.eq(version))
+        entries.iter().any(|e| e.version.eq(&package_info.version))
+    }
+}
+
+#[derive(Debug)]
+struct PackageInfo {
+    extension_id: ChromePackageName,
+    version: PackageVersion,
+}
+
+impl PackageInfo {
+    fn from_http_req(req: &Request) -> Option<Self> {
+        let (extension_id, version) = self::parser::parse_crx_download_url(req)?;
+        Some(PackageInfo {
+            extension_id,
+            version,
+        })
     }
 
-    fn parse_crx_download_url(req: &Request) -> Option<(ArcStr, PackageVersion)> {
-        self::parser::parse_crx_download_url(req)
+    fn into_blocked_artifact(self) -> Artifact {
+        let Self {
+            extension_id,
+            version,
+        } = self;
+        Artifact {
+            product: CHROME_PRODUCT_KEY,
+            identifier: extension_id.into_arcstr(),
+            display_name: None,
+            version: Some(version),
+        }
     }
 }
 

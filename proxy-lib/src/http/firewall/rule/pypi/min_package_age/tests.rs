@@ -1,10 +1,11 @@
-use rama::{
-    http::{Body, BodyExtractExt as _},
-    utils::time::now_unix_ms,
-};
+use rama::http::{Body, BodyExtractExt as _};
 
-use crate::package::released_packages_list::{
-    PyPINormalizedReleasedPackageFormatter, ReleasedPackageData, RemoteReleasedPackagesList,
+use crate::{
+    package::{
+        name_formatter::LowerCasePackageName,
+        released_packages_list::{ReleasedPackageData, RemoteReleasedPackagesList},
+    },
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
 use super::*;
@@ -16,8 +17,10 @@ fn make_json_response(body: &str) -> Response {
         .unwrap()
 }
 
-fn make_released_packages(entries: &[(&str, &str, u64)]) -> RemoteReleasedPackagesList {
-    let now_secs = now_unix_ms() / 1000;
+fn make_released_packages(
+    entries: &[(&str, &str, u64)],
+) -> RemoteReleasedPackagesList<LowerCasePackageName> {
+    let now_ts = SystemTimestampMilliseconds::now();
 
     RemoteReleasedPackagesList::from_entries_for_tests(
         entries
@@ -25,16 +28,15 @@ fn make_released_packages(entries: &[(&str, &str, u64)]) -> RemoteReleasedPackag
             .map(|(package_name, version, hours_ago)| ReleasedPackageData {
                 package_name: (*package_name).to_owned(),
                 version: version.parse().unwrap(),
-                released_on: now_secs - (*hours_ago as i64 * 3600),
+                released_on: now_ts - SystemDuration::hours(*hours_ago as u16),
             })
             .collect(),
-        now_secs,
-        PyPINormalizedReleasedPackageFormatter,
+        now_ts,
     )
 }
 
-fn default_cutoff_secs() -> i64 {
-    (now_unix_ms() / 1000) - (48 * 3600)
+fn default_cutoff_ts() -> SystemTimestampMilliseconds {
+    SystemTimestampMilliseconds::now() - SystemDuration::hours(48)
 }
 
 #[tokio::test]
@@ -51,7 +53,7 @@ async fn removes_recent_releases_from_legacy_json() {
     let list = make_released_packages(&[("my-package", "2.0.0", 1), ("my-package", "1.0.0", 72)]);
 
     let result = MinPackageAgePyPI::new(None)
-        .remove_new_packages(make_json_response(&body), &list, default_cutoff_secs())
+        .remove_new_packages(make_json_response(&body), &list, default_cutoff_ts())
         .await
         .unwrap();
     let result_json: serde_json::Value = result.try_into_json().await.unwrap();
@@ -78,7 +80,7 @@ async fn removes_recent_files_from_simple_json() {
     let list = make_released_packages(&[("my-package", "2.0.0", 1), ("my-package", "1.0.0", 72)]);
 
     let result = MinPackageAgePyPI::new(None)
-        .remove_new_packages(make_json_response(&body), &list, default_cutoff_secs())
+        .remove_new_packages(make_json_response(&body), &list, default_cutoff_ts())
         .await
         .unwrap();
     let result_json: serde_json::Value = result.try_into_json().await.unwrap();
@@ -99,7 +101,7 @@ async fn passthrough_non_json_non_html_response() {
     let list = make_released_packages(&[]);
 
     let result = MinPackageAgePyPI::new(None)
-        .remove_new_packages(resp, &list, default_cutoff_secs())
+        .remove_new_packages(resp, &list, default_cutoff_ts())
         .await
         .unwrap();
 
@@ -116,7 +118,7 @@ async fn passthrough_invalid_json_body() {
         .remove_new_packages(
             make_json_response("not valid json {{{"),
             &list,
-            default_cutoff_secs(),
+            default_cutoff_ts(),
         )
         .await
         .unwrap();
@@ -148,7 +150,7 @@ async fn removes_response_caching_when_modified() {
         .unwrap();
 
     let result = MinPackageAgePyPI::new(None)
-        .remove_new_packages(resp, &list, default_cutoff_secs())
+        .remove_new_packages(resp, &list, default_cutoff_ts())
         .await
         .unwrap();
 
@@ -175,7 +177,7 @@ async fn does_not_strip_cache_headers_when_not_modified() {
         .unwrap();
 
     let result = MinPackageAgePyPI::new(None)
-        .remove_new_packages(resp, &list, default_cutoff_secs())
+        .remove_new_packages(resp, &list, default_cutoff_ts())
         .await
         .unwrap();
 
@@ -206,7 +208,7 @@ async fn removes_recent_links_from_simple_html() {
         .unwrap();
 
     let result = MinPackageAgePyPI::new(None)
-        .remove_new_packages(resp, &list, default_cutoff_secs())
+        .remove_new_packages(resp, &list, default_cutoff_ts())
         .await
         .unwrap();
 
@@ -234,7 +236,7 @@ async fn html_always_strips_cache_headers_even_when_unmodified() {
         .unwrap();
 
     let result = MinPackageAgePyPI::new(None)
-        .remove_new_packages(resp, &list, default_cutoff_secs())
+        .remove_new_packages(resp, &list, default_cutoff_ts())
         .await
         .unwrap();
 

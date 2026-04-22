@@ -5,6 +5,7 @@ package certconfig
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -52,6 +53,30 @@ func installGradleTrust(_ context.Context) error {
 	}
 
 	return os.WriteFile(propsPath, []byte(content+gradlePropsBlock), gradlePropsFilePerm)
+}
+
+var gradleManagedBlockFormat = managedBlockFormat{
+	startMarker: gradlePropsMarkerStart,
+	endMarker:   gradlePropsMarkerEnd,
+}
+
+func isGradleTrustManaged() bool {
+	present, err := hasManagedBlock(
+		filepath.Join(platform.GetConfig().HomeDir, ".gradle", "gradle.properties"),
+		gradleManagedBlockFormat,
+	)
+	if err != nil {
+		log.Printf("gradle: failed to check managed block: %v", err)
+	}
+	return present
+}
+
+func gradleNeedsRepair() bool {
+	if isGradleTrustManaged() {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(platform.GetConfig().HomeDir, ".gradle", "gradle.properties"))
+	return err == nil
 }
 
 func uninstallGradleTrust(_ context.Context) error {

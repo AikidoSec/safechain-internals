@@ -7,7 +7,7 @@ use std::{
 };
 
 use rama_core::{
-    error::{BoxError, ErrorExt as _},
+    error::{BoxError, ErrorExt as _, extra::OpaqueError},
     telemetry::tracing::{debug, info, warn},
 };
 use windows_sys::Win32::{
@@ -82,13 +82,13 @@ pub fn enable_device(service_name: &str) -> Result<(), BoxError> {
                 );
             }
             _ => {
-                return Err(
-                    BoxError::from("failed to prepare device restart before enable")
-                        .context_str_field("name", service_name)
-                        .context_str_field("instance_id", &device.instance_id)
-                        .context_field("cfgmgr32", restart_disable_cr)
-                        .context_str_field("cfgmgr32_name", configret_name(restart_disable_cr)),
-                );
+                return Err(OpaqueError::from_static_str(
+                    "failed to prepare device restart before enable",
+                )
+                .context_str_field("name", service_name)
+                .context_str_field("instance_id", &device.instance_id)
+                .context_field("cfgmgr32", restart_disable_cr)
+                .context_str_field("cfgmgr32_name", configret_name(restart_disable_cr)));
             }
         }
 
@@ -97,7 +97,7 @@ pub fn enable_device(service_name: &str) -> Result<(), BoxError> {
             CM_Enable_DevNode(device.devinst, 0)
         };
         if cr != CR_SUCCESS {
-            return Err(BoxError::from("failed to enable device")
+            return Err(OpaqueError::from_static_str("failed to enable device")
                 .context_str_field("name", service_name)
                 .context_str_field("instance_id", &device.instance_id)
                 .context_field("cfgmgr32", cr));
@@ -135,13 +135,13 @@ pub fn disable_device(service_name: &str, force_remove_on_veto: bool) -> Result<
             );
             let remove_cr = force_remove_devinst(device.devinst, &device.instance_id);
             if remove_cr != CR_SUCCESS {
-                return Err(
-                    BoxError::from("failed to force-remove device after disable veto")
-                        .context_str_field("name", service_name)
-                        .context_str_field("instance_id", &device.instance_id)
-                        .context_field("cfgmgr32", remove_cr)
-                        .context_str_field("cfgmgr32_name", configret_name(remove_cr)),
-                );
+                return Err(OpaqueError::from_static_str(
+                    "failed to force-remove device after disable veto",
+                )
+                .context_str_field("name", service_name)
+                .context_str_field("instance_id", &device.instance_id)
+                .context_field("cfgmgr32", remove_cr)
+                .context_str_field("cfgmgr32_name", configret_name(remove_cr)));
             }
 
             info!(
@@ -153,7 +153,7 @@ pub fn disable_device(service_name: &str, force_remove_on_veto: bool) -> Result<
         }
 
         if cr != CR_SUCCESS {
-            return Err(BoxError::from("failed to disable device")
+            return Err(OpaqueError::from_static_str("failed to disable device")
                 .context_str_field("name", service_name)
                 .context_str_field("instance_id", &device.instance_id)
                 .context_field("cfgmgr32", cr)
@@ -289,8 +289,10 @@ impl DeviceInfoSet {
             )
         };
         if handle == INVALID_HANDLE_VALUE as isize {
-            return Err(BoxError::from("failed to enumerate device info set")
-                .context_field("win32", unsafe { GetLastError() }));
+            return Err(
+                OpaqueError::from_static_str("failed to enumerate device info set")
+                    .context_field("win32", unsafe { GetLastError() }),
+            );
         }
         Ok(Self(handle))
     }
@@ -333,7 +335,7 @@ fn find_devices_for_service(service_name: &str) -> Result<Vec<MatchedDevice>, Bo
                 break;
             }
 
-            return Err(BoxError::from("failed to enumerate devices")
+            return Err(OpaqueError::from_static_str("failed to enumerate devices")
                 .context_str_field("name", service_name)
                 .context_field("win32", code));
         }
@@ -387,7 +389,7 @@ fn query_device_registry_string_property(
         )
     };
     if ok != 0 {
-        return Err(BoxError::from(
+        return Err(OpaqueError::from_static_str(
             "unexpected success while probing device registry property size",
         )
         .context_field("property", property));
@@ -398,9 +400,11 @@ fn query_device_registry_string_property(
         return Ok(None);
     }
     if code != ERROR_INSUFFICIENT_BUFFER || required_size == 0 {
-        return Err(BoxError::from("failed to query device registry property")
-            .context_field("property", property)
-            .context_field("win32", code));
+        return Err(
+            OpaqueError::from_static_str("failed to query device registry property")
+                .context_field("property", property)
+                .context_field("win32", code),
+        );
     }
 
     let mut buffer = vec![0_u16; (required_size as usize).div_ceil(2)];
@@ -417,15 +421,19 @@ fn query_device_registry_string_property(
         )
     };
     if ok == 0 {
-        return Err(BoxError::from("failed to read device registry property")
-            .context_field("property", property)
-            .context_field("win32", unsafe { GetLastError() }));
+        return Err(
+            OpaqueError::from_static_str("failed to read device registry property")
+                .context_field("property", property)
+                .context_field("win32", unsafe { GetLastError() }),
+        );
     }
 
     if !matches!(property_type, REG_SZ | REG_EXPAND_SZ | REG_MULTI_SZ) {
-        return Err(BoxError::from("device registry property was not a string value")
-            .context_field("property", property)
-            .context_field("property_type", property_type));
+        return Err(OpaqueError::from_static_str(
+            "device registry property was not a string value",
+        )
+        .context_field("property", property)
+        .context_field("property_type", property_type));
     }
 
     Ok(Some(from_wide_with_nul(&buffer)))
@@ -447,15 +455,17 @@ fn query_device_instance_id(
         )
     };
     if ok != 0 {
-        return Err(BoxError::from(
+        return Err(OpaqueError::from_static_str(
             "unexpected success while probing device instance id size",
-        ));
+        )
+        .into_box_error());
     }
 
     let code = unsafe { GetLastError() };
     if code != ERROR_INSUFFICIENT_BUFFER || required_size == 0 {
         return Err(
-            BoxError::from("failed to query device instance id size").context_field("win32", code)
+            OpaqueError::from_static_str("failed to query device instance id size")
+                .context_field("win32", code),
         );
     }
 
@@ -471,8 +481,10 @@ fn query_device_instance_id(
         )
     };
     if ok == 0 {
-        return Err(BoxError::from("failed to read device instance id")
-            .context_field("win32", unsafe { GetLastError() }));
+        return Err(
+            OpaqueError::from_static_str("failed to read device instance id")
+                .context_field("win32", unsafe { GetLastError() }),
+        );
     }
 
     Ok(from_wide_with_nul(&buffer))
@@ -504,7 +516,7 @@ impl DeviceHandle {
             )
         };
         if handle == INVALID_HANDLE_VALUE {
-            return Err(BoxError::from("failed to open device")
+            return Err(OpaqueError::from_static_str("failed to open device")
                 .context_str_field("device_path", device_path)
                 .context_field("win32", unsafe { GetLastError() }));
         }
@@ -548,7 +560,7 @@ impl DeviceHandle {
         }
 
         Err(last_error.unwrap_or_else(|| {
-            BoxError::from("failed to open device after retry")
+            OpaqueError::from_static_str("failed to open device after retry")
                 .context_str_field("device_path", device_path)
         }))
     }
@@ -578,9 +590,11 @@ impl DeviceHandle {
             )
         };
         if ok == 0 {
-            return Err(BoxError::from("DeviceIoControl failed for ioctl")
-                .context_hex_field("ioctl", ioctl)
-                .context_field("win32", unsafe { GetLastError() }));
+            return Err(
+                OpaqueError::from_static_str("DeviceIoControl failed for ioctl")
+                    .context_hex_field("ioctl", ioctl)
+                    .context_field("win32", unsafe { GetLastError() }),
+            );
         }
 
         debug!(ioctl = format_args!("{ioctl:#x}"), "driver ioctl completed");

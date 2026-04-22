@@ -39,8 +39,8 @@ impl WebSocketMitmRelayService {
 
 impl<Ingress, Egress> Service<BridgeIo<Ingress, Egress>> for WebSocketMitmRelayService
 where
-    Ingress: Io + Unpin + extensions::ExtensionsMut,
-    Egress: Io + Unpin + extensions::ExtensionsMut,
+    Ingress: Io + Unpin + extensions::ExtensionsRef,
+    Egress: Io + Unpin + extensions::ExtensionsRef,
 {
     type Output = ();
     type Error = BoxError;
@@ -49,13 +49,13 @@ where
         &self,
         bridge_io: BridgeIo<Ingress, Egress>,
     ) -> Result<Self::Output, Self::Error> {
-        let proxy_target = bridge_io.extensions().get::<ProxyTarget>().cloned();
+        let proxy_target = bridge_io.extensions().get_arc::<ProxyTarget>();
         let source_app_bundle_id =
             get_app_source_bundle_id_from_ext(&bridge_io).map(|s| s.to_smolstr());
         let source_process_path =
             get_source_process_path_from_ext(&bridge_io).map(|s| s.to_smolstr());
 
-        if let Some(http_rules) = bridge_io.extensions().get::<FirewallHttpRules>()
+        if let Some(http_rules) = bridge_io.extensions().get_ref::<FirewallHttpRules>()
             && let Some(ws_rules) = http_rules.match_ws_rules(WebSocketHandshakeInfo {
                 domain: proxy_target
                     .as_ref()
@@ -64,7 +64,7 @@ where
                 source_process_path: get_source_process_path_from_ext(&bridge_io).as_deref(),
                 req_headers: bridge_io
                     .extensions()
-                    .get::<HttpWebSocketRelayHandshakeRequest>()
+                    .get_ref::<HttpWebSocketRelayHandshakeRequest>()
                     .map(|req| req.0.as_ref()),
             })
         {

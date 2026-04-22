@@ -13,4 +13,5 @@ pub use req_info::try_get_domain_for_req;
 
 pub mod client;
 
+pub mod headers;
 pub mod ws_relay;

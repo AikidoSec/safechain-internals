@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, str::FromStr as _};
 
 use rama::{
     Service,
@@ -7,27 +7,27 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
-    utils::{
-        str::{
-            self as str_utils,
-            arcstr::{ArcStr, arcstr},
-        },
-        time::now_unix_ms,
+    utils::str::{
+        self as str_utils,
+        arcstr::{ArcStr, arcstr},
+        smol_str::format_smolstr,
     },
 };
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig},
+    endpoint_protection::{
+        EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
+    },
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
     },
     package::{
-        malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
-        released_packages_list::{LowerCaseReleasedPackageFormatter, RemoteReleasedPackagesList},
-        version::PackageVersion,
+        malware_list::RemoteMalwareList, name_formatter::LowerCasePackageName,
+        released_packages_list::RemoteReleasedPackagesList, version::PackageVersion,
     },
     storage::SyncCompactDataStorage,
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
 #[cfg(feature = "pac")]
@@ -35,12 +35,23 @@ use crate::http::firewall::pac::PacScriptGenerator;
 
 use super::{BlockedRequest, RequestAction, Rule};
 
+type VSCodePackageName = LowerCasePackageName;
+type VSCodeRemoteMalwareList = RemoteMalwareList<VSCodePackageName>;
+type VSCodeRemoteReleasedPackageList = RemoteReleasedPackagesList<VSCodePackageName>;
+
+const VSCODE_PRODUCT_KEY: ArcStr = arcstr!("vscode");
+const VSCODE_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("vscode");
+
+#[inline(always)]
+fn new_vscode_package_name(raw: &str) -> VSCodePackageName {
+    VSCodePackageName::from(raw)
+}
+
 pub(in crate::http::firewall) struct RuleVSCode {
     target_domains: DomainMatcher,
-    remote_malware_list: RemoteMalwareList,
-    remote_released_packages_list: RemoteReleasedPackagesList,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
-    policy_evaluator: Option<PolicyEvaluator>,
+    remote_malware_list: VSCodeRemoteMalwareList,
+    remote_released_packages_list: VSCodeRemoteReleasedPackageList,
+    policy_evaluator: Option<PolicyEvaluator<VSCodePackageName>>,
 }
 
 impl RuleVSCode {
@@ -48,7 +59,6 @@ impl RuleVSCode {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<PolicyEvaluator>,
         remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
@@ -59,7 +69,6 @@ impl RuleVSCode {
             Uri::from_static("https://malware-list.aikido.dev/malware_vscode.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for vscode block rule")?;
@@ -69,10 +78,13 @@ impl RuleVSCode {
             Uri::from_static("https://malware-list.aikido.dev/releases/vscode.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCaseReleasedPackageFormatter,
         )
         .await
         .context("create remote released packages list for vscode block rule")?;
+
+        let policy_evaluator = remote_endpoint_config.map(|config| {
+            PolicyEvaluator::new(guard.clone(), VSCODE_ECOSYSTEM_KEY.clone(), config)
+        });
 
         Ok(Self {
             target_domains: [
@@ -86,7 +98,6 @@ impl RuleVSCode {
             .collect(),
             remote_malware_list,
             remote_released_packages_list,
-            remote_endpoint_config,
             policy_evaluator,
         })
     }
@@ -140,18 +151,20 @@ impl Rule for RuleVSCode {
 
         // Apply endpoint policy (rejected packages, allow exceptions, block_all_installs).
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision = policy_evaluator
-                .evaluate_package_install("vscode", vscode_extension.extension_id.as_str());
+            let decision =
+                policy_evaluator.evaluate_package_install(&vscode_extension.extension_id);
 
             match decision {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Defer => {}
-                decision => {
+                PackagePolicyDecision::BlockAll
+                | PackagePolicyDecision::Rejected
+                | PackagePolicyDecision::RequestInstall => {
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        Self::blocked_artifact(&vscode_extension),
+                        vscode_extension.into_blocked_artifact(),
                         super::block_reason_for(decision),
                     )));
                 }
@@ -166,20 +179,16 @@ impl Rule for RuleVSCode {
             );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&vscode_extension),
+                vscode_extension.into_blocked_artifact(),
                 BlockReason::Malware,
             )));
         }
 
-        let cutoff_secs = self.get_package_age_cutoff_secs();
-        let version: Option<PackageVersion> = vscode_extension
-            .version
-            .as_deref()
-            .map(|v| v.parse().unwrap());
+        let cutoff_ts = self.get_package_age_cutoff_ts();
         if self.remote_released_packages_list.is_recently_released(
             &vscode_extension.extension_id,
-            version.as_ref(),
-            cutoff_secs,
+            vscode_extension.version.as_ref(),
+            cutoff_ts,
         ) {
             tracing::debug!(
                 http.url.path = %path,
@@ -188,7 +197,7 @@ impl Rule for RuleVSCode {
             );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&vscode_extension),
+                vscode_extension.into_blocked_artifact(),
                 BlockReason::NewPackage,
             )));
         }
@@ -204,27 +213,13 @@ impl Rule for RuleVSCode {
 }
 
 impl RuleVSCode {
-    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 24 * 3600;
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(1);
 
-    fn get_package_age_cutoff_secs(&self) -> i64 {
-        let maybe_ts = self.remote_endpoint_config.as_ref().and_then(|c| {
-            c.get_ecosystem_config("vscode")
-                .config()
-                .and_then(|cfg| cfg.minimum_allowed_age_timestamp)
-        });
-        if let Some(ts_secs) = maybe_ts {
-            return ts_secs;
-        }
-        (now_unix_ms()) / 1000 - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
-    }
-
-    fn blocked_artifact(vscode_extension: &VsCodeExtensionId) -> Artifact {
-        Artifact {
-            product: arcstr!("vscode"),
-            identifier: ArcStr::from(vscode_extension.extension_id.as_str()),
-            display_name: None,
-            version: None,
-        }
+    fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
+        self.policy_evaluator
+            .as_ref()
+            .map(|c| c.package_age_cutoff_ts(Self::DEFAULT_MIN_PACKAGE_AGE))
+            .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 
     fn is_package_listed_as_malware(&self, vscode_extension: &VsCodeExtensionId) -> bool {
@@ -316,15 +311,32 @@ impl RuleVSCode {
 }
 
 struct VsCodeExtensionId {
-    extension_id: String,
-    version: Option<String>,
+    extension_id: VSCodePackageName,
+    version: Option<PackageVersion>,
 }
 
 impl VsCodeExtensionId {
-    fn new(publisher: &str, extension: &str, version: Option<&str>) -> VsCodeExtensionId {
+    fn new(publisher: &str, extension: &str, maybe_version_str: Option<&str>) -> VsCodeExtensionId {
+        let maybe_version = maybe_version_str.map(|version_str| {
+            let Ok(version) = PackageVersion::from_str(version_str);
+            version
+        });
         Self {
-            extension_id: format!("{publisher}.{extension}").to_lowercase(),
-            version: version.map(|v| v.to_lowercase()),
+            extension_id: new_vscode_package_name(&format_smolstr!("{publisher}.{extension}")),
+            version: maybe_version,
+        }
+    }
+
+    fn into_blocked_artifact(self) -> Artifact {
+        let Self {
+            extension_id,
+            version,
+        } = self;
+        Artifact {
+            product: VSCODE_PRODUCT_KEY,
+            identifier: extension_id.into_arcstr(),
+            display_name: None,
+            version,
         }
     }
 }

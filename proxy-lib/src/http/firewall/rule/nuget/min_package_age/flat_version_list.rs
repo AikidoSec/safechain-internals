@@ -7,10 +7,9 @@ use rama::{
     telemetry::tracing,
 };
 
-use crate::package::{
-        released_packages_list::RemoteReleasedPackagesList,
-        version::{PackageVersion, PragmaticSemver},
-    };
+use crate::{http::firewall::rule::nuget::NugetRemoteReleasedPackageList, package::{name_formatter::LowerCasePackageName, 
+        version::{PackageVersion, PragmaticSemver}}
+    , utils::time::SystemTimestampMilliseconds};
 
 pub struct FlatVersionList {}
 
@@ -36,8 +35,8 @@ impl FlatVersionList {
         &self,
         resp: Response,
         package_name: &str,
-        released_package_list: &RemoteReleasedPackagesList,
-        cutoff_secs: i64,
+        released_package_list: &NugetRemoteReleasedPackageList,
+        cutoff_secs: SystemTimestampMilliseconds,
     ) -> Result<Response, BoxError> {
         let (parts, body) = resp.into_parts();
 
@@ -66,8 +65,10 @@ impl FlatVersionList {
                     return true;
                 };
 
+                let normalized_package_name = LowerCasePackageName::from(package_name);
+
                 if released_package_list.is_recently_released(
-                    package_name,
+                    &normalized_package_name,
                     Some(&PackageVersion::Semver(version)),
                     cutoff_secs,
                 ) {

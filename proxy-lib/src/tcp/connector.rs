@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use rama::{
     error::BoxError,
-    extensions::ExtensionsMut,
+    extensions::ExtensionsRef,
     io::Io,
     net::{
         client::ConnectorService,
@@ -25,7 +25,7 @@ pub fn new_tcp_connector_service_for_internal<Input>(
 ) -> impl ConnectorService<Input, Connection: Io + Unpin> + Clone
 where
     Input:
-        ExtensionsMut + TryRefIntoTransportContext<Error: Send + Sync + 'static> + Send + 'static,
+        ExtensionsRef + TryRefIntoTransportContext<Error: Send + Sync + 'static> + Send + 'static,
     BoxError: From<Input::Error>,
 {
     TcpConnector::new(exec)
@@ -38,7 +38,7 @@ pub fn new_tcp_connector_service_for_proxy<Input>(
 ) -> impl ConnectorService<Input, Connection: Io + Unpin> + Clone
 where
     Input:
-        ExtensionsMut + TryRefIntoTransportContext<Error: Send + Sync + 'static> + Send + 'static,
+        ExtensionsRef + TryRefIntoTransportContext<Error: Send + Sync + 'static> + Send + 'static,
     BoxError: From<Input::Error>,
 {
     TcpConnector::new(exec).with_connector(Arc::new(SocketOptions {
