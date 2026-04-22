@@ -500,9 +500,9 @@ func (d *Daemon) handleLogCollectRequest(resp *cloud.HeartbeatResponse) {
 		return
 	}
 
-	log.Printf("Log collection requested (timestamp %d), uploading logs...", requestedAt)
-	if err := logcollector.Upload(d.ctx, d.config); err != nil {
-		log.Printf("Failed to upload logs: %v", err)
+	log.Printf("Log collection requested (timestamp %d), collecting logs...", requestedAt)
+	if err := logcollector.Collect(d.ctx, d.config); err != nil {
+		log.Printf("Failed to collect logs: %v", err)
 		return
 	}
 
