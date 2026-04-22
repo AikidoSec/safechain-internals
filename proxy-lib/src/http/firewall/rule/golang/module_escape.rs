@@ -8,14 +8,13 @@ pub(super) fn go_module_unescape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
-        if c == '!' {
-            if let Some(&next) = chars.peek() {
-                if next.is_ascii_lowercase() {
-                    out.push(next.to_ascii_uppercase());
-                    chars.next();
-                    continue;
-                }
-            }
+        if c == '!'
+            && let Some(&next) = chars.peek()
+            && next.is_ascii_lowercase()
+        {
+            out.push(next.to_ascii_uppercase());
+            chars.next();
+            continue;
         }
         out.push(c);
     }

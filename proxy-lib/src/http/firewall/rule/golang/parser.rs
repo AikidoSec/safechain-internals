@@ -65,6 +65,7 @@ pub(super) fn parse_module_from_list_path(path: &str) -> Option<String> {
 /// Reverses both encoding layers applied by the Go toolchain:
 ///   1. Percent-decode (`%21` → `!`)
 ///   2. Module-unescape (`!x` → uppercase `X`, per `golang.org/x/mod/module.UnescapePath`)
+///
 /// Then lowercases the result for consistent malware-list lookup.
 fn normalize_module_path(raw: &str) -> String {
     let percent_decoded = percent_encoding::percent_decode_str(raw).decode_utf8_lossy();
