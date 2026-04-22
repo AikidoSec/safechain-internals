@@ -2,6 +2,7 @@ package chrome
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,6 +29,57 @@ func addExtension(t *testing.T, dataDir, profile, extensionID, version, manifest
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(extDir, "manifest.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// writePreferences writes a Chrome Preferences (or Secure Preferences) file at
+// the root of the given profile. states maps extension IDs to their Chrome
+// state value (1 = enabled, 0 = disabled, etc.).
+func writePreferences(t *testing.T, dataDir, profile, filename string, states map[string]int) {
+	t.Helper()
+	settings := map[string]map[string]any{}
+	for id, state := range states {
+		settings[id] = map[string]any{"state": state}
+	}
+	payload := map[string]any{
+		"extensions": map[string]any{
+			"settings": settings,
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dataDir, profile, filename)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writePreferencesWithDisableReasons(
+	t *testing.T,
+	dataDir, profile, filename string,
+	disableReasons map[string][]int,
+) {
+	t.Helper()
+	settings := map[string]map[string]any{}
+	for id, reasons := range disableReasons {
+		settings[id] = map[string]any{
+			"disable_reasons": reasons,
+		}
+	}
+	payload := map[string]any{
+		"extensions": map[string]any{
+			"settings": settings,
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dataDir, profile, filename)
+	if err := os.WriteFile(path, data, 0644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -342,5 +394,215 @@ func TestFindProfilesNonExistentDir(t *testing.T) {
 	profiles := findProfilesWithExtensions("/nonexistent/path")
 	if len(profiles) != 0 {
 		t.Fatalf("expected 0 profiles, got %d", len(profiles))
+	}
+}
+
+func runSBOM(t *testing.T, dataDir string) []sbom.Package {
+	t.Helper()
+	c := &ChromeExtensions{}
+	packages, err := c.SBOM(context.Background(), sbom.InstalledVersion{DataPath: dataDir})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	return packages
+}
+
+func TestSBOMReportsEnabledStateFromPreferences(t *testing.T) {
+	dataDir := setupBrowserDataDir(t)
+	extID := "enabledextensionid1234567890abcd"
+
+	addExtension(t, dataDir, "Default", extID, "1.0.0", `{"name": "Enabled", "version": "1.0.0"}`)
+	writePreferences(t, dataDir, "Default", "Preferences", map[string]int{extID: 1})
+
+	packages := runSBOM(t, dataDir)
+	if len(packages) != 1 {
+		t.Fatalf("expected 1 package, got %d", len(packages))
+	}
+	if packages[0].State != "enabled" {
+		t.Errorf("expected State 'enabled', got %q", packages[0].State)
+	}
+}
+
+func TestSBOMReportsDisabledStateFromPreferences(t *testing.T) {
+	dataDir := setupBrowserDataDir(t)
+	extID := "disabledextensionid123456789abcd"
+
+	addExtension(t, dataDir, "Default", extID, "1.0.0", `{"name": "Disabled", "version": "1.0.0"}`)
+	writePreferences(t, dataDir, "Default", "Preferences", map[string]int{extID: 0})
+
+	packages := runSBOM(t, dataDir)
+	if len(packages) != 1 {
+		t.Fatalf("expected 1 package, got %d", len(packages))
+	}
+	if packages[0].State != "disabled" {
+		t.Errorf("expected State 'disabled', got %q", packages[0].State)
+	}
+}
+
+func TestSBOMStateDefaultsToEnabledWhenPreferencesMissing(t *testing.T) {
+	dataDir := setupBrowserDataDir(t)
+	extID := "noprefsextensionid1234567890abcd"
+
+	addExtension(t, dataDir, "Default", extID, "1.0.0", `{"name": "No Prefs", "version": "1.0.0"}`)
+
+	packages := runSBOM(t, dataDir)
+	if len(packages) != 1 {
+		t.Fatalf("expected 1 package, got %d", len(packages))
+	}
+	if packages[0].State != "enabled" {
+		t.Errorf("expected State 'enabled' (fail-open), got %q", packages[0].State)
+	}
+}
+
+func TestSBOMStateDefaultsToEnabledWhenEntryMissing(t *testing.T) {
+	dataDir := setupBrowserDataDir(t)
+	extID := "unlistedextensionid1234567890abc"
+	otherID := "otherextensionid12345678901234ab"
+
+	addExtension(t, dataDir, "Default", extID, "1.0.0", `{"name": "Unlisted", "version": "1.0.0"}`)
+	writePreferences(t, dataDir, "Default", "Preferences", map[string]int{otherID: 0})
+
+	packages := runSBOM(t, dataDir)
+	if len(packages) != 1 {
+		t.Fatalf("expected 1 package, got %d", len(packages))
+	}
+	if packages[0].State != "enabled" {
+		t.Errorf("expected State 'enabled' (entry missing), got %q", packages[0].State)
+	}
+}
+
+func TestSBOMStateEnabledInOneProfileWins(t *testing.T) {
+	dataDir := t.TempDir()
+	extID := "sharedextensionid12345678901234a"
+
+	for _, profile := range []string{"Default", "Profile 1"} {
+		if err := os.MkdirAll(filepath.Join(dataDir, profile, "Extensions"), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	addExtension(t, dataDir, "Default", extID, "1.0.0", `{"name": "Shared", "version": "1.0.0"}`)
+	addExtension(t, dataDir, "Profile 1", extID, "1.0.0", `{"name": "Shared", "version": "1.0.0"}`)
+	writePreferences(t, dataDir, "Default", "Preferences", map[string]int{extID: 0})
+	writePreferences(t, dataDir, "Profile 1", "Preferences", map[string]int{extID: 1})
+
+	packages := runSBOM(t, dataDir)
+	if len(packages) != 1 {
+		t.Fatalf("expected 1 package (deduplicated), got %d", len(packages))
+	}
+	if packages[0].State != "enabled" {
+		t.Errorf("expected State 'enabled' (enabled in any profile wins), got %q", packages[0].State)
+	}
+}
+
+func TestSBOMStateDisabledInAllProfiles(t *testing.T) {
+	dataDir := t.TempDir()
+	extID := "offeverywhereid123456789012345ab"
+
+	for _, profile := range []string{"Default", "Profile 1"} {
+		if err := os.MkdirAll(filepath.Join(dataDir, profile, "Extensions"), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	addExtension(t, dataDir, "Default", extID, "1.0.0", `{"name": "Off", "version": "1.0.0"}`)
+	addExtension(t, dataDir, "Profile 1", extID, "1.0.0", `{"name": "Off", "version": "1.0.0"}`)
+	writePreferences(t, dataDir, "Default", "Preferences", map[string]int{extID: 0})
+	writePreferences(t, dataDir, "Profile 1", "Preferences", map[string]int{extID: 0})
+
+	packages := runSBOM(t, dataDir)
+	if len(packages) != 1 {
+		t.Fatalf("expected 1 package, got %d", len(packages))
+	}
+	if packages[0].State != "disabled" {
+		t.Errorf("expected State 'disabled', got %q", packages[0].State)
+	}
+}
+
+func TestSBOMStateReadFromSecurePreferences(t *testing.T) {
+	dataDir := setupBrowserDataDir(t)
+	extID := "policyinstalledextid12345678901"
+
+	addExtension(t, dataDir, "Default", extID, "1.0.0", `{"name": "Policy", "version": "1.0.0"}`)
+	writePreferences(t, dataDir, "Default", "Secure Preferences", map[string]int{extID: 0})
+
+	packages := runSBOM(t, dataDir)
+	if len(packages) != 1 {
+		t.Fatalf("expected 1 package, got %d", len(packages))
+	}
+	if packages[0].State != "disabled" {
+		t.Errorf("expected State 'disabled' from Secure Preferences, got %q", packages[0].State)
+	}
+}
+
+func TestSBOMStateReadFromSecurePreferencesDisableReasons(t *testing.T) {
+	dataDir := setupBrowserDataDir(t)
+	extID := "disabledbyreasons12345678901234"
+
+	addExtension(t, dataDir, "Default", extID, "1.0.0", `{"name": "Disabled", "version": "1.0.0"}`)
+	writePreferencesWithDisableReasons(t, dataDir, "Default", "Secure Preferences", map[string][]int{
+		extID: {1},
+	})
+
+	packages := runSBOM(t, dataDir)
+	if len(packages) != 1 {
+		t.Fatalf("expected 1 package, got %d", len(packages))
+	}
+	if packages[0].State != "disabled" {
+		t.Errorf("expected State 'disabled' from disable_reasons, got %q", packages[0].State)
+	}
+}
+
+func TestSBOMStateSecurePreferencesOverridesPreferences(t *testing.T) {
+	dataDir := setupBrowserDataDir(t)
+	extID := "overrideextid1234567890123456789"
+
+	addExtension(t, dataDir, "Default", extID, "1.0.0", `{"name": "Override", "version": "1.0.0"}`)
+	writePreferences(t, dataDir, "Default", "Preferences", map[string]int{extID: 1})
+	writePreferences(t, dataDir, "Default", "Secure Preferences", map[string]int{extID: 0})
+
+	packages := runSBOM(t, dataDir)
+	if len(packages) != 1 {
+		t.Fatalf("expected 1 package, got %d", len(packages))
+	}
+	if packages[0].State != "disabled" {
+		t.Errorf("expected State 'disabled' (Secure Preferences wins), got %q", packages[0].State)
+	}
+}
+
+func TestSBOMStateBlocklistedTreatedAsDisabled(t *testing.T) {
+	dataDir := setupBrowserDataDir(t)
+	extID := "blocklistedextid1234567890abcdef"
+
+	addExtension(t, dataDir, "Default", extID, "1.0.0", `{"name": "Blocked", "version": "1.0.0"}`)
+	// Chrome uses state values like 3 (blocklisted) or 6 (blocked by policy)
+	// for extensions that are installed but not runnable. Anything other
+	// than 1 collapses to "disabled" in the SBOM.
+	writePreferences(t, dataDir, "Default", "Preferences", map[string]int{extID: 3})
+
+	packages := runSBOM(t, dataDir)
+	if len(packages) != 1 {
+		t.Fatalf("expected 1 package, got %d", len(packages))
+	}
+	if packages[0].State != "disabled" {
+		t.Errorf("expected State 'disabled' for blocklisted extension, got %q", packages[0].State)
+	}
+}
+
+func TestSBOMStateMalformedPreferencesFailsOpen(t *testing.T) {
+	dataDir := setupBrowserDataDir(t)
+	extID := "malformedprefsextid123456789abcd"
+
+	addExtension(t, dataDir, "Default", extID, "1.0.0", `{"name": "Malformed", "version": "1.0.0"}`)
+	if err := os.WriteFile(filepath.Join(dataDir, "Default", "Preferences"), []byte("{not json"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	packages := runSBOM(t, dataDir)
+	if len(packages) != 1 {
+		t.Fatalf("expected 1 package, got %d", len(packages))
+	}
+	if packages[0].State != "enabled" {
+		t.Errorf("expected State 'enabled' (fail-open), got %q", packages[0].State)
 	}
 }
