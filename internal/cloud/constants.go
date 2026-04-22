@@ -6,5 +6,5 @@ const (
 	SBOMEndpoint                       = "api/endpoint_protection/callbacks/reportInstalledPackages"
 	ActivityEndpoint                   = "api/endpoint_protection/callbacks/reportActivity"
 	RequestPackageInstallationEndpoint = "api/endpoint_protection/callbacks/requestPackageInstallation"
-	LogUploadEndpoint                  = "api/endpoint_protection/callbacks/uploadLogs"
+	UploadDeviceLogsEndpoint           = "api/endpoint_protection/callbacks/uploadDeviceLogs"
 )
