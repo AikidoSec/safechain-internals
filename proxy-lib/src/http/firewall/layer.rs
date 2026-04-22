@@ -2,7 +2,7 @@ use rama::{
     Layer, Service,
     error::{BoxError, ErrorContext},
     extensions::ExtensionsRef,
-    http::{Request, Response},
+    http::{Request, Response, Uri},
 };
 
 use crate::{
@@ -73,8 +73,9 @@ where
                 }
             };
 
+            let req_uri: Uri = mod_req.uri().clone();
             let resp = self.inner.serve(mod_req).await.into_box_error()?;
-            Ok(http_rules.evaluate_http_response(resp).await?)
+            Ok(http_rules.evaluate_http_response(resp, &req_uri).await?)
         } else {
             self.inner.serve(req).await.into_box_error()
         }

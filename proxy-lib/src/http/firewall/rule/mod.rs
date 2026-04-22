@@ -5,7 +5,11 @@ use rama::{
     extensions::{Extensions, ExtensionsRef as _},
     http::{
         Method, Request, Response, StatusCode, Uri, Version,
-        header::{HeaderMap, HeaderValue},
+        header::{self, HeaderMap, HeaderValue},
+        headers::{CacheControl, HeaderMapExt as _},
+        layer::remove_header::{
+            remove_cache_policy_headers, remove_cache_validation_response_headers,
+        },
         request,
         ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
     },
@@ -44,6 +48,17 @@ pub(crate) fn block_reason_for(decision: PackagePolicyDecision) -> BlockReason {
             unreachable!("Allow and Defer are not blocking decisions")
         }
     }
+}
+
+/// Strips all caching headers and inserts `Cache-Control: no-cache`.
+///
+/// Used by min-package-age rules after rewriting a response body so that
+/// the client cannot serve a stale, unfiltered copy from its own cache.
+pub(in crate::http::firewall) fn make_response_uncacheable(headers: &mut HeaderMap) {
+    remove_cache_policy_headers(headers);
+    remove_cache_validation_response_headers(headers);
+    headers.remove(header::CONTENT_LENGTH);
+    headers.typed_insert(CacheControl::new().with_no_cache());
 }
 
 #[cfg(feature = "pac")]
@@ -281,10 +296,12 @@ pub trait Rule: Sized + Send + Sync + 'static {
     ///                                      |
     ///                                      └──> Can Modify or Replace
     /// ```
-    fn evaluate_response(
-        &self,
+    fn evaluate_response<'r>(
+        &'r self,
         resp: Response,
-    ) -> impl Future<Output = Result<Response, BoxError>> + Send + '_ {
+        req_uri: &'r Uri,
+    ) -> impl Future<Output = Result<Response, BoxError>> + Send + 'r {
+        let _ = req_uri;
         std::future::ready(Ok(resp))
     }
 
@@ -326,10 +343,11 @@ trait DynRuleInner {
         req: Request,
     ) -> Pin<Box<dyn Future<Output = Result<RequestAction, BoxError>> + Send + '_>>;
 
-    fn dyn_evaluate_response(
-        &self,
+    fn dyn_evaluate_response<'r>(
+        &'r self,
         resp: Response,
-    ) -> Pin<Box<dyn Future<Output = Result<Response, BoxError>> + Send + '_>>;
+        req_uri: &'r Uri,
+    ) -> Pin<Box<dyn Future<Output = Result<Response, BoxError>> + Send + 'r>>;
 
     fn dyn_match_domain(&self, domain: &Domain) -> bool;
 
@@ -368,11 +386,12 @@ impl<R: Rule> DynRuleInner for R {
 
     #[inline(always)]
     /// see [`Rule::evaluate_response`] for more information.
-    fn dyn_evaluate_response(
-        &self,
+    fn dyn_evaluate_response<'r>(
+        &'r self,
         resp: Response,
-    ) -> Pin<Box<dyn Future<Output = Result<Response, BoxError>> + Send + '_>> {
-        Box::pin(self.evaluate_response(resp))
+        req_uri: &'r Uri,
+    ) -> Pin<Box<dyn Future<Output = Result<Response, BoxError>> + Send + 'r>> {
+        Box::pin(self.evaluate_response(resp, req_uri))
     }
 
     #[inline(always)]
@@ -457,11 +476,12 @@ impl Rule for DynRule {
     }
 
     #[inline(always)]
-    fn evaluate_response(
-        &self,
+    fn evaluate_response<'r>(
+        &'r self,
         resp: Response,
-    ) -> impl Future<Output = Result<Response, BoxError>> + Send + '_ {
-        self.inner.dyn_evaluate_response(resp)
+        req_uri: &'r Uri,
+    ) -> impl Future<Output = Result<Response, BoxError>> + Send + 'r {
+        self.inner.dyn_evaluate_response(resp, req_uri)
     }
 
     #[inline(always)]

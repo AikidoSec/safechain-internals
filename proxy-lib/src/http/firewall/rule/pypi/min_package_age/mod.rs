@@ -3,11 +3,7 @@ use rama::{
     http::{
         Body, Response,
         body::util::BodyExt as _,
-        header,
-        headers::{CacheControl, ContentType, HeaderMapExt as _},
-        layer::remove_header::{
-            remove_cache_policy_headers, remove_cache_validation_response_headers,
-        },
+        headers::{ContentType, HeaderMapExt as _},
     },
     telemetry::tracing,
     utils::{str::arcstr::ArcStr, time::now_unix_ms},
@@ -81,7 +77,7 @@ impl MinPackageAgePyPI {
                     "PyPI metadata rewritten: suppressed too-young versions"
                 );
 
-                Self::make_uncacheable(&mut parts.headers);
+                super::super::make_response_uncacheable(&mut parts.headers);
                 self.notify_rewrite(&rewrite).await;
 
                 Ok(Response::from_parts(parts, Body::from(rewrite.bytes)))
@@ -93,7 +89,7 @@ impl MinPackageAgePyPI {
                 // HTML is streamed through lol_html without buffering the full body.
                 // Cache headers are stripped upfront because we cannot defer
                 // header writes until the body is fully consumed.
-                Self::make_uncacheable(&mut parts.headers);
+                super::super::make_response_uncacheable(&mut parts.headers);
 
                 let notifier = self.notifier.clone();
                 let streaming_body = html::rewrite_body(
@@ -106,13 +102,6 @@ impl MinPackageAgePyPI {
                 Ok(Response::from_parts(parts, Body::new(streaming_body)))
             }
         }
-    }
-
-    fn make_uncacheable(headers: &mut rama::http::HeaderMap) {
-        remove_cache_policy_headers(headers);
-        remove_cache_validation_response_headers(headers);
-        headers.remove(header::CONTENT_LENGTH);
-        headers.typed_insert(CacheControl::new().with_no_cache());
     }
 
     async fn notify_rewrite(&self, rewrite: &JsonRewriteResult) {

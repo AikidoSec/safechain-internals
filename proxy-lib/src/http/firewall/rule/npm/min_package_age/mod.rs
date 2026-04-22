@@ -5,10 +5,7 @@ use rama::{
     http::{
         Body, Request, Response,
         body::util::BodyExt as _,
-        headers::{Accept, CacheControl, ContentType, HeaderMapExt as _},
-        layer::remove_header::{
-            remove_cache_policy_headers, remove_cache_validation_response_headers,
-        },
+        headers::{Accept, ContentType, HeaderMapExt as _},
     },
     telemetry::tracing,
     utils::{str::arcstr::ArcStr, time::now_unix_ms},
@@ -103,11 +100,7 @@ impl MinPackageAge {
         let new_bytes =
             serde_json::to_vec(&json).context("serialize modified npm info response")?;
 
-        remove_cache_policy_headers(&mut parts.headers);
-        remove_cache_validation_response_headers(&mut parts.headers);
-        parts
-            .headers
-            .typed_insert(CacheControl::new().with_no_cache());
+        super::super::make_response_uncacheable(&mut parts.headers);
 
         if let Some(notifier) = &self.notifier {
             let event = MinPackageAgeEvent {
