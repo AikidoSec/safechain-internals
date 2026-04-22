@@ -146,11 +146,7 @@ impl Rule for RuleNpm {
     }
 
     #[inline(always)]
-    async fn evaluate_response(
-        &self,
-        resp: Response,
-        _req_uri: &Uri,
-    ) -> Result<Response, BoxError> {
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         match &self.maybe_min_package_age {
             Some(min_package_age) => min_package_age.remove_new_packages(resp).await,
             None => Ok(resp),

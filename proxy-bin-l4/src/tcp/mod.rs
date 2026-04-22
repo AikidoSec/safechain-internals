@@ -3,7 +3,7 @@ use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 use rama::{
     Layer, Service,
     combinators::Either,
-    error::{BoxError, ErrorContext as _},
+    error::{BoxError, ErrorContext as _, ErrorExt, extra::OpaqueError},
     extensions::ExtensionsRef,
     graceful::ShutdownGuard,
     http::{
@@ -329,9 +329,9 @@ async fn create_firewall(
         }
 
         _ = guard.downgrade().into_cancelled() => {
-            Err(BoxError::from(
+            Err(OpaqueError::from_static_str(
                 "shutdown initiated prior to firewall created; exit process immediately",
-            ))
+            ).into_box_error())
         }
     }
 }

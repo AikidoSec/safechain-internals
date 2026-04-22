@@ -1,9 +1,7 @@
-use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
-
 use rama::{
     Layer, Service,
     combinators::Either,
-    error::{BoxError, ErrorContext as _, ErrorExt as _},
+    error::{BoxError, ErrorContext as _, ErrorExt as _, extra::OpaqueError},
     extensions::ExtensionsRef,
     graceful::ShutdownGuard,
     http::{
@@ -40,7 +38,9 @@ use rama::{
         },
     },
 };
+use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
 
+use crate::config::ProxyConfig;
 use safechain_proxy_lib::{
     http::{
         client::new_http_client_for_internal,
@@ -53,8 +53,6 @@ use safechain_proxy_lib::{
     tls::{RootCaKeyPair, mitm_relay_policy::TlsMitmRelayPolicyLayer},
     utils::token::AgentIdentity,
 };
-
-use crate::config::ProxyConfig;
 
 type TcpTlsMitmRelay = TlsMitmRelay<CachedBoringMitmCertIssuer<InMemoryBoringMitmCertIssuer>>;
 
@@ -72,11 +70,21 @@ impl TcpMitmService {
         let proxy_config = ProxyConfig::from_opaque_config(ctx.opaque_config())
             .context("decode proxy config (json)")?;
 
+        let Some((ca_crt_pem, ca_key_pem)) = proxy_config
+            .ca_cert_pem
+            .as_deref()
+            .zip(proxy_config.ca_key_pem.as_deref())
+        else {
+            return Err(
+                OpaqueError::from_static_str("CA crt or key missing in Opaque Config")
+                    .into_box_error(),
+            );
+        };
+
         let data_path =
             crate::utils::storage::storage_dir().context("(app) data path is missing")?;
-        let root_ca =
-            RootCaKeyPair::try_form_pem(&proxy_config.ca_cert_pem, &proxy_config.ca_key_pem)
-                .context("load config-provided ca crt/key pair")?;
+        let root_ca = RootCaKeyPair::try_form_pem(ca_crt_pem, ca_key_pem)
+            .context("load config-provided ca crt/key pair")?;
 
         let ca_crt_pem_bytes: &[u8] = root_ca
             .certificate()
@@ -289,9 +297,9 @@ async fn create_firewall(
         }
 
         _ = guard.downgrade().into_cancelled() => {
-            Err(BoxError::from(
+            Err(OpaqueError::from_static_str(
                 "shutdown initiated prior to firewall created; exit process immediately",
-            ))
+            ).into_box_error())
         }
     }
 }

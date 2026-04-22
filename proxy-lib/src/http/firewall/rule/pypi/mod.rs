@@ -225,11 +225,7 @@ impl Rule for RulePyPI {
     }
 
     #[inline(always)]
-    async fn evaluate_response(
-        &self,
-        resp: Response,
-        _req_uri: &Uri,
-    ) -> Result<Response, BoxError> {
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         match &self.maybe_min_package_age {
             Some(min_package_age) => {
                 min_package_age
