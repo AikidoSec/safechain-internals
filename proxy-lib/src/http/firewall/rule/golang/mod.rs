@@ -4,7 +4,6 @@ use rama::utils::time::now_unix_ms;
 use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
-    extensions::ExtensionsRef as _,
     graceful::ShutdownGuard,
     http::{Request, Response, StatusCode, Uri},
     net::address::Domain,
@@ -17,7 +16,6 @@ use crate::{
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
-        layer::OriginalRequestUri,
     },
     package::{
         malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
@@ -138,16 +136,11 @@ impl Rule for RuleGolang {
         resp.status == StatusCode::OK
     }
 
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
+    async fn evaluate_response(&self, resp: Response, req_uri: &Uri) -> Result<Response, BoxError> {
         let Some(min_package_age) = &self.maybe_min_package_age else {
             return Ok(resp);
         };
-        let Some(OriginalRequestUri(uri)) =
-            resp.extensions().get::<OriginalRequestUri>().cloned()
-        else {
-            return Ok(resp);
-        };
-        let Some(module_name) = parser::parse_module_from_list_path(uri.path()) else {
+        let Some(module_name) = parser::parse_module_from_list_path(req_uri.path()) else {
             return Ok(resp);
         };
         min_package_age

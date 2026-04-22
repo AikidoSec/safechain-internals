@@ -2,15 +2,7 @@ use std::str::FromStr;
 
 use rama::{
     error::{BoxError, ErrorContext as _},
-    http::{
-        Body, Response,
-        body::util::BodyExt as _,
-        headers::{CacheControl, HeaderMapExt as _},
-        layer::remove_header::{
-            remove_cache_policy_headers, remove_cache_validation_response_headers,
-            remove_payload_metadata_headers,
-        },
-    },
+    http::{Body, Response, body::util::BodyExt as _},
     telemetry::tracing,
     utils::{str::arcstr::ArcStr, time::now_unix_ms},
 };
@@ -97,10 +89,7 @@ impl MinPackageAgeGolang {
             "Go module list rewritten: suppressed too-young versions"
         );
 
-        remove_cache_policy_headers(&mut parts.headers);
-        remove_cache_validation_response_headers(&mut parts.headers);
-        remove_payload_metadata_headers(&mut parts.headers);
-        parts.headers.typed_insert(CacheControl::new().with_no_cache());
+        super::super::make_response_uncacheable(&mut parts.headers);
 
         let new_body = kept.join("\n") + "\n";
 
