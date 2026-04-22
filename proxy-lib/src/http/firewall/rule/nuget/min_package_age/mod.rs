@@ -1,11 +1,8 @@
 /*
 
 TODO list:
- - intercept based on static list of paths
- - remove packages from full meta request
-    - /v3/registration5-gz-semver2/{packagename}/page/{from}/{to}.json
  - make urls dynamic
- - configurable + notifier
+ - add notifier
  - check last modified response header
 */
 
