@@ -281,12 +281,10 @@ pub trait Rule: Sized + Send + Sync + 'static {
     ///                                      |
     ///                                      └──> Can Modify or Replace
     /// ```
-    fn evaluate_response<'r>(
-        &'r self,
+    fn evaluate_response(
+        &self,
         resp: Response,
-        req_uri: &'r Uri,
-    ) -> impl Future<Output = Result<Response, BoxError>> + Send + 'r {
-        let _ = req_uri;
+    ) -> impl Future<Output = Result<Response, BoxError>> + Send + '_ {
         std::future::ready(Ok(resp))
     }
 
@@ -328,11 +326,10 @@ trait DynRuleInner {
         req: Request,
     ) -> Pin<Box<dyn Future<Output = Result<RequestAction, BoxError>> + Send + '_>>;
 
-    fn dyn_evaluate_response<'r>(
-        &'r self,
+    fn dyn_evaluate_response(
+        &self,
         resp: Response,
-        req_uri: &'r Uri,
-    ) -> Pin<Box<dyn Future<Output = Result<Response, BoxError>> + Send + 'r>>;
+    ) -> Pin<Box<dyn Future<Output = Result<Response, BoxError>> + Send + '_>>;
 
     fn dyn_match_domain(&self, domain: &Domain) -> bool;
 
@@ -371,12 +368,11 @@ impl<R: Rule> DynRuleInner for R {
 
     #[inline(always)]
     /// see [`Rule::evaluate_response`] for more information.
-    fn dyn_evaluate_response<'r>(
-        &'r self,
+    fn dyn_evaluate_response(
+        &self,
         resp: Response,
-        req_uri: &'r Uri,
-    ) -> Pin<Box<dyn Future<Output = Result<Response, BoxError>> + Send + 'r>> {
-        Box::pin(self.evaluate_response(resp, req_uri))
+    ) -> Pin<Box<dyn Future<Output = Result<Response, BoxError>> + Send + '_>> {
+        Box::pin(self.evaluate_response(resp))
     }
 
     #[inline(always)]
@@ -461,12 +457,11 @@ impl Rule for DynRule {
     }
 
     #[inline(always)]
-    fn evaluate_response<'r>(
-        &'r self,
+    fn evaluate_response(
+        &self,
         resp: Response,
-        req_uri: &'r Uri,
-    ) -> impl Future<Output = Result<Response, BoxError>> + Send + 'r {
-        self.inner.dyn_evaluate_response(resp, req_uri)
+    ) -> impl Future<Output = Result<Response, BoxError>> + Send + '_ {
+        self.inner.dyn_evaluate_response(resp)
     }
 
     #[inline(always)]
