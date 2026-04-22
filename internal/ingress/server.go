@@ -94,6 +94,8 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("POST /v1/setup/start", s.handleSetupStart)
 	mux.HandleFunc("POST /v1/setup/restart", s.handleSetupRestart)
 
+	mux.HandleFunc("POST /v1/logs/collect", s.handleCollectLogs)
+
 	listener, err := net.Listen("tcp", DefaultBind)
 	if err != nil {
 		return fmt.Errorf("failed to bind ingress server: %w", err)

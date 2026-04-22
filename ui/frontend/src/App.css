@@ -126,6 +126,24 @@ body {
   color: var(--primary-aik-140);
 }
 
+.events-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 24px;
+}
+
+.events-list-header h1 {
+  margin: 0;
+}
+
+.events-list-collect-message {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
 .events-list-table-wrap {
   overflow-x: auto;
   max-width: 100%;
@@ -1456,7 +1474,8 @@ body {
   opacity: 0.65;
 }
 
-.install-page__confirm-overlay {
+.install-page__confirm-overlay,
+.confirm-overlay {
   position: fixed;
   inset: 0;
   z-index: 100;
@@ -1467,7 +1486,8 @@ body {
   backdrop-filter: blur(2px);
 }
 
-.install-page__confirm-dialog {
+.install-page__confirm-dialog,
+.confirm-dialog {
   background: #fff;
   border-radius: 14px;
   padding: 28px 32px 24px;
@@ -1476,21 +1496,24 @@ body {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
 }
 
-.install-page__confirm-title {
+.install-page__confirm-title,
+.confirm-title {
   margin: 0 0 8px;
   font-size: 1.1rem;
   font-weight: 700;
   color: #111827;
 }
 
-.install-page__confirm-body {
+.install-page__confirm-body,
+.confirm-body {
   margin: 0 0 20px;
   font-size: 0.9rem;
   line-height: 1.55;
   color: #4b5563;
 }
 
-.install-page__confirm-actions {
+.install-page__confirm-actions,
+.confirm-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;

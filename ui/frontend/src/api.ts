@@ -78,3 +78,7 @@ export async function setupRestart(): Promise<void> {
 export async function closeInstallWindow(): Promise<void> {
   return DaemonService.CloseInstallWindow();
 }
+
+export async function collectLogs(): Promise<void> {
+  return DaemonService.CollectLogs();
+}

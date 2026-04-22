@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import type { TlsTerminationFailedEvent } from "../types";
 import { Events } from "@wailsio/runtime";
-import { listTlsEvents } from "../api";
+import { collectLogs, listTlsEvents } from "../api";
 import { formatEventTime, isConnectionError } from "../utils";
 
 export function TlsEventsList() {
@@ -10,6 +10,34 @@ export function TlsEventsList() {
   const [events, setEvents] = useState<TlsTerminationFailedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [collecting, setCollecting] = useState(false);
+  const [collectMessage, setCollectMessage] = useState<string | null>(null);
+  const [confirmingCollect, setConfirmingCollect] = useState(false);
+
+  const handleCollectLogsClick = useCallback(() => {
+    setCollectMessage(null);
+    setConfirmingCollect(true);
+  }, []);
+
+  const handleCollectCancel = useCallback(() => {
+    setConfirmingCollect(false);
+  }, []);
+
+  const handleCollectConfirm = useCallback(async () => {
+    setConfirmingCollect(false);
+    setCollecting(true);
+    setCollectMessage(null);
+    try {
+      await collectLogs();
+      setCollectMessage("Logs collected successfully.");
+    } catch (e) {
+      setCollectMessage(
+        `Failed to collect logs: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    } finally {
+      setCollecting(false);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,7 +70,20 @@ export function TlsEventsList() {
 
   return (
     <div className="events-list">
-      <h1>Logs</h1>
+      <div className="events-list-header">
+        <h1>Logs</h1>
+        <button
+          type="button"
+          className="button-brand button--primary button--normal button--rounded"
+          onClick={handleCollectLogsClick}
+          disabled={collecting}
+        >
+          {collecting ? "Collecting…" : "Collect Logs"}
+        </button>
+      </div>
+      {collectMessage && (
+        <p className="events-list-collect-message">{collectMessage}</p>
+      )}
       {loading && <p className="events-list-loading">Loading…</p>}
       {error && !connectionFailed && (
         <div className="events-list-error-inline">
@@ -106,6 +147,32 @@ export function TlsEventsList() {
           <p className="events-list-empty-state-subtitle">
             When a TLS MITM handshake fails (e.g. due to certificate pinning) or other network-related issues occur, it will appear here.
           </p>
+        </div>
+      )}
+      {confirmingCollect && (
+        <div className="confirm-overlay" role="dialog" aria-modal="true">
+          <div className="confirm-dialog">
+            <p className="confirm-title">Collect logs?</p>
+            <p className="confirm-body">
+              Endpoint Protection will gather diagnostic logs from this device and securely upload them to Aikido so we can help investigate any issues. Continue?
+            </p>
+            <div className="confirm-actions">
+              <button
+                type="button"
+                className="button-brand button--tertiary button--normal button--rounded"
+                onClick={handleCollectCancel}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="button-brand button--primary button--normal button--rounded"
+                onClick={handleCollectConfirm}
+              >
+                Collect &amp; Upload
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
