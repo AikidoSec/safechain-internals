@@ -9,6 +9,13 @@ vars:
   APP_NAME: "endpoint-protection-ui"
   BIN_DIR: "bin"
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+  # Default CLI flags forwarded to the app binary in dev mode. These match the
+  # built-in defaults in daemon/client.go and appserver/server.go so `task dev`
+  # works without extra configuration.
+  DEV_DAEMON_URL: '{{.DEV_DAEMON_URL | default "http://127.0.0.1:7878"}}'
+  DEV_TOKEN: '{{.DEV_TOKEN | default "devtoken"}}'
+  DEV_UI_URL: '{{.DEV_UI_URL | default "127.0.0.1:9876"}}'
+  APP_ARGS: '-daemon_url {{.DEV_DAEMON_URL}} -token {{.DEV_TOKEN}} -ui_url {{.DEV_UI_URL}}'
 
 tasks:
   build:
@@ -25,6 +32,8 @@ tasks:
     summary: Runs the application
     cmds:
       - task: "{{OS}}:run"
+        vars:
+          APP_ARGS: '{{.APP_ARGS}}'
 
   dev:
     summary: Runs the application in development mode
