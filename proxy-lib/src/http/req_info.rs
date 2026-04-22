@@ -6,17 +6,11 @@ use rama::{
     net::{address::Domain, http::RequestContext, proxy::ProxyTarget},
 };
 
-macro_rules! request_meta_type {
-    ($name:ident, $t:ty) => {
-        #[derive(Debug, Extension)]
-        /// meta information that can be stored as extension data in a request,
-        /// such that it is also available for later use while processing
-        /// its response.
-        pub struct $name(pub $t);
-    };
-}
-
-request_meta_type!(RequestMetaUri, Uri);
+#[derive(Debug, Extension)]
+/// Original uri from request, can be useful
+/// to store as request Extension info such that you have
+/// access to it in a later layer or even while processing its response.
+pub struct RequestMetaUri(pub Uri);
 
 impl RequestMetaUri {
     #[inline(always)]
@@ -25,7 +19,11 @@ impl RequestMetaUri {
     }
 }
 
-request_meta_type!(RequestMetaHeaders, HeaderMap);
+#[derive(Debug, Extension)]
+/// Original http headers from request, can be useful
+/// to store as request Extension info such that you have
+/// access to it in a later layer or even while processing its response.
+pub struct RequestMetaHeaders(pub HeaderMap);
 
 impl RequestMetaHeaders {
     #[inline(always)]
