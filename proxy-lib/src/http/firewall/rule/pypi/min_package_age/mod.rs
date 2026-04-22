@@ -16,6 +16,7 @@ use crate::{
             events::{Artifact, MinPackageAgeEvent},
             notifier::EventNotifier,
         },
+        headers::make_response_uncacheable,
     },
     package::{
         name_formatter::LowerCasePackageName, released_packages_list::RemoteReleasedPackagesList,
@@ -81,7 +82,7 @@ impl MinPackageAgePyPI {
                     "PyPI metadata rewritten: suppressed too-young versions"
                 );
 
-                super::super::make_response_uncacheable(&mut parts.headers);
+                make_response_uncacheable(&mut parts.headers);
                 self.notify_rewrite(&rewrite).await;
 
                 Ok(Response::from_parts(parts, Body::from(rewrite.bytes)))
@@ -93,7 +94,7 @@ impl MinPackageAgePyPI {
                 // HTML is streamed through lol_html without buffering the full body.
                 // Cache headers are stripped upfront because we cannot defer
                 // header writes until the body is fully consumed.
-                super::super::make_response_uncacheable(&mut parts.headers);
+                make_response_uncacheable(&mut parts.headers);
 
                 let notifier = self.notifier.clone();
                 let streaming_body = html::rewrite_body(
