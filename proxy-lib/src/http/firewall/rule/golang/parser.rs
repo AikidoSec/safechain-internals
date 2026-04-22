@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use rama::telemetry::tracing;
+use rama::{net::uri::util::percent_encoding, telemetry::tracing};
 
 use crate::package::version::PragmaticSemver;
 
@@ -78,38 +78,9 @@ pub(super) fn parse_module_from_list_path(path: &str) -> Option<String> {
 ///   2. Module-unescape (`!x` → uppercase `X`, per `golang.org/x/mod/module.UnescapePath`)
 /// Then lowercases the result for consistent malware-list lookup.
 fn normalize_module_path(raw: &str) -> String {
-    let percent_decoded = percent_decode(raw);
+    let percent_decoded = percent_encoding::percent_decode_str(raw).decode_utf8_lossy();
     let unescaped = go_module_unescape(&percent_decoded);
     unescaped.to_ascii_lowercase()
-}
-
-/// Decodes percent-encoded characters in a URL path segment.
-/// Only handles the ASCII subset relevant to Go module paths (`%21` → `!`, etc.).
-fn percent_decode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let (Some(h), Some(l)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2])) {
-                out.push((h << 4 | l) as char);
-                i += 3;
-                continue;
-            }
-        }
-        out.push(bytes[i] as char);
-        i += 1;
-    }
-    out
-}
-
-fn hex_val(b: u8) -> Option<u8> {
-    match b {
-        b'0'..=b'9' => Some(b - b'0'),
-        b'a'..=b'f' => Some(b - b'a' + 10),
-        b'A'..=b'F' => Some(b - b'A' + 10),
-        _ => None,
-    }
 }
 
 #[cfg(test)]
