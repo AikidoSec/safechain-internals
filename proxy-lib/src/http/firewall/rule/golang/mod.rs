@@ -28,9 +28,7 @@ use crate::{
 #[cfg(feature = "pac")]
 use crate::http::firewall::pac::PacScriptGenerator;
 
-use super::{
-    BlockedRequest, HttpRequestMatcherView, HttpResponseMatcherView, RequestAction, Rule,
-};
+use super::{BlockedRequest, HttpRequestMatcherView, HttpResponseMatcherView, RequestAction, Rule};
 
 mod parser;
 use parser::{GoPackage, is_zip_download, parse_package_from_path};

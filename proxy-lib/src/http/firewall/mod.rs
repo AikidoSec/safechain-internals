@@ -48,9 +48,7 @@ use crate::{
         remote_app_passthrough_list::RemoteAppPassthroughList,
     },
     http::firewall::rule::{
-        DynRule,
-        golang::min_package_age::MinPackageAgeGolang,
-        npm::min_package_age::MinPackageAge,
+        DynRule, golang::min_package_age::MinPackageAgeGolang, npm::min_package_age::MinPackageAge,
         pypi::min_package_age::MinPackageAgePyPI,
     },
     storage::SyncCompactDataStorage,

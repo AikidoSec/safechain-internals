@@ -126,7 +126,10 @@ async fn filters_deep_multi_segment_module_path() {
 
     let text = result.try_into_string().await.unwrap();
     assert!(text.contains("v1.3.83"), "old version should be kept");
-    assert!(!text.contains("v1.3.84"), "new version should be suppressed");
+    assert!(
+        !text.contains("v1.3.84"),
+        "new version should be suppressed"
+    );
 }
 
 #[tokio::test]
@@ -146,7 +149,10 @@ async fn keeps_unparseable_version_lines() {
 
     let text = result.try_into_string().await.unwrap();
     assert!(text.contains("v1.0.0"));
-    assert!(text.contains("not-a-version"), "unparseable lines must be kept");
+    assert!(
+        text.contains("not-a-version"),
+        "unparseable lines must be kept"
+    );
 }
 
 #[tokio::test]
@@ -163,7 +169,10 @@ async fn strips_cache_headers_only_when_modified() {
         .await
         .unwrap();
 
-    assert!(result.headers().get("etag").is_none(), "etag should be stripped");
+    assert!(
+        result.headers().get("etag").is_none(),
+        "etag should be stripped"
+    );
     assert!(
         result.headers().get("last-modified").is_none(),
         "last-modified should be stripped"
