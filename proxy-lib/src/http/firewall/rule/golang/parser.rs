@@ -17,20 +17,9 @@ pub(super) fn is_zip_download(path: &str) -> bool {
     path.ends_with(".zip") && path.contains("/@v/")
 }
 
-/// Parses a Go module proxy zip URL path into a normalized module name and version.
-///
-/// Expected path shape: `/{module_path}/@v/{version}.zip`
-///
-/// Go module paths go through two layers of encoding in proxy URLs:
-///   1. Module escaping (`golang.org/x/mod/module.EscapePath`): each uppercase letter
-///      becomes `!` + its lowercase equivalent — e.g. `AikidoSec` → `!aikido!sec`.
-///   2. Percent-encoding of `!` in the URL: `!` → `%21`.
-///
-/// So `github.com/AikidoSec/firewall-go` appears in the URL as
-/// `github.com/%21aikido%21sec/firewall-go`.
-///
-/// We reverse both layers then lowercase for malware-list lookup
-/// (which uses `LowerCaseEntryFormatter`).
+/// Parses a Go module proxy zip URL path (`/{module}/@v/{version}.zip`) into a normalized
+/// module name and version. Reverses both encoding layers (percent-encoding + Go module escaping)
+/// and lowercases for malware-list lookup.
 pub(super) fn parse_package_from_path(path: &str) -> Option<GoPackage> {
     let path = path.trim_matches('/');
 
