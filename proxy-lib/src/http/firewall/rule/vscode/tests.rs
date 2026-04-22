@@ -43,11 +43,31 @@ fn test_is_metadata_request_path() {
         "_ApIs/PuBlIc/GaLlErY/ExTeNsIoNqUeRy"
     ));
 
+    // Per-extension update-check endpoint (VSCode auto-update path).
+    assert!(RuleVSCode::is_metadata_request_path(
+        "/_apis/public/gallery/vscode/google/geminicodeassist/latest"
+    ));
+    assert!(RuleVSCode::is_metadata_request_path(
+        "/_APIs/Public/Gallery/VSCode/google/geminicodeassist/LATEST"
+    ));
+
     assert!(!RuleVSCode::is_metadata_request_path(
         "/extensions/ms-python/python/1.0.0/Microsoft.VisualStudio.Code.Manifest"
     ));
     assert!(!RuleVSCode::is_metadata_request_path(
         "/files/ms-python/python/1.0.0/ms-python.python-1.0.0.vsix"
+    ));
+    // Missing /latest suffix — not the update-check endpoint.
+    assert!(!RuleVSCode::is_metadata_request_path(
+        "/_apis/public/gallery/vscode/google/geminicodeassist"
+    ));
+    // Trailing extra segment — not the update-check endpoint.
+    assert!(!RuleVSCode::is_metadata_request_path(
+        "/_apis/public/gallery/vscode/google/geminicodeassist/latest/extra"
+    ));
+    // Different endpoint under the same prefix.
+    assert!(!RuleVSCode::is_metadata_request_path(
+        "/_apis/public/gallery/publishers/ms-python/vsextensions/python/2024.22.0"
     ));
 }
 

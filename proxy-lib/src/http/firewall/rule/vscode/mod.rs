@@ -269,9 +269,30 @@ impl RuleVSCode {
     }
 
     /// Returns true for Marketplace metadata requests that can carry version lists.
+    ///
+    /// Matches both the batch `extensionquery` endpoint (used by manual installs and the
+    /// batch auto-update check) and the per-extension `.../vscode/<publisher>/<ext>/latest`
+    /// endpoint polled by VSCode's update checker. The latter advertises a single latest
+    /// version; if it reports a too-young one, the response-inspection path strips the
+    /// entry so VSCode does not schedule an auto-update it cannot actually install.
     fn is_metadata_request_path(path: &str) -> bool {
-        path.trim_start_matches('/')
-            .eq_ignore_ascii_case("_apis/public/gallery/extensionquery")
+        let trimmed = path.trim_start_matches('/');
+        if trimmed.eq_ignore_ascii_case("_apis/public/gallery/extensionquery") {
+            return true;
+        }
+        Self::is_per_extension_latest_path(trimmed)
+    }
+
+    fn is_per_extension_latest_path(path: &str) -> bool {
+        let mut it = path.split('/');
+        it.next().is_some_and(|s| s.eq_ignore_ascii_case("_apis"))
+            && it.next().is_some_and(|s| s.eq_ignore_ascii_case("public"))
+            && it.next().is_some_and(|s| s.eq_ignore_ascii_case("gallery"))
+            && it.next().is_some_and(|s| s.eq_ignore_ascii_case("vscode"))
+            && it.next().is_some_and(|s| !s.is_empty())
+            && it.next().is_some_and(|s| !s.is_empty())
+            && it.next().is_some_and(|s| s.eq_ignore_ascii_case("latest"))
+            && it.next().is_none()
     }
 
     fn is_extension_install_asset_path(path: &str) -> bool {
