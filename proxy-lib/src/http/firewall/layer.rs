@@ -2,11 +2,11 @@ use rama::{
     Layer, Service,
     error::{BoxError, ErrorContext},
     extensions::ExtensionsRef,
-    http::{Request, Response, Uri},
+    http::{Request, Response},
 };
 
 use crate::{
-    http::try_get_domain_for_req,
+    http::{RequestMetaUri, try_get_domain_for_req},
     utils::net::{get_app_source_bundle_id_from_ext, get_source_process_path_from_ext},
 };
 
@@ -73,9 +73,13 @@ where
                 }
             };
 
-            let req_uri: Uri = mod_req.uri().clone();
+            mod_req
+                .extensions()
+                .insert(RequestMetaUri::from_request(&mod_req));
+
             let resp = self.inner.serve(mod_req).await.into_box_error()?;
-            Ok(http_rules.evaluate_http_response(resp, &req_uri).await?)
+
+            Ok(http_rules.evaluate_http_response(resp).await?)
         } else {
             self.inner.serve(req).await.into_box_error()
         }

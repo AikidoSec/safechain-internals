@@ -188,11 +188,7 @@ impl Rule for RuleNuget {
     }
 
     #[inline(always)]
-    async fn evaluate_response(
-        &self,
-        resp: Response,
-        _req_uri: &Uri,
-    ) -> Result<Response, BoxError> {
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         Ok(resp)
     }
 
