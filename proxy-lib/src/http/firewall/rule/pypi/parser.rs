@@ -2,18 +2,15 @@ use std::{borrow::Cow, str::FromStr};
 
 use rama::net::uri::util::percent_encoding;
 use rama::utils::collections::smallvec::SmallVec;
-use rama::utils::str::smol_str::SmolStr;
+use rama::utils::str::smol_str::StrExt;
 
-use crate::package::{
-    released_packages_list::{
-        PyPINormalizedReleasedPackageFormatter, ReleasedPackageData, ReleasedPackageEntryFormatter,
-    },
-    version::PackageVersion,
-};
+use crate::package::{name_formatter::LowerCasePackageName, version::PackageVersion};
+
+type PyPIPackageName = LowerCasePackageName;
 
 #[derive(Debug)]
 pub(super) struct PackageInfo {
-    pub(super) name: SmolStr,
+    pub(super) name: PyPIPackageName,
     pub(super) version: PackageVersion,
 }
 
@@ -23,14 +20,8 @@ impl PackageInfo {
     }
 }
 
-pub(super) fn normalize_package_name(raw: &str) -> SmolStr {
-    PyPINormalizedReleasedPackageFormatter
-        .format(&ReleasedPackageData {
-            package_name: raw.to_owned(),
-            version: PackageVersion::None,
-            released_on: 0,
-        })
-        .into()
+pub(super) fn normalize_package_name(raw: &str) -> PyPIPackageName {
+    PyPIPackageName::from(raw.replace_smolstr("_", "-"))
 }
 
 fn percent_decode(input: &str) -> Cow<'_, str> {
@@ -159,9 +150,9 @@ fn make_package_info(dist: &str, version: &str) -> Option<PackageInfo> {
         return None;
     }
 
+    let Ok(version) = PackageVersion::from_str(version);
     Some(PackageInfo {
         name: normalize_package_name(dist),
-        version: PackageVersion::from_str(version)
-            .unwrap_or_else(|_| PackageVersion::Unknown(version.into())),
+        version,
     })
 }

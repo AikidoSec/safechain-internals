@@ -77,8 +77,8 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
         "policy-bypass-new-package-pypi" => json!({
             "block_all_installs": false,
             "request_installs": false,
-            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
-            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            // Cutoff set to far future: released_on (year ~2255) <= cutoff → not blocked
+            "minimum_allowed_age_timestamp": i64::MAX / 1000,
             "exceptions": {
                 "allowed_packages": [],
                 "rejected_packages": []
@@ -127,8 +127,8 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
         "policy-bypass-new-package-vscode" => json!({
             "block_all_installs": false,
             "request_installs": false,
-            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
-            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            // Cutoff set to far future
+            "minimum_allowed_age_timestamp": i64::MAX / 1000,
             "exceptions": {
                 "allowed_packages": [],
                 "rejected_packages": []
@@ -177,8 +177,8 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
         "policy-bypass-new-package-npm" => json!({
             "block_all_installs": false,
             "request_installs": false,
-            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
-            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            // Cutoff set to far future : released_on (year ~2255) <= cutoff → not blocked
+            "minimum_allowed_age_timestamp": i64::MAX / 1000,
             "exceptions": {
                 "allowed_packages": [],
                 "rejected_packages": []
@@ -227,8 +227,8 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
         "policy-bypass-new-package-maven" => json!({
             "block_all_installs": false,
             "request_installs": false,
-            // year ~2286 > released_on year ~2255 → is_recently_released returns false → not blocked
-            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            // way too far in future -> not blocked
+            "minimum_allowed_age_timestamp": i64::MAX / 1000,
             "exceptions": {
                 "allowed_packages": [],
                 "rejected_packages": []
@@ -277,8 +277,8 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
         "policy-bypass-new-package-nuget" => json!({
             "block_all_installs": false,
             "request_installs": false,
-            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
-            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            // Cutoff set to far future: released_on (year ~2255) <= cutoff → not blocked
+            "minimum_allowed_age_timestamp": i64::MAX / 1000,
             "exceptions": {
                 "allowed_packages": [],
                 "rejected_packages": []
@@ -327,8 +327,8 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
         "policy-bypass-new-package-chrome" => json!({
             "block_all_installs": false,
             "request_installs": false,
-            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
-            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            // Cutoff set to far future: released_on (year ~2255) <= cutoff → not blocked
+            "minimum_allowed_age_timestamp": i64::MAX / 1000,
             "exceptions": {
                 "allowed_packages": [],
                 "rejected_packages": []
@@ -381,8 +381,8 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
         "policy-bypass-new-package-skills-sh" => json!({
             "block_all_installs": false,
             "request_installs": false,
-            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
-            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            // Cutoff set to far future): released_on (year ~2255) <= cutoff → not blocked
+            "minimum_allowed_age_timestamp": i64::MAX / 1000,
             "exceptions": {
                 "allowed_packages": [],
                 "rejected_packages": []

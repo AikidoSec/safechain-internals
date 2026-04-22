@@ -135,8 +135,9 @@ clean-packaging:
 clean: clean-rust clean-xcode clean-packaging
 
 rust-update-deps:
+    @cargo install cargo-edit
+    cargo upgrade
     cargo update
-    cargo outdated
 
 rust-detect-unused-deps:
     @cargo install cargo-machete

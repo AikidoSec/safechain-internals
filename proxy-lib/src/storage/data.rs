@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use rama::error::{BoxError, ErrorContext, ErrorExt as _};
+use rama::error::{BoxError, ErrorContext, ErrorExt as _, extra::OpaqueError};
 use serde::{Serialize, de::DeserializeOwned};
 
 #[derive(Debug, Clone)]
@@ -17,16 +17,19 @@ pub struct SyncCompactDataStorage {
 impl SyncCompactDataStorage {
     pub fn try_new(dir: PathBuf) -> Result<Self, BoxError> {
         if dir.as_os_str().is_empty() {
-            return Err(BoxError::from(
+            return Err(OpaqueError::from_static_str(
                 "empty data storage dir value is not allowed",
-            ));
+            )
+            .into_box_error());
         }
 
         match std::fs::metadata(&dir) {
             Ok(meta) => {
                 if !meta.is_dir() {
-                    return Err(BoxError::from("data storage path is not a directory")
-                        .context_debug_field("path", dir));
+                    return Err(OpaqueError::from_static_str(
+                        "data storage path is not a directory",
+                    )
+                    .context_debug_field("path", dir));
                 }
             }
             Err(err) => {

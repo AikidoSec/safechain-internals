@@ -1,13 +1,39 @@
 use std::borrow::Cow;
 
 use rama::{
-    extensions::ExtensionsRef,
-    http::Request,
+    extensions::{Extension, ExtensionsRef},
+    http::{HeaderMap, Request, Uri, utils::request_uri},
     net::{address::Domain, http::RequestContext, proxy::ProxyTarget},
 };
 
+#[derive(Debug, Extension)]
+/// Original uri from request, can be useful
+/// to store as request Extension info such that you have
+/// access to it in a later layer or even while processing its response.
+pub struct RequestMetaUri(pub Uri);
+
+impl RequestMetaUri {
+    #[inline(always)]
+    pub fn from_request<Body>(req: &Request<Body>) -> Self {
+        Self(request_uri(req).into_owned())
+    }
+}
+
+#[derive(Debug, Extension)]
+/// Original http headers from request, can be useful
+/// to store as request Extension info such that you have
+/// access to it in a later layer or even while processing its response.
+pub struct RequestMetaHeaders(pub HeaderMap);
+
+impl RequestMetaHeaders {
+    #[inline(always)]
+    pub fn from_request<Body>(req: &Request<Body>) -> Self {
+        Self(req.headers().clone())
+    }
+}
+
 pub fn try_get_domain_for_req<Body>(req: &Request<Body>) -> Option<Cow<'_, Domain>> {
-    if let Some(ProxyTarget(target)) = req.extensions().get()
+    if let Some(ProxyTarget(target)) = req.extensions().get_ref()
         && let Some(domain) = target.host.as_domain()
     {
         Some(Cow::Borrowed(domain))
@@ -21,41 +47,5 @@ pub fn try_get_domain_for_req<Body>(req: &Request<Body>) -> Option<Cow<'_, Domai
 }
 
 #[cfg(test)]
-mod tests {
-    use rama::http::Body;
-
-    use super::*;
-
-    #[test]
-    fn test_try_get_domain_for_req() {
-        struct TestCase {
-            req: Request,
-            expected_domain: Option<String>,
-        }
-
-        for test_case in [
-            TestCase {
-                req: Request::new(Body::empty()),
-                expected_domain: None,
-            },
-            TestCase {
-                req: Request::builder()
-                    .uri("http://example.com/foo")
-                    .body(Body::empty())
-                    .unwrap(),
-                expected_domain: Some("example.com".to_owned()),
-            },
-            TestCase {
-                req: Request::builder()
-                    .uri("/foo")
-                    .extension(ProxyTarget((Domain::from_static("aikido.dev"), 443).into()))
-                    .body(Body::empty())
-                    .unwrap(),
-                expected_domain: Some("aikido.dev".to_owned()),
-            },
-        ] {
-            let result = try_get_domain_for_req(&test_case.req).map(|d| d.to_string());
-            assert_eq!(test_case.expected_domain, result);
-        }
-    }
-}
+#[path = "req_info_tests.rs"]
+mod tests;

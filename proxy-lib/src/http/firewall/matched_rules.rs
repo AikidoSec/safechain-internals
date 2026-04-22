@@ -3,9 +3,9 @@ use std::sync::Arc;
 use rama::{
     Service,
     error::BoxError,
-    extensions::ExtensionsRef,
+    extensions::{Extension, ExtensionsRef},
     http::{
-        Request, Response, Uri,
+        Request, Response,
         ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayInput, WebSocketRelayOutput},
     },
     matcher::service::{ServiceMatch, ServiceMatcher},
@@ -13,7 +13,7 @@ use rama::{
 
 use super::rule::{HttpRequestMatcherView, HttpResponseMatcherView, RequestAction, Rule as _};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Extension)]
 /// Matched firewall rules for http traffic and protocols built upon it.
 ///
 /// Can be created via the Firewall by matching on the target domain.
@@ -65,13 +65,12 @@ impl FirewallHttpRules {
     pub(super) async fn evaluate_http_response(
         &self,
         resp: Response,
-        req_uri: &Uri,
     ) -> Result<Response, BoxError> {
         let mut mod_resp = resp;
 
         // Iterate rules in reverse order for symmetry with request evaluation
         for rule in self.0.iter().rev() {
-            mod_resp = rule.evaluate_response(mod_resp, req_uri).await?;
+            mod_resp = rule.evaluate_response(mod_resp).await?;
         }
 
         Ok(mod_resp)
@@ -125,7 +124,7 @@ where
     ) -> Result<ServiceMatch<Self::ModifiedInput, Self::Service>, Self::Error> {
         let service = req
             .extensions()
-            .get()
+            .get_ref()
             .and_then(|rules: &FirewallHttpRules| {
                 rules.select_http_response_payload_inspection_rules(&req)
             });

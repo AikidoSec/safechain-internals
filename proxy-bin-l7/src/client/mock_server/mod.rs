@@ -7,7 +7,7 @@ use rama::{
     Layer, Service,
     cli::service::echo::EchoServiceBuilder,
     error::BoxError,
-    extensions::ExtensionsMut,
+    extensions::ExtensionsRef,
     http::{
         Request, Response,
         layer::{
@@ -55,7 +55,7 @@ pub fn new_mock_tcp_connector<Input>(
 ) -> impl ConnectorService<Input, Connection: Io + Unpin> + Clone
 where
     Input:
-        ExtensionsMut + TryRefIntoTransportContext<Error: Send + Sync + 'static> + Send + 'static,
+        ExtensionsRef + TryRefIntoTransportContext<Error: Send + Sync + 'static> + Send + 'static,
     BoxError: From<Input::Error>,
 {
     // Use an in-memory duplex stream pair instead of binding a real TCP socket.

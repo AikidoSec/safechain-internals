@@ -7,24 +7,24 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
-    utils::time::now_unix_ms,
+    utils::str::arcstr::{ArcStr, arcstr},
 };
 
-use rama::utils::str::arcstr::{ArcStr, arcstr};
-
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig},
+    endpoint_protection::{
+        EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
+    },
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
+        notifier::EventNotifier,
     },
     package::{
-        malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
-        released_packages_list::{
-            PyPINormalizedReleasedPackageFormatter, RemoteReleasedPackagesList,
-        },
+        malware_list::RemoteMalwareList, name_formatter::LowerCasePackageName,
+        released_packages_list::RemoteReleasedPackagesList,
     },
     storage::SyncCompactDataStorage,
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
 #[cfg(feature = "pac")]
@@ -32,19 +32,25 @@ use crate::http::firewall::pac::PacScriptGenerator;
 
 use super::{BlockedRequest, HttpRequestMatcherView, RequestAction, Rule};
 
-pub mod min_package_age;
-use min_package_age::MinPackageAgePyPI;
+mod min_package_age;
+use self::min_package_age::MinPackageAgePyPI;
 
 mod parser;
 use parser::{PackageInfo, parse_package_info_from_path};
 
+type PyPIPackageName = LowerCasePackageName;
+type PyPIRemoteMalwareList = RemoteMalwareList<PyPIPackageName>;
+type PyPIRemoteReleasedPackagesList = RemoteReleasedPackagesList<PyPIPackageName>;
+
+const PYPI_PRODUCT_KEY: ArcStr = arcstr!("pypi");
+const PYPI_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("pypi");
+
 pub(in crate::http::firewall) struct RulePyPI {
     target_domains: DomainMatcher,
-    remote_malware_list: RemoteMalwareList,
-    remote_released_packages_list: RemoteReleasedPackagesList,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
+    remote_malware_list: PyPIRemoteMalwareList,
+    remote_released_packages_list: PyPIRemoteReleasedPackagesList,
     maybe_min_package_age: Option<MinPackageAgePyPI>,
-    policy_evaluator: Option<PolicyEvaluator>,
+    policy_evaluator: Option<PolicyEvaluator<PyPIPackageName>>,
 }
 
 impl RulePyPI {
@@ -52,19 +58,17 @@ impl RulePyPI {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<PolicyEvaluator>,
-        min_package_age: Option<MinPackageAgePyPI>,
+        notifier: Option<EventNotifier>,
         remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_pypi.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for pypi block rule")?;
@@ -74,41 +78,32 @@ impl RulePyPI {
             Uri::from_static("https://malware-list.aikido.dev/releases/pypi.json"),
             sync_storage,
             remote_malware_list_https_client,
-            PyPINormalizedReleasedPackageFormatter,
         )
         .await
         .context("create remote released packages list for pypi block rule")?;
 
-        let target_domains = ["pypi.org", "files.pythonhosted.org", "pypi.python.org"]
-            .into_iter()
-            .collect();
+        let policy_evaluator = remote_endpoint_config
+            .clone()
+            .map(|config| PolicyEvaluator::new(guard.clone(), PYPI_ECOSYSTEM_KEY.clone(), config));
 
         Ok(Self {
-            target_domains,
+            target_domains: ["pypi.org", "files.pythonhosted.org", "pypi.python.org"]
+                .into_iter()
+                .collect(),
             remote_malware_list,
             remote_released_packages_list,
-            remote_endpoint_config,
-            maybe_min_package_age: min_package_age,
+            maybe_min_package_age: Some(MinPackageAgePyPI::new(notifier)),
             policy_evaluator,
         })
     }
 
-    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 48 * 3600;
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 
-    fn get_package_age_cutoff_secs(&self) -> i64 {
-        let maybe_minimum_allowed_age_timestamp =
-            self.remote_endpoint_config.as_ref().and_then(|c| {
-                let ecosystem = c.get_ecosystem_config("pypi");
-                ecosystem
-                    .config()
-                    .and_then(|c| c.minimum_allowed_age_timestamp)
-            });
-
-        if let Some(timestamp_in_seconds) = maybe_minimum_allowed_age_timestamp {
-            return timestamp_in_seconds;
-        }
-
-        (now_unix_ms()) / 1000 - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
+    fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
+        self.policy_evaluator
+            .as_ref()
+            .map(|c| c.package_age_cutoff_ts(Self::DEFAULT_MIN_PACKAGE_AGE))
+            .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 
     fn is_blocked(&self, package_info: &PackageInfo) -> Result<bool, BoxError> {
@@ -122,12 +117,12 @@ impl RulePyPI {
             .any(|entry| entry.version == package_info.version))
     }
 
-    fn blocked_artifact(package_info: &PackageInfo) -> Artifact {
+    fn blocked_artifact(package_info: PackageInfo) -> Artifact {
         Artifact {
-            product: arcstr!("pypi"),
-            identifier: ArcStr::from(package_info.name.as_str()),
+            product: PYPI_PRODUCT_KEY,
+            identifier: package_info.name.into_arcstr(),
             display_name: None,
-            version: Some(package_info.version.clone()),
+            version: Some(package_info.version),
         }
     }
 }
@@ -170,18 +165,19 @@ impl Rule for RulePyPI {
 
         // Apply endpoint policy (rejected packages, allow exceptions, block_all_installs).
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision =
-                policy_evaluator.evaluate_package_install("pypi", package_info.name.as_str());
+            let decision = policy_evaluator.evaluate_package_install(&package_info.name);
 
             match decision {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Defer => {}
-                decision => {
+                decision @ (PackagePolicyDecision::BlockAll
+                | PackagePolicyDecision::Rejected
+                | PackagePolicyDecision::RequestInstall) => {
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        Self::blocked_artifact(&package_info),
+                        Self::blocked_artifact(package_info),
                         super::block_reason_for(decision),
                     )));
                 }
@@ -192,16 +188,16 @@ impl Rule for RulePyPI {
             tracing::debug!(package = %package_info.name, version = ?package_info.version, "blocked PyPI package download");
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&package_info),
+                Self::blocked_artifact(package_info),
                 BlockReason::Malware,
             )));
         }
 
-        let cutoff_secs = self.get_package_age_cutoff_secs();
+        let cutoff_ts = self.get_package_age_cutoff_ts();
         if self.remote_released_packages_list.is_recently_released(
             &package_info.name,
             Some(&package_info.version),
-            cutoff_secs,
+            cutoff_ts,
         ) {
             tracing::info!(
                 package = %package_info.name,
@@ -210,7 +206,7 @@ impl Rule for RulePyPI {
             );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&package_info),
+                Self::blocked_artifact(package_info),
                 BlockReason::NewPackage,
             )));
         }
@@ -229,18 +225,14 @@ impl Rule for RulePyPI {
     }
 
     #[inline(always)]
-    async fn evaluate_response(
-        &self,
-        resp: Response,
-        _req_uri: &Uri,
-    ) -> Result<Response, BoxError> {
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         match &self.maybe_min_package_age {
             Some(min_package_age) => {
                 min_package_age
                     .remove_new_packages(
                         resp,
                         &self.remote_released_packages_list,
-                        self.get_package_age_cutoff_secs(),
+                        self.get_package_age_cutoff_ts(),
                     )
                     .await
             }

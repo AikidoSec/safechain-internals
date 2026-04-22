@@ -3,7 +3,7 @@ use std::{convert::Infallible, sync::Arc};
 use rama::{
     Layer, Service,
     error::{BoxError, ErrorContext as _},
-    extensions::ExtensionsMut,
+    extensions::ExtensionsRef,
     graceful::ShutdownGuard,
     http::{
         Request, Response,
@@ -50,7 +50,7 @@ use safechain_proxy_lib::{
     tls::{RootCaKeyPair, mitm_relay_policy::TlsMitmRelayPolicyLayer},
 };
 
-pub(super) fn new_app_mitm_server<S: Io + ExtensionsMut + Unpin>(
+pub(super) fn new_app_mitm_server<S: Io + ExtensionsRef + Unpin>(
     guard: ShutdownGuard,
     mitm_all: bool,
     root_ca: RootCaKeyPair,

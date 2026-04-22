@@ -32,13 +32,21 @@ fn deserializes_valid_configs() {
                 br#"{
                         "peek_duration_s": 12.5,
                         "reporting_endpoint": "https://collector.aikido.dev/report",
-                        "aikido_url": "https://app.aikido.dev"
+                        "aikido_url": "https://app.aikido.dev",
+                        "ca_cert_pem": "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n",
+                        "ca_key_pem": "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"
                     }"# as &[u8],
             ),
             ProxyConfig {
                 peek_duration_s: 12.5,
                 reporting_endpoint: Some(Uri::from_static("https://collector.aikido.dev/report")),
                 aikido_url: Uri::from_static("https://app.aikido.dev"),
+                ca_cert_pem: Some(
+                    "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n".to_owned(),
+                ),
+                ca_key_pem: Some(
+                    "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n".to_owned(),
+                ),
                 ..ProxyConfig::default()
             },
         ),
