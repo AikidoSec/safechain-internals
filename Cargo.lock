@@ -2970,7 +2970,6 @@ dependencies = [
  "rama",
  "rustls-platform-verifier",
  "safechain-proxy-lib",
- "security-framework",
  "serde",
  "serde_json",
  "tikv-jemallocator",
