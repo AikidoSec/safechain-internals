@@ -1,3 +1,4 @@
+import CryptoKit
 import Darwin
 import Foundation
 import NetworkExtension
@@ -5,6 +6,7 @@ import OSLog
 import ObjectiveC
 import Security
 import SystemExtensions
+import X509
 
 private enum HostCommand {
     case start(StartOptions)
@@ -31,6 +33,7 @@ private struct StartOptions {
     var agentToken: String?
     var agentDeviceID: String?
     var resetProfile = false
+    var cleanSecrets = false
 }
 
 private struct AgentIdentityPayload: Encodable, Equatable {
@@ -65,7 +68,6 @@ private struct ProxyEngineConfigPayload: Encodable, Equatable {
             && reportingEndpoint == nil
             && aikidoURL == nil
             && caCertPEM == nil
-            && caKeyPEM == nil
     }
 }
 
@@ -102,11 +104,6 @@ private final class TransparentProxyHostCLI {
     )
     private lazy var logger = Logger(
         subsystem: "com.aikido.endpoint.proxy.l4", category: "host-main")
-    private lazy var sharedAccessGroup: String? = {
-        let value = infoString(key: "AikidoL4SharedAccessGroup", fallback: "")
-        return value.isEmpty ? nil : value
-    }()
-
     func run(arguments: [String]) -> Int32 {
         do {
             let command = try Self.parse(arguments: arguments)
@@ -163,8 +160,12 @@ private final class TransparentProxyHostCLI {
             )
         }
 
-        let mitmCA = try loadOrCreateMITMCA()
-        let engineConfigJSON = try Self.makeEngineConfigJSON(from: options, mitmCA: mitmCA)
+        if options.cleanSecrets {
+            cleanSecrets()
+        }
+
+        let ca = try loadOrCreateMITMCA()
+        let engineConfigJSON = try Self.makeEngineConfigJSON(from: options, ca: ca)
         let existingManagers = try loadManagers()
 
         if options.resetProfile {
@@ -235,7 +236,9 @@ private final class TransparentProxyHostCLI {
         }
 
         if let manager {
-            print("status: \(options.removeProfile ? "removed" : statusString(manager.connection.status))")
+            print(
+                "status: \(options.removeProfile ? "removed" : statusString(manager.connection.status))"
+            )
         } else {
             print("status: not-installed")
         }
@@ -268,7 +271,9 @@ private final class TransparentProxyHostCLI {
             let _ = try prepareManager(existingManagers: existingManagers, engineConfigJSON: nil)
         } catch {
             let ns = error as NSError
-            if ns.domain == NEVPNErrorDomain && ns.code == NEVPNError.configurationReadWriteFailed.rawValue {
+            if ns.domain == NEVPNErrorDomain
+                && ns.code == NEVPNError.configurationReadWriteFailed.rawValue
+            {
                 print("vpn: not-allowed")
                 return
             }
@@ -288,7 +293,9 @@ private final class TransparentProxyHostCLI {
             log("failed to list system extensions: \(error.localizedDescription)")
             return []
         }
-        return output.split(separator: "\n").filter { $0.contains(extensionBundleId) && !$0.contains("terminated") }
+        return output.split(separator: "\n").filter {
+            $0.contains(extensionBundleId) && !$0.contains("terminated")
+        }
     }
 
     private func checkExtensionInstalled() throws {
@@ -635,16 +642,12 @@ private final class TransparentProxyHostCLI {
 
     private func cleanSecrets() {
         for key in Self.secretServiceKeys {
-            var query: [String: Any] = [
+            let query: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: key,
                 kSecAttrAccount as String: Self.secretAccount,
                 kSecUseDataProtectionKeychain as String: true,
             ]
-
-            if let sharedAccessGroup {
-                query[kSecAttrAccessGroup as String] = sharedAccessGroup
-            }
 
             let status = SecItemDelete(query as CFDictionary)
             if status == errSecSuccess {
@@ -718,12 +721,14 @@ private final class TransparentProxyHostCLI {
             return .allowVpn
         case "is-extension-installed":
             guard arguments.count == 1 else {
-                throw CLIError.usage("`is-extension-installed` does not accept additional arguments")
+                throw CLIError.usage(
+                    "`is-extension-installed` does not accept additional arguments")
             }
             return .isExtensionInstalled
         case "is-extension-activated":
             guard arguments.count == 1 else {
-                throw CLIError.usage("`is-extension-activated` does not accept additional arguments")
+                throw CLIError.usage(
+                    "`is-extension-activated` does not accept additional arguments")
             }
             return .isExtensionActivated
         case "is-vpn-allowed":
@@ -759,6 +764,8 @@ private final class TransparentProxyHostCLI {
                     flag: argument, arguments: arguments, index: &index)
             case "--reset-profile":
                 options.resetProfile = true
+            case "--clean-secrets":
+                options.cleanSecrets = true
             default:
                 throw CLIError.usage("unknown `start` argument: \(argument)")
             }
@@ -829,7 +836,7 @@ private final class TransparentProxyHostCLI {
 
     private static func makeEngineConfigJSON(
         from options: StartOptions,
-        mitmCA: MITMCASecrets
+        ca: MITMCASecrets
     ) throws -> String? {
         let agentIdentity: AgentIdentityPayload?
         if let token = options.agentToken, let deviceID = options.agentDeviceID {
@@ -843,8 +850,8 @@ private final class TransparentProxyHostCLI {
             reportingEndpoint: options.reportingEndpoint,
             aikidoURL: options.aikidoURL,
             hostBundleID: Bundle.main.bundleIdentifier ?? "com.aikido.endpoint.proxy.l4.dev",
-            caCertPEM: mitmCA.certPEM,
-            caKeyPEM: mitmCA.keyPEM
+            caCertPEM: ca.certPEM,
+            caKeyPEM: ca.keyPEM
         )
 
         let encoder = JSONEncoder()
@@ -878,7 +885,7 @@ private final class TransparentProxyHostCLI {
     }
 
     private func loadSecret(service: String) throws -> String? {
-        var query: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: Self.secretAccount,
@@ -886,10 +893,6 @@ private final class TransparentProxyHostCLI {
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
-
-        if let sharedAccessGroup {
-            query[kSecAttrAccessGroup as String] = sharedAccessGroup
-        }
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
@@ -905,9 +908,6 @@ private final class TransparentProxyHostCLI {
             return value
         case errSecItemNotFound:
             return nil
-        case errSecInteractionNotAllowed, errSecAuthFailed, errSecNotAvailable:
-            log("keychain secret \(service) unavailable (OSStatus \(status)); will regenerate")
-            return nil
         default:
             throw CLIError.runtime("failed to load keychain secret \(service): OSStatus \(status)")
         }
@@ -918,16 +918,12 @@ private final class TransparentProxyHostCLI {
             throw CLIError.runtime("failed to encode keychain secret \(service) as UTF-8")
         }
 
-        var baseQuery: [String: Any] = [
+        let baseQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: Self.secretAccount,
             kSecUseDataProtectionKeychain as String: true,
         ]
-
-        if let sharedAccessGroup {
-            baseQuery[kSecAttrAccessGroup as String] = sharedAccessGroup
-        }
 
         let updateAttrs: [String: Any] = [
             kSecValueData as String: data
@@ -957,42 +953,56 @@ private final class TransparentProxyHostCLI {
     }
 
     private func generateSelfSignedCAPEM() throws -> MITMCASecrets {
-        let keyPEM = try runProcessCaptureStdout(
-            launchPath: "/usr/bin/openssl",
-            arguments: [
-                "genpkey",
-                "-algorithm", "RSA",
-                "-pkeyopt", "rsa_keygen_bits:3072",
-                "-outform", "PEM",
-            ]
-        )
-
-        guard keyPEM.contains("BEGIN PRIVATE KEY") || keyPEM.contains("BEGIN RSA PRIVATE KEY")
-        else {
-            throw CLIError.runtime("generated CA private key PEM had unexpected format")
+        let signingKey = P256.Signing.PrivateKey()
+        let now = Date()
+        let calendar = Calendar(identifier: .gregorian)
+        guard let notValidAfter = calendar.date(byAdding: .day, value: 3650, to: now) else {
+            throw CLIError.runtime("failed to compute CA certificate expiry date")
         }
 
-        let certPEM = try runProcessCaptureStdout(
-            launchPath: "/usr/bin/openssl",
-            arguments: [
-                "req",
-                "-x509",
-                "-new",
-                "-sha256",
-                "-days", "3650",
-                "-key", "/dev/stdin",
-                "-out", "/dev/stdout",
-                "-subj", "/CN=Aikido Endpoint L4 Proxy Root CA/O=Aikido/OU=Endpoint/C=BE",
-                "-addext", "basicConstraints=critical,CA:true,pathlen:0",
-                "-addext", "keyUsage=critical,digitalSignature,keyCertSign,cRLSign",
-                "-addext", "subjectKeyIdentifier=hash",
-                "-addext", "authorityKeyIdentifier=keyid:always,issuer",
-            ],
-            stdin: keyPEM
+        let subject = try DistinguishedName {
+            CommonName("Aikido Endpoint L4 Proxy Root CA")
+            OrganizationName("Aikido")
+            OrganizationalUnitName("Endpoint")
+            CountryName("BE")
+        }
+
+        let certificate = try Certificate(
+            version: .v3,
+            serialNumber: .init(),
+            publicKey: .init(signingKey.publicKey),
+            notValidBefore: now,
+            notValidAfter: notValidAfter,
+            issuer: subject,
+            subject: subject,
+            signatureAlgorithm: .ecdsaWithSHA256,
+            extensions: try Certificate.Extensions {
+                Critical(BasicConstraints.isCertificateAuthority(maxPathLength: 0))
+                Critical(
+                    KeyUsage(
+                        digitalSignature: true,
+                        nonRepudiation: false,
+                        keyEncipherment: false,
+                        dataEncipherment: false,
+                        keyAgreement: false,
+                        keyCertSign: true,
+                        cRLSign: true,
+                        encipherOnly: false,
+                        decipherOnly: false
+                    )
+                )
+            },
+            issuerPrivateKey: .init(signingKey)
         )
+
+        let certPEM = try certificate.serializeAsPEM().pemString
+        let keyPEM = try Certificate.PrivateKey(signingKey).serializeAsPEM().pemString
 
         guard certPEM.contains("BEGIN CERTIFICATE") else {
             throw CLIError.runtime("generated CA certificate PEM had unexpected format")
+        }
+        guard keyPEM.contains("BEGIN PRIVATE KEY") || keyPEM.contains("BEGIN EC PRIVATE KEY") else {
+            throw CLIError.runtime("generated CA private key PEM had unexpected format")
         }
 
         return MITMCASecrets(certPEM: certPEM, keyPEM: keyPEM)
@@ -1105,6 +1115,7 @@ private final class TransparentProxyHostCLI {
           --aikido-url URL           Override the Aikido app base URL used by the extension.
           --agent-token TOKEN        Agent token to forward to the extension config.
           --agent-device-id ID       Agent device identifier to forward to the extension config.
+          --clean-secrets            Delete proxy CA secrets before starting to rotate the MITM CA.
           --reset-profile            Remove the saved Network Extension profile before starting.
           --help                     Show this help text.
 

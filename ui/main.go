@@ -52,11 +52,25 @@ type appFlags struct {
 
 func parseFlags() appFlags {
 	f := appFlags{}
-	flag.StringVar(&f.daemonURL, "daemon_url", "", "Daemon API base URL (default http://127.0.0.1:7878)")
-	flag.StringVar(&f.token, "token", "", "Daemon API auth token (default devtoken)")
-	flag.StringVar(&f.uiURL, "ui_url", "", "Address the UI app server listens on (default 127.0.0.1:9876)")
+	flag.StringVar(&f.daemonURL, "daemon_url", "", "Daemon API base URL (required)")
+	flag.StringVar(&f.token, "token", "", "Daemon API auth token (required)")
+	flag.StringVar(&f.uiURL, "ui_url", "", "Address the UI app server listens on (required)")
 	flag.StringVar(&f.logFile, "log_file", "", "Path to the log file")
 	flag.Parse()
+
+	var missing []string
+	if f.daemonURL == "" {
+		missing = append(missing, "-daemon_url")
+	}
+	if f.token == "" {
+		missing = append(missing, "-token")
+	}
+	if f.uiURL == "" {
+		missing = append(missing, "-ui_url")
+	}
+	if len(missing) > 0 {
+		log.Fatalf("missing required flag(s): %s", strings.Join(missing, ", "))
+	}
 	return f
 }
 
@@ -65,12 +79,8 @@ func applyFlags(f appFlags) {
 		setupLogging(f.logFile)
 		log.Println("Logging to file:", f.logFile)
 	}
-	if f.daemonURL != "" || f.token != "" {
-		daemon.SetConfig(f.daemonURL, f.token)
-	}
-	if f.uiURL != "" {
-		appserver.SetListenAddr(f.uiURL)
-	}
+	daemon.SetConfig(f.daemonURL, f.token)
+	appserver.SetListenAddr(f.uiURL)
 }
 
 // --- Notifications -------------------------------------------------------

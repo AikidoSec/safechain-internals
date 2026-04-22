@@ -1,3 +1,5 @@
+use crate::package::version::PragmaticSemver;
+
 use super::*;
 
 #[test]
@@ -107,7 +109,11 @@ fn test_parse_extension_id_from_path() {
 
     for (input, expected) in test_cases {
         let parsed = RuleVSCode::parse_extension_id_from_path(input).map(|v| v.extension_id);
-        assert_eq!(parsed.as_deref(), expected, "input: '{input}'");
+        assert_eq!(
+            parsed,
+            expected.map(VSCodePackageName::from),
+            "input: '{input}'"
+        );
     }
 }
 
@@ -135,8 +141,8 @@ fn test_parse_extension_id_from_path_lowercased() {
     for (input, expected) in test_cases {
         let parsed = RuleVSCode::parse_extension_id_from_path(input).map(|v| v.extension_id);
         assert_eq!(
-            parsed.as_deref(),
-            expected,
+            parsed,
+            expected.map(VSCodePackageName::from),
             "Failed to parse path: {}",
             input
         );
@@ -145,55 +151,82 @@ fn test_parse_extension_id_from_path_lowercased() {
 
 #[test]
 fn test_parse_extension_id_version_captured() {
-    // files/<pub>/<ext>/<version>/...
-    let parsed = RuleVSCode::parse_extension_id_from_path(
-        "/files/ms-python/python/2024.22.0/ms-python.python-2024.22.0.vsix",
-    )
-    .unwrap();
-    assert_eq!(parsed.extension_id, "ms-python.python");
-    assert_eq!(parsed.version.as_deref(), Some("2024.22.0"));
+    struct TestCase {
+        // keeps the original inline comment intent
+        comment: &'static str,
+        path: &'static str,
+        expected_extension_id: VSCodePackageName,
+        expected_version: Option<PackageVersion>,
+    }
 
-    // extensions/<pub>/<ext>/<version>/...
-    let parsed = RuleVSCode::parse_extension_id_from_path(
-        "/extensions/ms-python/python/2024.22.0/Microsoft.VisualStudio.Services.VsixSignature",
-    )
-    .unwrap();
-    assert_eq!(parsed.extension_id, "ms-python.python");
-    assert_eq!(parsed.version.as_deref(), Some("2024.22.0"));
+    let cases = [
+        TestCase {
+            comment: "files/<pub>/<ext>/<version>/...",
+            path: "/files/ms-python/python/2024.22.0/ms-python.python-2024.22.0.vsix",
+            expected_extension_id: VSCodePackageName::from("ms-python.python"),
+            expected_version: Some(PackageVersion::Semver(PragmaticSemver::new_semver(
+                2024, 22, 0,
+            ))),
+        },
+        TestCase {
+            comment: "extensions/<pub>/<ext>/<version>/...",
+            path: "/extensions/ms-python/python/2024.22.0/Microsoft.VisualStudio.Services.VsixSignature",
+            expected_extension_id: VSCodePackageName::from("ms-python.python"),
+            expected_version: Some(PackageVersion::Semver(PragmaticSemver::new_semver(
+                2024, 22, 0,
+            ))),
+        },
+        TestCase {
+            comment: "extensions/<pub>/<ext> (no version)",
+            path: "/extensions/ms-python/python",
+            expected_extension_id: VSCodePackageName::from("ms-python.python"),
+            expected_version: None,
+        },
+        TestCase {
+            comment: "_apis/public/gallery/publishers/<pub>/vsextensions/<ext>/<version>/...",
+            path: "/_apis/public/gallery/publishers/ms-python/vsextensions/python/2024.22.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage",
+            expected_extension_id: VSCodePackageName::from("ms-python.python"),
+            expected_version: Some(PackageVersion::Semver(PragmaticSemver::new_semver(
+                2024, 22, 0,
+            ))),
+        },
+        TestCase {
+            comment: "_apis/public/gallery/publisher/<pub>/<ext>/<version>/...",
+            path: "/_apis/public/gallery/publisher/ms-python/python/2024.22.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage",
+            expected_extension_id: VSCodePackageName::from("ms-python.python"),
+            expected_version: Some(PackageVersion::Semver(PragmaticSemver::new_semver(
+                2024, 22, 0,
+            ))),
+        },
+        TestCase {
+            comment: "_apis/public/gallery/publisher/<pub>/extension/<ext>/<version>/...",
+            path: "/_apis/public/gallery/publisher/AddictedGuys/extension/vscode-har-explorer/1.0.0/assetbyname/Microsoft.VisualStudio.Code.Manifest",
+            expected_extension_id: VSCodePackageName::from("addictedguys.vscode-har-explorer"),
+            expected_version: Some(PackageVersion::Semver(PragmaticSemver::new_semver(1, 0, 0))),
+        },
+        TestCase {
+            comment: "version lowercased",
+            path: "/files/Publisher/Extension/1.0.0-BETA/extension.vsix",
+            expected_extension_id: VSCodePackageName::from("publisher.extension"),
+            expected_version: Some(PackageVersion::Semver(
+                PragmaticSemver::parse("1.0.0-beta").unwrap(),
+            )),
+        },
+    ];
 
-    // extensions/<pub>/<ext> (no version)
-    let parsed = RuleVSCode::parse_extension_id_from_path("/extensions/ms-python/python").unwrap();
-    assert_eq!(parsed.extension_id, "ms-python.python");
-    assert_eq!(parsed.version, None);
+    for case in cases {
+        let parsed = RuleVSCode::parse_extension_id_from_path(case.path)
+            .unwrap_or_else(|| panic!("{} failed for path {}", case.comment, case.path));
 
-    // _apis/public/gallery/publishers/<pub>/vsextensions/<ext>/<version>/...
-    let parsed = RuleVSCode::parse_extension_id_from_path(
-        "/_apis/public/gallery/publishers/ms-python/vsextensions/python/2024.22.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage",
-    )
-    .unwrap();
-    assert_eq!(parsed.extension_id, "ms-python.python");
-    assert_eq!(parsed.version.as_deref(), Some("2024.22.0"));
-
-    // _apis/public/gallery/publisher/<pub>/<ext>/<version>/...
-    let parsed = RuleVSCode::parse_extension_id_from_path(
-        "/_apis/public/gallery/publisher/ms-python/python/2024.22.0/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage",
-    )
-    .unwrap();
-    assert_eq!(parsed.extension_id, "ms-python.python");
-    assert_eq!(parsed.version.as_deref(), Some("2024.22.0"));
-
-    // _apis/public/gallery/publisher/<pub>/extension/<ext>/<version>/...
-    let parsed = RuleVSCode::parse_extension_id_from_path(
-        "/_apis/public/gallery/publisher/AddictedGuys/extension/vscode-har-explorer/1.0.0/assetbyname/Microsoft.VisualStudio.Code.Manifest",
-    )
-    .unwrap();
-    assert_eq!(parsed.extension_id, "addictedguys.vscode-har-explorer");
-    assert_eq!(parsed.version.as_deref(), Some("1.0.0"));
-
-    // version lowercased
-    let parsed = RuleVSCode::parse_extension_id_from_path(
-        "/files/Publisher/Extension/1.0.0-BETA/extension.vsix",
-    )
-    .unwrap();
-    assert_eq!(parsed.version.as_deref(), Some("1.0.0-beta"));
+        assert_eq!(
+            parsed.extension_id, case.expected_extension_id,
+            "{}: extension_id mismatch for path {}",
+            case.comment, case.path
+        );
+        assert_eq!(
+            parsed.version, case.expected_version,
+            "{}: version mismatch for path {}",
+            case.comment, case.path
+        );
+    }
 }

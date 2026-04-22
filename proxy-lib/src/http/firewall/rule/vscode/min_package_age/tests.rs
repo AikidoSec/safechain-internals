@@ -9,12 +9,9 @@ fn timestamp_hours_ago(hours: u64) -> String {
     humantime::format_rfc3339_millis(t).to_string()
 }
 
-fn cutoff_secs_ago(hours: u64) -> i64 {
-    let now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
-    now - (hours as i64 * 3600)
+fn cutoff_secs_ago(hours: u64) -> SystemTimestampMilliseconds {
+    let t = SystemTime::now() - std::time::Duration::from_secs(hours * 3600);
+    SystemTimestampMilliseconds::from(t)
 }
 
 fn make_single_extension_response(

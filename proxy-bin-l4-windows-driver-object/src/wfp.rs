@@ -1,17 +1,16 @@
 use std::ptr;
 
 use rama_core::{
-    error::{BoxError, ErrorExt},
+    error::{BoxError, ErrorExt, extra::OpaqueError},
     telemetry::tracing::{debug, info, warn},
 };
 use safechain_proxy_lib_nostd::windows::driver_protocol::{
     WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V4, WFP_CALLOUT_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
     WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4,
-    WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6,
-    WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V4, WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V6,
-    WFP_FILTER_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4,
-    WFP_FILTER_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6,
-    WFP_PROVIDER_SAFECHAIN_L4_PROXY, WFP_SUBLAYER_SAFECHAIN_L4_PROXY, WindowsGuid,
+    WFP_CALLOUT_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6, WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V4,
+    WFP_FILTER_SAFECHAIN_TCP_CONNECT_REDIRECT_V6, WFP_FILTER_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V4,
+    WFP_FILTER_SAFECHAIN_UDP_AUTH_CONNECT_BLOCK_V6, WFP_PROVIDER_SAFECHAIN_L4_PROXY,
+    WFP_SUBLAYER_SAFECHAIN_L4_PROXY, WindowsGuid,
 };
 use windows_sys::Win32::{
     Foundation::{
@@ -388,7 +387,10 @@ fn check_delete_status(
         status = format_args!("{status:#x}"),
         "unexpected WFP delete failure"
     );
-    Err(BoxError::from("WFP (delete) operation failed").context_hex_field("status", status))
+    Err(
+        OpaqueError::from_static_str("WFP (delete) operation failed")
+            .context_hex_field("status", status),
+    )
 }
 
 fn zeroed_blob() -> FWP_BYTE_BLOB {
@@ -417,7 +419,8 @@ fn check_status(status: u32, operation: &str) -> Result<(), BoxError> {
             status = format_args!("{status:#x}"),
             "WFP operation failed"
         );
-        Err(BoxError::from("WFP operation failed").context_hex_field("status", status))
+        Err(OpaqueError::from_static_str("WFP operation failed")
+            .context_hex_field("status", status))
     }
 }
 

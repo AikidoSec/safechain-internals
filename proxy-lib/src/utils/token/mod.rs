@@ -1,12 +1,19 @@
 use std::{io::Read, path::Path};
 
-use rama::{telemetry::tracing, utils::str::NonEmptyStr};
+use rama::{
+    error::{BoxError, ErrorContext as _},
+    http::{Request, header::AUTHORIZATION},
+    telemetry::tracing,
+    utils::str::NonEmptyStr,
+};
 use serde::Deserialize;
+
+use crate::http::headers::X_DEVICE_ID;
 
 #[derive(Clone, Deserialize, PartialEq)]
 pub struct AgentIdentity {
-    pub token: NonEmptyStr,
-    pub device_id: NonEmptyStr,
+    token: NonEmptyStr,
+    device_id: NonEmptyStr,
 }
 
 impl std::fmt::Debug for AgentIdentity {
@@ -19,6 +26,24 @@ impl std::fmt::Debug for AgentIdentity {
 }
 
 impl AgentIdentity {
+    pub fn add_request_headers<B>(&self, req: &mut Request<B>) -> Result<(), BoxError> {
+        req.headers_mut().insert(
+            AUTHORIZATION,
+            self.token
+                .as_ref()
+                .try_into()
+                .context("convert endpoint token into authorization header value")?,
+        );
+        req.headers_mut().insert(
+            X_DEVICE_ID,
+            self.device_id
+                .as_ref()
+                .try_into()
+                .context("convert endpoint device_id into x-device-id header value")?,
+        );
+        Ok(())
+    }
+
     pub fn load(data_dir: &Path) -> Option<Self> {
         let identity = Self::try_load_from_path(&data_dir.join("config.json"));
 

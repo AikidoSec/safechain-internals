@@ -7,62 +7,40 @@ use rama::{
     http::{Request, Response, Uri},
     net::address::Domain,
     telemetry::tracing,
-    utils::{
-        str::arcstr::{ArcStr, arcstr},
-        time::now_unix_ms,
-    },
+    utils::str::arcstr::{ArcStr, arcstr},
 };
 
 use crate::{
-    endpoint_protection::{PolicyEvaluator, RemoteEndpointConfig},
+    endpoint_protection::{EcosystemKey, RemoteEndpointConfig},
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
         rule::{BlockedRequest, RequestAction, Rule},
     },
     package::{
-        malware_list::{ListDataEntry, MalwareListEntryFormatter, RemoteMalwareList},
-        released_packages_list::{LowerCaseReleasedPackageFormatter, RemoteReleasedPackagesList},
+        malware_list::RemoteMalwareList, released_packages_list::RemoteReleasedPackagesList,
     },
     storage::SyncCompactDataStorage,
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
 #[cfg(feature = "pac")]
 use crate::http::firewall::pac::PacScriptGenerator;
 
-/// Formats a skills.sh malware-list entry as `owner/repo` (lowercase).
-///
-/// The malware list uses three-part names (`owner/repo/skill-name`) because a
-/// single repository may contain multiple skills.  A git pull URL, however,
-/// only ever identifies the repository (`owner/repo`), so we index the trie by
-/// that prefix so that any listed skill in a repository triggers a block.
-#[derive(Debug, Default, Clone)]
-struct SkillsShEntryFormatter;
+mod package_name;
+use self::package_name::SkillsShPackageName;
 
-impl MalwareListEntryFormatter for SkillsShEntryFormatter {
-    fn format(&self, entry: &ListDataEntry) -> String {
-        let name = entry.package_name.trim().to_ascii_lowercase();
-        // Take only the first two slash-delimited segments (owner/repo),
-        // discarding the skill-name suffix.
-        match name.splitn(3, '/').collect::<Vec<_>>().as_slice() {
-            [owner, repo, ..] if !owner.is_empty() && !repo.is_empty() => {
-                format!("{owner}/{repo}")
-            }
-            _ => name,
-        }
-    }
-}
+type SkillsShRemoteMalwareList = RemoteMalwareList<SkillsShPackageName>;
+type SkillsShRemoteReleasedPackageList = RemoteReleasedPackagesList<SkillsShPackageName>;
+
+const SKILLS_SH_PRODUCT_KEY: ArcStr = arcstr!("skills_sh");
+const SKILLS_SH_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("skills_sh");
 
 pub(in crate::http::firewall) struct RuleSkillsSh {
     target_domains: DomainMatcher,
-    remote_malware_list: RemoteMalwareList,
-    remote_released_packages_list: RemoteReleasedPackagesList,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
-    // Policy evaluator is not used for skills_sh: policy decisions like
-    // BlockAll / RequestInstall / Allow / Reject would affect all GitHub git
-    // operations, not just skills.sh repositories.
-    #[allow(dead_code)]
-    policy_evaluator: Option<PolicyEvaluator>,
+    remote_malware_list: SkillsShRemoteMalwareList,
+    remote_released_packages_list: SkillsShRemoteReleasedPackageList,
+    policy_evaluator: Option<crate::endpoint_protection::PolicyEvaluator<SkillsShPackageName>>,
 }
 
 impl RuleSkillsSh {
@@ -70,37 +48,41 @@ impl RuleSkillsSh {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<PolicyEvaluator>,
         remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_skills_sh.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            SkillsShEntryFormatter,
         )
         .await
         .context("create remote malware list for skills.sh block rule")?;
 
         let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/releases/skills_sh.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCaseReleasedPackageFormatter,
         )
         .await
         .context("create remote released packages list for skills.sh block rule")?;
+
+        let policy_evaluator = remote_endpoint_config.map(|config| {
+            crate::endpoint_protection::PolicyEvaluator::new(
+                guard.clone(),
+                SKILLS_SH_ECOSYSTEM_KEY.clone(),
+                config,
+            )
+        });
 
         Ok(Self {
             target_domains: ["github.com"].into_iter().collect(),
             remote_malware_list,
             remote_released_packages_list,
-            remote_endpoint_config,
             policy_evaluator,
         })
     }
@@ -153,15 +135,15 @@ impl Rule for RuleSkillsSh {
             );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&repo_name),
+                Self::blocked_artifact(repo_name),
                 BlockReason::Malware,
             )));
         }
 
-        let cutoff_secs = self.get_package_age_cutoff_secs();
+        let cutoff_ts = self.get_package_age_cutoff_ts();
         if self
             .remote_released_packages_list
-            .is_recently_released(&repo_name, None, cutoff_secs)
+            .is_recently_released(&repo_name, None, cutoff_ts)
         {
             tracing::debug!(
                 http.url.path = %path,
@@ -170,7 +152,7 @@ impl Rule for RuleSkillsSh {
             );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&repo_name),
+                Self::blocked_artifact(repo_name),
                 BlockReason::NewPackage,
             )));
         }
@@ -184,37 +166,32 @@ impl Rule for RuleSkillsSh {
 }
 
 impl RuleSkillsSh {
-    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 48 * 3600;
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 
-    fn get_package_age_cutoff_secs(&self) -> i64 {
-        let maybe_ts = self.remote_endpoint_config.as_ref().and_then(|c| {
-            c.get_ecosystem_config("skills_sh")
-                .config()
-                .and_then(|cfg| cfg.minimum_allowed_age_timestamp)
-        });
-        if let Some(ts_secs) = maybe_ts {
-            return ts_secs;
-        }
-        (now_unix_ms()) / 1000 - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
+    fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
+        self.policy_evaluator
+            .as_ref()
+            .map(|c| c.package_age_cutoff_ts(Self::DEFAULT_MIN_PACKAGE_AGE))
+            .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 
-    fn blocked_artifact(repo_name: &str) -> Artifact {
+    fn blocked_artifact(repo_name: SkillsShPackageName) -> Artifact {
         Artifact {
-            product: arcstr!("skills_sh"),
-            identifier: ArcStr::from(repo_name),
+            product: SKILLS_SH_PRODUCT_KEY,
+            identifier: repo_name.into_arcstr(),
             display_name: None,
             version: None,
         }
     }
 
-    fn is_repo_listed_as_malware(&self, repo_name: &str) -> bool {
+    fn is_repo_listed_as_malware(&self, repo_name: &SkillsShPackageName) -> bool {
         self.remote_malware_list
             .find_entries(repo_name)
             .entries()
             .is_some()
     }
 
-    fn parse_repo_from_path(path: &str) -> Option<String> {
+    fn parse_repo_from_path(path: &str) -> Option<SkillsShPackageName> {
         // Git smart-HTTP protocol endpoints (gitprotocol-http):
         //   GET  /{repo}/info/refs?service=git-upload-pack  (fetch/clone discovery)
         //   POST /{repo}/git-upload-pack                    (fetch/clone pack transfer)
@@ -246,7 +223,7 @@ impl RuleSkillsSh {
             return None;
         }
 
-        Some(repo_path.to_ascii_lowercase())
+        Some(SkillsShPackageName::from(repo_path))
     }
 }
 

@@ -4,7 +4,7 @@ use moka::{Equivalent, policy::EvictionPolicy};
 use rama::{
     Layer, Service,
     error::{BoxError, ErrorContext as _, ErrorExt as _},
-    extensions::{self, ExtensionsMut},
+    extensions::ExtensionsRef,
     io::{BridgeIo, Io},
     net::{
         address::Domain,
@@ -130,8 +130,8 @@ impl<Issuer, Inner, Ingress, Egress> Service<InputWithClientHello<BridgeIo<Ingre
 where
     Issuer: BoringMitmCertIssuer<Error: Into<BoxError>>,
     Inner: Service<BridgeIo<TlsStream<Ingress>, TlsStream<Egress>>, Output = (), Error: Into<BoxError>>,
-    Ingress: Io + Unpin + extensions::ExtensionsMut,
-    Egress: Io + Unpin + extensions::ExtensionsMut,
+    Ingress: Io + Unpin + ExtensionsRef,
+    Egress: Io + Unpin + ExtensionsRef,
 {
     type Output = ();
     type Error = BoxError;
@@ -139,7 +139,7 @@ where
     async fn serve(
         &self,
         InputWithClientHello {
-            input: mut bridge_io,
+            input: bridge_io,
             client_hello,
         }: InputWithClientHello<BridgeIo<Ingress, Egress>>,
     ) -> Result<Self::Output, Self::Error> {
@@ -171,7 +171,7 @@ where
             match self.firewall.match_http_rules(&incoming_flow_info) {
                 Some(http_rules) => {
                     // insert the http rules so that they can be used after tls handshake for ws & for our fw layer
-                    bridge_io.extensions_mut().insert(http_rules);
+                    bridge_io.extensions().insert(http_rules);
                 }
                 None if self.mitm_all => (),
                 None => {

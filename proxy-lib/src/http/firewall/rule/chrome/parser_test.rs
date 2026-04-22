@@ -1,6 +1,9 @@
 use rama::http::{Body, Request, Uri};
 
-use crate::package::version::{PackageVersion, PragmaticSemver};
+use crate::{
+    http::firewall::rule::chrome::package_name::ChromePackageName,
+    package::version::{PackageVersion, PragmaticSemver},
+};
 
 use super::parse_crx_download_url;
 
@@ -17,7 +20,10 @@ fn test_parse_crx_download_url() {
     assert!(result.is_some());
 
     let (extension_id, version) = result.unwrap();
-    assert_eq!(extension_id.as_str(), "GLNPJGLILKICBCKJPBGCFKOGEBGLLEMB");
+    assert_eq!(
+        extension_id,
+        ChromePackageName::from("GLNPJGLILKICBCKJPBGCFKOGEBGLLEMB")
+    );
     assert_eq!(
         version,
         PackageVersion::Semver(PragmaticSemver::new_two_components(6, 45))
@@ -37,6 +43,9 @@ fn test_parse_update2_crx_download_url() {
     assert!(result.is_some());
 
     let (extension_id, version) = result.unwrap();
-    assert_eq!(extension_id.as_str(), "liecbddmkiiihnedobmlmillhodjkdmb");
+    assert_eq!(
+        extension_id,
+        ChromePackageName::from("liecbddmkiiihnedobmlmillhodjkdmb")
+    );
     assert_eq!(version, PackageVersion::None);
 }

@@ -1,5 +1,3 @@
-use std::time::SystemTime;
-
 use rama::{
     error::{BoxError, ErrorContext as _},
     http::{
@@ -8,7 +6,7 @@ use rama::{
         headers::{Accept, ContentType, HeaderMapExt as _},
     },
     telemetry::tracing,
-    utils::{str::arcstr::ArcStr, time::now_unix_ms},
+    utils::str::arcstr::ArcStr,
 };
 use serde_json::json;
 
@@ -19,8 +17,11 @@ use crate::{
         firewall::{
             events::{Artifact, MinPackageAgeEvent},
             notifier::EventNotifier,
+            rule::npm::NPM_ECOSYSTEM_KEY,
         },
+        headers::make_response_uncacheable,
     },
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
 pub(in crate::http::firewall) struct MinPackageAge {
@@ -28,14 +29,17 @@ pub(in crate::http::firewall) struct MinPackageAge {
     config: Option<RemoteEndpointConfig>,
 }
 
-const DEFAULT_MIN_PACKAGE_AGE_MS: i64 = 172_800_000; // 48 hours
+const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 
 impl MinPackageAge {
-    pub fn new(notifier: Option<EventNotifier>, config: Option<RemoteEndpointConfig>) -> Self {
+    pub(in crate::http::firewall) fn new(
+        notifier: Option<EventNotifier>,
+        config: Option<RemoteEndpointConfig>,
+    ) -> Self {
         Self { notifier, config }
     }
 
-    pub fn modify_request_headers(&self, req: &mut Request) {
+    pub(super) fn modify_request_headers(&self, req: &mut Request) {
         if !req
             .headers()
             .typed_get()
@@ -51,7 +55,7 @@ impl MinPackageAge {
         req.headers_mut().typed_insert(Accept::json());
     }
 
-    pub async fn remove_new_packages(&self, resp: Response) -> Result<Response, BoxError> {
+    pub(super) async fn remove_new_packages(&self, resp: Response) -> Result<Response, BoxError> {
         if resp
             .headers()
             .typed_get::<ContentType>()
@@ -100,11 +104,11 @@ impl MinPackageAge {
         let new_bytes =
             serde_json::to_vec(&json).context("serialize modified npm info response")?;
 
-        super::super::make_response_uncacheable(&mut parts.headers);
+        make_response_uncacheable(&mut parts.headers);
 
         if let Some(notifier) = &self.notifier {
             let event = MinPackageAgeEvent {
-                ts_ms: now_unix_ms(),
+                ts_ms: SystemTimestampMilliseconds::now(),
                 artifact: Artifact {
                     product: "npm".into(),
                     identifier: package_name.clone(),
@@ -183,7 +187,10 @@ impl MinPackageAge {
         json
     }
 
-    fn get_versions_to_remove(json: &serde_json::Value, cutoff_unix_ms: i64) -> Vec<String> {
+    fn get_versions_to_remove(
+        json: &serde_json::Value,
+        cutoff_ts: SystemTimestampMilliseconds,
+    ) -> Vec<String> {
         if let Some(time_obj) = json.get("time").and_then(|t| t.as_object()) {
             let keys_to_remove: Vec<String> = time_obj
                 .iter()
@@ -196,11 +203,8 @@ impl MinPackageAge {
                     };
                     match humantime::parse_rfc3339(timestamp_str) {
                         Ok(published_at) => {
-                            let published_unix_ms = published_at
-                                .duration_since(SystemTime::UNIX_EPOCH)
-                                .map(|d| d.as_millis() as i64)
-                                .unwrap_or(0);
-                            published_unix_ms > cutoff_unix_ms
+                            let published_ts = SystemTimestampMilliseconds::from(published_at);
+                            published_ts > cutoff_ts
                         }
                         Err(err) => {
                             tracing::debug!(
@@ -218,20 +222,22 @@ impl MinPackageAge {
         }
     }
 
-    fn get_cutoff_timestamp(&self) -> i64 {
-        let maybe_minimum_allowed_age_timestamp = self.config.as_ref().and_then(|c| {
-            let ecosystem = c.get_ecosystem_config("npm");
-            ecosystem
-                .config()
-                .and_then(|c| c.minimum_allowed_age_timestamp)
-        });
+    fn get_cutoff_timestamp(&self) -> SystemTimestampMilliseconds {
+        let maybe_minimum_allowed_age_timestamp = self
+            .config
+            .as_ref()
+            .and_then(|c| {
+                c.map_ecosystem_config(&NPM_ECOSYSTEM_KEY, |ecosystem_config| {
+                    ecosystem_config.minimum_allowed_age_timestamp
+                })
+            })
+            .flatten();
 
-        if let Some(timestamp_in_seconds) = maybe_minimum_allowed_age_timestamp {
-            // Needs to be converted from seconds to ms
-            return timestamp_in_seconds.saturating_mul(1000);
+        if let Some(timestamp) = maybe_minimum_allowed_age_timestamp {
+            return timestamp;
         }
 
-        now_unix_ms() - DEFAULT_MIN_PACKAGE_AGE_MS
+        SystemTimestampMilliseconds::now() - DEFAULT_MIN_PACKAGE_AGE
     }
 }
 

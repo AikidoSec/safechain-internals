@@ -1,12 +1,12 @@
 use rama::{
     Layer, Service,
     error::{BoxError, ErrorContext},
-    extensions::{ExtensionsMut, ExtensionsRef},
+    extensions::ExtensionsRef,
     http::{Request, Response},
 };
 
 use crate::{
-    http::try_get_domain_for_req,
+    http::{RequestMetaUri, try_get_domain_for_req},
     utils::net::{get_app_source_bundle_id_from_ext, get_source_process_path_from_ext},
 };
 
@@ -48,7 +48,7 @@ where
     async fn serve(&self, req: Request) -> Result<Self::Output, Self::Error> {
         // If the request already had a TLS handshake we just take the rules that have been matched
         // if not the case (e.g. insecure http traffic), we match here with match_http_rules (same function being used during tls handshake)
-        let maybe_http_rules = match req.extensions().get().cloned() {
+        let maybe_http_rules = match req.extensions().get_ref().cloned() {
             Some(rules) => Some(rules),
             None => try_get_domain_for_req(&req).and_then(|domain| {
                 self.firewall.match_http_rules(&super::IncomingFlowInfo {
@@ -61,8 +61,8 @@ where
 
         if let Some(http_rules) = maybe_http_rules {
             let mod_req = match http_rules.evaluate_http_request(req).await? {
-                RequestAction::Allow(mut allowed_mod_req) => {
-                    allowed_mod_req.extensions_mut().insert(http_rules.clone());
+                RequestAction::Allow(allowed_mod_req) => {
+                    allowed_mod_req.extensions().insert(http_rules.clone());
                     allowed_mod_req
                 }
                 RequestAction::Block(blocked) => {
@@ -73,7 +73,12 @@ where
                 }
             };
 
+            mod_req
+                .extensions()
+                .insert(RequestMetaUri::from_request(&mod_req));
+
             let resp = self.inner.serve(mod_req).await.into_box_error()?;
+
             Ok(http_rules.evaluate_http_response(resp).await?)
         } else {
             self.inner.serve(req).await.into_box_error()

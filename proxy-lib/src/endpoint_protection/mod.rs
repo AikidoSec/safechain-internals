@@ -6,6 +6,6 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
-pub use config::{EcosystemConfigResult, RemoteEndpointConfig};
+pub use config::RemoteEndpointConfig;
 pub use policy::{PackagePolicyDecision, PolicyEvaluator};
-pub use types::{EcosystemConfig, EndpointConfig, ExceptionLists, PermissionGroup};
+pub use types::{EcosystemConfig, EcosystemKey, EndpointConfig, ExceptionLists, PermissionGroup};

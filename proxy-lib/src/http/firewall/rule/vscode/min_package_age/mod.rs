@@ -1,5 +1,3 @@
-use std::time::SystemTime;
-
 use rama::{
     error::{BoxError, ErrorContext as _},
     http::{
@@ -8,7 +6,7 @@ use rama::{
         headers::{ContentType, HeaderMapExt as _},
     },
     telemetry::tracing,
-    utils::{str::arcstr::ArcStr, time::now_unix_ms},
+    utils::str::arcstr::ArcStr,
 };
 
 use crate::{
@@ -18,8 +16,10 @@ use crate::{
             events::{Artifact, MinPackageAgeEvent},
             notifier::EventNotifier,
         },
+        headers::make_response_uncacheable,
     },
     package::version::PackageVersion,
+    utils::time::SystemTimestampMilliseconds,
 };
 
 #[derive(Debug, Clone)]
@@ -35,7 +35,7 @@ impl MinPackageAgeVSCode {
     pub async fn remove_new_versions(
         &self,
         resp: Response,
-        cutoff_secs: i64,
+        cutoff_ts: SystemTimestampMilliseconds,
     ) -> Result<Response, BoxError> {
         if resp
             .headers()
@@ -58,7 +58,7 @@ impl MinPackageAgeVSCode {
             return Ok(Response::from_parts(parts, Body::from(bytes)));
         }
 
-        let Some(rewrite) = rewrite_json(&bytes, cutoff_secs) else {
+        let Some(rewrite) = rewrite_json(&bytes, cutoff_ts) else {
             return Ok(Response::from_parts(parts, Body::from(bytes)));
         };
 
@@ -69,7 +69,7 @@ impl MinPackageAgeVSCode {
 
         self.notify_rewrites(&rewrite.suppressed_versions).await;
 
-        super::super::make_response_uncacheable(&mut parts.headers);
+        make_response_uncacheable(&mut parts.headers);
 
         Ok(Response::from_parts(parts, Body::from(rewrite.bytes)))
     }
@@ -90,7 +90,7 @@ impl MinPackageAgeVSCode {
         }
         for (ext_id, versions) in by_extension {
             let event = MinPackageAgeEvent {
-                ts_ms: now_unix_ms(),
+                ts_ms: SystemTimestampMilliseconds::now(),
                 artifact: Artifact {
                     product: "vscode".into(),
                     identifier: ext_id.clone(),
@@ -126,8 +126,8 @@ struct RewriteResult {
 ///   }]
 /// }
 /// ```
-/// Given a `cutoff_secs` in the past, `0.4.0` is stripped and `0.3.0` is kept.
-fn rewrite_json(bytes: &[u8], cutoff_secs: i64) -> Option<RewriteResult> {
+/// Given a `cutoff_ts` in the past, `0.4.0` is stripped and `0.3.0` is kept.
+fn rewrite_json(bytes: &[u8], cutoff_ts: SystemTimestampMilliseconds) -> Option<RewriteResult> {
     let mut json: serde_json::Value = match serde_json::from_slice(bytes) {
         Ok(v) => v,
         Err(err) => {
@@ -155,10 +155,10 @@ fn rewrite_json(bytes: &[u8], cutoff_secs: i64) -> Option<RewriteResult> {
 
     if let Some(extensions) = batch_extensions {
         for extension in extensions {
-            filter_extension_versions(extension, cutoff_secs, &mut suppressed);
+            filter_extension_versions(extension, cutoff_ts, &mut suppressed);
         }
     } else {
-        filter_extension_versions(&mut json, cutoff_secs, &mut suppressed);
+        filter_extension_versions(&mut json, cutoff_ts, &mut suppressed);
     }
 
     if suppressed.is_empty() {
@@ -181,7 +181,7 @@ fn rewrite_json(bytes: &[u8], cutoff_secs: i64) -> Option<RewriteResult> {
 
 fn filter_extension_versions(
     extension: &mut serde_json::Value,
-    cutoff_secs: i64,
+    cutoff_ts: SystemTimestampMilliseconds,
     suppressed: &mut Vec<(ArcStr, PackageVersion)>,
 ) {
     let publisher_name = extension
@@ -215,10 +215,10 @@ fn filter_extension_versions(
         let Some(last_updated) = v.get("lastUpdated").and_then(|t| t.as_str()) else {
             return true;
         };
-        let Some(published_secs) = parse_rfc3339_to_epoch_secs(last_updated) else {
+        let Some(published_ts) = parse_rfc3339_to_ts(last_updated) else {
             return true;
         };
-        let too_new = published_secs > cutoff_secs;
+        let too_new = published_ts > cutoff_ts;
         let version_str_opt = v.get("version").and_then(|s| s.as_str());
         if too_new
             && let Some(version_str) = version_str_opt
@@ -231,13 +231,10 @@ fn filter_extension_versions(
     });
 }
 
-/// Parse an RFC 3339 timestamp string into Unix epoch seconds, returning `None` on failure.
-fn parse_rfc3339_to_epoch_secs(timestamp: &str) -> Option<i64> {
+/// Parse an RFC 3339 timestamp string, returning `None` on failure.
+fn parse_rfc3339_to_ts(timestamp: &str) -> Option<SystemTimestampMilliseconds> {
     match humantime::parse_rfc3339(timestamp) {
-        Ok(t) => t
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs() as i64)
-            .ok(),
+        Ok(t) => Some(SystemTimestampMilliseconds::from(t)),
         Err(err) => {
             tracing::debug!("failed to parse VSCode version timestamp '{timestamp}': {err}");
             None

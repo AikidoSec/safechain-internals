@@ -23,14 +23,14 @@ impl ZeroAuthority {
 }
 
 impl<T: UsernameLabelParser> AuthoritySync<Basic, T> for ZeroAuthority {
-    fn authorized(&self, ext: &mut Extensions, credentials: &Basic) -> bool {
+    fn authorized(&self, ext: &Extensions, credentials: &Basic) -> bool {
         let basic_username = credentials.username();
         tracing::trace!("ZeroAuthority (http proxy) trusts all, it also trusts: {basic_username}");
 
-        let mut parser_ext = Extensions::new();
-        let parsed_username = match parse_username(&mut parser_ext, T::default(), basic_username) {
+        let parser_ext = Extensions::new();
+        let parsed_username = match parse_username(&parser_ext, T::default(), basic_username) {
             Ok(t) => {
-                ext.extend(parser_ext);
+                ext.extend(&parser_ext);
                 t
             }
             Err(err) => {
@@ -52,7 +52,7 @@ impl Authorizer<Basic> for ZeroAuthority {
             "ZeroAuthority (socks5 proxy) trusts all, it also trusts: {basic_username}"
         );
 
-        let mut result_extensions = Extensions::new();
+        let result_extensions = Extensions::new();
         result_extensions.insert(UserId::Username(basic_username.to_owned()));
 
         AuthorizeResult {

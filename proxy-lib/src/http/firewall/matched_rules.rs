@@ -3,7 +3,7 @@ use std::sync::Arc;
 use rama::{
     Service,
     error::BoxError,
-    extensions::ExtensionsRef,
+    extensions::{Extension, ExtensionsRef},
     http::{
         Request, Response,
         ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayInput, WebSocketRelayOutput},
@@ -13,7 +13,7 @@ use rama::{
 
 use super::rule::{HttpRequestMatcherView, HttpResponseMatcherView, RequestAction, Rule as _};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Extension)]
 /// Matched firewall rules for http traffic and protocols built upon it.
 ///
 /// Can be created via the Firewall by matching on the target domain.
@@ -124,7 +124,7 @@ where
     ) -> Result<ServiceMatch<Self::ModifiedInput, Self::Service>, Self::Error> {
         let service = req
             .extensions()
-            .get()
+            .get_ref()
             .and_then(|rules: &FirewallHttpRules| {
                 rules.select_http_response_payload_inspection_rules(&req)
             });

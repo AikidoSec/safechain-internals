@@ -14,30 +14,39 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig},
+    endpoint_protection::{
+        EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
+    },
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
         rule::{BlockedRequest, RequestAction, Rule},
     },
     package::{
-        malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
-        released_packages_list::{LowerCaseReleasedPackageFormatter, RemoteReleasedPackagesList},
+        malware_list::RemoteMalwareList,
+        name_formatter::LowerCasePackageName,
+        released_packages_list::RemoteReleasedPackagesList,
         version::{PackageVersion, PragmaticSemver},
     },
     storage::SyncCompactDataStorage,
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
-use rama::utils::time::now_unix_ms;
 
 #[cfg(feature = "pac")]
 use crate::http::firewall::pac::PacScriptGenerator;
 
+type NugetPackageName = LowerCasePackageName;
+type NugetRemoteMalwareList = RemoteMalwareList<NugetPackageName>;
+type NugetRemoteReleasedPackageList = RemoteReleasedPackagesList<NugetPackageName>;
+
+const NUGET_PRODUCT_KEY: ArcStr = arcstr!("nuget");
+const NUGET_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("nuget");
+
 pub(in crate::http::firewall) struct RuleNuget {
     target_domains: DomainMatcher,
-    remote_malware_list: RemoteMalwareList,
-    remote_released_packages_list: RemoteReleasedPackagesList,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
-    policy_evaluator: Option<PolicyEvaluator>,
+    remote_malware_list: NugetRemoteMalwareList,
+    remote_released_packages_list: NugetRemoteReleasedPackageList,
+    policy_evaluator: Option<PolicyEvaluator<NugetPackageName>>,
 }
 
 impl RuleNuget {
@@ -45,37 +54,37 @@ impl RuleNuget {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<PolicyEvaluator>,
         remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_nuget.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for nuget block rule")?;
 
         let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/releases/nuget.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCaseReleasedPackageFormatter,
         )
         .await
         .context("create remote released packages list for nuget block rule")?;
+
+        let policy_evaluator = remote_endpoint_config
+            .clone()
+            .map(|config| PolicyEvaluator::new(guard.clone(), NUGET_ECOSYSTEM_KEY.clone(), config));
 
         Ok(Self {
             target_domains: ["api.nuget.org", "www.nuget.org"].into_iter().collect(),
             remote_malware_list,
             remote_released_packages_list,
-            remote_endpoint_config,
             policy_evaluator,
         })
     }
@@ -125,18 +134,20 @@ impl Rule for RuleNuget {
         );
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision = policy_evaluator
-                .evaluate_package_install("nuget", &nuget_package.fully_qualified_name);
+            let decision =
+                policy_evaluator.evaluate_package_install(&nuget_package.fully_qualified_name);
 
             match decision {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Defer => {}
-                decision => {
+                PackagePolicyDecision::BlockAll
+                | PackagePolicyDecision::Rejected
+                | PackagePolicyDecision::RequestInstall => {
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        Self::blocked_artifact(&nuget_package),
+                        nuget_package.into_blocked_artifact(),
                         super::block_reason_for(decision),
                     )));
                 }
@@ -146,16 +157,16 @@ impl Rule for RuleNuget {
         if self.is_package_listed_as_malware(&nuget_package) {
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&nuget_package),
+                nuget_package.into_blocked_artifact(),
                 BlockReason::Malware,
             )));
         }
 
-        let cutoff_secs = self.get_package_age_cutoff_secs();
+        let cutoff_ts = self.get_package_age_cutoff_ts();
         if self.remote_released_packages_list.is_recently_released(
             &nuget_package.fully_qualified_name,
             Some(&PackageVersion::Semver(nuget_package.version.clone())),
-            cutoff_secs,
+            cutoff_ts,
         ) {
             tracing::info!(
                 http.url.path = %path,
@@ -164,7 +175,7 @@ impl Rule for RuleNuget {
             );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&nuget_package),
+                nuget_package.into_blocked_artifact(),
                 BlockReason::NewPackage,
             )));
         }
@@ -192,33 +203,19 @@ impl Rule for RuleNuget {
 }
 
 impl RuleNuget {
-    fn blocked_artifact(nuget_package: &NugetPackage) -> Artifact {
-        Artifact {
-            product: arcstr!("nuget"),
-            identifier: ArcStr::from(nuget_package.fully_qualified_name.as_str()),
-            display_name: None,
-            version: Some(PackageVersion::Semver(nuget_package.version.clone())),
-        }
-    }
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(1);
 
-    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 48 * 3600;
-
-    fn get_package_age_cutoff_secs(&self) -> i64 {
-        let maybe_ts = self.remote_endpoint_config.as_ref().and_then(|c| {
-            c.get_ecosystem_config("nuget")
-                .config()
-                .and_then(|cfg| cfg.minimum_allowed_age_timestamp)
-        });
-        if let Some(ts_secs) = maybe_ts {
-            return ts_secs;
-        }
-        (now_unix_ms() / 1000) - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
+    fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
+        self.policy_evaluator
+            .as_ref()
+            .map(|c| c.package_age_cutoff_ts(Self::DEFAULT_MIN_PACKAGE_AGE))
+            .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 
     fn is_package_listed_as_malware(&self, nuget_package: &NugetPackage) -> bool {
         self.remote_malware_list.has_entries_with_version(
             &nuget_package.fully_qualified_name,
-            PackageVersion::Semver(nuget_package.version.clone()),
+            &PackageVersion::Semver(nuget_package.version.clone()),
         )
     }
 
@@ -286,15 +283,28 @@ impl RuleNuget {
 }
 
 struct NugetPackage {
-    fully_qualified_name: String,
+    fully_qualified_name: NugetPackageName,
     version: PragmaticSemver,
 }
 
 impl NugetPackage {
     fn new(name: &str, version: PragmaticSemver) -> NugetPackage {
         Self {
-            fully_qualified_name: name.trim().to_ascii_lowercase(),
+            fully_qualified_name: NugetPackageName::from(name),
             version,
+        }
+    }
+
+    fn into_blocked_artifact(self) -> Artifact {
+        let Self {
+            fully_qualified_name,
+            version,
+        } = self;
+        Artifact {
+            product: NUGET_PRODUCT_KEY,
+            identifier: fully_qualified_name.into_arcstr(),
+            display_name: None,
+            version: Some(PackageVersion::Semver(version)),
         }
     }
 }
