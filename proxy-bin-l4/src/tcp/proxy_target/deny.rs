@@ -1,4 +1,4 @@
-use rama::{Layer, Service, error::BoxError, extensions::ExtensionsMut, io::Io};
+use rama::{Layer, Service, error::BoxError, extensions::ExtensionsRef, io::Io};
 
 #[derive(Debug, Clone)]
 pub struct DenyProxyTargetFromInputLayer;
@@ -22,7 +22,7 @@ impl<S> Layer<S> for DenyProxyTargetFromInputLayer {
 impl<S, Input> Service<Input> for DenyProxyTargetFromInput<S>
 where
     S: Service<Input, Error: Into<BoxError>>,
-    Input: Io + ExtensionsMut,
+    Input: Io + ExtensionsRef,
 {
     type Output = S::Output;
     type Error = BoxError;
