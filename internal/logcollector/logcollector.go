@@ -30,5 +30,8 @@ func Collect(ctx context.Context, config *config.ConfigInfo) error {
 	if err := submitLogs(ctx, config, zipPath); err != nil {
 		return fmt.Errorf("failed to submit logs: %w", err)
 	}
+
+	cleanupPreparedLogs(logDir)
+	cleanupZips(logDir)
 	return nil
 }

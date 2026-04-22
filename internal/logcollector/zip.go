@@ -3,6 +3,7 @@ package logcollector
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,4 +42,21 @@ func zipLogsWithPassword(ctx context.Context, dir, timestamp, password string) (
 	}
 
 	return filepath.Join(dir, zipName), nil
+}
+
+func cleanupZips(dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		log.Printf("Failed to read %s for zip cleanup: %v", dir, err)
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".zip" {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		if err := os.Remove(path); err != nil {
+			log.Printf("Failed to remove %s: %v", path, err)
+		}
+	}
 }

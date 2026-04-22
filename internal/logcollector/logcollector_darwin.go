@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
@@ -46,4 +47,25 @@ func collectNetworkExtensionLogs(ctx context.Context, logDir, timestamp string) 
 		return fmt.Errorf("failed to write network extension logs: %w", err)
 	}
 	return nil
+}
+
+func cleanupPreparedLogs(logDir string) {
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		log.Printf("Failed to read %s for prepared-log cleanup: %v", logDir, err)
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasPrefix(name, "network_extension_") || !strings.HasSuffix(name, ".log") {
+			continue
+		}
+		path := filepath.Join(logDir, name)
+		if err := os.Remove(path); err != nil {
+			log.Printf("Failed to remove %s: %v", path, err)
+		}
+	}
 }
