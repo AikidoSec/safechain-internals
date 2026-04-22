@@ -46,6 +46,7 @@ mod assert_endpoint;
 mod endpoint_protection_callbacks;
 pub mod malware_list;
 mod npm_registry;
+mod packagist_registry;
 mod pypi_registry;
 mod vscode_marketplace;
 
@@ -127,6 +128,10 @@ fn new_mock_server() -> impl Service<Request, Output = Response, Error = Infalli
         .with_matcher(
             HttpMatcher::domain(Domain::from_static("pypi.org")),
             self::pypi_registry::web_svc(),
+        )
+        .with_matcher(
+            HttpMatcher::domain(Domain::from_static("repo.packagist.org")),
+            self::packagist_registry::web_svc(),
         )
         .with_matcher(
             HttpMatcher::domain(app_domain),
