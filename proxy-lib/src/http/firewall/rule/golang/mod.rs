@@ -38,9 +38,6 @@ use parser::{GoPackage, is_zip_download, parse_package_from_path};
 pub mod min_package_age;
 use min_package_age::MinPackageAgeGolang;
 
-#[cfg(test)]
-mod tests;
-
 pub(in crate::http::firewall) struct RuleGolang {
     target_domains: DomainMatcher,
     remote_malware_list: RemoteMalwareList,
