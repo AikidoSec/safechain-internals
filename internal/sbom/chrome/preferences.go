@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Chrome persists extension state in two JSON files at the root of each profile:
@@ -21,14 +22,29 @@ type preferencesFile struct {
 	} `json:"extensions"`
 }
 
+func isValidChromeProfileDir(profileDir string) bool {
+	cleanDir := filepath.Clean(profileDir)
+	name := filepath.Base(cleanDir)
+	if name != "Default" && !strings.HasPrefix(name, "Profile ") {
+		return false
+	}
+
+	parent := filepath.Base(filepath.Dir(cleanDir))
+	return parent != "." && parent != string(filepath.Separator)
+}
+
 // readProfileExtensionStates returns a map from extension ID to true (enabled)
 // or false (disabled) for extensions explicitly listed in the profile's
 // Preferences or Secure Preferences. Secure Preferences wins on conflict.
 func readProfileExtensionStates(profileDir string) map[string]bool {
 	states := map[string]bool{}
+	if !isValidChromeProfileDir(profileDir) {
+		log.Printf("Skipping Chrome preference scan for unexpected profile directory: %s", profileDir)
+		return states
+	}
 
 	for _, name := range []string{"Preferences", "Secure Preferences"} {
-		path := filepath.Join(profileDir, name)
+		path := filepath.Join(filepath.Clean(profileDir), name)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue

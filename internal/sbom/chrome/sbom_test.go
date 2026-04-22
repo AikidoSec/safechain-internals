@@ -242,6 +242,23 @@ func TestSBOMLocalizedName(t *testing.T) {
 	}
 }
 
+func TestReadProfileExtensionStatesRejectsUnexpectedProfileDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	profileDir := filepath.Join(tmpDir, "NotAProfile")
+	if err := os.MkdirAll(profileDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	writePreferences(t, tmpDir, "NotAProfile", "Preferences", map[string]int{
+		"abcdefghijklmnopqrstuvwxyzzzzzzz": 1,
+	})
+
+	states := readProfileExtensionStates(profileDir)
+	if len(states) != 0 {
+		t.Fatalf("expected no states for unexpected profile dir, got %v", states)
+	}
+}
+
 func TestSBOMFallsBackToExtensionIDWhenNameEmpty(t *testing.T) {
 	dataDir := setupBrowserDataDir(t)
 	extID := "noname_extension_id_1234567890ab"
