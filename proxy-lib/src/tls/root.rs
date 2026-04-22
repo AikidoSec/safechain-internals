@@ -1,5 +1,5 @@
 use rama::{
-    error::{BoxError, ErrorContext as _, ErrorExt as _},
+    error::{BoxError, ErrorContext as _, ErrorExt as _, extra::OpaqueError},
     net::{address::Domain, tls::server::SelfSignedData},
     telemetry::tracing,
     tls::boring::{
@@ -83,9 +83,10 @@ fn store_crt_in_secret_storage(
     let crt_der = crt_data.crt_der();
     let chunk_count = crt_der.len().div_ceil(CRT_SECRET_CHUNK_SIZE_BYTES);
     if chunk_count == 0 {
-        return Err(BoxError::from(
+        return Err(OpaqueError::from_static_str(
             "refusing to store empty CA crt bytes in secret storage",
-        ));
+        )
+        .into_box_error());
     }
 
     for (idx, chunk) in crt_der.chunks(CRT_SECRET_CHUNK_SIZE_BYTES).enumerate() {
@@ -117,9 +118,11 @@ fn load_crt_from_secret_storage(
     };
 
     if !crt_meta.crt_fingerprint().eq(expected_fp) {
-        return Err(BoxError::from("unexpected CA crt meta fingerprint")
-            .context_hex_field("expected_fingerprint", expected_fp.to_vec())
-            .context_hex_field("found_fingerprint", crt_meta.crt_fingerprint().to_vec()));
+        return Err(
+            OpaqueError::from_static_str("unexpected CA crt meta fingerprint")
+                .context_hex_field("expected_fingerprint", expected_fp.to_vec())
+                .context_hex_field("found_fingerprint", crt_meta.crt_fingerprint().to_vec()),
+        );
     }
 
     let mut crt_der = Vec::new();
@@ -130,8 +133,10 @@ fn load_crt_from_secret_storage(
             .context("load CA crt chunk from secret storage")
             .context_str_field("chunk_key", &chunk_key)?
         else {
-            return Err(BoxError::from("missing CA crt chunk in secret storage")
-                .context_str_field("chunk_key", &chunk_key));
+            return Err(
+                OpaqueError::from_static_str("missing CA crt chunk in secret storage")
+                    .context_str_field("chunk_key", &chunk_key),
+            );
         };
         crt_der.extend_from_slice(&chunk);
     }
@@ -172,9 +177,11 @@ pub(super) fn new_root_tls_crt_key_pair(
             .digest(MessageDigest::sha256())
             .context("recompute CA crt fingerprint from stored DER")?;
         if !crt_fp.eq(key_data.crt_fingerprint()) {
-            return Err(BoxError::from("unexpected CA crt fingerprint")
-                .context_hex_field("computed_fingerprint", crt_fp)
-                .context_hex_field("expected_fingerprint", key_data.crt_fingerprint().to_vec()));
+            return Err(
+                OpaqueError::from_static_str("unexpected CA crt fingerprint")
+                    .context_hex_field("computed_fingerprint", crt_fp)
+                    .context_hex_field("expected_fingerprint", key_data.crt_fingerprint().to_vec()),
+            );
         }
 
         let key_x509 = PKey::private_key_from_der(key_data.key())
