@@ -37,6 +37,7 @@ func init() {
 	application.RegisterEvent[daemon.BlockEvent]("blocked")
 	application.RegisterEvent[daemon.BlockEvent]("blocked_updated")
 	application.RegisterEvent[daemon.TlsTerminationFailedEvent]("tls_termination_failed")
+	application.RegisterEvent[daemon.MinPackageAgeEvent]("min_package_age")
 	application.RegisterEvent[daemon.PermissionsResponse]("permissions_updated")
 	application.RegisterEvent[FocusEventPayload]("focus_event")
 }
@@ -372,6 +373,10 @@ func startAppServer(app *application.App, wm *windowManager, statusCh chan<- app
 		func(ev daemon.TlsTerminationFailedEvent) {
 			log.Println("TLS termination failed event:", ev)
 			app.Event.Emit("tls_termination_failed", ev)
+		},
+		func(ev daemon.MinPackageAgeEvent) {
+			log.Println("Min package age event:", ev)
+			app.Event.Emit("min_package_age", ev)
 		},
 		func(ev daemon.PermissionsResponse) {
 			log.Println("Permissions updated")

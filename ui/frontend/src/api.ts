@@ -1,5 +1,5 @@
 import * as DaemonService from "../bindings/endpoint-protection-ui/daemonservice.js";
-import type { BlockEvent, TlsTerminationFailedEvent } from "./types";
+import type { BlockEvent, MinPackageAgeEvent, TlsTerminationFailedEvent } from "./types";
 
 export async function listEvents(limit: number): Promise<BlockEvent[]> {
   return DaemonService.ListEvents(limit);
@@ -21,6 +21,14 @@ export async function listTlsEvents(limit: number): Promise<TlsTerminationFailed
 
 export async function getTlsEvent(eventId: string): Promise<TlsTerminationFailedEvent> {
   return DaemonService.GetTlsEvent(eventId);
+}
+
+export async function listMinPackageAgeEvents(limit: number): Promise<MinPackageAgeEvent[]> {
+  return DaemonService.ListMinPackageAgeEvents(limit);
+}
+
+export async function getMinPackageAgeEvent(eventId: string): Promise<MinPackageAgeEvent> {
+  return DaemonService.GetMinPackageAgeEvent(eventId);
 }
 
 export async function getVersion(): Promise<string> {
