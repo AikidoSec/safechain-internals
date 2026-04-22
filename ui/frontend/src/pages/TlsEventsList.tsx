@@ -154,7 +154,7 @@ export function TlsEventsList() {
           <div className="confirm-dialog">
             <p className="confirm-title">Upload logs?</p>
             <p className="confirm-body">
-              Endpoint Protection will gather diagnostic logs from this device and securely upload them to Aikido so we can investigate any issues. Continue?
+              Endpoint Protection will gather diagnostic logs from this device and securely upload them to Aikido. Continue?
             </p>
             <div className="confirm-actions">
               <button
