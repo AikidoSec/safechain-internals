@@ -3,9 +3,11 @@ use std::fmt;
 use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
+    extensions::ExtensionsRef,
     graceful::ShutdownGuard,
     http::{
         Request, Response, Uri,
+        proto::RequestExtensions,
         ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
     },
     net::address::Domain,
@@ -17,10 +19,15 @@ use crate::{
     endpoint_protection::{
         EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
     },
-    http::firewall::{
-        domain_matcher::DomainMatcher,
-        events::{Artifact, BlockReason},
-        rule::{BlockedRequest, RequestAction, Rule, nuget::min_package_age::MinPackageAgeNuget},
+    http::{
+        RequestMetaUri,
+        firewall::{
+            domain_matcher::DomainMatcher,
+            events::{Artifact, BlockReason},
+            rule::{
+                BlockedRequest, RequestAction, Rule, nuget::min_package_age::MinPackageAgeNuget,
+            },
+        },
     },
     package::{
         malware_list::RemoteMalwareList,
@@ -192,15 +199,22 @@ impl Rule for RuleNuget {
     }
 
     #[inline(always)]
-    async fn evaluate_response(&self, resp: Response, req_uri: &Uri) -> Result<Response, BoxError> {
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         let Some(min_package_age) = &self.maybe_min_package_age else {
+            return Ok(resp);
+        };
+        let Some(req_uri) = resp
+            .extensions()
+            .get_ref::<RequestExtensions>()
+            .and_then(|ext| ext.get_ref().map(|RequestMetaUri(uri)| uri.clone()))
+        else {
             return Ok(resp);
         };
 
         let cutoff_secs = self.get_package_age_cutoff_ts();
 
         min_package_age
-            .remove_new_packages(resp, req_uri, cutoff_secs)
+            .remove_new_packages(resp, &req_uri, cutoff_secs)
             .await
     }
 

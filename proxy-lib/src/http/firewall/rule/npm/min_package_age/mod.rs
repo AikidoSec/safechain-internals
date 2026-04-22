@@ -19,6 +19,7 @@ use crate::{
             notifier::EventNotifier,
             rule::npm::NPM_ECOSYSTEM_KEY,
         },
+        headers::make_response_uncacheable,
     },
     utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
@@ -103,7 +104,7 @@ impl MinPackageAge {
         let new_bytes =
             serde_json::to_vec(&json).context("serialize modified npm info response")?;
 
-        super::super::make_response_uncacheable(&mut parts.headers);
+        make_response_uncacheable(&mut parts.headers);
 
         if let Some(notifier) = &self.notifier {
             let event = MinPackageAgeEvent {

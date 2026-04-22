@@ -5,7 +5,7 @@ use rama::{
     error::BoxError,
     extensions::{Extension, ExtensionsRef},
     http::{
-        Request, Response, Uri,
+        Request, Response,
         ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayInput, WebSocketRelayOutput},
     },
     matcher::service::{ServiceMatch, ServiceMatcher},
@@ -65,13 +65,12 @@ impl FirewallHttpRules {
     pub(super) async fn evaluate_http_response(
         &self,
         resp: Response,
-        req_uri: &Uri,
     ) -> Result<Response, BoxError> {
         let mut mod_resp = resp;
 
         // Iterate rules in reverse order for symmetry with request evaluation
         for rule in self.0.iter().rev() {
-            mod_resp = rule.evaluate_response(mod_resp, req_uri).await?;
+            mod_resp = rule.evaluate_response(mod_resp).await?;
         }
 
         Ok(mod_resp)
