@@ -8,13 +8,11 @@ use rama::{
 
 macro_rules! request_meta_type {
     ($name:ident, $t:ty) => {
-        #[derive(Debug)]
+        #[derive(Debug, Extension)]
         /// meta information that can be stored as extension data in a request,
         /// such that it is also available for later use while processing
         /// its response.
         pub struct $name(pub $t);
-
-        impl Extension for $name {}
     };
 }
 
