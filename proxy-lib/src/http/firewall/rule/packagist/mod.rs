@@ -21,7 +21,7 @@ use crate::{
         KnownContentType,
         firewall::{
             domain_matcher::DomainMatcher,
-            events::{Artifact, MinPackageAgeEvent},
+            events::{Artifact, BlockReason, BlockedEvent, MinPackageAgeEvent},
             notifier::EventNotifier,
         },
     },
@@ -166,13 +166,13 @@ impl Rule for RulePackagist {
             return Ok(Response::from_parts(parts, Body::from(bytes)));
         };
 
-        if let Some(evaluator) = self.policy_evaluator.as_ref() {
-            if matches!(
+        if let Some(evaluator) = self.policy_evaluator.as_ref()
+            && matches!(
                 evaluator.evaluate_package_install("packagist", &package_name),
                 PackagePolicyDecision::Allow
-            ) {
-                return Ok(Response::from_parts(parts, Body::from(bytes)));
-            }
+            )
+        {
+            return Ok(Response::from_parts(parts, Body::from(bytes)));
         }
 
         let mut suppressed_malware: Vec<PackageVersion> = Vec::new();
@@ -191,6 +191,20 @@ impl Rule for RulePackagist {
                     version = %version,
                     "packagist: suppressing malware version from metadata response"
                 );
+                if let Some(notifier) = &self.notifier {
+                    notifier
+                        .notify_blocked(BlockedEvent {
+                            ts_ms: now_unix_ms(),
+                            artifact: Artifact {
+                                product: "packagist".into(),
+                                identifier: ArcStr::from(package_name.as_str()),
+                                display_name: Some(ArcStr::from(package_name.as_str())),
+                                version: Some(version.clone()),
+                            },
+                            block_reason: BlockReason::Malware,
+                        })
+                        .await;
+                }
                 suppressed_malware.push(version);
                 continue;
             }
@@ -232,20 +246,20 @@ impl Rule for RulePackagist {
 
         make_response_uncacheable(&mut parts.headers);
 
-        if !suppressed_min_age.is_empty() {
-            if let Some(notifier) = &self.notifier {
-                let event = MinPackageAgeEvent {
-                    ts_ms: now_unix_ms(),
-                    artifact: Artifact {
-                        product: "packagist".into(),
-                        identifier: ArcStr::from(package_name.as_str()),
-                        display_name: Some(ArcStr::from(package_name.as_str())),
-                        version: None,
-                    },
-                    suppressed_versions: suppressed_min_age,
-                };
-                notifier.notify_min_package_age(event).await;
-            }
+        if !suppressed_min_age.is_empty()
+            && let Some(notifier) = &self.notifier
+        {
+            let event = MinPackageAgeEvent {
+                ts_ms: now_unix_ms(),
+                artifact: Artifact {
+                    product: "packagist".into(),
+                    identifier: ArcStr::from(package_name.as_str()),
+                    display_name: Some(ArcStr::from(package_name.as_str())),
+                    version: None,
+                },
+                suppressed_versions: suppressed_min_age,
+            };
+            notifier.notify_min_package_age(event).await;
         }
 
         Ok(Response::from_parts(parts, Body::from(new_bytes)))
