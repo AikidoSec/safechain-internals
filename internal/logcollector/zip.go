@@ -29,7 +29,7 @@ func zipLogsWithPassword(ctx context.Context, dir, timestamp, password string) (
 		return "", fmt.Errorf("no logs to archive in %s", dir)
 	}
 
-	zipName := fmt.Sprintf("aikido_logs_%s.zip", timestamp)
+	zipName := fmt.Sprintf("aikido-endpoint-protection-logs-%s.zip", timestamp)
 	args := []string{"-j", "-P", password, zipName}
 	args = append(args, files...)
 

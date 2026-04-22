@@ -10,40 +10,25 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/AikidoSec/safechain-internals/internal/config"
+	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
-const logDir = "/Library/Logs/AikidoSecurity/EndpointProtection"
-
 const networkExtensionLogPredicate = `subsystem == "com.aikido.endpoint.proxy.l4" ` +
-	`OR process == "com.aikido.endpoint.proxy.l4.dist.extension" ` +
+	`OR process == "com.aikido.endpoint.proxy.l4.dev.extension" ` +
 	`OR process == "Aikido Network Extension"`
 
-func Collect(ctx context.Context, config *config.ConfigInfo) error {
-	if config.Token == "" {
-		return fmt.Errorf("token is required to password-protect log archive")
-	}
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return fmt.Errorf("failed to ensure log directory %s: %w", logDir, err)
-	}
+func prepareLogs(ctx context.Context) (string, error) {
+	logDir := platform.GetLogDir()
 
 	timestamp := time.Now().UTC().Format("20060102-150405")
-
-	if err := collectNetworkExtensionLogs(ctx, timestamp); err != nil {
+	if err := collectNetworkExtensionLogs(ctx, logDir, timestamp); err != nil {
 		log.Printf("Failed to collect network extension logs: %v", err)
 	}
-
-	zipPath, err := zipLogsWithPassword(ctx, logDir, timestamp, config.Token)
-	if err != nil {
-		return fmt.Errorf("failed to archive logs: %w", err)
-	}
-
-	log.Printf("Logs archived to %s", zipPath)
-	return nil
+	return logDir, nil
 }
 
-func collectNetworkExtensionLogs(ctx context.Context, timestamp string) error {
+func collectNetworkExtensionLogs(ctx context.Context, logDir, timestamp string) error {
 	outPath := filepath.Join(logDir, fmt.Sprintf("network_extension_%s.log", timestamp))
 
 	output, err := utils.RunCommand(ctx, "log", "show",

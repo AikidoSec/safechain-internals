@@ -4,12 +4,9 @@ package logcollector
 
 import (
 	"context"
-	"log"
-
-	"github.com/AikidoSec/safechain-internals/internal/config"
+	"fmt"
 )
 
-func Collect(_ context.Context, _ *config.ConfigInfo) error {
-	log.Println("Log collection is not yet implemented on this platform")
-	return nil
+func prepareLogs(_ context.Context) (string, error) {
+	return "", fmt.Errorf("log preparation is not implemented on this platform")
 }
