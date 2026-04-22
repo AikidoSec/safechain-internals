@@ -297,9 +297,9 @@ async fn create_firewall(
         }
 
         _ = guard.downgrade().into_cancelled() => {
-            Err(BoxError::from(
+            Err(OpaqueError::from_static_str(
                 "shutdown initiated prior to firewall created; exit process immediately",
-            ))
+            ).into_box_error())
         }
     }
 }

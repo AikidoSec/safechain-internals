@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use rama::{
     Layer,
-    error::{BoxError, ErrorContext as _, ErrorExt as _},
+    error::{BoxError, ErrorContext as _, ErrorExt as _, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{
         layer::{
@@ -135,10 +135,10 @@ pub async fn run_proxy_server(
     crate::server::write_server_socket_address_as_file(&args.data, "proxy", proxy_addr.into())
         .await?;
     if proxy_addr_tx.send(proxy_addr.into()).is_err() {
-        return Err(
-            BoxError::from("failed to send proxy address to meta server task")
-                .context_field("address", proxy_addr),
-        );
+        return Err(OpaqueError::from_static_str(
+            "failed to send proxy address to meta server task",
+        )
+        .context_field("address", proxy_addr));
     }
 
     // sent proxy addr to firewall

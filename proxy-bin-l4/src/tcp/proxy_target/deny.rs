@@ -1,4 +1,9 @@
-use rama::{Layer, Service, error::BoxError, extensions::ExtensionsRef, io::Io};
+use rama::{
+    Layer, Service,
+    error::{BoxError, extra::OpaqueError},
+    extensions::ExtensionsRef,
+    io::Io,
+};
 
 #[derive(Debug, Clone)]
 pub struct DenyProxyTargetFromInputLayer;
@@ -25,10 +30,10 @@ where
     Input: Io + ExtensionsRef,
 {
     type Output = S::Output;
-    type Error = BoxError;
+    type Error = OpaqueError;
 
     async fn serve(&self, _: Input) -> Result<Self::Output, Self::Error> {
-        Err(BoxError::from(
+        Err(OpaqueError::from_static_str(
             "Platform does not support L4 TProxy via this binary (Linux/Windows only)",
         ))
     }

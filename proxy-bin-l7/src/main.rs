@@ -7,7 +7,7 @@
 use std::{path::PathBuf, time::Duration};
 
 use rama::{
-    error::{BoxError, ErrorContext},
+    error::{BoxError, ErrorContext, ErrorExt, extra::OpaqueError},
     graceful::{self, ShutdownGuard},
     http::Uri,
     net::{
@@ -219,9 +219,9 @@ where
         }
 
         _ = graceful.guard_weak().into_cancelled() => {
-            return Err(BoxError::from(
+            return Err(OpaqueError::from_static_str(
                 "shutdown initiated prior to firewall created; exit process immediately",
-            ));
+            ).into_box_error());
         }
     };
 
