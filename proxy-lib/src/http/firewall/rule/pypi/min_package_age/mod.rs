@@ -6,7 +6,7 @@ use rama::{
         headers::{ContentType, HeaderMapExt as _},
     },
     telemetry::tracing,
-    utils::{str::arcstr::ArcStr, time::now_unix_ms},
+    utils::str::arcstr::ArcStr,
 };
 
 use crate::{
@@ -17,14 +17,18 @@ use crate::{
             notifier::EventNotifier,
         },
     },
-    package::{released_packages_list::RemoteReleasedPackagesList, version::PackageVersion},
+    package::{
+        name_formatter::LowerCasePackageName, released_packages_list::RemoteReleasedPackagesList,
+        version::PackageVersion,
+    },
+    utils::time::SystemTimestampMilliseconds,
 };
 
 mod html;
 mod json;
 
 #[derive(Debug, Clone)]
-pub(in crate::http::firewall) struct MinPackageAgePyPI {
+pub(super) struct MinPackageAgePyPI {
     notifier: Option<EventNotifier>,
 }
 
@@ -43,8 +47,8 @@ impl MinPackageAgePyPI {
     pub async fn remove_new_packages(
         &self,
         resp: Response,
-        released_packages: &RemoteReleasedPackagesList,
-        cutoff_secs: i64,
+        released_packages: &RemoteReleasedPackagesList<LowerCasePackageName>,
+        cutoff_ts: SystemTimestampMilliseconds,
     ) -> Result<Response, BoxError> {
         let Some(format) = resp
             .headers()
@@ -65,7 +69,7 @@ impl MinPackageAgePyPI {
                     .to_bytes();
 
                 let Some((rewrite_kind, rewrite)) =
-                    json::rewrite_response(&bytes, cutoff_secs, released_packages)
+                    json::rewrite_response(&bytes, cutoff_ts, released_packages)
                 else {
                     return Ok(Response::from_parts(parts, Body::from(bytes)));
                 };
@@ -94,7 +98,7 @@ impl MinPackageAgePyPI {
                 let notifier = self.notifier.clone();
                 let streaming_body = html::rewrite_body(
                     body,
-                    cutoff_secs,
+                    cutoff_ts,
                     released_packages.clone(),
                     move |rewrite| on_html_rewrite_end(rewrite, notifier),
                 );
@@ -141,7 +145,7 @@ fn build_min_package_age_event(
     suppressed_versions: Vec<PackageVersion>,
 ) -> MinPackageAgeEvent {
     MinPackageAgeEvent {
-        ts_ms: now_unix_ms(),
+        ts_ms: SystemTimestampMilliseconds::now(),
         artifact: Artifact {
             product: "pypi".into(),
             identifier: package_name.clone(),

@@ -137,7 +137,7 @@ impl EventNotifier {
         });
     }
 
-    pub fn notify_permissions_updated(&self, config: EndpointConfig) {
+    pub fn notify_permissions_updated(&self, config: Arc<Option<EndpointConfig>>) {
         self.spawn_event_task(|client, reporting_endpoint| {
             send_permissions_updated_event(client, reporting_endpoint, config)
         });
@@ -228,12 +228,12 @@ async fn send_tls_termination_failed_event(
 async fn send_permissions_updated_event(
     client: BoxService<Request, Response, OpaqueError>,
     reporting_endpoint: String,
-    config: EndpointConfig,
+    config: Arc<Option<EndpointConfig>>,
 ) {
-    // NOTE: you are sending an entire cloned object here (EndpointConig),
-    // you probably want to instead send the arced (option version)
-    // instead in future... you can than still make it a `nop`-op in
-    // case the cfg is `None`.
+    let Some(config) = config.as_ref() else {
+        return;
+    };
+
     tracing::debug!(
         "sending permissions update notification (permission_group_id={})",
         config.permission_group.id,

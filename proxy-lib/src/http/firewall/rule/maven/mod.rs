@@ -11,19 +11,22 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig},
+    endpoint_protection::{
+        EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
+    },
     http::firewall::{
         domain_matcher::DomainMatcher,
         events::{Artifact, BlockReason},
     },
     package::{
-        malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
-        released_packages_list::{LowerCaseReleasedPackageFormatter, RemoteReleasedPackagesList},
+        malware_list::RemoteMalwareList,
+        name_formatter::LowerCasePackageName,
+        released_packages_list::RemoteReleasedPackagesList,
         version::{PackageVersion, PragmaticSemver},
     },
     storage::SyncCompactDataStorage,
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
-use rama::utils::time::now_unix_ms;
 
 #[cfg(feature = "pac")]
 use crate::http::firewall::pac::PacScriptGenerator;
@@ -33,12 +36,18 @@ use super::{BlockedRequest, RequestAction, Rule};
 #[cfg(test)]
 mod test;
 
+type MavenPackageName = LowerCasePackageName;
+type MavenRemoteMalwareList = RemoteMalwareList<MavenPackageName>;
+type MavenRemoteReleasedPackagesList = RemoteReleasedPackagesList<MavenPackageName>;
+
+const MAVEN_PRODUCT_KEY: ArcStr = arcstr!("maven");
+const MAVEN_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("maven");
+
 pub(in crate::http::firewall) struct RuleMaven {
     target_domains: DomainMatcher,
-    remote_malware_list: RemoteMalwareList,
-    remote_released_packages_list: RemoteReleasedPackagesList,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
-    policy_evaluator: Option<PolicyEvaluator>,
+    remote_malware_list: MavenRemoteMalwareList,
+    remote_released_packages_list: MavenRemoteReleasedPackagesList,
+    policy_evaluator: Option<PolicyEvaluator<MavenPackageName>>,
 }
 
 impl RuleMaven {
@@ -46,31 +55,32 @@ impl RuleMaven {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<PolicyEvaluator>,
         remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
-        C: Service<Request, Output = Response, Error = OpaqueError> + Clone,
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
     {
         let remote_malware_list = RemoteMalwareList::try_new(
             guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/malware_maven.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for maven block rule")?;
 
         let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/releases/maven.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCaseReleasedPackageFormatter,
         )
         .await
         .context("create remote released packages list for maven block rule")?;
+
+        let policy_evaluator = remote_endpoint_config
+            .clone()
+            .map(|config| PolicyEvaluator::new(guard.clone(), MAVEN_ECOSYSTEM_KEY.clone(), config));
 
         Ok(Self {
             target_domains: [
@@ -83,7 +93,6 @@ impl RuleMaven {
             .collect(),
             remote_malware_list,
             remote_released_packages_list,
-            remote_endpoint_config,
             policy_evaluator,
         })
     }
@@ -138,18 +147,20 @@ impl Rule for RuleMaven {
         );
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision = policy_evaluator
-                .evaluate_package_install("maven", artifact.fully_qualified_name.as_str());
+            let decision =
+                policy_evaluator.evaluate_package_install(&artifact.fully_qualified_name);
 
             match decision {
                 PackagePolicyDecision::Allow => {
                     return Ok(RequestAction::Allow(req));
                 }
                 PackagePolicyDecision::Defer => {}
-                decision => {
+                PackagePolicyDecision::BlockAll
+                | PackagePolicyDecision::Rejected
+                | PackagePolicyDecision::RequestInstall => {
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
-                        Self::blocked_artifact(&artifact),
+                        artifact.into_blocked_artifact(),
                         super::block_reason_for(decision),
                     )));
                 }
@@ -159,17 +170,17 @@ impl Rule for RuleMaven {
         if self.is_package_listed_as_malware(&artifact) {
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&artifact),
+                artifact.into_blocked_artifact(),
                 BlockReason::Malware,
             )));
         }
 
-        let cutoff_secs = self.get_package_age_cutoff_secs();
+        let cutoff_ts = self.get_package_age_cutoff_ts();
         let artifact_version = PackageVersion::Semver(artifact.version.clone());
         if self.remote_released_packages_list.is_recently_released(
             &artifact.fully_qualified_name,
             Some(&artifact_version),
-            cutoff_secs,
+            cutoff_ts,
         ) {
             tracing::info!(
                 http.url.path = %path,
@@ -178,7 +189,7 @@ impl Rule for RuleMaven {
             );
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
-                Self::blocked_artifact(&artifact),
+                artifact.into_blocked_artifact(),
                 BlockReason::NewPackage,
             )));
         }
@@ -189,7 +200,7 @@ impl Rule for RuleMaven {
 }
 
 struct MavenArtifact {
-    fully_qualified_name: ArcStr,
+    fully_qualified_name: MavenPackageName,
     version: PragmaticSemver,
 }
 
@@ -203,43 +214,41 @@ impl MavenArtifact {
         }
         name.push(':');
         name.push_str(artifact_id);
-        name.make_ascii_lowercase();
 
         Self {
-            fully_qualified_name: ArcStr::from(name),
+            fully_qualified_name: MavenPackageName::from(name),
             version,
+        }
+    }
+
+    fn into_blocked_artifact(self) -> Artifact {
+        let Self {
+            fully_qualified_name,
+            version,
+        } = self;
+        Artifact {
+            product: MAVEN_PRODUCT_KEY,
+            identifier: fully_qualified_name.into_arcstr(),
+            display_name: None,
+            version: Some(PackageVersion::Semver(version)),
         }
     }
 }
 
 impl RuleMaven {
-    fn blocked_artifact(artifact: &MavenArtifact) -> Artifact {
-        Artifact {
-            product: arcstr!("maven"),
-            identifier: artifact.fully_qualified_name.clone(),
-            display_name: None,
-            version: Some(PackageVersion::Semver(artifact.version.clone())),
-        }
-    }
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 
-    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 48 * 3600;
-
-    fn get_package_age_cutoff_secs(&self) -> i64 {
-        let maybe_ts = self.remote_endpoint_config.as_ref().and_then(|c| {
-            c.get_ecosystem_config("maven")
-                .config()
-                .and_then(|cfg| cfg.minimum_allowed_age_timestamp)
-        });
-        if let Some(ts_secs) = maybe_ts {
-            return ts_secs;
-        }
-        (now_unix_ms() / 1000) - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
+    fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
+        self.policy_evaluator
+            .as_ref()
+            .map(|c| c.package_age_cutoff_ts(Self::DEFAULT_MIN_PACKAGE_AGE))
+            .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 
     fn is_package_listed_as_malware(&self, artifact: &MavenArtifact) -> bool {
         self.remote_malware_list.has_entries_with_version(
-            artifact.fully_qualified_name.as_str(),
-            PackageVersion::Semver(artifact.version.clone()),
+            &artifact.fully_qualified_name,
+            &PackageVersion::Semver(artifact.version.clone()),
         )
     }
 

@@ -1,15 +1,15 @@
 use std::str::FromStr;
 
 use rama::{
-    http::Request,
-    net::uri::util::percent_encoding,
-    telemetry::tracing,
-    utils::str::{arcstr::ArcStr, smol_str::StrExt},
+    http::Request, net::uri::util::percent_encoding, telemetry::tracing,
+    utils::str::smol_str::StrExt,
 };
 
 use crate::package::version::PackageVersion;
 
-pub(super) fn parse_crx_download_url(req: &Request) -> Option<(ArcStr, PackageVersion)> {
+pub(super) fn parse_crx_download_url(
+    req: &Request,
+) -> Option<(super::ChromePackageName, PackageVersion)> {
     if let Some(parsed) = parse_update2_crx_url(req) {
         return Some(parsed);
     }
@@ -54,12 +54,12 @@ pub(super) fn parse_crx_download_url(req: &Request) -> Option<(ArcStr, PackageVe
     }
 
     let version_string = version_raw.replace_smolstr("_", ".");
-    let version = PackageVersion::from_str(version_string.as_str()).unwrap_or(PackageVersion::None);
+    let Ok(version) = PackageVersion::from_str(version_string.as_str());
 
-    Some((ArcStr::from(extension_id), version))
+    Some((super::ChromePackageName::from(extension_id), version))
 }
 
-fn parse_update2_crx_url(req: &Request) -> Option<(ArcStr, PackageVersion)> {
+fn parse_update2_crx_url(req: &Request) -> Option<(super::ChromePackageName, PackageVersion)> {
     let uri = req.uri();
     if uri.path() != "/service/update2/crx" {
         return None;
@@ -78,7 +78,10 @@ fn parse_update2_crx_url(req: &Request) -> Option<(ArcStr, PackageVersion)> {
         return None;
     }
 
-    Some((ArcStr::from(extension_id), PackageVersion::None))
+    Some((
+        super::ChromePackageName::from(extension_id),
+        PackageVersion::None,
+    ))
 }
 
 fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {

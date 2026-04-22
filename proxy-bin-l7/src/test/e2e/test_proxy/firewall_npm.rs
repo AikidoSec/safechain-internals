@@ -138,7 +138,7 @@ async fn test_npm_https_package_new_package_blocked() {
 #[tokio::test]
 #[tracing_test::traced_test]
 async fn test_npm_https_package_new_package_not_blocked_via_policy_cutoff() {
-    // The policy sets minimum_allowed_age_timestamp far in the future (year ~2286), making the
+    // The policy sets minimum_allowed_age_timestamp far in the future, making the
     // cutoff larger than our test entry's released_on (year ~2255) — so the package is no
     // longer considered "recent" and is allowed through.
     let runtime = e2e::runtime::spawn_with_agent_identity(

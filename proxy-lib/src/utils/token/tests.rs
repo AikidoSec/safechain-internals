@@ -1,5 +1,6 @@
 use super::*;
 use crate::utils::io::tmp_dir;
+use rama::http::{Body, Request};
 use std::fs;
 
 #[test]
@@ -69,4 +70,19 @@ fn test_incomplete_identity_is_rejected() {
     fs::write(&config_path, r#"{"token":"some-valid-test-token"}"#).unwrap();
 
     assert!(AgentIdentity::try_load_from_path(&config_path).is_none());
+}
+
+#[test]
+fn test_add_request_headers() {
+    let identity: AgentIdentity =
+        serde_json::from_str(r#"{"token":"some-valid-test-token","device_id":"abc123"}"#).unwrap();
+    let mut req = Request::builder().uri("/").body(Body::empty()).unwrap();
+
+    identity.add_request_headers(&mut req).unwrap();
+
+    assert_eq!(
+        req.headers().get("authorization").unwrap(),
+        "some-valid-test-token"
+    );
+    assert_eq!(req.headers().get("x-device-id").unwrap(), "abc123");
 }

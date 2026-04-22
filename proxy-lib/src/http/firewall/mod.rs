@@ -18,8 +18,9 @@ use rama::{
     layer::MapErrLayer,
     net::address::Domain,
     rt::Executor,
+    service::BoxService,
     telemetry::tracing,
-    utils::{backoff::ExponentialBackoff, rng::HasherRng, str::arcstr::ArcStr},
+    utils::{backoff::ExponentialBackoff, rng::HasherRng},
 };
 
 #[cfg(feature = "pac")]
@@ -44,11 +45,11 @@ mod pac;
 
 use crate::{
     endpoint_protection::{
-        PolicyEvaluator, RemoteEndpointConfig,
-        remote_app_passthrough_list::RemoteAppPassthroughList,
+        RemoteEndpointConfig, remote_app_passthrough_list::RemoteAppPassthroughList,
     },
-    http::firewall::rule::{
-        DynRule, npm::min_package_age::MinPackageAge, pypi::min_package_age::MinPackageAgePyPI,
+    http::firewall::{
+        notifier::EventNotifier,
+        rule::{DynRule, npm::min_package_age::MinPackageAge},
     },
     storage::SyncCompactDataStorage,
     utils::{env::network_service_identifier, token::AgentIdentity},
@@ -92,47 +93,8 @@ impl Firewall {
         agent_identity: Option<AgentIdentity>,
         aikido_url: Uri,
     ) -> Result<Self, BoxError> {
-        let layered_client = (
-            MapResponseBodyLayer::new_boxed_streaming_body(),
-            MapErrLayer::into_opaque_error(),
-            DecompressionLayer::new(),
-            TimeoutLayer::new(Duration::from_secs(60)),
-            RetryLayer::new(
-                ManagedPolicy::default().with_backoff(
-                    ExponentialBackoff::new(
-                        Duration::from_millis(100),
-                        Duration::from_secs(30),
-                        0.01,
-                        HasherRng::default,
-                    )
-                    .context("create exponential backoff impl")?,
-                ),
-            ),
-            AddRequiredRequestHeadersLayer::new().with_user_agent_header_value(
-                HeaderValue::from_static(network_service_identifier()),
-            ),
-            MapRequestBodyLayer::new_boxed_streaming_body(),
-        )
-            .into_layer(client.clone())
-            .boxed();
-
-        let notifier = match reporting_endpoint {
-            Some(endpoint) => match self::notifier::EventNotifier::try_new(
-                Executor::graceful(guard.clone()),
-                client,
-                endpoint,
-            ) {
-                Ok(notifier) => Some(notifier),
-                Err(err) => {
-                    tracing::warn!(
-                        error = %err,
-                        "failed to initialize blocked-event notifier; reporting disabled"
-                    );
-                    None
-                }
-            },
-            None => None,
-        };
+        let layered_client = try_new_layered_client(client.clone())?;
+        let notifier = new_event_notifier(guard.clone(), client, reporting_endpoint);
 
         let endpoint_config_uri = Self::endpoint_config_uri(&aikido_url)?;
         let remote_endpoint_config = match agent_identity.as_ref() {
@@ -140,8 +102,7 @@ impl Firewall {
                 match RemoteEndpointConfig::try_new(
                     guard.clone(),
                     endpoint_config_uri.clone(),
-                    ArcStr::from(identity.token.as_ref()),
-                    ArcStr::from(identity.device_id.as_ref()),
+                    identity.clone(),
                     data.clone(),
                     layered_client.clone(),
                     notifier.clone(),
@@ -160,7 +121,6 @@ impl Firewall {
             }
             None => None,
         };
-        let policy_evaluator = remote_endpoint_config.clone().map(PolicyEvaluator::new);
 
         let passthrough_list = match agent_identity {
             Some(identity) => {
@@ -168,6 +128,7 @@ impl Firewall {
                     guard.clone(),
                     identity,
                     aikido_url,
+                    data.clone(),
                     layered_client.clone(),
                 )
                 .await
@@ -191,7 +152,6 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
                     remote_endpoint_config.clone(),
                 )
                 .await
@@ -201,7 +161,6 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
                     remote_endpoint_config.clone(),
                 )
                 .await
@@ -211,7 +170,6 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
                     remote_endpoint_config.clone(),
                 )
                 .await
@@ -221,7 +179,6 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
                     Some(MinPackageAge::new(
                         notifier.clone(),
                         remote_endpoint_config.clone(),
@@ -235,8 +192,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
-                    Some(MinPackageAgePyPI::new(notifier.clone())),
+                    notifier.clone(),
                     remote_endpoint_config.clone(),
                 )
                 .await
@@ -246,7 +202,6 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
                     remote_endpoint_config.clone(),
                 )
                 .await
@@ -256,7 +211,6 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
                     remote_endpoint_config.clone(),
                 )
                 .await
@@ -266,7 +220,6 @@ impl Firewall {
                     guard,
                     layered_client,
                     data,
-                    policy_evaluator,
                     remote_endpoint_config,
                 )
                 .await
@@ -372,5 +325,56 @@ impl Firewall {
         };
 
         passthrough_list.is_source_app_passthrough(incoming_flow_info)
+    }
+}
+
+fn try_new_layered_client(
+    client: impl Service<Request, Output = Response, Error = OpaqueError> + Clone,
+) -> Result<BoxService<Request, Response, OpaqueError>, BoxError> {
+    Ok((
+        MapResponseBodyLayer::new_boxed_streaming_body(),
+        MapErrLayer::into_opaque_error(),
+        DecompressionLayer::new(),
+        TimeoutLayer::new(Duration::from_secs(60)),
+        RetryLayer::new(
+            ManagedPolicy::default().with_backoff(
+                ExponentialBackoff::new(
+                    Duration::from_millis(100),
+                    Duration::from_secs(30),
+                    0.01,
+                    HasherRng::default,
+                )
+                .context("create exponential backoff impl")?,
+            ),
+        ),
+        AddRequiredRequestHeadersLayer::new()
+            .with_user_agent_header_value(HeaderValue::from_static(network_service_identifier())),
+        MapRequestBodyLayer::new_boxed_streaming_body(),
+    )
+        .into_layer(client.clone())
+        .boxed())
+}
+
+fn new_event_notifier(
+    guard: ShutdownGuard,
+    client: impl Service<Request, Output = Response, Error = OpaqueError> + Clone,
+    reporting_endpoint: Option<Uri>,
+) -> Option<EventNotifier> {
+    match reporting_endpoint {
+        Some(endpoint) => match self::notifier::EventNotifier::try_new(
+            Executor::graceful(guard.clone()),
+            client,
+            endpoint,
+        ) {
+            Ok(notifier) => Some(notifier),
+            Err(err) => {
+                tracing::warn!(
+                    error = %err,
+                    "failed to initialize blocked-event notifier; reporting disabled"
+                );
+                None
+            }
+        },
+        None => None,
     }
 }

@@ -6,7 +6,11 @@ use rama::{http::Body, utils::str::arcstr::ArcStr};
 
 use crate::{
     http::{LolHtmlBody, firewall::rule::pypi::parser::parse_package_info_from_url},
-    package::{released_packages_list::RemoteReleasedPackagesList, version::PackageVersion},
+    package::{
+        name_formatter::LowerCasePackageName, released_packages_list::RemoteReleasedPackagesList,
+        version::PackageVersion,
+    },
+    utils::time::SystemTimestampMilliseconds,
 };
 
 #[derive(Debug)]
@@ -42,8 +46,8 @@ impl HtmlRewriteState {
 
 pub(super) fn rewrite_body<F>(
     body: Body,
-    cutoff_secs: i64,
-    released_packages: RemoteReleasedPackagesList,
+    cutoff_ts: SystemTimestampMilliseconds,
+    released_packages: RemoteReleasedPackagesList<LowerCasePackageName>,
     on_end: F,
 ) -> LolHtmlBody
 where
@@ -58,7 +62,7 @@ where
         };
 
         let (removed_name, version) =
-            match analyze_anchor_href(&href, cutoff_secs, &released_packages) {
+            match analyze_anchor_href(&href, cutoff_ts, &released_packages) {
                 AnchorDecision::Keep => return Ok(()),
                 AnchorDecision::Remove {
                     package_name: removed_name,
@@ -99,8 +103,8 @@ enum AnchorDecision {
 /// and that exact version is newer than the configured cutoff.
 fn analyze_anchor_href(
     href: &str,
-    cutoff_secs: i64,
-    released_packages: &RemoteReleasedPackagesList,
+    cutoff_ts: SystemTimestampMilliseconds,
+    released_packages: &RemoteReleasedPackagesList<LowerCasePackageName>,
 ) -> AnchorDecision {
     let Some(package) = parse_package_info_from_url(href) else {
         return AnchorDecision::Keep;
@@ -108,16 +112,12 @@ fn analyze_anchor_href(
 
     // The HTML simple index only carries filenames/URLs — no upload timestamps.
     // Unlike JSON responses we can only consult the releases list here.
-    if !released_packages.is_recently_released(
-        package.name.as_str(),
-        Some(&package.version),
-        cutoff_secs,
-    ) {
+    if !released_packages.is_recently_released(&package.name, Some(&package.version), cutoff_ts) {
         return AnchorDecision::Keep;
     }
 
     AnchorDecision::Remove {
-        package_name: ArcStr::from(package.name.as_str()),
+        package_name: package.name.into_arcstr(),
         version: package.version,
     }
 }

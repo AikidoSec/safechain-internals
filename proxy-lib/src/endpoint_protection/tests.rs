@@ -1,3 +1,5 @@
+use crate::utils::time::{SystemDuration, SystemTimestampMilliseconds};
+
 use super::*;
 
 #[test]
@@ -25,10 +27,16 @@ fn test_parse_fetch_permissions_payload() {
     assert_eq!(config.permission_group.id, 123);
     assert_eq!(config.permission_group.name.as_str(), "Development");
 
-    let pypi = config.ecosystems.get("pypi").unwrap();
+    let pypi = config
+        .ecosystems
+        .get(&EcosystemKey::from_static("pypi"))
+        .unwrap();
     assert!(!pypi.block_all_installs);
     assert!(pypi.request_installs);
-    assert_eq!(pypi.minimum_allowed_age_timestamp, Some(1740172800));
+    assert_eq!(
+        pypi.minimum_allowed_age_timestamp,
+        Some(SystemTimestampMilliseconds::EPOCH + SystemDuration::seconds(1740172800))
+    );
     assert_eq!(pypi.exceptions.allowed_packages.len(), 2);
     assert_eq!(pypi.exceptions.rejected_packages.len(), 1);
 }
@@ -46,7 +54,10 @@ fn test_parse_fetch_permissions_defaults() {
     }"#;
 
     let config: EndpointConfig = serde_json::from_str(json).unwrap();
-    let npm = config.ecosystems.get("npm").unwrap();
+    let npm = config
+        .ecosystems
+        .get(&EcosystemKey::from_static("npm"))
+        .unwrap();
 
     assert!(!npm.block_all_installs);
     assert!(!npm.request_installs);
@@ -110,7 +121,10 @@ fn test_parse_exceptions_with_wildcard_packages() {
     }"#;
 
     let config: EndpointConfig = serde_json::from_str(json).unwrap();
-    let npm = config.ecosystems.get("npm").unwrap();
+    let npm = config
+        .ecosystems
+        .get(&EcosystemKey::from_static("npm"))
+        .unwrap();
     assert!(npm.exceptions.allowed_packages.contains("@npmcli/*"));
     assert!(npm.exceptions.rejected_packages.contains("@evil/*"));
 }
