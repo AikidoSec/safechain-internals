@@ -1,7 +1,6 @@
 /*
 
 TODO list:
- - make urls dynamic
  - add notifier
  - check last modified response header
 */
@@ -27,6 +26,8 @@ use crate::{
 
 mod catalog_list;
 mod flat_version_list;
+#[cfg(test)]
+mod tests;
 
 pub(in crate::http::firewall) struct MinPackageAgeNuget {
     remote_released_packages_list: NugetRemoteReleasedPackageList,
@@ -61,7 +62,7 @@ impl MinPackageAgeNuget {
             return Ok(resp);
         }
 
-        if let Some(package_name) = self.flat_version_list.match_uri(&req_uri) {
+        if let Some(package_name) = self.flat_version_list.match_uri(req_uri) {
             return self
                 .flat_version_list
                 .remove_new_packages(
@@ -73,7 +74,7 @@ impl MinPackageAgeNuget {
                 .await;
         }
 
-        if let Some(package_name) = self.catalog_list.match_uri(&req_uri) {
+        if let Some(package_name) = self.catalog_list.match_uri(req_uri) {
             return self
                 .catalog_list
                 .remove_new_packages(

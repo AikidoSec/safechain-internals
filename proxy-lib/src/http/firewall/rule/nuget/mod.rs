@@ -5,7 +5,8 @@ use rama::{
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{
-        Request, Response, Uri, ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput}
+        Request, Response, Uri,
+        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
     },
     net::address::Domain,
     telemetry::tracing,
@@ -17,7 +18,9 @@ use crate::{
         EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
     },
     http::firewall::{
-        domain_matcher::DomainMatcher, events::{Artifact, BlockReason}, rule::{BlockedRequest, RequestAction, Rule, nuget::min_package_age::MinPackageAgeNuget}
+        domain_matcher::DomainMatcher,
+        events::{Artifact, BlockReason},
+        rule::{BlockedRequest, RequestAction, Rule, nuget::min_package_age::MinPackageAgeNuget},
     },
     package::{
         malware_list::RemoteMalwareList,
@@ -196,7 +199,9 @@ impl Rule for RuleNuget {
 
         let cutoff_secs = self.get_package_age_cutoff_ts();
 
-        min_package_age.remove_new_packages(resp, req_uri, cutoff_secs).await
+        min_package_age
+            .remove_new_packages(resp, req_uri, cutoff_secs)
+            .await
     }
 
     #[inline(always)]

@@ -6,27 +6,24 @@ use rama::{
 
 use crate::{
     http::firewall::rule::nuget::NugetRemoteReleasedPackageList,
-    package::{name_formatter::LowerCasePackageName, version::{PackageVersion, PragmaticSemver}},
+    package::{
+        name_formatter::LowerCasePackageName,
+        version::{PackageVersion, PragmaticSemver},
+    },
     utils::time::SystemTimestampMilliseconds,
 };
+
+const BASE_PATH: &str = "/v3/registration5-gz-semver2";
 
 pub struct CatalogList {}
 
 impl CatalogList {
-    pub fn match_uri<'a>(&self, uri: &'a Uri) -> Option<&'a str> {
-        let path = uri.path();
-
-        let (segment, path) = path.trim_start_matches("/").split_once("/")?;
-        if !segment.eq_ignore_ascii_case("v3") {
-            return None;
-        }
-
-        let (segment, path) = path.trim_start_matches("/").split_once("/")?;
-        if !segment.eq_ignore_ascii_case("registration5-gz-semver2") {
-            return None;
-        }
-
-        path.split_once("/").map(|(package_name, _)| package_name)
+    pub fn match_uri<'u>(&self, uri: &'u Uri) -> Option<&'u str> {
+        uri.path()
+            .strip_prefix(BASE_PATH)?
+            .trim_start_matches('/')
+            .split_once('/')
+            .map(|(package_name, _)| package_name)
     }
 
     pub async fn remove_new_packages(
@@ -86,10 +83,10 @@ impl CatalogList {
         });
 
         let new_count = items.len();
-        if let Some(count) = json.get_mut("count") {
-            if count.as_u64() != Some(new_count as u64) {
-                *count = serde_json::Value::Number(new_count.into());
-            }
+        if let Some(count) = json.get_mut("count")
+            && count.as_u64() != Some(new_count as u64)
+        {
+            *count = serde_json::Value::Number(new_count.into());
         }
     }
 

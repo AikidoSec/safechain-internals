@@ -1,28 +1,29 @@
 use rama::{
     error::{BoxError, ErrorContext},
-    http::{
-        Body, Response, Uri,
-        body::util::BodyExt,
-    },
+    http::{Body, Response, Uri, body::util::BodyExt},
     telemetry::tracing,
 };
 
-use crate::{http::firewall::rule::nuget::NugetRemoteReleasedPackageList, package::{name_formatter::LowerCasePackageName, 
-        version::{PackageVersion, PragmaticSemver}}
-    , utils::time::SystemTimestampMilliseconds};
+use crate::{
+    http::firewall::rule::nuget::NugetRemoteReleasedPackageList,
+    package::{
+        name_formatter::LowerCasePackageName,
+        version::{PackageVersion, PragmaticSemver},
+    },
+    utils::time::SystemTimestampMilliseconds,
+};
+
+const BASE_PATH: &str = "/v3-flatcontainer";
 
 pub struct FlatVersionList {}
 
 impl FlatVersionList {
     pub fn match_uri<'a>(&self, uri: &'a Uri) -> Option<&'a str> {
-        let path = uri.path();
-
-        let (first_segment, remainder) = path.trim_start_matches("/").split_once("/")?;
-        if !first_segment.eq_ignore_ascii_case("v3-flatcontainer") {
-            return None;
-        }
-
-        let (package_name, index_json) = remainder.split_once("/")?;
+        let (package_name, index_json) = uri
+            .path()
+            .strip_prefix(BASE_PATH)?
+            .trim_start_matches('/')
+            .split_once('/')?;
 
         if index_json.eq_ignore_ascii_case("index.json") {
             Some(package_name)
