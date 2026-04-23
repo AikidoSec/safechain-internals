@@ -54,6 +54,8 @@ type Daemon struct {
 
 	daemonLastStatusLogTime  time.Time
 	daemonLastSBOMReportTime time.Time
+
+	lastProtected bool
 }
 
 func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
@@ -420,7 +422,8 @@ func (d *Daemon) reportSBOM() error {
 }
 
 func (d *Daemon) heartbeat() error {
-	if ingress.IsSetupOk(d.ctx, d.config) {
+	setupOk := ingress.IsSetupOk(d.ctx, d.config)
+	if setupOk {
 		shouldRetry, err := d.handleProxy()
 		if !shouldRetry {
 			return fmt.Errorf("failed to handle proxy: %v", err)
@@ -441,34 +444,14 @@ func (d *Daemon) heartbeat() error {
 		d.printDaemonStatus()
 		return nil
 	})
-	d.runIfIntervalExceeded(&d.config.LastHeartbeatReportTime, constants.HeartbeatReportInterval, func() error {
-		if d.config.Token == "" {
-			return fmt.Errorf("Token is not set, skipping heartbeat report")
-		}
-		missingSteps := ingress.ComputeSetupSteps(d.ctx, d.config)
-		if len(missingSteps) == 0 && !d.proxy.IsRunning() {
-			missingSteps = []string{"start-proxy"}
-		}
-		heartbeatEvent := &cloud.HeartbeatEvent{
-			DeviceInfo:  *d.deviceInfo,
-			VersionInfo: *d.versionInfo,
-			Status: cloud.Status{
-				Protected:         len(missingSteps) == 0,
-				MissingSetupSteps: missingSteps,
-			},
-		}
-		resp, err := cloud.SendHeartbeat(d.ctx, d.config, heartbeatEvent)
-		if err != nil {
-			return fmt.Errorf("Failed to report heartbeat: %v", err)
-		}
-		eventJSON, _ := json.MarshalIndent(heartbeatEvent, "", "  ")
-		log.Printf("Heartbeat report sent successfully: %s", string(eventJSON))
+	protected := setupOk && d.proxy.IsRunning()
+	if protected != d.lastProtected {
+		log.Printf("Protection state changed (protected=%v); forcing cloud heartbeat report", protected)
+		d.reportHeartbeat()
+	}
+	d.lastProtected = protected
 
-		d.handleLogCollectRequest(resp)
-		d.handleTargetUpdateVersion(resp)
-
-		return nil
-	})
+	d.runIfIntervalExceeded(&d.config.LastHeartbeatReportTime, constants.HeartbeatReportInterval, d.reportHeartbeat)
 	d.runIfIntervalExceeded(&d.config.LastSBOMReportTime, constants.SBOMReportInterval, func() error {
 		if d.config.Token == "" {
 			return fmt.Errorf("Token is not set, skipping SBOM report")
@@ -478,6 +461,35 @@ func (d *Daemon) heartbeat() error {
 		}
 		return nil
 	})
+	return nil
+}
+
+func (d *Daemon) reportHeartbeat() error {
+	if d.config.Token == "" {
+		return fmt.Errorf("Token is not set, skipping heartbeat report")
+	}
+	missingSteps := ingress.ComputeSetupSteps(d.ctx, d.config)
+	if len(missingSteps) == 0 && !d.proxy.IsRunning() {
+		missingSteps = []string{"start-proxy"}
+	}
+	heartbeatEvent := &cloud.HeartbeatEvent{
+		DeviceInfo:  *d.deviceInfo,
+		VersionInfo: *d.versionInfo,
+		Status: cloud.Status{
+			Protected:         len(missingSteps) == 0,
+			MissingSetupSteps: missingSteps,
+		},
+	}
+	resp, err := cloud.SendHeartbeat(d.ctx, d.config, heartbeatEvent)
+	if err != nil {
+		return fmt.Errorf("Failed to report heartbeat: %v", err)
+	}
+	eventJSON, _ := json.MarshalIndent(heartbeatEvent, "", "  ")
+	log.Printf("Heartbeat report sent successfully: %s", string(eventJSON))
+
+	d.handleLogCollectRequest(resp)
+	d.handleTargetUpdateVersion(resp)
+
 	return nil
 }
 
