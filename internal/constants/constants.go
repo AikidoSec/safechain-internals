@@ -9,5 +9,6 @@ const (
 	DaemonStatusLogInterval = 1 * time.Hour
 	HeartbeatReportInterval = 3 * time.Minute
 	SBOMReportInterval      = 24 * time.Hour
+	SetupWizardReshowInterval = 24 * time.Hour
 	ProxyStartMaxRetries    = 100
 )

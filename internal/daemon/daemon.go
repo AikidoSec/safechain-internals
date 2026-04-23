@@ -57,8 +57,6 @@ type Daemon struct {
 }
 
 func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
-	uiMgr := NewUIManager()
-
 	if err := platform.Init(); err != nil {
 		return nil, fmt.Errorf("failed to initialize platform: %v", err)
 	}
@@ -74,6 +72,8 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("failed to create config")
 	}
+
+	uiMgr := NewUIManager(cfg)
 
 	var proxyManager proxy.ProxyManager
 	if cfg.GetProxyMode() == config.ProxyModeL4 {
@@ -476,6 +476,15 @@ func (d *Daemon) heartbeat() error {
 		if err := d.reportSBOM(); err != nil {
 			return fmt.Errorf("Failed to report SBOM: %v", err)
 		}
+		return nil
+	})
+
+	d.runIfIntervalExceeded(&d.config.LastSetupWizardShownTime, constants.SetupWizardReshowInterval, func() error {
+		steps := ingress.ComputeSetupSteps(d.ctx, d.config)
+		if len(steps) == 0 {
+			return nil
+		}
+		d.uiManager.StartSetupWizard(steps)
 		return nil
 	})
 	return nil

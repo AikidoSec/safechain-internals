@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/uiclient"
 	"github.com/AikidoSec/safechain-internals/internal/utils"
@@ -22,6 +23,7 @@ const uiReadyTimeout = 5 * time.Second
 type UIManager struct {
 	Client  *uiclient.Client
 	process uiProcess
+	config  *config.ConfigInfo
 
 	launchMu    sync.Mutex
 	ctx         context.Context
@@ -32,9 +34,10 @@ type UIManager struct {
 	lastProxyStdoutMessage string
 }
 
-func NewUIManager() *UIManager {
+func NewUIManager(cfg *config.ConfigInfo) *UIManager {
 	return &UIManager{
 		Client: uiclient.New(),
+		config: cfg,
 	}
 }
 
@@ -181,6 +184,14 @@ func (m *UIManager) StartSetupWizard(steps []string) {
 	log.Printf("Starting setup wizard with steps: %v", steps)
 	if err := m.Client.StartSetupWizard(steps); err != nil {
 		log.Printf("Failed to start setup wizard: %v", err)
+		return
+	}
+
+	if m.config != nil {
+		m.config.LastSetupWizardShownTime = time.Now()
+		if err := m.config.Save(); err != nil {
+			log.Printf("Failed to save config after showing setup wizard: %v", err)
+		}
 	}
 }
 
