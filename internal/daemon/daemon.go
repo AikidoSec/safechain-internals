@@ -73,7 +73,7 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 		return nil, fmt.Errorf("failed to create config")
 	}
 
-	uiMgr := NewUIManager(cfg)
+	uiMgr := NewUIManager()
 
 	var proxyManager proxy.ProxyManager
 	if cfg.GetProxyMode() == config.ProxyModeL4 {
@@ -226,7 +226,7 @@ func (d *Daemon) run(ctx context.Context) error {
 			log.Printf("Failed to launch UI: %v", err)
 		}
 		if !proxy.ProxyCAInstalled() {
-			d.uiManager.StartSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
+			d.showSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
 		}
 	}()
 
@@ -488,6 +488,17 @@ func (d *Daemon) heartbeat() error {
 		return nil
 	})
 	return nil
+}
+
+func (d *Daemon) showSetupWizard(steps []string) {
+	if len(steps) == 0 {
+		return
+	}
+	d.uiManager.StartSetupWizard(steps)
+	d.config.LastSetupWizardShownTime = time.Now()
+	if err := d.config.Save(); err != nil {
+		log.Printf("Failed to save config after showing setup wizard: %v", err)
+	}
 }
 
 func newSBOMRegistry() *sbom.Registry {
