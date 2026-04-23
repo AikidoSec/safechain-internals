@@ -5,7 +5,9 @@ use rama::{
 };
 
 use crate::{
-    http::{firewall::rule::nuget::NugetRemoteReleasedPackageList, headers::make_response_uncacheable},
+    http::{
+        firewall::rule::nuget::NugetRemoteReleasedPackageList, headers::make_response_uncacheable,
+    },
     package::{
         name_formatter::LowerCasePackageName,
         version::{PackageVersion, PragmaticSemver},
