@@ -45,11 +45,15 @@ mod pac;
 
 use crate::{
     endpoint_protection::{
-        RemoteEndpointConfig, remote_app_passthrough_list::RemoteAppPassthroughList,
+        RemoteEndpointConfig,
+        remote_app_passthrough_list::{PassthroughMatchContext, RemoteAppPassthroughList},
     },
     http::firewall::{
         notifier::EventNotifier,
-        rule::{DynRule, npm::min_package_age::MinPackageAge},
+        rule::{
+            DynRule, npm::min_package_age::MinPackageAge,
+            vscode::min_package_age::MinPackageAgeVSCode,
+        },
     },
     storage::SyncCompactDataStorage,
     utils::{env::network_service_identifier, token::AgentIdentity},
@@ -152,6 +156,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
+                    Some(MinPackageAgeVSCode::new(notifier.clone())),
                     remote_endpoint_config.clone(),
                 )
                 .await
@@ -251,7 +256,10 @@ impl Firewall {
         &self,
         incoming_flow_info: &IncomingFlowInfo,
     ) -> Option<FirewallHttpRules> {
-        if self.is_passthrough_traffic(incoming_flow_info) {
+        if self.is_passthrough_traffic(&PassthroughMatchContext {
+            app_bundle_id: incoming_flow_info.app_bundle_id,
+            domain: Some(incoming_flow_info.domain),
+        }) {
             tracing::debug!(
                 domain = %incoming_flow_info.domain,
                 bundle_id = %incoming_flow_info.app_bundle_id.unwrap_or("default"),
@@ -320,12 +328,12 @@ impl Firewall {
             .into_response()
     }
 
-    fn is_passthrough_traffic(&self, incoming_flow_info: &IncomingFlowInfo) -> bool {
+    pub fn is_passthrough_traffic(&self, passthrough_context: &PassthroughMatchContext) -> bool {
         let Some(ref passthrough_list) = self.passthrough_list else {
             return false;
         };
 
-        passthrough_list.is_source_app_passthrough(incoming_flow_info)
+        passthrough_list.is_source_app_passthrough(passthrough_context)
     }
 }
 

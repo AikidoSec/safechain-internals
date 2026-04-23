@@ -22,6 +22,9 @@ type ConfigInfo struct {
 	LastSBOMReportTime      time.Time `json:"last_sbom_report_time"`
 	BaseURL                 string    `json:"base_url,omitempty"`
 	ProxyMode               string    `json:"proxy_mode,omitempty"`
+
+	LastHandledLogCollectRequestAt int64  `json:"last_handled_log_collect_request_at,omitempty"`
+	LastHandledTargetUpdateVersion string `json:"last_handled_target_update_version,omitempty"`
 }
 
 func (c *ConfigInfo) GetProxyMode() string {

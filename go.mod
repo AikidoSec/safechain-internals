@@ -1,6 +1,6 @@
 module github.com/AikidoSec/safechain-internals
 
-go 1.25.0
+go 1.26.2
 
 require (
 	github.com/google/go-github/v82 v82.0.0
