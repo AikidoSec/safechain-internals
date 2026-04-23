@@ -112,3 +112,15 @@ func (s *DaemonService) CloseInstallWindow() {
 func (s *DaemonService) CollectLogs() error {
 	return daemon.CollectLogs()
 }
+
+func (s *DaemonService) OpenDashboardToEvent(eventId, eventType string) {
+	if openDashboardToEvent != nil {
+		openDashboardToEvent(eventId, eventType)
+	}
+}
+
+func (s *DaemonService) CloseTrayNotification() {
+	if closeTrayNotification != nil {
+		closeTrayNotification()
+	}
+}
