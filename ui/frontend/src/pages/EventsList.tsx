@@ -5,6 +5,7 @@ import { Events } from "@wailsio/runtime";
 import { listEvents } from "../api";
 import { BLOCK_REASON_LABEL, getToolIcon } from "../constants";
 import { formatEventTimeShort, isConnectionError } from "../utils";
+import { useDashboardContext } from "../App";
 
 function updateEventInList(events: BlockEvent[], updated: BlockEvent): BlockEvent[] {
   return events.map((event) => (event.id === updated.id ? updated : event));
@@ -12,6 +13,7 @@ function updateEventInList(events: BlockEvent[], updated: BlockEvent): BlockEven
 
 export function EventsList() {
   const navigate = useNavigate();
+  const { setupRequired, onStartSetup } = useDashboardContext();
   const [events, setEvents] = useState<BlockEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +71,21 @@ export function EventsList() {
   return (
     <div className="events-list">
       <h1>Events</h1>
+      {setupRequired && (
+        <div className="events-list-setup-required" role="alert">
+          <p className="events-list-setup-required__text">
+            Initial setup is incomplete. Aikido Endpoint Protection is not protecting this device yet —{" "}
+            <button
+              type="button"
+              className="events-list-setup-required__link"
+              onClick={onStartSetup}
+            >
+              click “System Setup Required…”
+            </button>{" "}
+            to finish configuration.
+          </p>
+        </div>
+      )}
       {loading && <p className="events-list-loading">Loading…</p>}
       {error && !connectionFailed && (
         <div className="events-list-error-inline">

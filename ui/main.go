@@ -33,12 +33,17 @@ var closeInstallWindow func()
 
 var setInstallWindowOnTop func(bool)
 
+type SetupStatePayload struct {
+	SetupRequired bool `json:"setupRequired"`
+}
+
 func init() {
 	application.RegisterEvent[daemon.BlockEvent]("blocked")
 	application.RegisterEvent[daemon.BlockEvent]("blocked_updated")
 	application.RegisterEvent[daemon.TlsTerminationFailedEvent]("tls_termination_failed")
 	application.RegisterEvent[daemon.PermissionsResponse]("permissions_updated")
 	application.RegisterEvent[FocusEventPayload]("focus_event")
+	application.RegisterEvent[SetupStatePayload]("setup_state")
 }
 
 // --- CLI flags -----------------------------------------------------------
@@ -262,6 +267,15 @@ func wrapText(text string, maxWidth int) []string {
 
 const maxStatusLines = 4
 
+// setupStart kicks off the daemon setup flow; shared between tray menu and UI button.
+func setupStart() {
+	go func() {
+		if err := daemon.SetupStart(); err != nil {
+			log.Printf("setup start: %v", err)
+		}
+	}()
+}
+
 func setupSystemTray(app *application.App, showDashboard func()) chan<- appserver.ProxyStatusBody {
 	systray := app.SystemTray.New()
 	systray.SetTooltip("Aikido Endpoint Protection")
@@ -284,11 +298,7 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 	setupItem := menu.Add("⚠ System Setup Required...")
 	setupItem.SetHidden(true)
 	setupItem.OnClick(func(_ *application.Context) {
-		go func() {
-			if err := daemon.SetupStart(); err != nil {
-				log.Printf("setup start: %v", err)
-			}
-		}()
+		setupStart()
 	})
 	menu.AddSeparator()
 	menu.Add("Open Dashboard").OnClick(func(_ *application.Context) {
@@ -314,6 +324,7 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 				setupHidden.Store(shouldHide)
 				setupItem.SetHidden(shouldHide)
 				menu.Update()
+				app.Event.Emit("setup_state", SetupStatePayload{SetupRequired: !shouldHide})
 			}
 			time.Sleep(10 * time.Second)
 		}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { HashRouter, Routes, Route, NavLink, useNavigate, Outlet, useLocation } from "react-router-dom";
+import { HashRouter, Routes, Route, NavLink, useNavigate, Outlet, useLocation, useOutletContext } from "react-router-dom";
 import { Events } from "@wailsio/runtime";
 import { EventsList } from "./pages/EventsList";
 import { EventDetail } from "./pages/EventDetail";
@@ -7,9 +7,18 @@ import { TlsEventsList } from "./pages/TlsEventsList";
 import { TlsEventDetail } from "./pages/TlsEventDetail";
 import { ProtectedEcosystems } from "./pages/ProtectedEcosystems";
 import { InstallPage } from "./pages/InstallPage";
-import { getVersion } from "./api";
+import { getVersion, setupCheck, setupStart } from "./api";
 import logoUrl from "../assets/logo.svg";
 import "./App.css";
+
+export type DashboardContext = {
+  setupRequired: boolean;
+  onStartSetup: () => void;
+};
+
+export function useDashboardContext(): DashboardContext {
+  return useOutletContext<DashboardContext>();
+}
 
 function FocusHandler() {
   const navigate = useNavigate();
@@ -37,9 +46,32 @@ function FocusHandler() {
 function DashboardLayout() {
   const location = useLocation();
   const [version, setVersion] = useState("");
+  const [setupRequired, setSetupRequired] = useState(false);
   useEffect(() => {
     getVersion().then(setVersion).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setupCheck()
+      .then((ok) => {
+        if (!cancelled) setSetupRequired(!ok);
+      })
+      .catch(() => {});
+    const unsub = Events.On("setup_state", (ev: { data?: { setupRequired?: boolean } }) => {
+      if (typeof ev.data?.setupRequired === "boolean") {
+        setSetupRequired(ev.data.setupRequired);
+      }
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, []);
+
+  const onStartSetup = () => {
+    setupStart().catch(() => {});
+  };
 
   const eventsTabActive = location.pathname === "/" || location.pathname.startsWith("/events");
 
@@ -47,7 +79,19 @@ function DashboardLayout() {
     <div className="container">
       <header className="app-header">
         <img src={logoUrl} alt="Aikido" className="app-logo-img" />
-        {version && <span className="app-version">v{version}</span>}
+        <div className="app-header-right">
+          {setupRequired && (
+            <button
+              type="button"
+              className="app-setup-required-btn"
+              onClick={onStartSetup}
+            >
+              <span className="app-setup-required-btn__icon" aria-hidden>⚠</span>
+              System Setup Required…
+            </button>
+          )}
+          {version && <span className="app-version">v{version}</span>}
+        </div>
       </header>
       <nav className="app-tabs">
         <NavLink to="/events" className={() => `app-tab${eventsTabActive ? " app-tab--active" : ""}`}>
@@ -65,7 +109,7 @@ function DashboardLayout() {
       </nav>
       <main className="dashboard">
         <FocusHandler />
-        <Outlet />
+        <Outlet context={{ setupRequired, onStartSetup } satisfies DashboardContext} />
       </main>
     </div>
   );
