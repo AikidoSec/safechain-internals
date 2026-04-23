@@ -16,6 +16,7 @@ type Package struct {
 	Id      string `json:"id"`
 	Name    string `json:"name,omitempty"`
 	Version string `json:"version"`
+	State   string `json:"state,omitempty"`
 }
 
 // PackageManager represents a package ecosystem (e.g. "npm", "pip").
