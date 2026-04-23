@@ -1,10 +1,7 @@
 use rama::http::{
-    HeaderMap, HeaderName,
+    HeaderMap, HeaderName, header,
     headers::{CacheControl, HeaderMapExt as _},
-    layer::remove_header::{
-        remove_cache_policy_headers, remove_cache_validation_response_headers,
-        remove_payload_metadata_headers,
-    },
+    layer::remove_header::{remove_cache_policy_headers, remove_cache_validation_response_headers},
 };
 
 pub const X_DEVICE_ID: HeaderName = HeaderName::from_static("x-device-id");
@@ -17,6 +14,6 @@ pub const X_DEVICE_ID: HeaderName = HeaderName::from_static("x-device-id");
 pub fn make_response_uncacheable(headers: &mut HeaderMap) {
     remove_cache_policy_headers(headers);
     remove_cache_validation_response_headers(headers);
-    remove_payload_metadata_headers(headers);
+    while headers.remove(header::CONTENT_LENGTH).is_some() {}
     headers.typed_insert(CacheControl::new().with_no_cache());
 }
