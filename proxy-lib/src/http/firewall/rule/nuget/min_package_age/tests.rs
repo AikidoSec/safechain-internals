@@ -3,7 +3,7 @@ use rama::http::Uri;
 use super::catalog_list::CatalogList;
 use super::flat_version_list::FlatVersionList;
 
-// FlatVersionList matches GET /v3-flatcontainer/{package}/index.json (step 4 in nuget restore)
+// FlatVersionList matches GET /v3-flatcontainer/{package}/index.json
 
 #[test]
 fn test_flat_version_list_match_uri_returns_package_name() {
@@ -32,7 +32,7 @@ fn test_flat_version_list_match_uri_no_match_for_wrong_base_path() {
     assert_eq!(FlatVersionList {}.match_uri(&uri), None);
 }
 
-// CatalogList matches GET /v3/registration5-gz-semver2/{package}/... (steps 2 and 3 in nuget restore)
+// CatalogList matches GET /v3/registration5-gz-semver2/{package}/...
 
 #[test]
 fn test_catalog_list_match_uri_returns_package_name_for_index() {

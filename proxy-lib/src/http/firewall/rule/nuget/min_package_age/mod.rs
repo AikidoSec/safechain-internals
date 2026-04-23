@@ -1,7 +1,6 @@
 /*
 TODO list:
  - add notifier
- - check last modified response header
 */
 
 use rama::{

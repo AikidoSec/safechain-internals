@@ -5,7 +5,7 @@ use rama::{
 };
 
 use crate::{
-    http::firewall::rule::nuget::NugetRemoteReleasedPackageList,
+    http::{firewall::rule::nuget::NugetRemoteReleasedPackageList, headers::make_response_uncacheable},
     package::{
         name_formatter::LowerCasePackageName,
         version::{PackageVersion, PragmaticSemver},
@@ -39,7 +39,7 @@ impl FlatVersionList {
         released_package_list: &NugetRemoteReleasedPackageList,
         cutoff_secs: SystemTimestampMilliseconds,
     ) -> Result<Response, BoxError> {
-        let (parts, body) = resp.into_parts();
+        let (mut parts, body) = resp.into_parts();
 
         let bytes = body
             .collect()
@@ -84,6 +84,8 @@ impl FlatVersionList {
 
         let new_bytes =
             serde_json::to_vec(&json).context("serialize modified nuget index response")?;
+
+        make_response_uncacheable(&mut parts.headers);
 
         Ok(Response::from_parts(parts, Body::from(new_bytes)))
     }
