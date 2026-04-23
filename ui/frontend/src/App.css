@@ -120,27 +120,11 @@ body {
   margin: 0 0 20px;
 }
 
-.events-list-setup-required__text {
+.events-list .events-list-setup-required__text {
   margin: 0;
   font-size: 0.9rem;
   line-height: 1.5;
   color: #7a1919;
-}
-
-.events-list-setup-required__link {
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  color: var(--surface-red-100);
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: underline;
-  font: inherit;
-}
-
-.events-list-setup-required__link:hover {
-  color: #991b1b;
 }
 
 .app-tabs {

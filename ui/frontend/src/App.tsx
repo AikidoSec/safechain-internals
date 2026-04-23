@@ -87,7 +87,7 @@ function DashboardLayout() {
               onClick={onStartSetup}
             >
               <span className="app-setup-required-btn__icon" aria-hidden>⚠</span>
-              System Setup Required…
+              System Setup Required
             </button>
           )}
           {version && <span className="app-version">v{version}</span>}
