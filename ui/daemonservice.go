@@ -94,6 +94,14 @@ func (s *DaemonService) SetupRestart() error {
 	return daemon.SetupRestart()
 }
 
+func (s *DaemonService) SetupCheck() (bool, error) {
+	return daemon.SetupCheck()
+}
+
+func (s *DaemonService) SetupStart() error {
+	return daemon.SetupStart()
+}
+
 // CloseInstallWindow hides the certificate install window.
 func (s *DaemonService) CloseInstallWindow() {
 	if closeInstallWindow != nil {

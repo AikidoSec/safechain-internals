@@ -33,12 +33,17 @@ var closeInstallWindow func()
 
 var setInstallWindowOnTop func(bool)
 
+type SetupStatePayload struct {
+	SetupRequired bool `json:"setupRequired"`
+}
+
 func init() {
 	application.RegisterEvent[daemon.BlockEvent]("blocked")
 	application.RegisterEvent[daemon.BlockEvent]("blocked_updated")
 	application.RegisterEvent[daemon.TlsTerminationFailedEvent]("tls_termination_failed")
 	application.RegisterEvent[daemon.PermissionsResponse]("permissions_updated")
 	application.RegisterEvent[FocusEventPayload]("focus_event")
+	application.RegisterEvent[SetupStatePayload]("setup_state")
 }
 
 // --- CLI flags -----------------------------------------------------------
@@ -314,6 +319,7 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 				setupHidden.Store(shouldHide)
 				setupItem.SetHidden(shouldHide)
 				menu.Update()
+				app.Event.Emit("setup_state", SetupStatePayload{SetupRequired: !shouldHide})
 			}
 			time.Sleep(10 * time.Second)
 		}
