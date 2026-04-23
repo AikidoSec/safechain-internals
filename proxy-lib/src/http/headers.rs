@@ -1,10 +1,7 @@
 use rama::http::{
-    HeaderMap, HeaderName,
-    header,
+    HeaderMap, HeaderName, header,
     headers::{CacheControl, HeaderMapExt as _},
-    layer::remove_header::{
-        remove_cache_policy_headers, remove_cache_validation_response_headers,
-    },
+    layer::remove_header::{remove_cache_policy_headers, remove_cache_validation_response_headers},
 };
 
 pub const X_DEVICE_ID: HeaderName = HeaderName::from_static("x-device-id");
