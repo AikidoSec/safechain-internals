@@ -105,7 +105,8 @@ impl CatalogList {
         cutoff_secs: SystemTimestampMilliseconds,
         depth: usize,
     ) {
-        if depth > 5 {
+        const MAX_DEPTH: usize = 5;
+        if depth > MAX_DEPTH {
             return;
         }
         let Some(serde_json::Value::Array(items)) = json.get_mut("items") else {
