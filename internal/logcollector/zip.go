@@ -1,15 +1,16 @@
 package logcollector
 
 import (
+	"archive/zip"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 )
 
-func zipLogsWithPassword(ctx context.Context, dir, timestamp, password string) (string, error) {
+func zipLogs(ctx context.Context, dir, timestamp string) (string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return "", fmt.Errorf("failed to read log directory: %w", err)
@@ -31,17 +32,59 @@ func zipLogsWithPassword(ctx context.Context, dir, timestamp, password string) (
 	}
 
 	zipName := fmt.Sprintf("aikido-endpoint-protection-logs-%s.zip", timestamp)
-	args := []string{"-j", "-P", password, zipName}
-	args = append(args, files...)
+	zipPath := filepath.Join(dir, zipName)
 
-	cmd := exec.CommandContext(ctx, "zip", args...)
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
+	out, err := os.Create(zipPath)
 	if err != nil {
-		return "", fmt.Errorf("zip command failed: %w (output: %s)", err, string(out))
+		return "", fmt.Errorf("failed to create zip file: %w", err)
+	}
+	defer out.Close()
+
+	zw := zip.NewWriter(out)
+	defer zw.Close()
+
+	for _, name := range files {
+		if err := ctx.Err(); err != nil {
+			os.Remove(zipPath)
+			return "", err
+		}
+		if err := addFile(zw, filepath.Join(dir, name), name); err != nil {
+			os.Remove(zipPath)
+			return "", fmt.Errorf("failed to add %s to zip: %w", name, err)
+		}
 	}
 
-	return filepath.Join(dir, zipName), nil
+	return zipPath, nil
+}
+
+func addFile(zw *zip.Writer, srcPath, entryName string) error {
+	src, err := os.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	info, err := src.Stat()
+	if err != nil {
+		return err
+	}
+
+	header, err := zip.FileInfoHeader(info)
+	if err != nil {
+		return err
+	}
+	header.Name = entryName
+	header.Method = zip.Deflate
+
+	w, err := zw.CreateHeader(header)
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(w, src); err != nil {
+		return err
+	}
+	return nil
 }
 
 func cleanupZips(dir string) {

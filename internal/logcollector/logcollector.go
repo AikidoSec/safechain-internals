@@ -11,7 +11,7 @@ import (
 
 func Collect(ctx context.Context, config *config.ConfigInfo) error {
 	if config.Token == "" {
-		return fmt.Errorf("token is required to password-protect log archive")
+		return fmt.Errorf("token is required to submit log archive")
 	}
 
 	logDir, err := prepareLogs(ctx)
@@ -21,7 +21,7 @@ func Collect(ctx context.Context, config *config.ConfigInfo) error {
 
 	timestamp := time.Now().UTC().Format("20060102-150405")
 
-	zipPath, err := zipLogsWithPassword(ctx, logDir, timestamp, config.Token)
+	zipPath, err := zipLogs(ctx, logDir, timestamp)
 	if err != nil {
 		return fmt.Errorf("failed to archive logs: %w", err)
 	}
