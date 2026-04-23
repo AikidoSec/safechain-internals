@@ -27,11 +27,12 @@ func Collect(ctx context.Context, config *config.ConfigInfo) error {
 	}
 	log.Printf("Logs archived to %s", zipPath)
 
-	if err := submitLogs(ctx, config, zipPath); err != nil {
+	err = submitLogs(ctx, config, zipPath)
+	if err != nil {
 		return fmt.Errorf("failed to submit logs: %w", err)
 	}
 
 	cleanupPreparedLogs(logDir)
 	cleanupZips(logDir)
-	return nil
+	return err
 }

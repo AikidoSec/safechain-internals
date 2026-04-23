@@ -3,6 +3,7 @@ package logcollector
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -45,9 +46,20 @@ func submitLogs(ctx context.Context, config *config.ConfigInfo, zipPath string) 
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return fmt.Errorf("log submission failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var result struct {
+		Success int `json:"success"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return fmt.Errorf("failed to parse log submission response: %w (body: %s)", err, string(respBody))
+	}
+	if result.Success != 1 {
+		return fmt.Errorf("log submission rejected by server: %s", string(respBody))
 	}
 
 	log.Printf("Logs submitted successfully from %s", zipPath)
