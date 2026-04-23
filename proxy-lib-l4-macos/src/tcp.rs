@@ -22,7 +22,10 @@ use rama::{
     io::{BridgeIo, Io},
     layer::{ArcLayer, ConsumeErrLayer, HijackLayer},
     net::{
-        apple::networkextension::{TcpFlow, tproxy::TransparentProxyServiceContext},
+        apple::networkextension::{
+            TcpFlow,
+            tproxy::{TransparentProxyFlowMeta, TransparentProxyServiceContext},
+        },
         client::{ConnectorService, EstablishedClientConnection},
         http::server::HttpPeekRouter,
         proxy::{IoForwardService, ProxyTarget},
@@ -42,6 +45,7 @@ use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
 
 use crate::config::ProxyConfig;
 use safechain_proxy_lib::{
+    endpoint_protection::remote_app_passthrough_list::PassthroughMatchContext,
     http::{
         client::new_http_client_for_internal,
         firewall::{Firewall, FirewallDecompressionMatcher},
@@ -126,6 +130,18 @@ impl TcpMitmService {
             mitm: self.clone(),
             exec,
         }
+    }
+
+    pub fn is_passthrough_flow(&self, meta: &TransparentProxyFlowMeta) -> bool {
+        let Some(ref bundle_id) = meta.source_app_bundle_identifier else {
+            return false;
+        };
+
+        self.firewall
+            .is_passthrough_traffic(&PassthroughMatchContext {
+                app_bundle_id: Some(bundle_id),
+                domain: None,
+            })
     }
 
     fn new_bridge_service<Ingress, Egress>(
