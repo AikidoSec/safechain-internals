@@ -22,11 +22,9 @@ use crate::{
     http::{
         RequestMetaUri,
         firewall::{
-            domain_matcher::DomainMatcher,
-            events::{Artifact, BlockReason},
-            rule::{
+            domain_matcher::DomainMatcher, events::{Artifact, BlockReason}, notifier::EventNotifier, rule::{
                 BlockedRequest, RequestAction, Rule, nuget::min_package_age::MinPackageAgeNuget,
-            },
+            }
         },
     },
     package::{
@@ -65,6 +63,7 @@ impl RuleNuget {
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
         remote_endpoint_config: Option<RemoteEndpointConfig>,
+        notifier: Option<EventNotifier>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
@@ -95,7 +94,7 @@ impl RuleNuget {
             target_domains: ["api.nuget.org", "www.nuget.org"].into_iter().collect(),
             remote_malware_list,
             remote_released_packages_list: remote_released_packages_list.clone(),
-            maybe_min_package_age: Some(MinPackageAgeNuget::new(remote_released_packages_list)),
+            maybe_min_package_age: Some(MinPackageAgeNuget::new(remote_released_packages_list, notifier)),
             policy_evaluator,
         })
     }

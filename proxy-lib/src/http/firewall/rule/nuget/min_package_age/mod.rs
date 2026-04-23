@@ -1,8 +1,3 @@
-/*
-TODO list:
- - add notifier
-*/
-
 use rama::{
     error::BoxError,
     http::{
@@ -14,9 +9,12 @@ use rama::{
 use crate::{
     http::{
         KnownContentType,
-        firewall::rule::nuget::{
-            NugetRemoteReleasedPackageList,
-            min_package_age::{catalog_list::CatalogList, flat_version_list::FlatVersionList},
+        firewall::{
+            notifier::EventNotifier,
+            rule::nuget::{
+                NugetRemoteReleasedPackageList,
+                min_package_age::{catalog_list::CatalogList, flat_version_list::FlatVersionList},
+            },
         },
     },
     utils::time::SystemTimestampMilliseconds,
@@ -36,11 +34,14 @@ pub(in crate::http::firewall) struct MinPackageAgeNuget {
 impl MinPackageAgeNuget {
     pub fn new(
         remote_released_packages_list: NugetRemoteReleasedPackageList,
+        notifier: Option<EventNotifier>,
     ) -> MinPackageAgeNuget {
         Self {
             remote_released_packages_list,
-            flat_version_list: FlatVersionList {},
-            catalog_list: CatalogList {},
+            flat_version_list: FlatVersionList {
+                notifier: notifier.clone(),
+            },
+            catalog_list: CatalogList { notifier },
         }
     }
 

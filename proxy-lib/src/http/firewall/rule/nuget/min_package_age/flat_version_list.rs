@@ -1,12 +1,17 @@
 use rama::{
     error::{BoxError, ErrorContext},
     http::{Body, Response, Uri, body::util::BodyExt},
-    telemetry::tracing,
+    telemetry::tracing, utils::str::arcstr::ArcStr,
 };
 
 use crate::{
     http::{
-        firewall::rule::nuget::NugetRemoteReleasedPackageList, headers::make_response_uncacheable,
+        firewall::{
+            events::{Artifact, MinPackageAgeEvent},
+            notifier::EventNotifier,
+            rule::nuget::{NUGET_PRODUCT_KEY, NugetRemoteReleasedPackageList},
+        },
+        headers::make_response_uncacheable,
     },
     package::{
         name_formatter::LowerCasePackageName,
@@ -17,10 +22,12 @@ use crate::{
 
 const BASE_PATH: &str = "/v3-flatcontainer";
 
-pub struct FlatVersionList {}
+pub struct FlatVersionList {
+    pub notifier: Option<EventNotifier>,
+}
 
 impl FlatVersionList {
-    pub fn match_uri<'a>(&self, uri: &'a Uri) -> Option<&'a str> {
+    pub fn match_uri<'a>(&self, uri: &'a Uri) -> Option<ArcStr> {
         let (package_name, index_json) = uri
             .path()
             .strip_prefix(BASE_PATH)?
@@ -28,7 +35,7 @@ impl FlatVersionList {
             .split_once('/')?;
 
         if index_json.eq_ignore_ascii_case("index.json") {
-            Some(package_name)
+            Some(package_name.into())
         } else {
             None
         }
@@ -37,7 +44,7 @@ impl FlatVersionList {
     pub async fn remove_new_packages(
         &self,
         resp: Response,
-        package_name: &str,
+        package_name: ArcStr,
         released_package_list: &NugetRemoteReleasedPackageList,
         cutoff_secs: SystemTimestampMilliseconds,
     ) -> Result<Response, BoxError> {
@@ -59,6 +66,8 @@ impl FlatVersionList {
             }
         };
 
+        let mut removed_versions: Vec<String> = vec![];
+
         if let Some(versions) = json.get_mut("versions").and_then(|v| v.as_array_mut()) {
             versions.retain(|v| {
                 let Some(version_str) = v.as_str() else {
@@ -68,20 +77,37 @@ impl FlatVersionList {
                     return true;
                 };
 
-                let normalized_package_name = LowerCasePackageName::from(package_name);
-
                 if released_package_list.is_recently_released(
-                    &normalized_package_name,
+                    &LowerCasePackageName::from(package_name.clone()),
                     Some(&PackageVersion::Semver(version)),
                     cutoff_secs,
                 ) {
-                    tracing::info!("Version {version_str} was recently released.");
+                    removed_versions.push(version_str.to_string());
+                    tracing::info!("{package_name}@{version_str} was removed from the nuget meta response because it was recently released.");
                     false
                 } else {
-                    tracing::info!("Version {version_str} was not recently released.");
                     true
                 }
             });
+        }
+
+        if !removed_versions.is_empty()
+            && let Some(notifier) = &self.notifier
+        {
+            let event = MinPackageAgeEvent {
+                ts_ms: SystemTimestampMilliseconds::now(),
+                artifact: Artifact {
+                    product: NUGET_PRODUCT_KEY,
+                    identifier: package_name.clone(),
+                    display_name: Some(package_name),
+                    version: None,
+                },
+                suppressed_versions: removed_versions
+                    .iter()
+                    .filter_map(|v| v.parse().ok())
+                    .collect(),
+            };
+            notifier.notify_min_package_age(event).await;
         }
 
         let new_bytes =

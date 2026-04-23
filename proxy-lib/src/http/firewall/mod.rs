@@ -162,6 +162,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     remote_endpoint_config.clone(),
+                    notifier.clone(),
                 )
                 .await
                 .context("create block rule: nuget")?

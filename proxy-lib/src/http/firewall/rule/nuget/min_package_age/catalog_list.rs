@@ -2,11 +2,17 @@ use rama::{
     error::{BoxError, ErrorContext},
     http::{Body, Response, Uri, body::util::BodyExt},
     telemetry::tracing,
+    utils::str::arcstr::ArcStr,
 };
 
 use crate::{
     http::{
-        firewall::rule::nuget::NugetRemoteReleasedPackageList, headers::make_response_uncacheable,
+        firewall::{
+            events::{Artifact, MinPackageAgeEvent},
+            notifier::EventNotifier,
+            rule::nuget::{NUGET_PRODUCT_KEY, NugetRemoteReleasedPackageList},
+        },
+        headers::make_response_uncacheable,
     },
     package::{
         name_formatter::LowerCasePackageName,
@@ -17,21 +23,23 @@ use crate::{
 
 const BASE_PATH: &str = "/v3/registration5-gz-semver2";
 
-pub struct CatalogList {}
+pub struct CatalogList {
+    pub notifier: Option<EventNotifier>,
+}
 
 impl CatalogList {
-    pub fn match_uri<'u>(&self, uri: &'u Uri) -> Option<&'u str> {
+    pub fn match_uri<'u>(&self, uri: &'u Uri) -> Option<ArcStr> {
         uri.path()
             .strip_prefix(BASE_PATH)?
             .trim_start_matches('/')
             .split_once('/')
-            .map(|(package_name, _)| package_name)
+            .map(|(package_name, _)| package_name.into())
     }
 
     pub async fn remove_new_packages(
         &self,
         resp: Response,
-        _: &str,
+        package_name: ArcStr,
         remote_released_packages_list: &NugetRemoteReleasedPackageList,
         cutoff_secs: SystemTimestampMilliseconds,
     ) -> Result<Response, BoxError> {
@@ -53,7 +61,33 @@ impl CatalogList {
             }
         };
 
-        Self::handle_items_collection(&mut json, remote_released_packages_list, cutoff_secs);
+        let mut removed_versions: Vec<String> = vec![];
+
+        Self::handle_items_collection(
+            &mut json,
+            &mut removed_versions,
+            remote_released_packages_list,
+            cutoff_secs,
+        );
+
+        if !removed_versions.is_empty()
+            && let Some(notifier) = &self.notifier
+        {
+            let event = MinPackageAgeEvent {
+                ts_ms: SystemTimestampMilliseconds::now(),
+                artifact: Artifact {
+                    product: NUGET_PRODUCT_KEY,
+                    identifier: package_name.clone(),
+                    display_name: Some(package_name),
+                    version: None,
+                },
+                suppressed_versions: removed_versions
+                    .iter()
+                    .filter_map(|v| v.parse().ok())
+                    .collect(),
+            };
+            notifier.notify_min_package_age(event).await;
+        }
 
         let new_bytes =
             serde_json::to_vec(&json).context("serialize modified nuget index response")?;
@@ -65,6 +99,7 @@ impl CatalogList {
 
     fn handle_items_collection(
         json: &mut serde_json::Value,
+        removed_versions: &mut Vec<String>,
         remote_released_packages_list: &NugetRemoteReleasedPackageList,
         cutoff_secs: SystemTimestampMilliseconds,
     ) {
@@ -82,7 +117,12 @@ impl CatalogList {
             }
 
             // Recursively loop over child items arrays
-            Self::handle_items_collection(item, remote_released_packages_list, cutoff_secs);
+            Self::handle_items_collection(
+                item,
+                removed_versions,
+                remote_released_packages_list,
+                cutoff_secs,
+            );
             true
         });
 
@@ -130,10 +170,17 @@ impl CatalogList {
 
         let normalized_package_name = LowerCasePackageName::from(package_name);
 
-        remote_released_packages_list.is_recently_released(
+        if remote_released_packages_list.is_recently_released(
             &normalized_package_name,
             Some(&version),
             cutoff_secs,
-        )
+        ) {
+            tracing::info!(
+                "{package_name}@{package_version} was removed from the nuget meta response because it was recently released."
+            );
+            true
+        } else {
+            false
+        }
     }
 }
