@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use rama::{
     Service,
@@ -135,6 +135,10 @@ struct EndpointConfigRemoteResource {
 impl RemoteResourceSpec for EndpointConfigRemoteResource {
     type Payload = EndpointConfig;
     type State = Option<EndpointConfig>;
+
+    fn refresh_interval(&self) -> Duration {
+        Duration::from_secs(30)
+    }
 
     fn build_request(&self) -> Result<Request, BoxError> {
         let mut req = Request::builder()
