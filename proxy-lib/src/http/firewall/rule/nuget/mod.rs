@@ -22,9 +22,12 @@ use crate::{
     http::{
         RequestMetaUri,
         firewall::{
-            domain_matcher::DomainMatcher, events::{Artifact, BlockReason}, notifier::EventNotifier, rule::{
+            domain_matcher::DomainMatcher,
+            events::{Artifact, BlockReason},
+            notifier::EventNotifier,
+            rule::{
                 BlockedRequest, RequestAction, Rule, nuget::min_package_age::MinPackageAgeNuget,
-            }
+            },
         },
     },
     package::{
@@ -94,7 +97,10 @@ impl RuleNuget {
             target_domains: ["api.nuget.org", "www.nuget.org"].into_iter().collect(),
             remote_malware_list,
             remote_released_packages_list: remote_released_packages_list.clone(),
-            maybe_min_package_age: Some(MinPackageAgeNuget::new(remote_released_packages_list, notifier)),
+            maybe_min_package_age: Some(MinPackageAgeNuget::new(
+                remote_released_packages_list,
+                notifier,
+            )),
             policy_evaluator,
         })
     }

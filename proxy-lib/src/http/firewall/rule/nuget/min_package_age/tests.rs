@@ -11,8 +11,8 @@ fn test_flat_version_list_match_uri_returns_package_name() {
         "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging/index.json",
     );
     assert_eq!(
-        FlatVersionList {}.match_uri(&uri),
-        Some("microsoft.extensions.logging")
+        FlatVersionList { notifier: None }.match_uri(&uri),
+        Some("microsoft.extensions.logging".into())
     );
 }
 
@@ -21,7 +21,7 @@ fn test_flat_version_list_match_uri_no_match_for_package_download() {
     let uri = Uri::from_static(
         "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging/9.0.1/microsoft.extensions.logging.9.0.1.nupkg",
     );
-    assert_eq!(FlatVersionList {}.match_uri(&uri), None);
+    assert_eq!(FlatVersionList { notifier: None }.match_uri(&uri), None);
 }
 
 #[test]
@@ -29,7 +29,7 @@ fn test_flat_version_list_match_uri_no_match_for_wrong_base_path() {
     let uri = Uri::from_static(
         "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/index.json",
     );
-    assert_eq!(FlatVersionList {}.match_uri(&uri), None);
+    assert_eq!(FlatVersionList { notifier: None }.match_uri(&uri), None);
 }
 
 // CatalogList matches GET /v3/registration5-gz-semver2/{package}/...
@@ -40,8 +40,8 @@ fn test_catalog_list_match_uri_returns_package_name_for_index() {
         "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/index.json",
     );
     assert_eq!(
-        CatalogList {}.match_uri(&uri),
-        Some("microsoft.extensions.logging")
+        CatalogList { notifier: None }.match_uri(&uri),
+        Some("microsoft.extensions.logging".into())
     );
 }
 
@@ -51,8 +51,8 @@ fn test_catalog_list_match_uri_returns_package_name_for_page_request() {
         "https://api.nuget.org/v3/registration5-gz-semver2/microsoft.extensions.logging/page/9.0.1/11.0.0-preview.3.26207.106.json",
     );
     assert_eq!(
-        CatalogList {}.match_uri(&uri),
-        Some("microsoft.extensions.logging")
+        CatalogList { notifier: None }.match_uri(&uri),
+        Some("microsoft.extensions.logging".into())
     );
 }
 
@@ -61,5 +61,5 @@ fn test_catalog_list_match_uri_no_match_for_wrong_base_path() {
     let uri = Uri::from_static(
         "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging/index.json",
     );
-    assert_eq!(CatalogList {}.match_uri(&uri), None);
+    assert_eq!(CatalogList { notifier: None }.match_uri(&uri), None);
 }

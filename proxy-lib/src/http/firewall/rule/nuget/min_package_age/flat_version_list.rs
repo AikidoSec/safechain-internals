@@ -1,7 +1,8 @@
 use rama::{
     error::{BoxError, ErrorContext},
     http::{Body, Response, Uri, body::util::BodyExt},
-    telemetry::tracing, utils::str::arcstr::ArcStr,
+    telemetry::tracing,
+    utils::str::arcstr::ArcStr,
 };
 
 use crate::{
@@ -27,7 +28,7 @@ pub struct FlatVersionList {
 }
 
 impl FlatVersionList {
-    pub fn match_uri<'a>(&self, uri: &'a Uri) -> Option<ArcStr> {
+    pub fn match_uri(&self, uri: &Uri) -> Option<ArcStr> {
         let (package_name, index_json) = uri
             .path()
             .strip_prefix(BASE_PATH)?

@@ -28,7 +28,7 @@ pub struct CatalogList {
 }
 
 impl CatalogList {
-    pub fn match_uri<'u>(&self, uri: &'u Uri) -> Option<ArcStr> {
+    pub fn match_uri(&self, uri: &Uri) -> Option<ArcStr> {
         uri.path()
             .strip_prefix(BASE_PATH)?
             .trim_start_matches('/')
@@ -68,6 +68,7 @@ impl CatalogList {
             &mut removed_versions,
             remote_released_packages_list,
             cutoff_secs,
+            0,
         );
 
         if !removed_versions.is_empty()
@@ -102,26 +103,38 @@ impl CatalogList {
         removed_versions: &mut Vec<String>,
         remote_released_packages_list: &NugetRemoteReleasedPackageList,
         cutoff_secs: SystemTimestampMilliseconds,
+        depth: usize,
     ) {
+        if depth > 5 {
+            return;
+        }
         let Some(serde_json::Value::Array(items)) = json.get_mut("items") else {
             return;
         };
 
         items.retain_mut(|item| {
             if Self::has_type(item, "Package") {
-                return !Self::should_remove_package(
+                return match Self::should_remove_package(
                     item,
                     remote_released_packages_list,
                     cutoff_secs,
-                );
+                ) {
+                    Some(version) => {
+                        removed_versions.push(version.to_string());
+                        false
+                    }
+                    None => true,
+                };
             }
 
-            // Recursively loop over child items arrays
+            // Each collection can, depending on its type, contain a sub-items collection
+            // Loop over these as well to recursively find all Package entries
             Self::handle_items_collection(
                 item,
                 removed_versions,
                 remote_released_packages_list,
                 cutoff_secs,
+                depth + 1,
             );
             true
         });
@@ -149,18 +162,18 @@ impl CatalogList {
         package_json: &serde_json::Value,
         remote_released_packages_list: &NugetRemoteReleasedPackageList,
         cutoff_secs: SystemTimestampMilliseconds,
-    ) -> bool {
+    ) -> Option<PackageVersion> {
         let serde_json::Value::Object(package) = package_json else {
-            return false;
+            return None;
         };
         let Some(serde_json::Value::Object(catalog_entry)) = package.get("catalogEntry") else {
-            return false;
+            return None;
         };
         let Some(serde_json::Value::String(package_name)) = catalog_entry.get("id") else {
-            return false;
+            return None;
         };
         let Some(serde_json::Value::String(package_version)) = catalog_entry.get("version") else {
-            return false;
+            return None;
         };
 
         let version = match PragmaticSemver::parse(package_version) {
@@ -178,9 +191,9 @@ impl CatalogList {
             tracing::info!(
                 "{package_name}@{package_version} was removed from the nuget meta response because it was recently released."
             );
-            true
+            Some(version)
         } else {
-            false
+            None
         }
     }
 }
