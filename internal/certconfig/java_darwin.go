@@ -17,10 +17,7 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
-const (
-	javaTrustAlias         = "aikido-safechain-proxy-ca"
-	javaTruststorePassword = "changeit" // JDK default for `cacerts`; never customized in practice.
-)
+const javaTrustAlias = "aikido-safechain-proxy-ca"
 
 var darwinJavaHomeRE = regexp.MustCompile(`(/.*(?:/Contents/Home|/Home))\s*$`)
 
@@ -88,7 +85,7 @@ func syncJavaTrustTarget(ctx context.Context, target javaTrustTarget, caPath str
 		"-alias", javaTrustAlias,
 		"-file", caPath,
 		"-keystore", target.cacertsPath,
-		"-storepass", javaTruststorePassword,
+		"-storepass", "changeit",
 	)
 	if err != nil {
 		return fmt.Errorf("java: keytool import failed for %s: %w (output: %s)", target.cacertsPath, err, strings.TrimSpace(output))
@@ -105,7 +102,7 @@ func deleteJavaTrustAlias(ctx context.Context, target javaTrustTarget) {
 		"-delete",
 		"-alias", javaTrustAlias,
 		"-keystore", target.cacertsPath,
-		"-storepass", javaTruststorePassword,
+		"-storepass", "changeit",
 	)
 	if err != nil {
 		log.Printf("java: keytool delete for %s reported %v (output: %s); continuing", target.cacertsPath, err, strings.TrimSpace(output))
