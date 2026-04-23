@@ -16,13 +16,13 @@ const (
 )
 
 type ConfigInfo struct {
-	Token                   string    `json:"token"`
-	DeviceID                string    `json:"device_id"`
+	Token                    string    `json:"token"`
+	DeviceID                 string    `json:"device_id"`
 	LastHeartbeatReportTime  time.Time `json:"last_heartbeat_report_time"`
 	LastSBOMReportTime       time.Time `json:"last_sbom_report_time"`
 	LastSetupWizardShownTime time.Time `json:"last_setup_wizard_shown_time"`
-	BaseURL                 string    `json:"base_url,omitempty"`
-	ProxyMode               string    `json:"proxy_mode,omitempty"`
+	BaseURL                  string    `json:"base_url,omitempty"`
+	ProxyMode                string    `json:"proxy_mode,omitempty"`
 
 	LastHandledLogCollectRequestAt int64  `json:"last_handled_log_collect_request_at,omitempty"`
 	LastHandledTargetUpdateVersion string `json:"last_handled_target_update_version,omitempty"`
