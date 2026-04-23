@@ -10,9 +10,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
+	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
 const (
@@ -79,8 +81,7 @@ func syncJavaTrustTarget(ctx context.Context, target javaTrustTarget, caPath str
 	// below is the ground truth and will surface real problems.
 	deleteJavaTrustAlias(ctx, target)
 
-	output, err := platform.RunAsCurrentUserWithPathEnv(ctx,
-		target.keytoolPath,
+	output, err := runKeytoolForTarget(ctx, target,
 		"-importcert",
 		"-noprompt",
 		"-trustcacerts",
@@ -100,8 +101,7 @@ func syncJavaTrustTarget(ctx context.Context, target javaTrustTarget, caPath str
 // debug granularity — the "alias absent" case is the dominant one and not
 // worth classifying.
 func deleteJavaTrustAlias(ctx context.Context, target javaTrustTarget) {
-	output, err := platform.RunAsCurrentUserWithPathEnv(ctx,
-		target.keytoolPath,
+	output, err := runKeytoolForTarget(ctx, target,
 		"-delete",
 		"-alias", javaTrustAlias,
 		"-keystore", target.cacertsPath,
@@ -110,6 +110,23 @@ func deleteJavaTrustAlias(ctx context.Context, target javaTrustTarget) {
 	if err != nil {
 		log.Printf("java: keytool delete for %s reported %v (output: %s); continuing", target.cacertsPath, err, strings.TrimSpace(output))
 	}
+}
+
+// runKeytoolForTarget invokes keytool under the right identity for the target's
+// cacerts ownership. System JDKs live under /Library and their cacerts are
+// owned by root — those require the daemon's root privileges to write. JDKs
+// managed by the user (e.g. JetBrains in ~/Library) have user-owned cacerts;
+// dropping to that user preserves ownership and matches how the other
+// user-scoped configurators operate.
+func runKeytoolForTarget(ctx context.Context, target javaTrustTarget, args ...string) (string, error) {
+	info, err := os.Stat(target.cacertsPath)
+	if err != nil {
+		return "", fmt.Errorf("stat cacerts %s: %w", target.cacertsPath, err)
+	}
+	if sys, ok := info.Sys().(*syscall.Stat_t); ok && sys.Uid == 0 {
+		return utils.RunCommand(ctx, target.keytoolPath, args...)
+	}
+	return platform.RunAsCurrentUserWithPathEnv(ctx, target.keytoolPath, args...)
 }
 
 func darwinJavaTrustTargets(ctx context.Context) []javaTrustTarget {
