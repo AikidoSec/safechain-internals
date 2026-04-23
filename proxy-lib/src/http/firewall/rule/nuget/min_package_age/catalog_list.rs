@@ -71,23 +71,25 @@ impl CatalogList {
             0,
         );
 
-        if !removed_versions.is_empty()
-            && let Some(notifier) = &self.notifier
-        {
-            let event = MinPackageAgeEvent {
-                ts_ms: SystemTimestampMilliseconds::now(),
-                artifact: Artifact {
-                    product: NUGET_PRODUCT_KEY,
-                    identifier: package_name.clone(),
-                    display_name: Some(package_name),
-                    version: None,
-                },
-                suppressed_versions: removed_versions
-                    .iter()
-                    .filter_map(|v| v.parse().ok())
-                    .collect(),
-            };
-            notifier.notify_min_package_age(event).await;
+        if removed_versions.is_empty() {
+            return Ok(Response::from_parts(parts, Body::from(bytes)));
+        } else {
+            if let Some(notifier) = &self.notifier {
+                let event = MinPackageAgeEvent {
+                    ts_ms: SystemTimestampMilliseconds::now(),
+                    artifact: Artifact {
+                        product: NUGET_PRODUCT_KEY,
+                        identifier: package_name.clone(),
+                        display_name: Some(package_name),
+                        version: None,
+                    },
+                    suppressed_versions: removed_versions
+                        .iter()
+                        .filter_map(|v| v.parse().ok())
+                        .collect(),
+                };
+                notifier.notify_min_package_age(event).await;
+            }
         }
 
         let new_bytes =
