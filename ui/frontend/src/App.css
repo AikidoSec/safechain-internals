@@ -138,10 +138,22 @@ body {
   margin: 0;
 }
 
-.events-list-collect-message {
-  margin: 0 0 16px;
-  color: var(--text-muted);
-  font-size: 14px;
+.button-brand.button--primary.button--success {
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.button-brand.button--primary.button--success:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.button-brand.button--primary.button--danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.button-brand.button--primary.button--danger:hover:not(:disabled) {
+  background: #b91c1c;
 }
 
 .events-list-table-wrap {

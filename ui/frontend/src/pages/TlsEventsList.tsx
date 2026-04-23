@@ -5,17 +5,19 @@ import { Events } from "@wailsio/runtime";
 import { collectLogs, listTlsEvents } from "../api";
 import { formatEventTime, isConnectionError } from "../utils";
 
+type CollectStatus = "idle" | "success" | "error";
+
 export function TlsEventsList() {
   const navigate = useNavigate();
   const [events, setEvents] = useState<TlsTerminationFailedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [collecting, setCollecting] = useState(false);
-  const [collectMessage, setCollectMessage] = useState<string | null>(null);
+  const [collectStatus, setCollectStatus] = useState<CollectStatus>("idle");
   const [confirmingCollect, setConfirmingCollect] = useState(false);
 
   const handleCollectLogsClick = useCallback(() => {
-    setCollectMessage(null);
+    setCollectStatus("idle");
     setConfirmingCollect(true);
   }, []);
 
@@ -26,18 +28,38 @@ export function TlsEventsList() {
   const handleCollectConfirm = useCallback(async () => {
     setConfirmingCollect(false);
     setCollecting(true);
-    setCollectMessage(null);
+    setCollectStatus("idle");
     try {
       await collectLogs();
-      setCollectMessage("Logs uploaded successfully.");
-    } catch (e) {
-      setCollectMessage(
-        `Failed to upload logs: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      setCollectStatus("success");
+    } catch {
+      setCollectStatus("error");
     } finally {
       setCollecting(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (collectStatus === "idle") return;
+    const id = window.setTimeout(() => setCollectStatus("idle"), 4000);
+    return () => window.clearTimeout(id);
+  }, [collectStatus]);
+
+  let uploadButtonLabel = "Upload Logs";
+  if (collecting) uploadButtonLabel = "Uploading…";
+  else if (collectStatus === "success") uploadButtonLabel = "Upload successful";
+  else if (collectStatus === "error") uploadButtonLabel = "Upload failed";
+
+  const uploadButtonClass = [
+    "button-brand",
+    "button--primary",
+    "button--normal",
+    "button--rounded",
+    collectStatus === "success" ? "button--success" : "",
+    collectStatus === "error" ? "button--danger" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,16 +96,13 @@ export function TlsEventsList() {
         <h1>Logs</h1>
         <button
           type="button"
-          className="button-brand button--primary button--normal button--rounded"
+          className={uploadButtonClass}
           onClick={handleCollectLogsClick}
           disabled={collecting}
         >
-          {collecting ? "Uploading…" : "Upload Logs"}
+          {uploadButtonLabel}
         </button>
       </div>
-      {collectMessage && (
-        <p className="events-list-collect-message">{collectMessage}</p>
-      )}
       {loading && <p className="events-list-loading">Loading…</p>}
       {error && !connectionFailed && (
         <div className="events-list-error-inline">
