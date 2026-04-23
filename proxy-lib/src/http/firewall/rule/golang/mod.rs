@@ -1,9 +1,9 @@
 use std::fmt;
 
-use rama::utils::time::now_unix_ms;
 use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
+    extensions::ExtensionsRef as _,
     graceful::ShutdownGuard,
     http::{Request, Response, StatusCode, Uri},
     net::address::Domain,
@@ -12,18 +12,26 @@ use rama::{
 };
 
 use crate::{
-    endpoint_protection::{PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig},
-    http::firewall::{
-        domain_matcher::DomainMatcher,
-        events::{Artifact, BlockReason},
+    endpoint_protection::{
+        EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
+    },
+    http::{
+        RequestMetaUri,
+        firewall::{
+            domain_matcher::DomainMatcher,
+            events::{Artifact, BlockReason},
+        },
     },
     package::{
-        malware_list::{LowerCaseEntryFormatter, RemoteMalwareList},
-        released_packages_list::{LowerCaseReleasedPackageFormatter, RemoteReleasedPackagesList},
-        version::PackageVersion,
+        malware_list::RemoteMalwareList, name_formatter::LowerCasePackageName,
+        released_packages_list::RemoteReleasedPackagesList, version::PackageVersion,
     },
     storage::SyncCompactDataStorage,
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
+
+type GolangPackageName = LowerCasePackageName;
+const GOLANG_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("golang");
 
 #[cfg(feature = "pac")]
 use crate::http::firewall::pac::PacScriptGenerator;
@@ -38,10 +46,9 @@ use min_package_age::MinPackageAgeGolang;
 
 pub(in crate::http::firewall) struct RuleGolang {
     target_domains: DomainMatcher,
-    remote_malware_list: RemoteMalwareList,
-    remote_released_packages_list: RemoteReleasedPackagesList,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
-    policy_evaluator: Option<PolicyEvaluator>,
+    remote_malware_list: RemoteMalwareList<GolangPackageName>,
+    remote_released_packages_list: RemoteReleasedPackagesList<GolangPackageName>,
+    policy_evaluator: Option<PolicyEvaluator<GolangPackageName>>,
     maybe_min_package_age: Option<MinPackageAgeGolang>,
 }
 
@@ -50,7 +57,6 @@ impl RuleGolang {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
-        policy_evaluator: Option<PolicyEvaluator>,
         remote_endpoint_config: Option<RemoteEndpointConfig>,
         min_package_age: Option<MinPackageAgeGolang>,
     ) -> Result<Self, BoxError>
@@ -62,26 +68,27 @@ impl RuleGolang {
             Uri::from_static("https://malware-list.aikido.dev/malware_golang.json"),
             sync_storage.clone(),
             remote_malware_list_https_client.clone(),
-            LowerCaseEntryFormatter,
         )
         .await
         .context("create remote malware list for golang block rule")?;
 
         let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
-            guard,
+            guard.clone(),
             Uri::from_static("https://malware-list.aikido.dev/releases/golang.json"),
             sync_storage,
             remote_malware_list_https_client,
-            LowerCaseReleasedPackageFormatter,
         )
         .await
         .context("create remote released packages list for golang block rule")?;
+
+        let policy_evaluator = remote_endpoint_config
+            .clone()
+            .map(|config| PolicyEvaluator::new(guard, GOLANG_ECOSYSTEM_KEY.clone(), config));
 
         Ok(Self {
             target_domains: ["proxy.golang.org"].into_iter().collect(),
             remote_malware_list,
             remote_released_packages_list,
-            remote_endpoint_config,
             policy_evaluator,
             maybe_min_package_age: min_package_age,
         })
@@ -131,11 +138,15 @@ impl Rule for RuleGolang {
         resp.status == StatusCode::OK
     }
 
-    async fn evaluate_response(&self, resp: Response, req_uri: &Uri) -> Result<Response, BoxError> {
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         let Some(min_package_age) = &self.maybe_min_package_age else {
             return Ok(resp);
         };
-        let Some(module_name) = parser::parse_module_from_list_path(req_uri.path()) else {
+        let Some(module_name) = resp
+            .extensions()
+            .get_ref::<RequestMetaUri>()
+            .and_then(|RequestMetaUri(uri)| parser::parse_module_from_list_path(uri.path()))
+        else {
             return Ok(resp);
         };
         min_package_age
@@ -143,25 +154,20 @@ impl Rule for RuleGolang {
                 resp,
                 &module_name,
                 &self.remote_released_packages_list,
-                self.get_package_age_cutoff_secs(),
+                self.get_package_age_cutoff_ts(),
             )
             .await
     }
 }
 
 impl RuleGolang {
-    const DEFAULT_MIN_PACKAGE_AGE_SECS: i64 = 48 * 3600;
+    const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
 
-    fn get_package_age_cutoff_secs(&self) -> i64 {
-        let maybe_ts = self.remote_endpoint_config.as_ref().and_then(|c| {
-            c.get_ecosystem_config("golang")
-                .config()
-                .and_then(|cfg| cfg.minimum_allowed_age_timestamp)
-        });
-        if let Some(ts_secs) = maybe_ts {
-            return ts_secs;
-        }
-        (now_unix_ms() / 1000) - Self::DEFAULT_MIN_PACKAGE_AGE_SECS
+    fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
+        self.policy_evaluator
+            .as_ref()
+            .map(|c| c.package_age_cutoff_ts(Self::DEFAULT_MIN_PACKAGE_AGE))
+            .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 
     fn blocked_artifact(package: &GoPackage) -> Artifact {
@@ -174,10 +180,9 @@ impl RuleGolang {
     }
 
     fn is_package_listed_as_malware(&self, package: &GoPackage) -> bool {
-        self.remote_malware_list.has_entries_with_version(
-            &package.fully_qualified_name,
-            PackageVersion::Semver(package.version.clone()),
-        )
+        let name = GolangPackageName::from(package.fully_qualified_name.as_str());
+        self.remote_malware_list
+            .has_entries_with_version(&name, &PackageVersion::Semver(package.version.clone()))
     }
 
     async fn evaluate_zip_request(&self, req: Request) -> Result<RequestAction, BoxError> {
@@ -196,8 +201,8 @@ impl RuleGolang {
         );
 
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            let decision =
-                policy_evaluator.evaluate_package_install("golang", &package.fully_qualified_name);
+            let name = GolangPackageName::from(package.fully_qualified_name.as_str());
+            let decision = policy_evaluator.evaluate_package_install(&name);
 
             match decision {
                 PackagePolicyDecision::Allow => {
@@ -223,11 +228,12 @@ impl RuleGolang {
             )));
         }
 
-        let cutoff_secs = self.get_package_age_cutoff_secs();
+        let cutoff_ts = self.get_package_age_cutoff_ts();
+        let name = GolangPackageName::from(package.fully_qualified_name.as_str());
         if self.remote_released_packages_list.is_recently_released(
-            &package.fully_qualified_name,
+            &name,
             Some(&PackageVersion::Semver(package.version.clone())),
-            cutoff_secs,
+            cutoff_ts,
         ) {
             tracing::info!(
                 http.url.path = %path,

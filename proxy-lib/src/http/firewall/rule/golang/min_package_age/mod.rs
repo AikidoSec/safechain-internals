@@ -4,18 +4,22 @@ use rama::{
     error::{BoxError, ErrorContext as _},
     http::{Body, Response, body::util::BodyExt as _},
     telemetry::tracing,
-    utils::{str::arcstr::ArcStr, time::now_unix_ms},
+    utils::str::arcstr::ArcStr,
 };
 
 use crate::{
-    http::firewall::{
-        events::{Artifact, MinPackageAgeEvent},
-        notifier::EventNotifier,
+    http::{
+        firewall::{
+            events::{Artifact, MinPackageAgeEvent},
+            notifier::EventNotifier,
+        },
+        headers::make_response_uncacheable,
     },
     package::{
         released_packages_list::RemoteReleasedPackagesList,
         version::{PackageVersion, PragmaticSemver},
     },
+    utils::time::SystemTimestampMilliseconds,
 };
 
 #[derive(Debug, Clone)]
@@ -32,8 +36,8 @@ impl MinPackageAgeGolang {
         &self,
         resp: Response,
         module_name: &str,
-        released_packages: &RemoteReleasedPackagesList,
-        cutoff_secs: i64,
+        released_packages: &RemoteReleasedPackagesList<super::GolangPackageName>,
+        cutoff_ts: SystemTimestampMilliseconds,
     ) -> Result<Response, BoxError> {
         let (mut parts, body) = resp.into_parts();
 
@@ -63,11 +67,8 @@ impl MinPackageAgeGolang {
             match PragmaticSemver::from_str(version_str) {
                 Ok(parsed) => {
                     let version = PackageVersion::Semver(parsed);
-                    if released_packages.is_recently_released(
-                        module_name,
-                        Some(&version),
-                        cutoff_secs,
-                    ) {
+                    let name = super::GolangPackageName::from(module_name);
+                    if released_packages.is_recently_released(&name, Some(&version), cutoff_ts) {
                         suppressed.push(version);
                     } else {
                         kept.push(line);
@@ -89,7 +90,7 @@ impl MinPackageAgeGolang {
             "Go module list rewritten: suppressed too-young versions"
         );
 
-        super::super::make_response_uncacheable(&mut parts.headers);
+        make_response_uncacheable(&mut parts.headers);
 
         let new_body = kept.join("\n") + "\n";
 
@@ -104,7 +105,7 @@ impl MinPackageAgeGolang {
         };
         let identifier: ArcStr = module_name.into();
         let event = MinPackageAgeEvent {
-            ts_ms: now_unix_ms(),
+            ts_ms: SystemTimestampMilliseconds::now(),
             artifact: Artifact {
                 product: "golang".into(),
                 identifier: identifier.clone(),

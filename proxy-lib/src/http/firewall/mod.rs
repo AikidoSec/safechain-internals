@@ -49,7 +49,10 @@ use crate::{
     },
     http::firewall::{
         notifier::EventNotifier,
-        rule::{DynRule, npm::min_package_age::MinPackageAge},
+        rule::{
+            DynRule, golang::min_package_age::MinPackageAgeGolang,
+            npm::min_package_age::MinPackageAge,
+        },
     },
     storage::SyncCompactDataStorage,
     utils::{env::network_service_identifier, token::AgentIdentity},
@@ -220,7 +223,6 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    policy_evaluator.clone(),
                     remote_endpoint_config.clone(),
                     Some(MinPackageAgeGolang::new(notifier.clone())),
                 )
