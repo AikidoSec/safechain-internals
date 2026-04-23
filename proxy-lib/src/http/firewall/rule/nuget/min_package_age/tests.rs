@@ -105,10 +105,7 @@ fn default_cutoff_ts() -> SystemTimestampMilliseconds {
 #[tokio::test]
 async fn removes_recent_version_from_flat_index() {
     let body = serde_json::json!({ "versions": ["1.0.0", "2.0.0"] }).to_string();
-    let list = make_released_packages(&[
-        ("my-package", "2.0.0", 1),
-        ("my-package", "1.0.0", 72),
-    ]);
+    let list = make_released_packages(&[("my-package", "2.0.0", 1), ("my-package", "1.0.0", 72)]);
 
     let result = FlatVersionList { notifier: None }
         .remove_new_packages(
@@ -127,10 +124,7 @@ async fn removes_recent_version_from_flat_index() {
 #[tokio::test]
 async fn keeps_all_versions_when_none_are_recent() {
     let body = serde_json::json!({ "versions": ["1.0.0", "2.0.0"] }).to_string();
-    let list = make_released_packages(&[
-        ("my-package", "1.0.0", 72),
-        ("my-package", "2.0.0", 96),
-    ]);
+    let list = make_released_packages(&[("my-package", "1.0.0", 72), ("my-package", "2.0.0", 96)]);
 
     let result = FlatVersionList { notifier: None }
         .remove_new_packages(
@@ -143,7 +137,10 @@ async fn keeps_all_versions_when_none_are_recent() {
         .unwrap();
     let result_json: serde_json::Value = result.try_into_json().await.unwrap();
 
-    assert_eq!(result_json["versions"], serde_json::json!(["1.0.0", "2.0.0"]));
+    assert_eq!(
+        result_json["versions"],
+        serde_json::json!(["1.0.0", "2.0.0"])
+    );
 }
 
 #[tokio::test]
@@ -160,7 +157,10 @@ async fn passthrough_invalid_json_body() {
         .await
         .unwrap();
 
-    assert_eq!(result.try_into_string().await.unwrap(), "not valid json {{{");
+    assert_eq!(
+        result.try_into_string().await.unwrap(),
+        "not valid json {{{"
+    );
 }
 
 #[tokio::test]
@@ -205,7 +205,6 @@ async fn strips_cache_headers_when_versions_removed() {
     assert_eq!(result.headers().get("cache-control").unwrap(), "no-cache");
 }
 
-
 #[tokio::test]
 async fn keeps_unparseable_version_strings() {
     let body = serde_json::json!({ "versions": ["1.0.0", "not-a-semver"] }).to_string();
@@ -222,10 +221,7 @@ async fn keeps_unparseable_version_strings() {
         .unwrap();
     let result_json: serde_json::Value = result.try_into_json().await.unwrap();
 
-    assert_eq!(
-        result_json["versions"],
-        serde_json::json!(["not-a-semver"])
-    );
+    assert_eq!(result_json["versions"], serde_json::json!(["not-a-semver"]));
 }
 
 // CatalogList::remove_new_packages
@@ -340,7 +336,10 @@ async fn catalog_list_passthrough_invalid_json_body() {
         .await
         .unwrap();
 
-    assert_eq!(result.try_into_string().await.unwrap(), "not valid json {{{");
+    assert_eq!(
+        result.try_into_string().await.unwrap(),
+        "not valid json {{{"
+    );
 }
 
 #[tokio::test]
