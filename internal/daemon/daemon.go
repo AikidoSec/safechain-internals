@@ -59,6 +59,8 @@ type Daemon struct {
 }
 
 func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
+	uiMgr := NewUIManager()
+
 	if err := platform.Init(); err != nil {
 		return nil, fmt.Errorf("failed to initialize platform: %v", err)
 	}
@@ -74,8 +76,6 @@ func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("failed to create config")
 	}
-
-	uiMgr := NewUIManager()
 
 	var proxyManager proxy.ProxyManager
 	if cfg.GetProxyMode() == config.ProxyModeL4 {
