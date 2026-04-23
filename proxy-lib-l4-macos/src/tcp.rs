@@ -132,7 +132,7 @@ impl TcpMitmService {
         }
     }
 
-    pub fn passthrough_tcp(&self, meta: &TransparentProxyFlowMeta) -> bool {
+    pub fn is_passthrough_flow(&self, meta: &TransparentProxyFlowMeta) -> bool {
         let Some(ref bundle_id) = meta.source_app_bundle_identifier else {
             return false;
         };
