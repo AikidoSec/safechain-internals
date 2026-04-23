@@ -166,8 +166,7 @@ export function EventDetail() {
 
   if (!event) return <p className="loading">Event not found.</p>;
 
-  // Access requests are currently permitted for all blocked events by default
-  const canRequest = true;
+  const canRequest = event.block_reason !== "malware";
   const info = BLOCK_REASON_INFO[event.block_reason];
 
   if (event.status === "request_approved") {
