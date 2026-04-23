@@ -74,6 +74,10 @@ impl TransparentProxyHandler for FlowHandler {
     + Send
     + '_ {
         let action = if self.tcp_mitm_service.passthrough_tcp(&meta) {
+                tracing::warn!(
+                    protocol = ?meta.source_app_bundle_identifier,
+                    "passthrough: app bundle matches passthrough for any domain"
+                );
             FlowAction::Passthrough
         } else {
             match flow_action(&meta) {
