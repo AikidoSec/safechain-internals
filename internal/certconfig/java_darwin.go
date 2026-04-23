@@ -15,7 +15,10 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
 )
 
-const javaTrustAlias = "aikido-safechain-proxy-ca"
+const (
+	javaTrustAlias         = "aikido-safechain-proxy-ca"
+	javaTruststorePassword = "changeit" // JDK default for `cacerts`; never customized in practice.
+)
 
 var darwinJavaHomeRE = regexp.MustCompile(`(/.*(?:/Contents/Home|/Home))\s*$`)
 
@@ -26,8 +29,9 @@ type javaTrustTarget struct {
 }
 
 func installJavaTrust(ctx context.Context) error {
-	targets := darwinJavaTrustTargets(ctx)
-	if len(targets) == 0 {
+	jdkTargets := darwinJavaTrustTargets(ctx)
+	if len(jdkTargets) == 0 {
+		log.Printf("java: no JDKs found, skipping truststore configuration")
 		return nil
 	}
 
@@ -37,7 +41,7 @@ func installJavaTrust(ctx context.Context) error {
 	}
 
 	var errs []error
-	for _, target := range targets {
+	for _, target := range jdkTargets {
 		if err := syncJavaTrustTarget(ctx, target, caPath); err != nil {
 			errs = append(errs, err)
 		}
@@ -48,43 +52,32 @@ func installJavaTrust(ctx context.Context) error {
 	return nil
 }
 
-func javaNeedsRepair(ctx context.Context) bool {
-	targets := darwinJavaTrustTargets(ctx)
-	if len(targets) == 0 {
-		return false
-	}
-	for _, target := range targets {
-		present, err := javaTrustAliasPresent(ctx, target)
-		if err != nil {
-			log.Printf("java: failed to inspect truststore %s: %v", target.cacertsPath, err)
-			return true
-		}
-		if !present {
-			return true
-		}
-	}
+// javaNeedsRepair intentionally always returns false. Detecting a drifted Java
+// truststore would require shelling out to keytool per JDK on every heartbeat
+// and parsing its locale-dependent output. Since any other configurator's drift
+// triggers a full certconfig.Install (which re-runs installJavaTrust), newly
+// added JDKs are picked up reactively without this proactive check.
+func javaNeedsRepair(_ context.Context) bool {
 	return false
 }
 
 func uninstallJavaTrust(ctx context.Context) error {
-	targets := darwinJavaTrustTargets(ctx)
-
-	var errs []error
-	for _, target := range targets {
-		if err := deleteJavaTrustAlias(ctx, target); err != nil {
-			errs = append(errs, err)
-		}
+	jdkTargets := darwinJavaTrustTargets(ctx)
+	if len(jdkTargets) == 0 {
+		log.Printf("java: no JDKs found, skipping truststore cleanup")
+		return nil
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("java: failed to remove truststore entries: %v", errs)
+	for _, target := range jdkTargets {
+		deleteJavaTrustAlias(ctx, target)
 	}
 	return nil
 }
 
 func syncJavaTrustTarget(ctx context.Context, target javaTrustTarget, caPath string) error {
-	if err := deleteJavaTrustAlias(ctx, target); err != nil {
-		return err
-	}
+	// keytool has no upsert, so we delete-then-import. The delete is best-effort:
+	// if it fails (alias absent on a fresh JDK, or any other reason), the import
+	// below is the ground truth and will surface real problems.
+	deleteJavaTrustAlias(ctx, target)
 
 	output, err := platform.RunAsCurrentUserWithPathEnv(ctx,
 		target.keytoolPath,
@@ -94,7 +87,7 @@ func syncJavaTrustTarget(ctx context.Context, target javaTrustTarget, caPath str
 		"-alias", javaTrustAlias,
 		"-file", caPath,
 		"-keystore", target.cacertsPath,
-		"-storepass", "changeit",
+		"-storepass", javaTruststorePassword,
 	)
 	if err != nil {
 		return fmt.Errorf("java: keytool import failed for %s: %w (output: %s)", target.cacertsPath, err, strings.TrimSpace(output))
@@ -102,43 +95,21 @@ func syncJavaTrustTarget(ctx context.Context, target javaTrustTarget, caPath str
 	return nil
 }
 
-func deleteJavaTrustAlias(ctx context.Context, target javaTrustTarget) error {
+// deleteJavaTrustAlias is best-effort. Callers never act on the outcome:
+// install re-imports either way, uninstall is teardown. Errors are logged at
+// debug granularity — the "alias absent" case is the dominant one and not
+// worth classifying.
+func deleteJavaTrustAlias(ctx context.Context, target javaTrustTarget) {
 	output, err := platform.RunAsCurrentUserWithPathEnv(ctx,
 		target.keytoolPath,
 		"-delete",
 		"-alias", javaTrustAlias,
 		"-keystore", target.cacertsPath,
-		"-storepass", "changeit",
+		"-storepass", javaTruststorePassword,
 	)
-	if err == nil {
-		return nil
+	if err != nil {
+		log.Printf("java: keytool delete for %s reported %v (output: %s); continuing", target.cacertsPath, err, strings.TrimSpace(output))
 	}
-
-	trimmed := strings.TrimSpace(output)
-	lower := strings.ToLower(trimmed)
-	if strings.Contains(lower, "does not exist") || strings.Contains(lower, "alias") && strings.Contains(lower, "not exist") {
-		return nil
-	}
-	return fmt.Errorf("java: keytool delete failed for %s: %w (output: %s)", target.cacertsPath, err, trimmed)
-}
-
-func javaTrustAliasPresent(ctx context.Context, target javaTrustTarget) (bool, error) {
-	output, err := platform.RunAsCurrentUserWithPathEnv(ctx,
-		target.keytoolPath,
-		"-list",
-		"-alias", javaTrustAlias,
-		"-keystore", target.cacertsPath,
-		"-storepass", "changeit",
-	)
-	if err == nil {
-		return true, nil
-	}
-
-	lower := strings.ToLower(strings.TrimSpace(output))
-	if strings.Contains(lower, "does not exist") || strings.Contains(lower, "alias") && strings.Contains(lower, "not exist") {
-		return false, nil
-	}
-	return false, fmt.Errorf("keytool list failed: %w (output: %s)", err, strings.TrimSpace(output))
 }
 
 func darwinJavaTrustTargets(ctx context.Context) []javaTrustTarget {
@@ -148,15 +119,18 @@ func darwinJavaTrustTargets(ctx context.Context) []javaTrustTarget {
 	for _, home := range javaHomesFromJavaHomeTool(ctx) {
 		homes = appendIfMissingCanonicalHome(homes, seen, home)
 	}
+	for _, home := range javaHomesFromJetBrains(platform.GetConfig().HomeDir) {
+		homes = appendIfMissingCanonicalHome(homes, seen, home)
+	}
 
-	targets := make([]javaTrustTarget, 0, len(homes))
+	jdkTargets := make([]javaTrustTarget, 0, len(homes))
 	for _, home := range homes {
 		target, ok := javaTrustTargetFromHome(home)
 		if ok {
-			targets = append(targets, target)
+			jdkTargets = append(jdkTargets, target)
 		}
 	}
-	return targets
+	return jdkTargets
 }
 
 func javaHomesFromJavaHomeTool(ctx context.Context) []string {
@@ -165,6 +139,29 @@ func javaHomesFromJavaHomeTool(ctx context.Context) []string {
 		return nil
 	}
 	return parseDarwinJavaHomeList(output)
+}
+
+// javaHomesFromJetBrains returns Java homes bundled by JetBrains Toolbox and
+// standalone JetBrains IDEs. These JDKs are not registered with the system
+// `java_home` tool but are used for Maven/Gradle builds launched from inside
+// the IDE, which is one of the primary pain points this configurator targets.
+func javaHomesFromJetBrains(homeDir string) []string {
+	if homeDir == "" {
+		return nil
+	}
+	patterns := []string{
+		filepath.Join(homeDir, "Library", "Java", "JavaVirtualMachines", "*", "Contents", "Home"),
+		filepath.Join(homeDir, "Library", "Application Support", "JetBrains", "*", "jdks", "*", "Contents", "Home"),
+	}
+	var homes []string
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			continue
+		}
+		homes = append(homes, matches...)
+	}
+	return homes
 }
 
 func parseDarwinJavaHomeList(output string) []string {

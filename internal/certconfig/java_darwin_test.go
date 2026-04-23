@@ -49,6 +49,38 @@ func TestJavaTrustTargetFromHome(t *testing.T) {
 	}
 }
 
+func TestJavaHomesFromJetBrains(t *testing.T) {
+	home := t.TempDir()
+
+	userJDK := filepath.Join(home, "Library", "Java", "JavaVirtualMachines", "corretto-21", "Contents", "Home")
+	ideJDK := filepath.Join(home, "Library", "Application Support", "JetBrains", "IntelliJIdea2024.3", "jdks", "temurin-21", "Contents", "Home")
+	unrelated := filepath.Join(home, "Library", "Application Support", "JetBrains", "IntelliJIdea2024.3", "settings")
+
+	for _, dir := range []string{userJDK, ideJDK, unrelated} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := javaHomesFromJetBrains(home)
+	want := map[string]bool{userJDK: true, ideJDK: true}
+
+	if len(got) != len(want) {
+		t.Fatalf("got %d homes, want %d: %v", len(got), len(want), got)
+	}
+	for _, h := range got {
+		if !want[h] {
+			t.Fatalf("unexpected home in result: %s", h)
+		}
+	}
+}
+
+func TestJavaHomesFromJetBrains_EmptyHome(t *testing.T) {
+	if got := javaHomesFromJetBrains(""); got != nil {
+		t.Fatalf("expected nil for empty homeDir, got %v", got)
+	}
+}
+
 func TestCollectDarwinJavaTrustTargets(t *testing.T) {
 	homes := []string{
 		filepath.Join(t.TempDir(), "corretto-19.0.2", "Contents", "Home"),
@@ -76,14 +108,14 @@ func TestCollectDarwinJavaTrustTargets(t *testing.T) {
 		dedupedHomes = appendIfMissingCanonicalHome(dedupedHomes, seen, home)
 	}
 
-	targets := make([]javaTrustTarget, 0, len(dedupedHomes))
+	jdkTargets := make([]javaTrustTarget, 0, len(dedupedHomes))
 	for _, home := range dedupedHomes {
 		target, ok := javaTrustTargetFromHome(home)
 		if ok {
-			targets = append(targets, target)
+			jdkTargets = append(jdkTargets, target)
 		}
 	}
-	if len(targets) != 2 {
-		t.Fatalf("expected 2 targets, got %d", len(targets))
+	if len(jdkTargets) != 2 {
+		t.Fatalf("expected 2 targets, got %d", len(jdkTargets))
 	}
 }
