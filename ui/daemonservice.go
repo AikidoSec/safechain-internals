@@ -100,3 +100,7 @@ func (s *DaemonService) CloseInstallWindow() {
 		closeInstallWindow()
 	}
 }
+
+func (s *DaemonService) CollectLogs() error {
+	return daemon.CollectLogs()
+}
