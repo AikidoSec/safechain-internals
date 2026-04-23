@@ -227,3 +227,142 @@ async fn keeps_unparseable_version_strings() {
         serde_json::json!(["not-a-semver"])
     );
 }
+
+// CatalogList::remove_new_packages
+
+fn package_item(id: &str, version: &str) -> serde_json::Value {
+    serde_json::json!({
+        "@type": "Package",
+        "catalogEntry": { "id": id, "version": version }
+    })
+}
+
+#[tokio::test]
+async fn catalog_list_removes_recent_package_from_direct_items() {
+    let body = serde_json::json!({
+        "count": 2,
+        "items": [
+            package_item("my-package", "1.0.0"),
+            package_item("my-package", "2.0.0"),
+        ]
+    })
+    .to_string();
+    let list = make_released_packages(&[("my-package", "2.0.0", 1), ("my-package", "1.0.0", 72)]);
+
+    let result = CatalogList { notifier: None }
+        .remove_new_packages(
+            make_json_response(&body),
+            "my-package".into(),
+            &list,
+            default_cutoff_ts(),
+        )
+        .await
+        .unwrap();
+    let result_json: serde_json::Value = result.try_into_json().await.unwrap();
+
+    assert_eq!(result_json["count"], 1);
+    assert_eq!(result_json["items"].as_array().unwrap().len(), 1);
+    assert_eq!(result_json["items"][0]["catalogEntry"]["version"], "1.0.0");
+}
+
+#[tokio::test]
+async fn catalog_list_removes_recent_package_from_nested_page() {
+    let body = serde_json::json!({
+        "count": 1,
+        "items": [{
+            "@type": "catalog:CatalogPage",
+            "count": 2,
+            "items": [
+                package_item("my-package", "1.0.0"),
+                package_item("my-package", "2.0.0"),
+            ]
+        }]
+    })
+    .to_string();
+    let list = make_released_packages(&[("my-package", "2.0.0", 1), ("my-package", "1.0.0", 72)]);
+
+    let result = CatalogList { notifier: None }
+        .remove_new_packages(
+            make_json_response(&body),
+            "my-package".into(),
+            &list,
+            default_cutoff_ts(),
+        )
+        .await
+        .unwrap();
+    let result_json: serde_json::Value = result.try_into_json().await.unwrap();
+
+    assert_eq!(result_json["count"], 1);
+    let page = &result_json["items"][0];
+    assert_eq!(page["count"], 1);
+    assert_eq!(page["items"].as_array().unwrap().len(), 1);
+    assert_eq!(page["items"][0]["catalogEntry"]["version"], "1.0.0");
+}
+
+#[tokio::test]
+async fn catalog_list_keeps_all_packages_when_none_are_recent() {
+    let body = serde_json::json!({
+        "count": 2,
+        "items": [
+            package_item("my-package", "1.0.0"),
+            package_item("my-package", "2.0.0"),
+        ]
+    })
+    .to_string();
+    let list = make_released_packages(&[("my-package", "1.0.0", 72), ("my-package", "2.0.0", 96)]);
+
+    let result = CatalogList { notifier: None }
+        .remove_new_packages(
+            make_json_response(&body),
+            "my-package".into(),
+            &list,
+            default_cutoff_ts(),
+        )
+        .await
+        .unwrap();
+    let result_json: serde_json::Value = result.try_into_json().await.unwrap();
+
+    assert_eq!(result_json["count"], 2);
+    assert_eq!(result_json["items"].as_array().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn catalog_list_passthrough_invalid_json_body() {
+    let list = make_released_packages(&[]);
+
+    let result = CatalogList { notifier: None }
+        .remove_new_packages(
+            make_json_response("not valid json {{{"),
+            "my-package".into(),
+            &list,
+            default_cutoff_ts(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.try_into_string().await.unwrap(), "not valid json {{{");
+}
+
+#[tokio::test]
+async fn catalog_list_strips_cache_headers() {
+    let body = serde_json::json!({
+        "count": 1,
+        "items": [package_item("my-package", "2.0.0")]
+    })
+    .to_string();
+    let list = make_released_packages(&[("my-package", "2.0.0", 1)]);
+    let resp = Response::builder()
+        .header("content-type", "application/json")
+        .header("etag", "abc123")
+        .header("cache-control", "max-age=3600")
+        .body(Body::from(body))
+        .unwrap();
+
+    let result = CatalogList { notifier: None }
+        .remove_new_packages(resp, "my-package".into(), &list, default_cutoff_ts())
+        .await
+        .unwrap();
+
+    assert!(result.headers().get("etag").is_none());
+    assert_eq!(result.headers().get("cache-control").unwrap(), "no-cache");
+}
