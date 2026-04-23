@@ -14,7 +14,7 @@ pub const X_DEVICE_ID: HeaderName = HeaderName::from_static("x-device-id");
 pub fn make_response_uncacheable(headers: &mut HeaderMap) {
     remove_cache_policy_headers(headers);
     remove_cache_validation_response_headers(headers);
-    while headers.remove([header](header::CONTENT_LENGTH)).is_some() {
+    while headers.remove(header::CONTENT_LENGTH).is_some() {
         tracing::trace!("removed content-length http header");
     }
     headers.typed_insert(CacheControl::new().with_no_cache());
