@@ -19,7 +19,10 @@ fn allowlist_list(app_name: &str, domains: &[&'static str]) -> PassthroughList {
     make_list([(app_name.to_owned(), matcher)])
 }
 
-fn flow<'a>(domain: Option<&'a Domain>, app_bundle_id: Option<&'a str>) -> PassthroughMatchContext<'a> {
+fn flow<'a>(
+    domain: Option<&'a Domain>,
+    app_bundle_id: Option<&'a str>,
+) -> PassthroughMatchContext<'a> {
     PassthroughMatchContext {
         domain,
         app_bundle_id,

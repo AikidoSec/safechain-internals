@@ -90,7 +90,7 @@ impl PassthroughList {
 
         match passthrough_context.domain {
             Some(domain) => matcher.is_match(domain),
-            None => matcher.matches_no_domain()
+            None => matcher.matches_no_domain(),
         }
     }
 }
