@@ -229,7 +229,7 @@ func (d *Daemon) run(ctx context.Context) error {
 		}
 
 		if !proxy.ProxyCAInstalled() {
-			d.uiManager.StartSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
+			d.showSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
 		}
 	}()
 
