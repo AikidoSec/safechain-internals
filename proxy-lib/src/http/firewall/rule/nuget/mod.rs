@@ -3,9 +3,11 @@ use std::fmt;
 use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
+    extensions::ExtensionsRef,
     graceful::ShutdownGuard,
     http::{
         Request, Response, Uri,
+        proto::RequestExtensions,
         ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
     },
     net::address::Domain,
@@ -17,10 +19,16 @@ use crate::{
     endpoint_protection::{
         EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
     },
-    http::firewall::{
-        domain_matcher::DomainMatcher,
-        events::{Artifact, BlockReason},
-        rule::{BlockedRequest, RequestAction, Rule},
+    http::{
+        RequestMetaUri,
+        firewall::{
+            domain_matcher::DomainMatcher,
+            events::{Artifact, BlockReason},
+            notifier::EventNotifier,
+            rule::{
+                BlockedRequest, RequestAction, Rule, nuget::min_package_age::MinPackageAgeNuget,
+            },
+        },
     },
     package::{
         malware_list::RemoteMalwareList,
@@ -42,10 +50,13 @@ type NugetRemoteReleasedPackageList = RemoteReleasedPackagesList<NugetPackageNam
 const NUGET_PRODUCT_KEY: ArcStr = arcstr!("nuget");
 const NUGET_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("nuget");
 
+pub mod min_package_age;
+
 pub(in crate::http::firewall) struct RuleNuget {
     target_domains: DomainMatcher,
     remote_malware_list: NugetRemoteMalwareList,
     remote_released_packages_list: NugetRemoteReleasedPackageList,
+    maybe_min_package_age: Option<MinPackageAgeNuget>,
     policy_evaluator: Option<PolicyEvaluator<NugetPackageName>>,
 }
 
@@ -55,6 +66,7 @@ impl RuleNuget {
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
         remote_endpoint_config: Option<RemoteEndpointConfig>,
+        notifier: Option<EventNotifier>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
@@ -84,7 +96,11 @@ impl RuleNuget {
         Ok(Self {
             target_domains: ["api.nuget.org", "www.nuget.org"].into_iter().collect(),
             remote_malware_list,
-            remote_released_packages_list,
+            remote_released_packages_list: remote_released_packages_list.clone(),
+            maybe_min_package_age: Some(MinPackageAgeNuget::new(
+                remote_released_packages_list,
+                notifier,
+            )),
             policy_evaluator,
         })
     }
@@ -189,7 +205,22 @@ impl Rule for RuleNuget {
 
     #[inline(always)]
     async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        Ok(resp)
+        let Some(min_package_age) = &self.maybe_min_package_age else {
+            return Ok(resp);
+        };
+        let Some(req_uri) = resp
+            .extensions()
+            .get_ref::<RequestExtensions>()
+            .and_then(|ext| ext.get_ref().map(|RequestMetaUri(uri)| uri.clone()))
+        else {
+            return Ok(resp);
+        };
+
+        let cutoff_secs = self.get_package_age_cutoff_ts();
+
+        min_package_age
+            .remove_new_packages(resp, &req_uri, cutoff_secs)
+            .await
     }
 
     #[inline(always)]
@@ -199,6 +230,14 @@ impl Rule for RuleNuget {
         data: WebSocketRelayOutput,
     ) -> Result<WebSocketRelayOutput, BoxError> {
         Ok(data)
+    }
+
+    #[inline(always)]
+    fn match_http_response_payload_inspection_request(
+        &self,
+        _: super::HttpRequestMatcherView<'_>,
+    ) -> bool {
+        self.maybe_min_package_age.is_some()
     }
 }
 
