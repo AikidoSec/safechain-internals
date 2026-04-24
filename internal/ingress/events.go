@@ -27,6 +27,19 @@ type TlsTerminationFailedEvent struct {
 	Error   string `json:"error"`
 }
 
+// MinPackageAgeEvent represents a passive log entry emitted when the proxy
+// suppresses versions that do not meet the minimum package age policy.
+// Unlike BlockEvent, this is intended for the Logs tab only and should not
+// trigger any native popup notification.
+type MinPackageAgeEvent struct {
+	ID        string   `json:"id,omitempty"`
+	TsMs      int64    `json:"ts_ms"`
+	Ecosystem string   `json:"ecosystem,omitempty"`
+	Artifact  Artifact `json:"artifact,omitempty"`
+	Title     string   `json:"title,omitempty"`
+	Message   string   `json:"message,omitempty"`
+}
+
 type EcosystemExceptions struct {
 	AllowedPackages  []string `json:"allowed_packages"`
 	RejectedPackages []string `json:"rejected_packages"`

@@ -164,6 +164,15 @@ func (c *Client) NotifyTlsTerminationFailed(ev any) {
 	}
 }
 
+// NotifyMinPackageAge sends an informational minimum-package-age log entry to
+// the UI. This is intentionally logs-only and should not be surfaced as a
+// native popup notification.
+func (c *Client) NotifyMinPackageAge(ev any) {
+	if err := c.post("/v1/min-package-age", ev); err != nil {
+		log.Printf("Failed to notify UI of min-package-age event: %v (UI may not be running)", err)
+	}
+}
+
 // NotifyPermissionsUpdated sends the latest permissions to the UI.
 func (c *Client) NotifyPermissionsUpdated(perms any) {
 	if err := c.post("/v1/permissions", perms); err != nil {

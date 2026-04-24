@@ -45,9 +45,17 @@ type TlsEvent struct {
 	Error string `json:"error"`
 }
 
+type MinPackageAgeEvent struct {
+	ID        string `json:"id"`
+	TsMs      int64  `json:"ts_ms"`
+	Ecosystem string `json:"ecosystem"`
+	Title     string `json:"title"`
+	Message   string `json:"message"`
+}
+
 // ── seed data ────────────────────────────────────────────────────────
 
-func seedData() ([]BlockEvent, []TlsEvent) {
+func seedData() ([]BlockEvent, []TlsEvent, []MinPackageAgeEvent) {
 	now := time.Now().UnixMilli()
 
 	blocks := []BlockEvent{
@@ -141,7 +149,24 @@ func seedData() ([]BlockEvent, []TlsEvent) {
 		},
 	}
 
-	return blocks, tlsEvents
+	minPackageAgeEvents := []MinPackageAgeEvent{
+		{
+			ID:        "min-package-age-suppressed-vscode",
+			TsMs:      now - 240_000,
+			Ecosystem: "vscode",
+			Title:     "vscode package versions suppressed",
+			Message:   "One or more package versions were suppressed because they did not meet the minimum package age policy.",
+		},
+		{
+			ID:        "min-package-age-suppressed-npm",
+			TsMs:      now - 120_000,
+			Ecosystem: "npm",
+			Title:     "npm package versions suppressed",
+			Message:   "One or more package versions were suppressed because they did not meet the minimum package age policy.",
+		},
+	}
+
+	return blocks, tlsEvents, minPackageAgeEvents
 }
 
 type EcosystemExceptions struct {
@@ -187,14 +212,15 @@ func seedPermissions() PermissionsResponse {
 // ── server ───────────────────────────────────────────────────────────
 
 type server struct {
-	mu                   sync.RWMutex
-	blocks               []BlockEvent
-	tlsEvents            []TlsEvent
-	permissions          PermissionsResponse
-	extensionInstalled   bool
-	extensionActivated   bool
-	vpnAllowed           bool
-	token                string
+	mu                  sync.RWMutex
+	blocks              []BlockEvent
+	tlsEvents           []TlsEvent
+	minPackageAgeEvents []MinPackageAgeEvent
+	permissions         PermissionsResponse
+	extensionInstalled  bool
+	extensionActivated  bool
+	vpnAllowed          bool
+	token               string
 }
 
 func (s *server) writeJSON(w http.ResponseWriter, v any) {
@@ -238,6 +264,25 @@ func (s *server) handleGetTlsEvent(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, e := range s.tlsEvents {
+		if e.ID == id {
+			s.writeJSON(w, e)
+			return
+		}
+	}
+	http.NotFound(w, r)
+}
+
+func (s *server) handleListMinPackageAgeEvents(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	s.writeJSON(w, s.minPackageAgeEvents)
+}
+
+func (s *server) handleGetMinPackageAgeEvent(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, e := range s.minPackageAgeEvents {
 		if e.ID == id {
 			s.writeJSON(w, e)
 			return
@@ -390,8 +435,13 @@ func (s *server) handleSetupRestart(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	blocks, tlsEvents := seedData()
-	s := &server{blocks: blocks, tlsEvents: tlsEvents, permissions: seedPermissions()}
+	blocks, tlsEvents, minPackageAgeEvents := seedData()
+	s := &server{
+		blocks:              blocks,
+		tlsEvents:           tlsEvents,
+		minPackageAgeEvents: minPackageAgeEvents,
+		permissions:         seedPermissions(),
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/version", s.handleVersion)
@@ -399,6 +449,8 @@ func main() {
 	mux.HandleFunc("GET /v1/events/{id}", s.handleGetEvent)
 	mux.HandleFunc("GET /v1/tls-events", s.handleListTlsEvents)
 	mux.HandleFunc("GET /v1/tls-events/{id}", s.handleGetTlsEvent)
+	mux.HandleFunc("GET /v1/min-package-age-events", s.handleListMinPackageAgeEvents)
+	mux.HandleFunc("GET /v1/min-package-age-events/{id}", s.handleGetMinPackageAgeEvent)
 	mux.HandleFunc("GET /v1/permissions", s.handlePermissions)
 	mux.HandleFunc("POST /v1/events/{id}/request-access", s.handleRequestAccess)
 	mux.HandleFunc("GET /v1/certificate/status", s.handleCertificateStatus)

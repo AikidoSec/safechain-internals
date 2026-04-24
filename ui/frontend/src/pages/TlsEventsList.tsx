@@ -1,15 +1,24 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import type { TlsTerminationFailedEvent } from "../types";
+import type { LogEvent, MinPackageAgeEvent, TlsTerminationFailedEvent } from "../types";
 import { Events } from "@wailsio/runtime";
-import { collectLogs, listTlsEvents } from "../api";
+import { listMinPackageAgeEvents, listTlsEvents,collectLogs } from "../api";
 import { formatEventTime, isConnectionError } from "../utils";
+
+function compareDescByTime(a: LogEvent, b: LogEvent) {
+  return b.ts_ms - a.ts_ms;
+}
+
+function upsertLogEvent(events: LogEvent[], nextEvent: LogEvent): LogEvent[] {
+  const filtered = events.filter((event) => !(event.type === nextEvent.type && event.id === nextEvent.id));
+  return [nextEvent, ...filtered].sort(compareDescByTime);
+}
 
 type CollectStatus = "idle" | "success" | "error";
 
 export function TlsEventsList() {
   const navigate = useNavigate();
-  const [events, setEvents] = useState<TlsTerminationFailedEvent[]>([]);
+  const [events, setEvents] = useState<LogEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [collecting, setCollecting] = useState(false);
@@ -65,8 +74,15 @@ export function TlsEventsList() {
     setLoading(true);
     setError(null);
     try {
-      const list = await listTlsEvents(50);
-      setEvents(list ?? []);
+      const [tlsEvents, minPackageAgeEvents] = await Promise.all([
+        listTlsEvents(50),
+        listMinPackageAgeEvents(50),
+      ]);
+      const combined: LogEvent[] = [
+        ...(tlsEvents ?? []).map((event) => ({ ...event, type: "tls" as const })),
+        ...(minPackageAgeEvents ?? []).map((event) => ({ ...event, type: "min_package_age" as const })),
+      ].sort(compareDescByTime);
+      setEvents(combined);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -81,7 +97,21 @@ export function TlsEventsList() {
   useEffect(() => {
     const unsub = Events.On("tls_termination_failed", (ev: unknown) => {
       const payload = (ev as { data?: TlsTerminationFailedEvent }).data;
-      if (payload) setEvents((prev) => [payload, ...prev]);
+      if (payload) {
+        setEvents((prev) => upsertLogEvent(prev, { ...payload, type: "tls" }));
+      }
+    });
+    return () => {
+      unsub();
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsub = Events.On("min_package_age", (ev: unknown) => {
+      const payload = (ev as { data?: MinPackageAgeEvent }).data;
+      if (payload) {
+        setEvents((prev) => upsertLogEvent(prev, { ...payload, type: "min_package_age" }));
+      }
     });
     return () => {
       unsub();
@@ -131,20 +161,29 @@ export function TlsEventsList() {
             <div
               key={ev.id}
               className="tls-card"
-              onClick={() => navigate(`/tls-events/${ev.id}`)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") navigate(`/tls-events/${ev.id}`); }}
+              onClick={() => navigate(ev.type === "tls" ? `/tls-events/${ev.id}` : `/min-package-age-events/${ev.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  navigate(ev.type === "tls" ? `/tls-events/${ev.id}` : `/min-package-age-events/${ev.id}`);
+                }
+              }}
               tabIndex={0}
               role="button"
             >
               <div className="tls-card-header">
-                <span className="tls-card-sni" title={ev.sni}>{ev.sni}</span>
+                <span
+                  className="tls-card-sni"
+                  title={ev.type === "tls" ? ev.sni : ev.title}
+                >
+                  {ev.type === "tls" ? ev.sni : ev.title}
+                </span>
                 <svg className="tls-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>
               <div className="tls-card-meta">
                 <span className="tls-card-time">{formatEventTime(ev.ts_ms)}</span>
-                {ev.app && (
+                {ev.type === "tls" && ev.app && (
                   <>
                     <span className="tls-card-sep" aria-hidden>&middot;</span>
                     <span className="tls-card-app">{ev.app}</span>
@@ -164,7 +203,7 @@ export function TlsEventsList() {
           </div>
           <h2 className="events-list-empty-state-title">No Logs</h2>
           <p className="events-list-empty-state-subtitle">
-            When a TLS MITM handshake fails (e.g. due to certificate pinning) or other network-related issues occur, it will appear here.
+            When a TLS MITM handshake fails, or when Aikido suppresses versions that are too new under the minimum package age policy, it will appear here.
           </p>
         </div>
       )}

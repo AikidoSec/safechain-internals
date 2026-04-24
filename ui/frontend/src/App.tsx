@@ -5,6 +5,7 @@ import { EventsList } from "./pages/EventsList";
 import { EventDetail } from "./pages/EventDetail";
 import { TlsEventsList } from "./pages/TlsEventsList";
 import { TlsEventDetail } from "./pages/TlsEventDetail";
+import { MinPackageAgeEventDetail } from "./pages/MinPackageAgeEventDetail";
 import { ProtectedEcosystems } from "./pages/ProtectedEcosystems";
 import { InstallPage } from "./pages/InstallPage";
 import { getVersion, setupCheck, setupStart } from "./api";
@@ -74,6 +75,7 @@ function DashboardLayout() {
   };
 
   const eventsTabActive = location.pathname === "/" || location.pathname.startsWith("/events");
+  const logsTabActive = location.pathname.startsWith("/tls-events") || location.pathname.startsWith("/min-package-age-events");
 
   return (
     <div className="container">
@@ -97,7 +99,7 @@ function DashboardLayout() {
         <NavLink to="/events" className={() => `app-tab${eventsTabActive ? " app-tab--active" : ""}`}>
           Events
         </NavLink>
-        <NavLink to="/tls-events" className={({ isActive }) => `app-tab${isActive ? " app-tab--active" : ""}`}>
+        <NavLink to="/tls-events" className={() => `app-tab${logsTabActive ? " app-tab--active" : ""}`}>
           Logs
         </NavLink>
         <NavLink
@@ -126,6 +128,7 @@ function App() {
           <Route path="/events/:id" element={<EventDetail />} />
           <Route path="/tls-events" element={<TlsEventsList />} />
           <Route path="/tls-events/:id" element={<TlsEventDetail />} />
+          <Route path="/min-package-age-events/:id" element={<MinPackageAgeEventDetail />} />
           <Route path="/protected-ecosystems" element={<ProtectedEcosystems />} />
         </Route>
       </Routes>
