@@ -228,7 +228,9 @@ func (d *Daemon) run(ctx context.Context) error {
 			log.Printf("Failed to launch UI: %v", err)
 		}
 
-		d.showSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
+		if !proxy.ProxyCAInstalled() {
+			d.uiManager.StartSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
+		}
 	}()
 
 	// For restarts, make sure the proxy is started
