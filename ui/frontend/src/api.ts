@@ -83,6 +83,18 @@ export async function setupRestart(): Promise<void> {
   return DaemonService.SetupRestart();
 }
 
+export async function setupCheck(): Promise<boolean> {
+  return DaemonService.SetupCheck();
+}
+
+export async function setupStart(): Promise<void> {
+  return DaemonService.SetupStart();
+}
+
 export async function closeInstallWindow(): Promise<void> {
   return DaemonService.CloseInstallWindow();
+}
+
+export async function collectLogs(): Promise<void> {
+  return DaemonService.CollectLogs();
 }

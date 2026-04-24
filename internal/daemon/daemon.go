@@ -16,6 +16,7 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/device"
 	"github.com/AikidoSec/safechain-internals/internal/dockerca"
 	"github.com/AikidoSec/safechain-internals/internal/ingress"
+	"github.com/AikidoSec/safechain-internals/internal/logcollector"
 	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
 	"github.com/AikidoSec/safechain-internals/internal/sbom"
@@ -26,6 +27,7 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/sbom/vscode"
 	"github.com/AikidoSec/safechain-internals/internal/scannermanager"
 	"github.com/AikidoSec/safechain-internals/internal/setup"
+	"github.com/AikidoSec/safechain-internals/internal/updater"
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 	"github.com/AikidoSec/safechain-internals/internal/version"
 )
@@ -52,6 +54,8 @@ type Daemon struct {
 
 	daemonLastStatusLogTime  time.Time
 	daemonLastSBOMReportTime time.Time
+
+	lastProtected bool
 }
 
 func New(ctx context.Context, cancel context.CancelFunc) (*Daemon, error) {
@@ -418,7 +422,8 @@ func (d *Daemon) reportSBOM() error {
 }
 
 func (d *Daemon) heartbeat() error {
-	if ingress.IsSetupOk(d.ctx, d.config) {
+	setupOk := ingress.IsSetupOk(d.ctx, d.config)
+	if setupOk {
 		shouldRetry, err := d.handleProxy()
 		if !shouldRetry {
 			return fmt.Errorf("failed to handle proxy: %v", err)
@@ -439,29 +444,14 @@ func (d *Daemon) heartbeat() error {
 		d.printDaemonStatus()
 		return nil
 	})
-	d.runIfIntervalExceeded(&d.config.LastHeartbeatReportTime, constants.HeartbeatReportInterval, func() error {
-		if d.config.Token == "" {
-			return fmt.Errorf("Token is not set, skipping heartbeat report")
-		}
-		missingSteps := ingress.ComputeSetupSteps(d.ctx, d.config)
-		if len(missingSteps) == 0 && !d.proxy.IsRunning() {
-			missingSteps = []string{"start-proxy"}
-		}
-		heartbeatEvent := &cloud.HeartbeatEvent{
-			DeviceInfo:  *d.deviceInfo,
-			VersionInfo: *d.versionInfo,
-			Status: cloud.Status{
-				Protected:         len(missingSteps) == 0,
-				MissingSetupSteps: missingSteps,
-			},
-		}
-		if err := cloud.SendHeartbeat(d.ctx, d.config, heartbeatEvent); err != nil {
-			return fmt.Errorf("Failed to report heartbeat: %v", err)
-		}
-		eventJSON, _ := json.MarshalIndent(heartbeatEvent, "", "  ")
-		log.Printf("Heartbeat report sent successfully: %s", string(eventJSON))
-		return nil
-	})
+	protected := setupOk && d.proxy.IsRunning()
+	if protected != d.lastProtected {
+		log.Printf("Protection state changed (protected=%v); forcing cloud heartbeat report", protected)
+		d.reportHeartbeat()
+	}
+	d.lastProtected = protected
+
+	d.runIfIntervalExceeded(&d.config.LastHeartbeatReportTime, constants.HeartbeatReportInterval, d.reportHeartbeat)
 	d.runIfIntervalExceeded(&d.config.LastSBOMReportTime, constants.SBOMReportInterval, func() error {
 		if d.config.Token == "" {
 			return fmt.Errorf("Token is not set, skipping SBOM report")
@@ -474,6 +464,35 @@ func (d *Daemon) heartbeat() error {
 	return nil
 }
 
+func (d *Daemon) reportHeartbeat() error {
+	if d.config.Token == "" {
+		return fmt.Errorf("Token is not set, skipping heartbeat report")
+	}
+	missingSteps := ingress.ComputeSetupSteps(d.ctx, d.config)
+	if len(missingSteps) == 0 && !d.proxy.IsRunning() {
+		missingSteps = []string{"start-proxy"}
+	}
+	heartbeatEvent := &cloud.HeartbeatEvent{
+		DeviceInfo:  *d.deviceInfo,
+		VersionInfo: *d.versionInfo,
+		Status: cloud.Status{
+			Protected:         len(missingSteps) == 0,
+			MissingSetupSteps: missingSteps,
+		},
+	}
+	resp, err := cloud.SendHeartbeat(d.ctx, d.config, heartbeatEvent)
+	if err != nil {
+		return fmt.Errorf("Failed to report heartbeat: %v", err)
+	}
+	eventJSON, _ := json.MarshalIndent(heartbeatEvent, "", "  ")
+	log.Printf("Heartbeat report sent successfully: %s", string(eventJSON))
+
+	d.handleLogCollectRequest(resp)
+	d.handleTargetUpdateVersion(resp)
+
+	return nil
+}
+
 func newSBOMRegistry() *sbom.Registry {
 	r := sbom.NewRegistry()
 	r.Register(npm.New())
@@ -482,6 +501,51 @@ func newSBOMRegistry() *sbom.Registry {
 	r.Register(pip.New())
 	r.Register(skills.New())
 	return r
+}
+
+func (d *Daemon) handleLogCollectRequest(resp *cloud.HeartbeatResponse) {
+	if resp.CollectLogsRequestedAt == nil {
+		return
+	}
+	requestedAt := *resp.CollectLogsRequestedAt
+	if requestedAt <= d.config.LastHandledLogCollectRequestAt {
+		return
+	}
+
+	log.Printf("Log collection requested (timestamp %d), collecting logs...", requestedAt)
+	if err := logcollector.Collect(d.ctx, d.config); err != nil {
+		log.Printf("Failed to collect logs: %v", err)
+		return
+	}
+
+	d.config.LastHandledLogCollectRequestAt = requestedAt
+	if err := d.config.Save(); err != nil {
+		log.Printf("Failed to save config after log collection: %v", err)
+	}
+}
+
+func (d *Daemon) handleTargetUpdateVersion(resp *cloud.HeartbeatResponse) {
+	if resp.TargetUpdateVersion == nil {
+		return
+	}
+	target := *resp.TargetUpdateVersion
+	if target == "" || target == d.versionInfo.Version {
+		return
+	}
+	if target == d.config.LastHandledTargetUpdateVersion {
+		return
+	}
+
+	log.Printf("Update requested to version %s (current: %s)", target, d.versionInfo.Version)
+	if err := updater.UpdateTo(d.ctx, target); err != nil {
+		log.Printf("Failed to update to version %s: %v", target, err)
+		return
+	}
+
+	d.config.LastHandledTargetUpdateVersion = target
+	if err := d.config.Save(); err != nil {
+		log.Printf("Failed to save config after update: %v", err)
+	}
 }
 
 func (d *Daemon) runIfIntervalExceeded(lastRun *time.Time, interval time.Duration, fn func() error) {

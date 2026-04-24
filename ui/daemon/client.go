@@ -46,6 +46,9 @@ const timeout = 10 * time.Second
 // Certificate install runs AppleScript + admin trust UI and can block for many minutes.
 const certificateInstallTimeout = 15 * time.Minute
 
+// Log collection runs `log show --last 30m` + zip which can take tens of seconds.
+const collectLogsTimeout = 2 * time.Minute
+
 var httpClient = &http.Client{
 	Timeout: timeout,
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -55,6 +58,13 @@ var httpClient = &http.Client{
 
 var certificateInstallHTTPClient = &http.Client{
 	Timeout: certificateInstallTimeout,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
+
+var collectLogsHTTPClient = &http.Client{
+	Timeout: collectLogsTimeout,
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	},
@@ -452,6 +462,19 @@ func RequestAccess(eventID string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("request-access: %s", resp.Status)
+	}
+	return nil
+}
+
+func CollectLogs() error {
+	resp, err := doRequestWithClient(collectLogsHTTPClient, http.MethodPost, "/v1/logs/collect", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("collect logs: %s: %s", resp.Status, strings.TrimSpace(string(b)))
 	}
 	return nil
 }

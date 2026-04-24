@@ -73,14 +73,24 @@ impl TransparentProxyHandler for FlowHandler {
     ) -> impl Future<Output = FlowAction<impl Service<TcpFlow, Output = (), Error = Infallible>>>
     + Send
     + '_ {
-        std::future::ready(match flow_action(&meta) {
-            TransparentProxyFlowAction::Intercept => FlowAction::Intercept {
-                service: self.tcp_mitm_service.new_intercept_service(exec),
-                meta,
-            },
-            TransparentProxyFlowAction::Passthrough => FlowAction::Passthrough,
-            TransparentProxyFlowAction::Blocked => FlowAction::Blocked,
-        })
+        let action = if self.tcp_mitm_service.is_passthrough_flow(&meta) {
+            tracing::warn!(
+                protocol = ?meta.source_app_bundle_identifier,
+                "passthrough: app bundle matches passthrough for any domain"
+            );
+            FlowAction::Passthrough
+        } else {
+            match flow_action(&meta) {
+                TransparentProxyFlowAction::Intercept => FlowAction::Intercept {
+                    service: self.tcp_mitm_service.new_intercept_service(exec),
+                    meta,
+                },
+                TransparentProxyFlowAction::Passthrough => FlowAction::Passthrough,
+                TransparentProxyFlowAction::Blocked => FlowAction::Blocked,
+            }
+        };
+
+        std::future::ready(action)
     }
 
     fn match_udp_flow(
@@ -90,19 +100,31 @@ impl TransparentProxyHandler for FlowHandler {
     ) -> impl Future<Output = FlowAction<impl Service<UdpFlow, Output = (), Error = Infallible>>>
     + Send
     + '_ {
-        std::future::ready(match flow_action(&meta) {
-            TransparentProxyFlowAction::Intercept => {
-                tracing::warn!(
-                    protocol = ?meta.protocol,
-                    remote = ?meta.remote_endpoint,
-                    local = ?meta.local_endpoint,
-                    "unexpected udp intercept decision; passing through"
-                );
-                FlowAction::<UdpFlowService>::Passthrough
+        let action = if self.tcp_mitm_service.is_passthrough_flow(&meta) {
+            tracing::warn!(
+                protocol = ?meta.source_app_bundle_identifier,
+                "passthrough: app bundle matches passthrough for any domain"
+            );
+            FlowAction::Passthrough
+        } else {
+            match flow_action(&meta) {
+                TransparentProxyFlowAction::Intercept => {
+                    tracing::warn!(
+                        protocol = ?meta.protocol,
+                        remote = ?meta.remote_endpoint,
+                        local = ?meta.local_endpoint,
+                        "unexpected udp intercept decision; passing through"
+                    );
+                    FlowAction::<UdpFlowService>::Passthrough
+                }
+                TransparentProxyFlowAction::Passthrough => {
+                    FlowAction::<UdpFlowService>::Passthrough
+                }
+                TransparentProxyFlowAction::Blocked => FlowAction::<UdpFlowService>::Blocked,
             }
-            TransparentProxyFlowAction::Passthrough => FlowAction::<UdpFlowService>::Passthrough,
-            TransparentProxyFlowAction::Blocked => FlowAction::<UdpFlowService>::Blocked,
-        })
+        };
+
+        std::future::ready(action)
     }
 }
 

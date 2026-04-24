@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import type { LogEvent, MinPackageAgeEvent, TlsTerminationFailedEvent } from "../types";
 import { Events } from "@wailsio/runtime";
-import { listMinPackageAgeEvents, listTlsEvents } from "../api";
+import { listMinPackageAgeEvents, listTlsEvents,collectLogs } from "../api";
 import { formatEventTime, isConnectionError } from "../utils";
 
 function compareDescByTime(a: LogEvent, b: LogEvent) {
@@ -14,11 +14,61 @@ function upsertLogEvent(events: LogEvent[], nextEvent: LogEvent): LogEvent[] {
   return [nextEvent, ...filtered].sort(compareDescByTime);
 }
 
+type CollectStatus = "idle" | "success" | "error";
+
 export function TlsEventsList() {
   const navigate = useNavigate();
   const [events, setEvents] = useState<LogEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [collecting, setCollecting] = useState(false);
+  const [collectStatus, setCollectStatus] = useState<CollectStatus>("idle");
+  const [confirmingCollect, setConfirmingCollect] = useState(false);
+
+  const handleCollectLogsClick = useCallback(() => {
+    setCollectStatus("idle");
+    setConfirmingCollect(true);
+  }, []);
+
+  const handleCollectCancel = useCallback(() => {
+    setConfirmingCollect(false);
+  }, []);
+
+  const handleCollectConfirm = useCallback(async () => {
+    setConfirmingCollect(false);
+    setCollecting(true);
+    setCollectStatus("idle");
+    try {
+      await collectLogs();
+      setCollectStatus("success");
+    } catch {
+      setCollectStatus("error");
+    } finally {
+      setCollecting(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (collectStatus === "idle") return;
+    const id = window.setTimeout(() => setCollectStatus("idle"), 4000);
+    return () => window.clearTimeout(id);
+  }, [collectStatus]);
+
+  let uploadButtonLabel = "Upload Logs";
+  if (collecting) uploadButtonLabel = "Uploading…";
+  else if (collectStatus === "success") uploadButtonLabel = "Upload successful";
+  else if (collectStatus === "error") uploadButtonLabel = "Upload failed";
+
+  const uploadButtonClass = [
+    "button-brand",
+    "button--primary",
+    "button--normal",
+    "button--rounded",
+    collectStatus === "success" ? "button--success" : "",
+    collectStatus === "error" ? "button--danger" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,7 +122,17 @@ export function TlsEventsList() {
 
   return (
     <div className="events-list">
-      <h1>Logs</h1>
+      <div className="events-list-header">
+        <h1>Logs</h1>
+        <button
+          type="button"
+          className={uploadButtonClass}
+          onClick={handleCollectLogsClick}
+          disabled={collecting}
+        >
+          {uploadButtonLabel}
+        </button>
+      </div>
       {loading && <p className="events-list-loading">Loading…</p>}
       {error && !connectionFailed && (
         <div className="events-list-error-inline">
@@ -153,6 +213,32 @@ export function TlsEventsList() {
           <p className="events-list-empty-state-subtitle">
             When a TLS MITM handshake fails, or when Aikido suppresses versions that are too new under the minimum package age policy, it will appear here.
           </p>
+        </div>
+      )}
+      {confirmingCollect && (
+        <div className="confirm-overlay" role="dialog" aria-modal="true">
+          <div className="confirm-dialog">
+            <p className="confirm-title">Upload logs?</p>
+            <p className="confirm-body">
+              Endpoint Protection will gather diagnostic logs from this device and securely upload them to Aikido. Continue?
+            </p>
+            <div className="confirm-actions">
+              <button
+                type="button"
+                className="button-brand button--tertiary button--normal button--rounded"
+                onClick={handleCollectCancel}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="button-brand button--primary button--normal button--rounded"
+                onClick={handleCollectConfirm}
+              >
+                Upload
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
