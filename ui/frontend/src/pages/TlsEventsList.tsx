@@ -189,14 +189,6 @@ export function TlsEventsList() {
                     <span className="tls-card-app">{ev.app}</span>
                   </>
                 )}
-                {ev.type === "min_package_age" && (
-                  <>
-                    <span className="tls-card-sep" aria-hidden>&middot;</span>
-                    <span className="tls-card-app">
-                      Please consult app.aikido.dev for SBOM details
-                    </span>
-                  </>
-                )}
               </div>
             </div>
           ))}

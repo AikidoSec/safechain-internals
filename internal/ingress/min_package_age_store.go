@@ -39,7 +39,7 @@ func (e *minPackageAgeEventStore) Add(ev MinPackageAgeEvent) MinPackageAgeEvent 
 		TsMs:      ev.TsMs,
 		Ecosystem: ecosystem,
 		Title:     title,
-		Message:   "One or more package versions were suppressed because they did not meet the minimum package age policy. Please consult app.aikido.dev for SBOM details.",
+		Message:   "One or more package versions were suppressed because they did not meet the minimum package age policy.",
 	}
 
 	e.events = append(e.events, stored)

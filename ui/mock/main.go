@@ -155,14 +155,14 @@ func seedData() ([]BlockEvent, []TlsEvent, []MinPackageAgeEvent) {
 			TsMs:      now - 240_000,
 			Ecosystem: "vscode",
 			Title:     "vscode package versions suppressed",
-			Message:   "One or more package versions were suppressed because they did not meet the minimum package age policy. Please consult app.aikido.dev for SBOM details.",
+			Message:   "One or more package versions were suppressed because they did not meet the minimum package age policy.",
 		},
 		{
 			ID:        "min-package-age-suppressed-npm",
 			TsMs:      now - 120_000,
 			Ecosystem: "npm",
 			Title:     "npm package versions suppressed",
-			Message:   "One or more package versions were suppressed because they did not meet the minimum package age policy. Please consult app.aikido.dev for SBOM details.",
+			Message:   "One or more package versions were suppressed because they did not meet the minimum package age policy.",
 		},
 	}
 
