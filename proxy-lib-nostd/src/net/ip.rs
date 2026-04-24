@@ -8,6 +8,7 @@
 //! References:
 //! - <https://www.iana.org/assignments/iana-ipv4-special-registry/>
 //! - <https://www.iana.org/assignments/iana-ipv6-special-registry/>
+//! - <https://tailscale.com/kb/1082/firewall-ports> (Tailscale DERP + log infra ranges)
 
 use core::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
@@ -40,6 +41,7 @@ pub fn is_passthrough_ipv4(addr: Ipv4Addr) -> bool {
         || is_ipv4_protocol_assignments(val)
         || is_ipv4_benchmarking(val)
         || is_ipv4_reserved(val)
+        || is_ipv4_tailscale_infra(val)
 }
 
 /// Returns `true` for IPv6 ranges that are not meant to be treated as ordinary
@@ -60,6 +62,7 @@ pub fn is_passthrough_ipv6(addr: Ipv6Addr) -> bool {
         || is_ipv6_discard_only(val)
         || is_ipv6_dummy_prefix(val)
         || is_ipv6_local_use_translation(val)
+        || is_ipv6_tailscale_infra(val)
 }
 
 // --- IPv4 Helpers ---
@@ -101,6 +104,18 @@ fn is_ipv4_reserved(val: u32) -> bool {
     val & 0xF000_0000 == 0xF000_0000
 }
 
+#[inline(always)]
+fn is_ipv4_tailscale_infra(val: u32) -> bool {
+    // Tailscale DERP relay servers: 192.200.0.0/24
+    // Tailscale log infrastructure (log.tailscale.com): 199.165.136.0/24
+    // Both ranges are statically registered to Tailscale and used as DERP relay
+    // and control-plane endpoints. Intercepting them delays WireGuard tunnel
+    // recovery without any security benefit.
+    // Ref: <https://tailscale.com/kb/1082/firewall-ports>
+    (val & 0xFFFF_FF00 == 0xC0C8_0000)  // 192.200.0.0/24
+        || (val & 0xFFFF_FF00 == 0xC7A5_8800) // 199.165.136.0/24
+}
+
 // --- IPv6 Helpers ---
 
 #[inline(always)]
@@ -137,6 +152,16 @@ fn is_ipv6_dummy_prefix(val: u128) -> bool {
 fn is_ipv6_local_use_translation(val: u128) -> bool {
     // RFC 8215 local-use translation prefix: 64:ff9b:1::/48.
     (val >> 80) == 0x0064_ff9b_0001
+}
+
+#[inline(always)]
+fn is_ipv6_tailscale_infra(val: u128) -> bool {
+    // Tailscale DERP relay servers: 2606:B740:49::/48
+    // Tailscale log infrastructure (log.tailscale.com): 2606:B740:1::/48
+    // IPv6 counterparts to the Tailscale-registered IPv4 DERP and log ranges.
+    // Ref: <https://tailscale.com/kb/1082/firewall-ports>
+    (val >> 80) == 0x2606_B740_0049  // 2606:B740:49::/48
+        || (val >> 80) == 0x2606_B740_0001 // 2606:B740:1::/48
 }
 
 #[cfg(test)]
