@@ -1,6 +1,7 @@
 package ingress
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -51,10 +52,11 @@ func (s *Server) handleCertificateInstall(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := certconfig.Install(r.Context()); err != nil {
-		log.Printf("ingress: certconfig install: %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	w.WriteHeader(http.StatusOK)
+
+	go func() {
+		if err := certconfig.Install(context.Background()); err != nil {
+			log.Printf("ingress: certconfig install: %v", err)
+		}
+	}()
 }
