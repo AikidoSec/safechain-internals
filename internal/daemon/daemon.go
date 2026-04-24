@@ -227,8 +227,9 @@ func (d *Daemon) run(ctx context.Context) error {
 		if err := d.uiManager.Launch(ctx, d.ingress.Addr()); err != nil {
 			log.Printf("Failed to launch UI: %v", err)
 		}
+
 		if !proxy.ProxyCAInstalled() {
-			d.uiManager.StartSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
+			d.showSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
 		}
 	}()
 
@@ -490,7 +491,22 @@ func (d *Daemon) reportHeartbeat() error {
 	d.handleLogCollectRequest(resp)
 	d.handleTargetUpdateVersion(resp)
 
+	d.runIfIntervalExceeded(&d.config.LastSetupWizardShownTime, constants.SetupWizardReshowInterval, func() error {
+		d.showSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
+		return nil
+	})
 	return nil
+}
+
+func (d *Daemon) showSetupWizard(steps []string) {
+	if len(steps) == 0 {
+		return
+	}
+	d.uiManager.StartSetupWizard(steps)
+	d.config.LastSetupWizardShownTime = time.Now()
+	if err := d.config.Save(); err != nil {
+		log.Printf("Failed to save config after showing setup wizard: %v", err)
+	}
 }
 
 func newSBOMRegistry() *sbom.Registry {
