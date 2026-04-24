@@ -490,11 +490,7 @@ func (d *Daemon) reportHeartbeat() error {
 	d.handleTargetUpdateVersion(resp)
 
 	d.runIfIntervalExceeded(&d.config.LastSetupWizardShownTime, constants.SetupWizardReshowInterval, func() error {
-		steps := ingress.ComputeSetupSteps(d.ctx, d.config)
-		if len(steps) == 0 {
-			return nil
-		}
-		d.uiManager.StartSetupWizard(steps)
+		d.showSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
 		return nil
 	})
 	return nil
