@@ -188,3 +188,54 @@ fn test_trait_dispatch_consistency() {
     assert!(is_passthrough_ip([127, 0, 0, 1]));
     assert!(!is_passthrough_ip([8, 8, 8, 8]));
 }
+
+#[test]
+fn passthrough_tailscale_infra_ranges() {
+    // Tailscale DERP relay: 192.200.0.0/24
+    // Tailscale log infra: 199.165.136.0/24
+    // Ref: https://tailscale.com/kb/1082/firewall-ports
+    let ipv4_cases = [
+        // 192.200.0.0/24 — DERP relay servers
+        (Ipv4Addr::new(192, 200, 0, 0), true),
+        (Ipv4Addr::new(192, 200, 0, 1), true),
+        (Ipv4Addr::new(192, 200, 0, 255), true),
+        // just outside
+        (Ipv4Addr::new(192, 199, 255, 255), false),
+        (Ipv4Addr::new(192, 201, 0, 0), false),
+        // 199.165.136.0/24 — log.tailscale.com
+        (Ipv4Addr::new(199, 165, 136, 0), true),
+        (Ipv4Addr::new(199, 165, 136, 100), true),
+        (Ipv4Addr::new(199, 165, 136, 255), true),
+        // just outside
+        (Ipv4Addr::new(199, 165, 135, 255), false),
+        (Ipv4Addr::new(199, 165, 137, 0), false),
+    ];
+
+    for (addr, expected) in ipv4_cases {
+        assert_eq!(is_passthrough_ipv4(addr), expected, "addr: {addr}");
+    }
+
+    // Tailscale DERP relay: 2606:B740:49::/48
+    // Tailscale log infra: 2606:B740:1::/48
+    let ipv6_cases: &[(&str, bool)] = &[
+        // 2606:B740:49::/48 — DERP relay servers
+        ("2606:b740:49::", true),
+        ("2606:b740:49::1", true),
+        ("2606:b740:49:ffff:ffff:ffff:ffff:ffff", true),
+        // just outside
+        ("2606:b740:48:ffff::1", false),
+        ("2606:b740:4a::1", false),
+        // 2606:B740:1::/48 — log.tailscale.com
+        ("2606:b740:1::", true),
+        ("2606:b740:1::1", true),
+        ("2606:b740:1:ffff:ffff:ffff:ffff:ffff", true),
+        // just outside
+        ("2606:b740:0:ffff::1", false),
+        ("2606:b740:2::1", false),
+    ];
+
+    for (addr_str, expected) in ipv6_cases {
+        let addr: Ipv6Addr = addr_str.parse().unwrap();
+        assert_eq!(is_passthrough_ipv6(addr), *expected, "addr: {addr_str}");
+    }
+}
