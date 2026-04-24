@@ -19,8 +19,14 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-//go:embed build/imageTemplate.png
-var icon []byte
+//go:embed build/assets/DefaultTemplate.svg
+var iconDefault []byte
+
+//go:embed build/assets/NotifTemplate.svg
+var iconNotif []byte
+
+//go:embed build/assets/WarningTemplate.svg
+var iconWarning []byte
 
 type FocusEventPayload struct {
 	EventId   string `json:"eventId"`
@@ -34,6 +40,16 @@ var setInstallWindowOnTop func(bool)
 var openDashboardToEvent func(eventId, eventType string)
 var closeTrayNotification func()
 var showTrayNotification func()
+var setTrayIcon func(kind trayIconKind)
+var resetTrayIconIfNotif func()
+
+type trayIconKind int32
+
+const (
+	trayIconKindDefault trayIconKind = iota
+	trayIconKindNotif
+	trayIconKindWarning
+)
 
 type SetupStatePayload struct {
 	SetupRequired bool `json:"setupRequired"`
@@ -273,11 +289,44 @@ const maxStatusLines = 4
 func setupSystemTray(app *application.App, showDashboard func(), notifWindow *application.WebviewWindow) chan<- appserver.ProxyStatusBody {
 	systray := app.SystemTray.New()
 	systray.SetTooltip("Aikido Endpoint Protection")
-	if runtime.GOOS == "darwin" {
-		systray.SetTemplateIcon(icon)
-	} else {
-		systray.SetIcon(icon)
+
+	var currentIcon atomic.Int32
+	applyIcon := func(icon []byte) {
+		if runtime.GOOS == "darwin" {
+			systray.SetTemplateIcon(icon)
+		} else {
+			systray.SetIcon(icon)
+		}
 	}
+	var setupHidden atomic.Bool
+	setupHidden.Store(true)
+
+	setTrayIcon = func(kind trayIconKind) {
+		if kind == trayIconKindNotif && trayIconKind(currentIcon.Load()) == trayIconKindWarning {
+			return
+		}
+		currentIcon.Store(int32(kind))
+		switch kind {
+		case trayIconKindNotif:
+			applyIcon(iconNotif)
+		case trayIconKindWarning:
+			applyIcon(iconWarning)
+		default:
+			applyIcon(iconDefault)
+		}
+	}
+	resetTrayIconIfNotif = func() {
+		if trayIconKind(currentIcon.Load()) != trayIconKindNotif {
+			return
+		}
+		if !setupHidden.Load() {
+			setTrayIcon(trayIconKindWarning)
+		} else {
+			setTrayIcon(trayIconKindDefault)
+		}
+	}
+
+	setTrayIcon(trayIconKindDefault)
 	systray.AttachWindow(notifWindow)
 
 	menu := application.NewMenu()
@@ -302,6 +351,9 @@ func setupSystemTray(app *application.App, showDashboard func(), notifWindow *ap
 	menu.AddSeparator()
 	menu.Add("Open Dashboard").OnClick(func(_ *application.Context) {
 		app.Event.Emit("focus_event", FocusEventPayload{EventId: ""})
+		if resetTrayIconIfNotif != nil {
+			resetTrayIconIfNotif()
+		}
 		showDashboard()
 	})
 	systray.SetMenu(menu)
@@ -322,10 +374,9 @@ func setupSystemTray(app *application.App, showDashboard func(), notifWindow *ap
 		systray.PositionWindow(notifWindow, 2)
 		systray.WindowDebounce(200 * time.Millisecond)
 		notifWindow.Show()
+		notifWindow.Focus()
 	}
 
-	var setupHidden atomic.Bool
-	setupHidden.Store(true)
 	go func() {
 		time.Sleep(5 * time.Second)
 		for {
@@ -338,6 +389,11 @@ func setupSystemTray(app *application.App, showDashboard func(), notifWindow *ap
 				setupHidden.Store(shouldHide)
 				setupItem.SetHidden(shouldHide)
 				menu.Update()
+				if !shouldHide {
+					setTrayIcon(trayIconKindWarning)
+				} else if trayIconKind(currentIcon.Load()) == trayIconKindWarning {
+					setTrayIcon(trayIconKindDefault)
+				}
 				app.Event.Emit("setup_state", SetupStatePayload{SetupRequired: !shouldHide})
 			}
 			time.Sleep(10 * time.Second)
@@ -372,6 +428,9 @@ func setupSystemTray(app *application.App, showDashboard func(), notifWindow *ap
 func handleBlockedEventCreated(app *application.App, ev daemon.BlockEvent) {
 	log.Println("Blocked event:", ev)
 	app.Event.Emit("blocked", ev)
+	if setTrayIcon != nil {
+		setTrayIcon(trayIconKindNotif)
+	}
 	if showTrayNotification != nil {
 		showTrayNotification()
 	}
@@ -380,6 +439,12 @@ func handleBlockedEventCreated(app *application.App, ev daemon.BlockEvent) {
 func handleBlockedEventUpdate(app *application.App, ev daemon.BlockEvent) {
 	log.Println("Blocked event updated:", ev)
 	app.Event.Emit("blocked_updated", ev)
+	if setTrayIcon != nil {
+		setTrayIcon(trayIconKindNotif)
+	}
+	if showTrayNotification != nil {
+		showTrayNotification()
+	}
 }
 
 func startAppServer(app *application.App, wm *windowManager, statusCh chan<- appserver.ProxyStatusBody) {
@@ -423,6 +488,9 @@ func main() {
 		if wm.notifWindow != nil {
 			wm.notifWindow.Hide()
 		}
+		if resetTrayIconIfNotif != nil {
+			resetTrayIconIfNotif()
+		}
 		wm.showDashboard()
 		go func() {
 			app.Event.Emit("focus_event", FocusEventPayload{EventId: eventId, EventType: eventType})
@@ -432,6 +500,9 @@ func main() {
 	closeTrayNotification = func() {
 		if wm.notifWindow != nil {
 			wm.notifWindow.Hide()
+		}
+		if resetTrayIconIfNotif != nil {
+			resetTrayIconIfNotif()
 		}
 	}
 
