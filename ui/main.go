@@ -14,7 +14,6 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
-	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 )
 
 //go:embed all:frontend/dist
@@ -91,36 +90,15 @@ func applyFlags(f appFlags) {
 	appserver.SetListenAddr(f.uiURL)
 }
 
-// --- Notifications -------------------------------------------------------
-
-func setupNotifications() *notifications.NotificationService {
-	notifier := notifications.New()
-	notifier.RegisterNotificationCategory(notifications.NotificationCategory{
-		ID:      "aikido-blocked",
-		Actions: []notifications.NotificationAction{{ID: "OPEN", Title: "Open"}},
-	})
-	authorized, _ := notifier.CheckNotificationAuthorization()
-	if !authorized {
-		go func() {
-			ok, _ := notifier.RequestNotificationAuthorization()
-			log.Println("Notifications authorized:", ok)
-		}()
-		return notifier
-	}
-	log.Println("Notifications authorized:", authorized)
-	return notifier
-}
-
 // --- Wails application ---------------------------------------------------
 
 var daemonSvc = &DaemonService{}
 
-func newApp(notifier *notifications.NotificationService) *application.App {
+func newApp() *application.App {
 	return application.New(application.Options{
 		Name:        "Aikido Endpoint Protection",
 		Description: "Aikido Endpoint Protection",
 		Services: []application.Service{
-			application.NewService(notifier),
 			application.NewService(daemonSvc),
 		},
 		Assets: application.AssetOptions{
@@ -391,18 +369,10 @@ func setupSystemTray(app *application.App, showDashboard func(), notifWindow *ap
 
 // --- App server (receives events from daemon) ----------------------------
 
-func handleBlockedEventCreated(app *application.App, notifier *notifications.NotificationService, ev daemon.BlockEvent) {
+func handleBlockedEventCreated(app *application.App, ev daemon.BlockEvent) {
 	log.Println("Blocked event:", ev)
 	app.Event.Emit("blocked", ev)
-	if authorized, _ := notifier.CheckNotificationAuthorization(); authorized {
-		notifier.SendNotificationWithActions(notifications.NotificationOptions{
-			ID:         "block-" + ev.ID,
-			Title:      "Aikido Endpoint Protection blocked an event",
-			Body:       ev.Artifact.Product + ": " + ev.Artifact.PackageName,
-			CategoryID: "aikido-blocked",
-			Data:       map[string]interface{}{"eventId": ev.ID, "eventType": "block"},
-		})
-	} else if showTrayNotification != nil {
+	if showTrayNotification != nil {
 		showTrayNotification()
 	}
 }
@@ -412,11 +382,11 @@ func handleBlockedEventUpdate(app *application.App, ev daemon.BlockEvent) {
 	app.Event.Emit("blocked_updated", ev)
 }
 
-func startAppServer(app *application.App, wm *windowManager, statusCh chan<- appserver.ProxyStatusBody, notifier *notifications.NotificationService) {
+func startAppServer(app *application.App, wm *windowManager, statusCh chan<- appserver.ProxyStatusBody) {
 	srv := appserver.New()
 	srv.SetHandlers(
 		func(ev appserver.ProxyStatusBody) { statusCh <- ev },
-		func(ev daemon.BlockEvent) { handleBlockedEventCreated(app, notifier, ev) },
+		func(ev daemon.BlockEvent) { handleBlockedEventCreated(app, ev) },
 		func(ev daemon.BlockEvent) { handleBlockedEventUpdate(app, ev) },
 		func(ev daemon.TlsTerminationFailedEvent) {
 			log.Println("TLS termination failed event:", ev)
@@ -442,13 +412,12 @@ func main() {
 	flags := parseFlags()
 	applyFlags(flags)
 
-	notifier := setupNotifications()
-	app := newApp(notifier)
+	app := newApp()
 
 	wm := newWindowManager(app)
 
 	statusCh := setupSystemTray(app, wm.showDashboard, wm.notifWindow)
-	startAppServer(app, wm, statusCh, notifier)
+	startAppServer(app, wm, statusCh)
 
 	openDashboardToEvent = func(eventId, eventType string) {
 		if wm.notifWindow != nil {
@@ -472,22 +441,6 @@ func main() {
 	app.Event.RegisterApplicationEventHook(events.Mac.ApplicationShouldHandleReopen, func(event *application.ApplicationEvent) {
 		wm.showDashboard()
 		event.Cancel()
-	})
-
-	notifier.OnNotificationResponse(func(result notifications.NotificationResult) {
-		if result.Error != nil {
-			return
-		}
-		eventId, _ := result.Response.UserInfo["eventId"].(string)
-		if eventId == "" {
-			return
-		}
-		eventType, _ := result.Response.UserInfo["eventType"].(string)
-		wm.showDashboard()
-		go func() {
-			time.Sleep(500 * time.Millisecond)
-			app.Event.Emit("focus_event", FocusEventPayload{EventId: eventId, EventType: eventType})
-		}()
 	})
 
 	if err := app.Run(); err != nil {
