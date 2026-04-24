@@ -32,6 +32,9 @@ type FocusEventPayload struct {
 var closeInstallWindow func()
 
 var setInstallWindowOnTop func(bool)
+var openDashboardToEvent func(eventId, eventType string)
+var closeTrayNotification func()
+var showTrayNotification func()
 
 type SetupStatePayload struct {
 	SetupRequired bool `json:"setupRequired"`
@@ -158,6 +161,7 @@ type windowManager struct {
 	app           *application.App
 	window        *application.WebviewWindow
 	installWindow *application.WebviewWindow
+	notifWindow   *application.WebviewWindow
 	installMu     sync.Mutex
 }
 
@@ -181,10 +185,31 @@ func installWindowOpts() application.WebviewWindowOptions {
 	}
 }
 
+func trayNotifWindowOpts() application.WebviewWindowOptions {
+	return application.WebviewWindowOptions{
+		Name:           "tray-notification",
+		Width:          360,
+		Height:         160,
+		Hidden:         true,
+		Frameless:      true,
+		DisableResize:  true,
+		AlwaysOnTop:    true,
+		URL:            "/#/tray-notification",
+		BackgroundType: application.BackgroundTypeTransparent,
+		Windows: application.WindowsWindow{
+			HiddenOnTaskbar: true,
+		},
+		Mac: application.MacWindow{
+			CollectionBehavior: application.MacWindowCollectionBehaviorMoveToActiveSpace,
+		},
+	}
+}
+
 func newWindowManager(app *application.App) *windowManager {
 	wm := &windowManager{app: app}
 	wm.window = app.Window.NewWithOptions(mainWindowOpts())
 	wm.installWindow = app.Window.NewWithOptions(installWindowOpts())
+	wm.notifWindow = app.Window.NewWithOptions(trayNotifWindowOpts())
 	wm.interceptClose(wm.window)
 	wm.interceptClose(wm.installWindow)
 	closeInstallWindow = func() {
@@ -267,7 +292,7 @@ func wrapText(text string, maxWidth int) []string {
 
 const maxStatusLines = 4
 
-func setupSystemTray(app *application.App, showDashboard func()) chan<- appserver.ProxyStatusBody {
+func setupSystemTray(app *application.App, showDashboard func(), notifWindow *application.WebviewWindow) chan<- appserver.ProxyStatusBody {
 	systray := app.SystemTray.New()
 	systray.SetTooltip("Aikido Endpoint Protection")
 	if runtime.GOOS == "darwin" {
@@ -275,6 +300,7 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 	} else {
 		systray.SetIcon(icon)
 	}
+	systray.AttachWindow(notifWindow)
 
 	menu := application.NewMenu()
 	statusLines := make([]*application.MenuItem, maxStatusLines)
@@ -301,8 +327,23 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 		showDashboard()
 	})
 	systray.SetMenu(menu)
-	if runtime.GOOS == "windows" {
-		systray.OnClick(systray.OpenMenu)
+
+	hideNotifAndOpenMenu := func() {
+		if notifWindow.IsVisible() {
+			notifWindow.Hide()
+		}
+		systray.OpenMenu()
+	}
+	systray.OnClick(hideNotifAndOpenMenu)
+	systray.OnRightClick(hideNotifAndOpenMenu)
+
+	showTrayNotification = func() {
+		if notifWindow.IsVisible() {
+			return
+		}
+		systray.PositionWindow(notifWindow, 2)
+		systray.WindowDebounce(200 * time.Millisecond)
+		notifWindow.Show()
 	}
 
 	var setupHidden atomic.Bool
@@ -361,6 +402,8 @@ func handleBlockedEventCreated(app *application.App, notifier *notifications.Not
 			CategoryID: "aikido-blocked",
 			Data:       map[string]interface{}{"eventId": ev.ID, "eventType": "block"},
 		})
+	} else if showTrayNotification != nil {
+		showTrayNotification()
 	}
 }
 
@@ -404,8 +447,24 @@ func main() {
 
 	wm := newWindowManager(app)
 
-	statusCh := setupSystemTray(app, wm.showDashboard)
+	statusCh := setupSystemTray(app, wm.showDashboard, wm.notifWindow)
 	startAppServer(app, wm, statusCh, notifier)
+
+	openDashboardToEvent = func(eventId, eventType string) {
+		if wm.notifWindow != nil {
+			wm.notifWindow.Hide()
+		}
+		wm.showDashboard()
+		go func() {
+			app.Event.Emit("focus_event", FocusEventPayload{EventId: eventId, EventType: eventType})
+		}()
+	}
+
+	closeTrayNotification = func() {
+		if wm.notifWindow != nil {
+			wm.notifWindow.Hide()
+		}
+	}
 
 	// On macOS, clicking the app bundle while running triggers a default Wails
 	// listener that shows ALL hidden windows. Register a hook (runs before

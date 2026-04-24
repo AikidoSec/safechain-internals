@@ -90,3 +90,11 @@ export async function closeInstallWindow(): Promise<void> {
 export async function collectLogs(): Promise<void> {
   return DaemonService.CollectLogs();
 }
+
+export async function openDashboardToEvent(eventId: string, eventType: string): Promise<void> {
+  return DaemonService.OpenDashboardToEvent(eventId, eventType);
+}
+
+export async function closeTrayNotification(): Promise<void> {
+  return DaemonService.CloseTrayNotification();
+}
