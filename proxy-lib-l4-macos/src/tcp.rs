@@ -53,7 +53,7 @@ use safechain_proxy_lib::{
         ws_relay::WebSocketMitmRelayService,
     },
     storage,
-    tcp::new_tcp_connector_service_for_proxy,
+    tcp::{is_known_http_port, is_known_tls_port, new_tcp_connector_service_for_proxy},
     tls::{RootCaKeyPair, mitm_relay_policy::TlsMitmRelayPolicyLayer},
     utils::token::AgentIdentity,
 };
@@ -394,14 +394,4 @@ impl Service<TcpFlow> for TcpInterceptService {
         let _ = mitm_svc.serve(BridgeIo(ingress, egress)).await;
         Ok(())
     }
-}
-
-#[inline]
-fn is_known_tls_port(port: u16) -> bool {
-    matches!(port, 443 | 8443)
-}
-
-#[inline]
-fn is_known_http_port(port: u16) -> bool {
-    matches!(port, 80 | 443 | 8080 | 8443)
 }
