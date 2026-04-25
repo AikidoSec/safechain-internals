@@ -148,6 +148,8 @@ impl TcpMitmService {
         &self,
         exec: Executor,
         within_connect_tunnel: bool,
+        tls_peek_duration: Duration,
+        http_peek_duration: Duration,
     ) -> impl Service<BridgeIo<Ingress, Egress>, Output = (), Error = Infallible> + Clone
     where
         Ingress: Io + Unpin + ExtensionsRef,
@@ -161,10 +163,13 @@ impl TcpMitmService {
             self.firewall.clone(),
             self.ca_crt_pem_bytes,
             within_connect_tunnel,
+            tls_peek_duration,
+            http_peek_duration,
         )
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn new_tcp_service_inner<Issuer, Ingress, Egress>(
     exec: Executor,
     proxy_config: ProxyConfig,
@@ -173,14 +178,14 @@ fn new_tcp_service_inner<Issuer, Ingress, Egress>(
     firewall: Firewall,
     ca_crt_pem_bytes: &'static [u8],
     within_connect_tunnel: bool,
+    tls_peek_duration: Duration,
+    http_peek_duration: Duration,
 ) -> impl Service<BridgeIo<Ingress, Egress>, Output = (), Error = Infallible> + Clone
 where
     Issuer: BoringMitmCertIssuer<Error: Into<BoxError>> + Clone,
     Ingress: Io + Unpin + ExtensionsRef,
     Egress: Io + Unpin + ExtensionsRef,
 {
-    let peek_duration = Duration::from_secs_f64(proxy_config.peek_duration_s.max(0.05));
-
     let http_mitm_svc =
         HttpMitmRelay::new(exec.clone()).with_http_middleware(http_relay_middleware(
             exec,
@@ -190,16 +195,18 @@ where
             firewall,
             ca_crt_pem_bytes,
             within_connect_tunnel,
+            tls_peek_duration,
+            http_peek_duration,
         ));
 
     let maybe_http_mitm_svc = HttpPeekRouter::new(http_mitm_svc)
-        .with_peek_timeout(peek_duration)
+        .with_peek_timeout(http_peek_duration)
         .with_fallback(IoForwardService::new());
 
     let app_mitm_layer = PeekTlsClientHelloService::new(
         (tls_mitm_relay_policy, tls_mitm_relay).into_layer(maybe_http_mitm_svc.clone()),
     )
-    .with_peek_timeout(peek_duration)
+    .with_peek_timeout(tls_peek_duration)
     .with_fallback(maybe_http_mitm_svc);
 
     if within_connect_tunnel {
@@ -208,12 +215,13 @@ where
 
     let socks5_mitm_relay = Socks5MitmRelayService::new(app_mitm_layer.clone());
     let mitm_svc = Socks5PeekRouter::new(socks5_mitm_relay)
-        .with_peek_timeout(peek_duration)
+        .with_peek_timeout(http_peek_duration)
         .with_fallback(app_mitm_layer);
 
     Either::B(ConsumeErrLayer::trace_as_debug().into_layer(mitm_svc))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn http_relay_middleware<S, Issuer>(
     exec: Executor,
     proxy_config: ProxyConfig,
@@ -222,6 +230,8 @@ fn http_relay_middleware<S, Issuer>(
     firewall: Firewall,
     ca_crt_pem_bytes: &'static [u8],
     within_connect_tunnel: bool,
+    tls_peek_duration: Duration,
+    http_peek_duration: Duration,
 ) -> impl Layer<S, Service: Service<Request, Output = Response, Error = BoxError> + Clone>
 + Send
 + Sync
@@ -244,6 +254,8 @@ where
             firewall.clone(),
             ca_crt_pem_bytes,
             true,
+            tls_peek_duration,
+            http_peek_duration,
         )
         .boxed()
     };
@@ -355,8 +367,41 @@ impl Service<TcpFlow> for TcpInterceptService {
                 }
             };
 
-        let mitm_svc = self.mitm.new_bridge_service(self.exec.clone(), false);
+        let cfg = &self.mitm.proxy_config;
+        let port = egress_addr.port;
+        let tls_peek_duration = Duration::from_secs_f64(
+            if is_known_tls_port(port) {
+                cfg.peek_duration_s
+            } else {
+                cfg.peek_unknown_port_duration_s
+            }
+            .max(0.001),
+        );
+        let http_peek_duration = Duration::from_secs_f64(
+            if is_known_http_port(port) {
+                cfg.peek_duration_s
+            } else {
+                cfg.peek_unknown_port_duration_s
+            }
+            .max(0.001),
+        );
+        let mitm_svc = self.mitm.new_bridge_service(
+            self.exec.clone(),
+            false,
+            tls_peek_duration,
+            http_peek_duration,
+        );
         let _ = mitm_svc.serve(BridgeIo(ingress, egress)).await;
         Ok(())
     }
+}
+
+#[inline]
+fn is_known_tls_port(port: u16) -> bool {
+    matches!(port, 443 | 8443)
+}
+
+#[inline]
+fn is_known_http_port(port: u16) -> bool {
+    matches!(port, 80 | 443 | 8080 | 8443)
 }
