@@ -77,7 +77,7 @@ impl RuleNpm {
 
         let remote_released_packages_list = RemoteReleasedPackagesList::try_new(
             guard.clone(),
-            Uri::from_static("https://malware-list.aikido.dev/releases/npm.json"),
+            Uri::from_static("https://malware-list.aikido.dev/releases/gz/npm.json"),
             sync_storage,
             remote_malware_list_https_client,
         )
