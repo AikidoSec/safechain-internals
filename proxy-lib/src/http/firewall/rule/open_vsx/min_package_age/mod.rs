@@ -1,11 +1,3 @@
-//! OpenVSX metadata rewriter — strips too-young versions from JSON responses.
-//!
-//! Soft-fail by design. This is best-effort: if anything goes wrong (malformed
-//! JSON, unknown response shape, oversized body, serialization failure) we return
-//! the original response untouched. The hard `.vsix` install-asset block in
-//! [`super::RuleOpenVsx::evaluate_request`] remains the authoritative safety net,
-//! so a failed rewrite never widens the attack surface.
-
 use rama::{
     error::{BoxError, ErrorContext as _},
     http::{

@@ -1,8 +1,3 @@
-//! JSON rewriting for OpenVSX metadata responses.
-//!
-//! Pure transformation — no I/O. The caller in `super` is responsible for
-//! reading the body, content-type checks, size limits, and emitting events.
-
 use std::str::FromStr as _;
 
 use rama::{telemetry::tracing, utils::str::arcstr::ArcStr};
@@ -17,8 +12,6 @@ pub(super) struct RewriteResult {
     pub(super) suppressed_versions: Vec<(ArcStr, PackageVersion)>,
 }
 
-/// Parse → dispatch → re-serialize. Returns `None` on any soft-failure
-/// (invalid JSON, unknown shape, nothing to suppress, serialization failure).
 pub(super) fn rewrite_json(
     bytes: &[u8],
     released_packages_list: &OpenVsxRemoteReleasedPackagesList,
@@ -55,25 +48,6 @@ pub(super) fn rewrite_json(
 /// and applies the corresponding per-extension filter, mutating `json` in place.
 /// Returns the `(extension_id, version)` pairs that were stripped — empty if the
 /// shape is unknown or every version is old enough to keep.
-///
-/// The three supported shapes:
-///
-/// 1. Native OpenVSX single-extension (`/api/{namespace}/{name}`):
-///    ```json
-///    { "namespace": "...", "name": "...", "version": "...",
-///      "allVersions": { "1.2.3": "url", "1.2.2": "url", ... } }
-///    ```
-/// 2. Native OpenVSX query (`/api/-/query` or `/api/v2/-/query`):
-///    ```json
-///    { "extensions": [ { "namespace": "...", "name": "...", "allVersions": {...}, ... } ] }
-///    ```
-/// 3. VS-Marketplace-shaped mirror (Cursor's `marketplace.cursorapi.com`,
-///    OpenVSX's own `/vscode/gallery/extensionquery`):
-///    ```json
-///    { "results": [ { "extensions": [ { "publisher": {"publisherName": "..."},
-///                                       "extensionName": "...",
-///                                       "versions": [ {"version": "..."} , ... ] } ] } ] }
-///    ```
 fn dispatch_filter_by_shape(
     json: &mut serde_json::Value,
     released_packages_list: &OpenVsxRemoteReleasedPackagesList,
@@ -81,7 +55,13 @@ fn dispatch_filter_by_shape(
 ) -> Vec<(ArcStr, PackageVersion)> {
     let mut suppressed: Vec<(ArcStr, PackageVersion)> = Vec::new();
 
-    // Shape 3: VS-Marketplace-shaped mirror — top-level `results` array.
+    /// VS-Marketplace-shaped mirror (Cursor's `marketplace.cursorapi.com`,
+    ///    OpenVSX's own `/vscode/gallery/extensionquery`):
+    ///    ```json
+    ///    { "results": [ { "extensions": [ { "publisher": {"publisherName": "..."},
+    ///                                       "extensionName": "...",
+    ///                                       "versions": [ {"version": "..."} , ... ] } ] } ] }
+    ///    ```
     if let Some(results) = json.get_mut("results").and_then(|r| r.as_array_mut()) {
         for result in results.iter_mut() {
             let Some(extensions) = result.get_mut("extensions").and_then(|e| e.as_array_mut())
@@ -98,7 +78,11 @@ fn dispatch_filter_by_shape(
             }
         }
     }
-    // Shape 2: OpenVSX query — top-level `extensions` array.
+
+    /// Native OpenVSX query (`/api/-/query` or `/api/v2/-/query`):
+    ///    ```json
+    ///    { "extensions": [ { "namespace": "...", "name": "...", "allVersions": {...}, ... } ] }
+    ///    ```
     else if let Some(extensions) = json.get_mut("extensions").and_then(|e| e.as_array_mut()) {
         for extension in extensions {
             filter_openvsx_extension(
@@ -109,10 +93,16 @@ fn dispatch_filter_by_shape(
             );
         }
     }
-    // Shape 1: OpenVSX single-extension — top-level object with `namespace`/`name`.
+
+    /// Native OpenVSX single-extension (`/api/{namespace}/{name}`):
+    ///    ```json
+    ///    { "namespace": "...", "name": "...", "version": "...",
+    ///      "allVersions": { "1.2.3": "url", "1.2.2": "url", ... } }
+    ///    ```
     else if json.get("namespace").is_some() && json.get("name").is_some() {
         filter_openvsx_extension(json, released_packages_list, cutoff_ts, &mut suppressed);
     }
+
     // else: unknown shape — leave json untouched, return empty vec.
 
     suppressed
