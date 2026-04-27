@@ -423,6 +423,10 @@ func GetOSVersion() string {
 	return fmt.Sprintf("%d.%d.%d", ver.MajorVersion, ver.MinorVersion, ver.BuildNumber)
 }
 
+func GetSystemBootTime() time.Time {
+	return time.Now().Add(-windows.DurationSinceBoot())
+}
+
 func GetRawDeviceID() (string, error) {
 	return readRegistryValue(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Cryptography`, "MachineGuid")
 }

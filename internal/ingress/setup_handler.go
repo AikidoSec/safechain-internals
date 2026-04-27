@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/AikidoSec/safechain-internals/internal/config"
+	"github.com/AikidoSec/safechain-internals/internal/platform"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
 )
 
@@ -16,6 +18,22 @@ type setupCheckResult struct {
 
 func IsSetupOk(ctx context.Context, cfg *config.ConfigInfo) bool {
 	return len(ComputeSetupSteps(ctx, cfg)) == 0
+}
+
+// IsRebootRequired reports whether the system needs to reboot to finish setup.
+// The package installer creates an install marker file in the run directory;
+// if that file's modification time is after the last system boot, the user
+// has not rebooted since (re)installing.
+func IsRebootRequired() bool {
+	bootTime := platform.GetSystemBootTime()
+	if bootTime.IsZero() {
+		return false
+	}
+	info, err := os.Stat(platform.GetInstallMarkerPath())
+	if err != nil {
+		return false
+	}
+	return info.ModTime().After(bootTime)
 }
 
 func ComputeSetupSteps(ctx context.Context, cfg *config.ConfigInfo) []string {
@@ -43,6 +61,10 @@ func ComputeSetupSteps(ctx context.Context, cfg *config.ConfigInfo) []string {
 		// and be able to install it in the next step
 		steps = append(steps, "start-proxy")
 		steps = append(steps, "install-ca")
+	}
+
+	if IsRebootRequired() {
+		steps = append(steps, "reboot")
 	}
 
 	return steps

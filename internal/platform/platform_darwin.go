@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 	"golang.org/x/sys/unix"
@@ -617,6 +618,15 @@ func GetOSVersion() string {
 		return ""
 	}
 	return strings.TrimSpace(version)
+}
+
+func GetSystemBootTime() time.Time {
+	tv, err := unix.SysctlTimeval("kern.boottime")
+	if err != nil {
+		log.Printf("failed to read kern.boottime: %v", err)
+		return time.Time{}
+	}
+	return time.Unix(int64(tv.Sec), int64(tv.Usec)*1000)
 }
 
 func GetRawDeviceID() (string, error) {
