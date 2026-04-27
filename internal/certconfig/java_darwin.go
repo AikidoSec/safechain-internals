@@ -155,6 +155,9 @@ func darwinJavaTrustTargets(ctx context.Context) []javaTrustTarget {
 	for _, home := range javaHomesFromJetBrainsRuntime() {
 		homes = appendIfMissingCanonicalHome(homes, seen, home)
 	}
+	for _, home := range javaHomesFromEclipse() {
+		homes = appendIfMissingCanonicalHome(homes, seen, home)
+	}
 	for _, home := range javaHomesFromHomebrew() {
 		homes = appendIfMissingCanonicalHome(homes, seen, home)
 	}
@@ -204,6 +207,18 @@ func javaHomesFromJetBrainsRuntime() []string {
 	patterns := []string{
 		"/Applications/*.app/Contents/jbr/Contents/Home",
 		"/Applications/JetBrains Toolbox/*.app/Contents/jbr/Contents/Home",
+	}
+	return globAll(patterns)
+}
+
+// javaHomesFromEclipse returns the OpenJDK that Eclipse and Eclipse-based IDEs
+// (Spring Tool Suite, JBoss Tools, etc.) bundle via the JustJ plugin. Builds
+// run from inside Eclipse use this JDK by default; without it in trust
+// discovery, Maven/Gradle invocations from the IDE fail TLS handshakes against
+// L4-intercepted hosts because the bundled cacerts has no Aikido CA imported.
+func javaHomesFromEclipse() []string {
+	patterns := []string{
+		"/Applications/*.app/Contents/Eclipse/plugins/org.eclipse.justj.openjdk.hotspot.jre.full.macosx.*/jre",
 	}
 	return globAll(patterns)
 }
