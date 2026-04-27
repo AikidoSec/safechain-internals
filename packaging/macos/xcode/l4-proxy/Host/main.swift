@@ -1124,7 +1124,7 @@ private final class TransparentProxyHostCLI {
           --clean-secrets            Delete proxy CA secrets before starting to rotate the MITM CA.
           --reset-profile            Remove the saved Network Extension profile before starting.
           --help                     Show this help text.
-          --no-firwall               Don't setup the firewall
+          --no-firewall               Don't setup the firewall
 
         Notes:
           - The transparent proxy extension is managed by macOS after `start`; this host process

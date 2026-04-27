@@ -311,7 +311,6 @@ async fn create_firewall(
     let https_client = new_http_client_for_internal(Executor::graceful(guard.clone()))
         .context("create firewall's inner http(s) client")?;
 
-
     if no_firewall {
         tracing::warn!("Starting without firewall due to the --no-firewall startup flag");
         return Firewall::empty().await;
