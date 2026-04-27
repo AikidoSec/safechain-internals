@@ -130,22 +130,41 @@ func verifyPackageVersion(ctx context.Context, pkgPath, expected string) error {
 	return nil
 }
 
+// updateLogName is the file (under platform.GetLogDir()) where installer
+// stdout/stderr is appended across all auto-update attempts.
+const updateLogName = "endpoint-protection-update.log"
+
 // installPackageDetached starts `installer` in a brand-new session so that it
 // keeps running after the package's pre-install scripts terminate this daemon.
 // Setsid moves the new process out of our process group/session, and Release
 // hands off bookkeeping so launchd/init reaps it instead of us.
+//
+// Installer output is appended to a dedicated update log so we can inspect
+// failed installs after the fact (the daemon itself is dead by then).
 func installPackageDetached(pkgPath string) error {
 	log.Printf("Starting detached installer for %s", pkgPath)
+
+	logPath := filepath.Join(platform.GetLogDir(), updateLogName)
+	logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("Failed to open update log %s: %v; installer output will be discarded", logPath, err)
+		logFile = nil
+	} else {
+		defer logFile.Close()
+		fmt.Fprintf(logFile, "\n=== %s installer starting for %s ===\n", time.Now().UTC().Format(time.RFC3339), pkgPath)
+	}
 
 	cmd := exec.Command("/usr/sbin/installer", "-pkg", pkgPath, "-target", "/")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	cmd.Stdin = nil
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	if logFile != nil {
+		cmd.Stdout = logFile
+		cmd.Stderr = logFile
+	}
 
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	log.Printf("Installer started (PID %d); detaching from daemon process tree", cmd.Process.Pid)
+	log.Printf("Installer started (PID %d); output appended to %s", cmd.Process.Pid, logPath)
 	return cmd.Process.Release()
 }

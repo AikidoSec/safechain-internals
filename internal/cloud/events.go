@@ -19,7 +19,8 @@ type HeartbeatEvent struct {
 
 type HeartbeatResponse struct {
 	CollectLogsRequestedAt *int64  `json:"collect_logs_requested_at,omitempty"`
-	TargetUpdateVersion    *string `json:"target_update_version,omitempty"`
+	UpdateEnabled          *bool   `json:"update_enabled,omitempty"`
+	UpdateVersion          *string `json:"update_version,omitempty"`
 }
 
 type SBOMEvent struct {

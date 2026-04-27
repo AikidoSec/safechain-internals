@@ -489,7 +489,7 @@ func (d *Daemon) reportHeartbeat() error {
 	log.Printf("Heartbeat report sent successfully: %s", string(eventJSON))
 
 	d.handleLogCollectRequest(resp)
-	d.handleTargetUpdateVersion(resp)
+	d.handleAutoUpdate(resp)
 
 	d.runIfIntervalExceeded(&d.config.LastSetupWizardShownTime, constants.SetupWizardReshowInterval, func() error {
 		d.showSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
@@ -540,13 +540,16 @@ func (d *Daemon) handleLogCollectRequest(resp *cloud.HeartbeatResponse) {
 	}
 }
 
-func (d *Daemon) handleTargetUpdateVersion(resp *cloud.HeartbeatResponse) {
-	if resp.TargetUpdateVersion == nil {
+func (d *Daemon) handleAutoUpdate(resp *cloud.HeartbeatResponse) {
+	if resp.UpdateEnabled == nil || !*resp.UpdateEnabled {
 		return
 	}
-	target := *resp.TargetUpdateVersion
+	if resp.UpdateVersion == nil {
+		return
+	}
+	target := *resp.UpdateVersion
 	if target == "" {
-		log.Printf("Update requested with empty version, skipping auto-update")
+		log.Printf("Update enabled with empty version, skipping auto-update")
 		return
 	}
 
