@@ -2,6 +2,35 @@ package ingress
 
 import "testing"
 
+func TestAdd_PreservesNonBlockedStatusFromExistingEvent(t *testing.T) {
+	store := &eventStore{
+		events: []BlockEvent{
+			{
+				ID:   "existing-1",
+				TsMs: 500,
+				Artifact: Artifact{
+					Product:     "npm",
+					PackageName: "evil-pkg",
+				},
+				Status: "allowed",
+			},
+		},
+	}
+
+	got := store.Add(BlockEvent{
+		TsMs: 1000,
+		Artifact: Artifact{
+			Product:     "npm",
+			PackageName: "evil-pkg",
+		},
+		BlockReason: "malware",
+	})
+
+	if got.Status != "allowed" {
+		t.Fatalf("expected status to be preserved as %q, got %q", "allowed", got.Status)
+	}
+}
+
 func TestMergeChromeBlockIfDuplicate_MergesMatchingArtifact(t *testing.T) {
 	store := &eventStore{
 		events: []BlockEvent{

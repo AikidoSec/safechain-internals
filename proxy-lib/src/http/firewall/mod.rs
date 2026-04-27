@@ -92,6 +92,16 @@ impl Firewall {
             .context("aikido_url should always produce a valid absolute http(s) origin")
     }
 
+    pub async fn empty() -> Result<Self, BoxError> {
+        Ok(Self {
+            block_rules: Arc::from([]),
+            notifier: None,
+            passthrough_list: None,
+            agent_identity: None,
+            remote_endpoint_config: None,
+        })
+    }
+
     pub async fn try_new(
         guard: ShutdownGuard,
         client: impl Service<Request, Output = Response, Error = OpaqueError> + Clone,

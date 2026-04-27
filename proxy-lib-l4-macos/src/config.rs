@@ -61,6 +61,10 @@ pub struct ProxyConfig {
 
     /// PEM-encoded root CA private key supplied by the host.
     pub ca_key_pem: Option<String>,
+
+    /// Disables the firewall, this is used for the first time the proxy starts and certs are not trusted yet
+    ///  The daemon will first start the proxy in this mode to obtain the cert and make it trusted.
+    pub no_firewall: bool,
 }
 
 impl Default for ProxyConfig {
@@ -73,6 +77,7 @@ impl Default for ProxyConfig {
             aikido_url: Uri::from_static("https://app.aikido.dev"),
             ca_cert_pem: None,
             ca_key_pem: None,
+            no_firewall: false,
         }
     }
 }
