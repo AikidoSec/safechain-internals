@@ -17,6 +17,9 @@ type eventStore struct {
 // Add appends the event to the store and returns the saved event.
 // When the store exceeds maxEvents the oldest entries are discarded.
 func (e *eventStore) Add(ev BlockEvent) BlockEvent {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	blocked := BlockEvent{
 		ID:          uuid.New().String(),
 		TsMs:        ev.TsMs,
@@ -32,8 +35,6 @@ func (e *eventStore) Add(ev BlockEvent) BlockEvent {
 		}
 	}
 
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	e.events = append(e.events, blocked)
 	if len(e.events) > maxEvents {
 		e.events = e.events[len(e.events)-maxEvents:]
