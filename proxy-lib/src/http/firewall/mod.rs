@@ -52,6 +52,7 @@ use crate::{
         notifier::EventNotifier,
         rule::{
             DynRule, npm::min_package_age::MinPackageAge,
+            open_vsx::min_package_age::MinPackageAgeOpenVsx,
             vscode::min_package_age::MinPackageAgeVSCode,
         },
     },
@@ -216,6 +217,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
+                    Some(MinPackageAgeOpenVsx::new(notifier.clone())),
                     remote_endpoint_config.clone(),
                 )
                 .await
