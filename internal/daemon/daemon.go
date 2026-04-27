@@ -545,10 +545,18 @@ func (d *Daemon) handleTargetUpdateVersion(resp *cloud.HeartbeatResponse) {
 		return
 	}
 	target := *resp.TargetUpdateVersion
-	if target == "" || target == d.versionInfo.Version {
+	if target == "" {
+		log.Printf("Update requested with empty version, skipping auto-update")
 		return
 	}
-	if target == d.config.LastHandledTargetUpdateVersion {
+
+	if target == d.versionInfo.Version || target == d.config.LastHandledTargetUpdateVersion {
+		log.Printf("Update requested to same version %s, already handled, skipping auto-update", target)
+		return
+	}
+
+	if !ingress.IsSetupOk(d.ctx, d.config) {
+		log.Printf("Update requested to version %s, but setup is incomplete; skipping auto-update", target)
 		return
 	}
 
