@@ -7,9 +7,7 @@ use std::str::FromStr as _;
 
 use rama::{telemetry::tracing, utils::str::arcstr::ArcStr};
 
-use crate::{
-    package::version::PackageVersion, utils::time::SystemTimestampMilliseconds,
-};
+use crate::{package::version::PackageVersion, utils::time::SystemTimestampMilliseconds};
 
 use super::{OpenVsxPackageName, OpenVsxRemoteReleasedPackagesList};
 
@@ -200,15 +198,35 @@ fn filter_vsmarketplace_extension(
     // from platform-specific entries (e.g. darwin-arm64, darwin-x64, win32-x64).
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     versions.retain(|v| {
-        let Some(version_str) = v.get("version").and_then(|s| s.as_str()) else {
+        let Some((version_str, version)) =
+            version_entry_to_suppress(v, &lookup_key, released_packages_list, cutoff_ts)
+        else {
             return true;
         };
-        let Ok(version) = PackageVersion::from_str(version_str);
-        let too_new =
-            released_packages_list.is_recently_released(&lookup_key, Some(&version), cutoff_ts);
-        if too_new && seen.insert(version_str.to_owned()) {
+        if seen.insert(version_str) {
             suppressed.push((extension_id.clone(), version));
         }
-        !too_new
+        false
     });
+}
+
+/// Pure classifier for a single VS-Marketplace `versions[]` entry.
+///
+/// Returns `Some((version_str, parsed_version))` when the entry should be stripped
+/// because the released-packages list flags this `(extension, version)` pair as
+/// too recently released. Returns `None` for entries we should keep — either the
+/// version is old enough, or the entry has no readable `version` field.
+fn version_entry_to_suppress(
+    entry: &serde_json::Value,
+    lookup_key: &OpenVsxPackageName,
+    released_packages_list: &OpenVsxRemoteReleasedPackagesList,
+    cutoff_ts: SystemTimestampMilliseconds,
+) -> Option<(String, PackageVersion)> {
+    let version_str = entry.get("version").and_then(|s| s.as_str())?;
+    let Ok(version) = PackageVersion::from_str(version_str);
+    if released_packages_list.is_recently_released(lookup_key, Some(&version), cutoff_ts) {
+        Some((version_str.to_owned(), version))
+    } else {
+        None
+    }
 }

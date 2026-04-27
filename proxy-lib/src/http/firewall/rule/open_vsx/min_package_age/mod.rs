@@ -76,11 +76,13 @@ impl MinPackageAgeOpenVsx {
         // passthrough untouched rather than buffer the entire body for JSON rewriting.
         // A missing Content-Length (chunked) falls through to collect(); we have not
         // observed chunked metadata responses in practice.
-        if let Some(declared_len) = resp
+        let declared_content_length = resp
             .headers()
             .get(CONTENT_LENGTH)
             .and_then(|v| v.to_str().ok())
-            .and_then(|s| s.parse::<u64>().ok())
+            .and_then(|s| s.parse::<u64>().ok());
+
+        if let Some(declared_len) = declared_content_length
             && declared_len > MAX_METADATA_BODY_BYTES
         {
             tracing::warn!(
