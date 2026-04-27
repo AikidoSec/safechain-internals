@@ -26,6 +26,13 @@ impl std::fmt::Debug for AgentIdentity {
 }
 
 impl AgentIdentity {
+    pub fn is_authorized<B>(&self, req: &Request<B>) -> bool {
+        req.headers()
+            .get(AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            == Some(self.token.as_ref())
+    }
+
     pub fn add_request_headers<B>(&self, req: &mut Request<B>) -> Result<(), BoxError> {
         req.headers_mut().insert(
             AUTHORIZATION,
