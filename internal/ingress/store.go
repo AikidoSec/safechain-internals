@@ -17,6 +17,9 @@ type eventStore struct {
 // Add appends the event to the store and returns the saved event.
 // When the store exceeds maxEvents the oldest entries are discarded.
 func (e *eventStore) Add(ev BlockEvent) BlockEvent {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	blocked := BlockEvent{
 		ID:          uuid.New().String(),
 		TsMs:        ev.TsMs,
@@ -25,9 +28,13 @@ func (e *eventStore) Add(ev BlockEvent) BlockEvent {
 		Status:      "blocked",
 		Count:       1,
 	}
+	// If the user already requested access for this artifact, carry that request status forward
+	for i := range e.events {
+		if e.events[i].Artifact == ev.Artifact && e.events[i].Status != "blocked" {
+			blocked.Status = e.events[i].Status
+		}
+	}
 
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	e.events = append(e.events, blocked)
 	if len(e.events) > maxEvents {
 		e.events = e.events[len(e.events)-maxEvents:]
