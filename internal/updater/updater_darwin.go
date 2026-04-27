@@ -151,7 +151,7 @@ func installPackageDetached(pkgPath string) error {
 		logFile = nil
 	} else {
 		defer logFile.Close()
-		fmt.Fprintf(logFile, "\n=== %s installer starting for %s ===\n", time.Now().UTC().Format(time.RFC3339), pkgPath)
+		fmt.Fprintf(logFile, "\n=== %s installer starting for %s ===\n\n", time.Now().UTC().Format(time.RFC3339), pkgPath)
 	}
 
 	cmd := exec.Command("/usr/sbin/installer", "-pkg", pkgPath, "-target", "/")
