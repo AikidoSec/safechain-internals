@@ -189,6 +189,7 @@ func (d *Daemon) startProxy(ctx context.Context) error {
 		BaseURL:     d.config.GetBaseURL(),
 		Token:       d.config.Token,
 		DeviceID:    d.config.DeviceID,
+		Passthrough: ingress.IsRebootRequired(),
 	}
 
 	if err := d.proxy.Start(ctx, opts); err != nil {
@@ -439,7 +440,12 @@ func (d *Daemon) heartbeat() error {
 	// Ensure the UI is running, if not, relaunch it
 	d.uiManager.EnsureRunning()
 
-	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.GetStatus())
+	proxyStatus, proxyStatusMessage := d.proxy.GetStatus()
+	if !setupOk {
+		proxyStatus = false
+		proxyStatusMessage = "setup-required"
+	}
+	d.uiManager.NotifyProxyStatusIfChanged(proxyStatus, proxyStatusMessage)
 
 	d.runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() error {
 		d.printDaemonStatus()
