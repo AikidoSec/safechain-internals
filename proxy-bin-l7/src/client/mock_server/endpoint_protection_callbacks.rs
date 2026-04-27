@@ -377,6 +377,56 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
         _ => default_ecosystem_policy.clone(),
     };
 
+    let ruby_policy = match token {
+        "policy-block-ruby" => json!({
+            "block_all_installs": true,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
+        "policy-allow-safe-chain-ruby-test" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": ["safe-chain-ruby-test"], // listed as malware in mock list
+                "rejected_packages": []
+            }
+        }),
+        "policy-reject-rake-ruby" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": ["rake"]
+            }
+        }),
+        "policy-request-installs-ruby" => json!({
+            "block_all_installs": false,
+            "request_installs": true,
+            "minimum_allowed_age_timestamp": null,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
+        "policy-bypass-new-package-ruby" => json!({
+            "block_all_installs": false,
+            "request_installs": false,
+            // Cutoff set to far future (year ~2286): released_on (year ~2255) <= cutoff → not blocked
+            "minimum_allowed_age_timestamp": 9_999_999_999_i64,
+            "exceptions": {
+                "allowed_packages": [],
+                "rejected_packages": []
+            }
+        }),
+        _ => default_ecosystem_policy.clone(),
+    };
+
     let skills_sh_policy = match token {
         "policy-bypass-new-package-skills-sh" => json!({
             "block_all_installs": false,
@@ -404,7 +454,8 @@ async fn fetch_permissions(req: Request) -> impl IntoResponse {
             "nuget": nuget_policy,
             "chrome": chrome_policy,
             "open_vsx": open_vsx_policy,
-            "skills_sh": skills_sh_policy
+            "skills_sh": skills_sh_policy,
+            "ruby": ruby_policy
         }
     }))
     .into_response()

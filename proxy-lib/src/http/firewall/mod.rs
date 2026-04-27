@@ -212,6 +212,16 @@ impl Firewall {
                 .await
                 .context("create block rule: maven")?
                 .into_dyn(),
+                self::rule::ruby::RuleRuby::try_new(
+                    guard.clone(),
+                    layered_client.clone(),
+                    data.clone(),
+                    policy_evaluator.clone(),
+                    remote_endpoint_config.clone(),
+                )
+                .await
+                .context("create block rule: ruby")?
+                .into_dyn(),
                 self::rule::open_vsx::RuleOpenVsx::try_new(
                     guard.clone(),
                     layered_client.clone(),
