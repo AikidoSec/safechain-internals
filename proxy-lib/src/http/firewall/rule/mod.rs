@@ -55,6 +55,7 @@ pub mod maven;
 pub mod npm;
 pub mod nuget;
 pub mod open_vsx;
+pub mod packagist;
 pub mod pypi;
 pub mod skills_sh;
 pub mod vscode;

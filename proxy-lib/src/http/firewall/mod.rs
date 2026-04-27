@@ -203,6 +203,17 @@ impl Firewall {
                 .await
                 .context("create block rule: pypi")?
                 .into_dyn(),
+                self::rule::packagist::RulePackagist::try_new(
+                    guard.clone(),
+                    layered_client.clone(),
+                    data.clone(),
+                    policy_evaluator.clone(),
+                    notifier.clone(),
+                    remote_endpoint_config.clone(),
+                )
+                .await
+                .context("create block rule: packagist")?
+                .into_dyn(),
                 self::rule::maven::RuleMaven::try_new(
                     guard.clone(),
                     layered_client.clone(),
