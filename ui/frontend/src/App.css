@@ -1375,6 +1375,17 @@ body {
   color: var(--primary-aik-100);
 }
 
+.install-page__finish-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.install-page__finish-step .install-page__finish-status {
+  margin: 0;
+}
+
 .install-page__finish-hero--split .install-page__followup-lead {
   margin-bottom: 0;
 }

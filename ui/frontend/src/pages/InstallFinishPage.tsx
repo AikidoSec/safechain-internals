@@ -11,13 +11,25 @@ const FINISH_ECOSYSTEM_VISUAL: { id: string; align: "left" | "right" | "center" 
   { id: "skills_sh", align: "right" },
 ];
 
-export function InstallFinishPage() {
+interface Props {
+  stepNumber: number;
+  totalSteps: number;
+}
+
+export function InstallFinishPage({ stepNumber, totalSteps }: Props) {
   return (
     <div className="install-page__main">
       <div className="install-page__finish-grid">
         <div className="install-page__finish-col install-page__finish-col--left">
           <div className="install-page__finish-hero install-page__finish-hero--split">
-            <p className="install-page__finish-status">Certificate installed</p>
+            <div className="install-page__finish-step">
+              <div className="install-page__step-badge" aria-hidden>
+                {stepNumber}
+              </div>
+              <p className="install-page__finish-status">
+                Step {stepNumber} of {totalSteps}
+              </p>
+            </div>
             <h1 className="install-page__title install-page__title--finish">Restart required</h1>
             <p className="install-page__lead install-page__followup-lead install-page__lead--finish">
               In order for Endpoint Protection to protect your device, you need to restart your computer. Until you do,

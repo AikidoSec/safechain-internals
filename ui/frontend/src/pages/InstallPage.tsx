@@ -214,7 +214,7 @@ export function InstallPage() {
       case "install-ca":
         return <SetupStepInstallCa {...stepProps} />;
       case "reboot":
-        return <InstallFinishPage />;
+        return <InstallFinishPage stepNumber={stepProps.stepNumber} totalSteps={stepProps.totalSteps} />;
       default:
         return null;
     }
