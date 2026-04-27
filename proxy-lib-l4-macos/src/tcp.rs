@@ -111,6 +111,7 @@ impl TcpMitmService {
             proxy_config.agent_identity.clone(),
             proxy_config.reporting_endpoint.clone(),
             proxy_config.aikido_url.clone(),
+            proxy_config.no_firewall,
         )
         .await?;
 
@@ -293,6 +294,7 @@ async fn create_firewall(
     agent_identity: Option<AgentIdentity>,
     reporting_endpoint: Option<Uri>,
     aikido_url: Uri,
+    no_firewall: bool,
 ) -> Result<Firewall, BoxError> {
     let data_path = maybe_data_path.context("(app) data path is missing")?;
 
@@ -308,6 +310,12 @@ async fn create_firewall(
 
     let https_client = new_http_client_for_internal(Executor::graceful(guard.clone()))
         .context("create firewall's inner http(s) client")?;
+
+
+    if no_firewall {
+        tracing::warn!("Starting without firewall due to the --no-firewall startup flag");
+        return Firewall::empty().await;
+    }
 
     // ensure to not wait for firewall creation in case shutdown was initiated,
     // this can happen for example in case remote lists need to be fetched and the
