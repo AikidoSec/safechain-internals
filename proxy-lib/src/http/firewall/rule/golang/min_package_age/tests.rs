@@ -1,10 +1,11 @@
-use rama::{
-    http::{Body, BodyExtractExt as _},
-    utils::time::now_unix_ms,
-};
+use rama::http::{Body, BodyExtractExt as _};
 
-use crate::package::released_packages_list::{
-    LowerCaseReleasedPackageFormatter, ReleasedPackageData, RemoteReleasedPackagesList,
+use crate::{
+    package::{
+        name_formatter::LowerCasePackageName,
+        released_packages_list::{ReleasedPackageData, RemoteReleasedPackagesList},
+    },
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
 use super::*;
@@ -26,24 +27,25 @@ fn make_list_response_with_cache(body: &str) -> Response {
         .unwrap()
 }
 
-fn make_released_packages(entries: &[(&str, &str, u64)]) -> RemoteReleasedPackagesList {
-    let now_secs = now_unix_ms() / 1000;
+fn make_released_packages(
+    entries: &[(&str, &str, u64)],
+) -> RemoteReleasedPackagesList<LowerCasePackageName> {
+    let now_ts = SystemTimestampMilliseconds::now();
     RemoteReleasedPackagesList::from_entries_for_tests(
         entries
             .iter()
             .map(|(package_name, version, hours_ago)| ReleasedPackageData {
                 package_name: (*package_name).to_owned(),
                 version: version.parse().unwrap(),
-                released_on: now_secs - (*hours_ago as i64 * 3600),
+                released_on: now_ts - SystemDuration::hours(*hours_ago as u16),
             })
             .collect(),
-        now_secs,
-        LowerCaseReleasedPackageFormatter,
+        now_ts,
     )
 }
 
-fn default_cutoff_secs() -> i64 {
-    (now_unix_ms() / 1000) - (48 * 3600)
+fn default_cutoff_ts() -> SystemTimestampMilliseconds {
+    SystemTimestampMilliseconds::now() - SystemDuration::hours(48)
 }
 
 #[tokio::test]
@@ -59,7 +61,7 @@ async fn filters_recently_released_versions() {
             make_list_response(body),
             "github.com/gorilla/mux",
             &list,
-            default_cutoff_secs(),
+            default_cutoff_ts(),
         )
         .await
         .unwrap();
@@ -80,7 +82,7 @@ async fn passthrough_when_nothing_filtered() {
     let resp = make_list_response_with_cache(body);
 
     let result = MinPackageAgeGolang::new(None)
-        .rewrite_list_response(resp, "github.com/gorilla/mux", &list, default_cutoff_secs())
+        .rewrite_list_response(resp, "github.com/gorilla/mux", &list, default_cutoff_ts())
         .await
         .unwrap();
 
@@ -119,7 +121,7 @@ async fn filters_deep_multi_segment_module_path() {
             make_list_response(body),
             "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/es",
             &list,
-            default_cutoff_secs(),
+            default_cutoff_ts(),
         )
         .await
         .unwrap();
@@ -142,7 +144,7 @@ async fn keeps_unparseable_version_lines() {
             make_list_response(body),
             "github.com/gorilla/mux",
             &list,
-            default_cutoff_secs(),
+            default_cutoff_ts(),
         )
         .await
         .unwrap();
@@ -165,7 +167,7 @@ async fn strips_cache_headers_only_when_modified() {
     let resp = make_list_response_with_cache(body);
 
     let result = MinPackageAgeGolang::new(None)
-        .rewrite_list_response(resp, "github.com/gorilla/mux", &list, default_cutoff_secs())
+        .rewrite_list_response(resp, "github.com/gorilla/mux", &list, default_cutoff_ts())
         .await
         .unwrap();
 
