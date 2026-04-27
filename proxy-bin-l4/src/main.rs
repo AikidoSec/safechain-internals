@@ -111,7 +111,7 @@ pub struct Args {
     pub aikido_url: Uri,
 
     /// Peek duration in seconds (fractional).
-    #[arg(long, default_value_t = 0.5)]
+    #[arg(long, default_value_t = 0.2)]
     pub peek_duration: f64,
 
     #[cfg(target_family = "unix")]
@@ -166,7 +166,7 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
     let graceful = graceful::Shutdown::default();
 
     let agent_identity = AgentIdentity::load(&args.data);
-    let peek_duration = Duration::from_secs_f64(args.peek_duration.max(0.05));
+    let peek_duration = Duration::from_secs_f64(args.peek_duration.max(0.001));
 
     let maybe_tcp_server_addr_v6 = if let Some(bind_ipv6) = args.bind_ipv6 {
         Some(
