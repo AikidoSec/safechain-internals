@@ -216,14 +216,13 @@ impl Rule for RuleOpenVsx {
             return false;
         }
         let matched = Self::is_metadata_request_path(path);
-        // TEMP(inform): log every candidate so we can tune the matcher from real traffic.
-        tracing::info!(
-            http.url.path = %path,
-            http.method = %req.method,
-            host = ?req.uri.host(),
-            matched,
-            "OpenVSX: metadata-request matcher evaluated"
-        );
+        if matched {
+            tracing::debug!(
+                http.url.path = %path,
+                http.method = %req.method,
+                "Open VSX gallery metadata request — will inspect response"
+            );
+        }
         matched
     }
 
@@ -269,15 +268,6 @@ impl RuleOpenVsx {
     }
 
     /// Returns true for OpenVSX / Cursor marketplace metadata paths that can carry version lists.
-    ///
-    /// Best-guess coverage for first iteration — tune from `tracing::info!` logs of live traffic:
-    /// - OpenVSX native: `/api/-/query`, `/api/v2/-/query`, `/api/-/search`
-    /// - OpenVSX single-extension: `/api/{namespace}/{name}` (exactly 3 non-empty segments;
-    ///   the asset-download shape `/api/{pub}/{name}/{ver}/file/...` is already filtered out
-    ///   by [`Self::is_extension_install_asset_path`] above).
-    /// - Cursor marketplace mirror (unconfirmed shape): anything under
-    ///   `/_apis/public/gallery/` or `/open-vsx-mirror/_apis/` — we match broadly and let the
-    ///   JSON shape detection in the rewriter decide whether to act.
     fn is_metadata_request_path(path: &str) -> bool {
         let trimmed = path.trim_start_matches('/').trim_end_matches('/');
 
@@ -300,10 +290,14 @@ impl RuleOpenVsx {
             return true;
         }
 
-        // Cursor marketplace mirror — broadly match the VS-Marketplace extensionquery path,
-        // both at the root and under the /open-vsx-mirror prefix.
+        // VS-Marketplace-shaped mirrors — both endpoint variants observed in the wild:
+        // - `_apis/public/gallery/extensionquery` (Cursor's `marketplace.cursorapi.com`)
+        // - `vscode/gallery/extensionquery` (OpenVSX's own mirror at `open-vsx.org`,
+        //   used by VSCodium's auto-update poll and its extension search panel)
         let lower = trimmed.to_ascii_lowercase();
-        if lower.ends_with("_apis/public/gallery/extensionquery") {
+        if lower.ends_with("_apis/public/gallery/extensionquery")
+            || lower.ends_with("vscode/gallery/extensionquery")
+        {
             return true;
         }
 

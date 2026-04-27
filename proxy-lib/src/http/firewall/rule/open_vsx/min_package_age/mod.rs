@@ -53,13 +53,6 @@ impl MinPackageAgeOpenVsx {
         released_packages_list: &OpenVsxRemoteReleasedPackagesList,
         cutoff_ts: SystemTimestampMilliseconds,
     ) -> Result<Response, BoxError> {
-        // TEMP(inform): log every response that reaches the rewriter.
-        tracing::info!(
-            http.response.status = resp.status().as_u16(),
-            content_type = ?resp.headers().typed_get::<ContentType>(),
-            "OpenVSX min_package_age: evaluate_response entered"
-        );
-
         if resp
             .headers()
             .typed_get::<ContentType>()
@@ -67,14 +60,13 @@ impl MinPackageAgeOpenVsx {
             .and_then(KnownContentType::detect_from_content_type_header)
             != Some(KnownContentType::Json)
         {
-            tracing::info!("OpenVSX min_package_age: non-JSON content-type, passthrough");
             return Ok(resp);
         }
 
         // Size guard: if the server advertised a Content-Length larger than the cap,
         // passthrough untouched rather than buffer the entire body for JSON rewriting.
-        // A missing Content-Length (chunked) falls through to collect(), which is
-        // acceptable for now — we have not observed chunked metadata responses yet.
+        // A missing Content-Length (chunked) falls through to collect(); we have not
+        // observed chunked metadata responses in practice.
         if let Some(declared_len) = resp
             .headers()
             .get(CONTENT_LENGTH)
@@ -85,12 +77,15 @@ impl MinPackageAgeOpenVsx {
             tracing::warn!(
                 declared_len,
                 limit = MAX_METADATA_BODY_BYTES,
-                "OpenVSX min_package_age: declared Content-Length exceeds cap, skipping rewrite"
+                "OpenVSX metadata response exceeds size cap, skipping rewrite"
             );
             return Ok(resp);
         }
 
         let (mut parts, body) = resp.into_parts();
+        // If `collect` fails the upstream stream was already broken — the original
+        // body cannot be reconstructed for passthrough, and the client was going to
+        // see a transport error either way. Propagate so rama can surface it.
         let bytes = body
             .collect()
             .await
@@ -98,26 +93,16 @@ impl MinPackageAgeOpenVsx {
             .to_bytes();
 
         if bytes.is_empty() {
-            tracing::info!("OpenVSX min_package_age: empty body, passthrough");
             return Ok(Response::from_parts(parts, Body::from(bytes)));
         }
 
-        tracing::info!(
-            body_len = bytes.len(),
-            "OpenVSX min_package_age: collected response body"
-        );
-
         let Some(rewrite) = rewrite_json(&bytes, released_packages_list, cutoff_ts) else {
-            tracing::info!(
-                "OpenVSX min_package_age: no versions suppressed, returning original body"
-            );
             return Ok(Response::from_parts(parts, Body::from(bytes)));
         };
 
         tracing::info!(
-            suppressed_count = rewrite.suppressed_versions.len(),
-            suppressed = ?rewrite.suppressed_versions,
-            "OpenVSX min_package_age: metadata rewritten, suppressed too-young versions"
+            suppressed_versions = ?rewrite.suppressed_versions,
+            "OpenVSX metadata rewritten: suppressed too-young versions"
         );
 
         self.notify_rewrites(&rewrite.suppressed_versions).await;
@@ -132,6 +117,7 @@ impl MinPackageAgeOpenVsx {
             return;
         };
 
+        // Group suppressed versions by extension ID before notifying.
         let mut by_extension: std::collections::HashMap<ArcStr, Vec<PackageVersion>> =
             std::collections::HashMap::new();
         for (ext_id, version) in suppressed {
@@ -175,7 +161,8 @@ struct RewriteResult {
 ///    ```json
 ///    { "extensions": [ { "namespace": "...", "name": "...", "allVersions": {...}, ... } ] }
 ///    ```
-/// 3. VS-Marketplace-shaped mirror (Cursor's `marketplace.cursorapi.com`):
+/// 3. VS-Marketplace-shaped mirror (Cursor's `marketplace.cursorapi.com`,
+///    OpenVSX's own `/vscode/gallery/extensionquery`):
 ///    ```json
 ///    { "results": [ { "extensions": [ { "publisher": {"publisherName": "..."},
 ///                                       "extensionName": "...",
@@ -189,9 +176,7 @@ fn rewrite_json(
     let mut json: serde_json::Value = match serde_json::from_slice(bytes) {
         Ok(v) => v,
         Err(err) => {
-            tracing::info!(
-                "OpenVSX min_package_age: response is not valid JSON, passthrough: {err}"
-            );
+            tracing::debug!("OpenVSX response is not valid JSON, passing through: {err}");
             return None;
         }
     };
@@ -200,9 +185,6 @@ fn rewrite_json(
 
     // Shape 3: VS-Marketplace-shaped mirror — detect by top-level `results` array.
     if let Some(results) = json.get_mut("results").and_then(|r| r.as_array_mut()) {
-        tracing::info!(
-            "OpenVSX min_package_age: detected VS-Marketplace-shaped response (results[])"
-        );
         for result in results.iter_mut() {
             let Some(extensions) = result.get_mut("extensions").and_then(|e| e.as_array_mut())
             else {
@@ -220,7 +202,6 @@ fn rewrite_json(
     }
     // Shape 2: OpenVSX query — detect by top-level `extensions` array.
     else if let Some(extensions) = json.get_mut("extensions").and_then(|e| e.as_array_mut()) {
-        tracing::info!("OpenVSX min_package_age: detected OpenVSX query response (extensions[])");
         for extension in extensions {
             filter_openvsx_extension(
                 extension,
@@ -232,9 +213,6 @@ fn rewrite_json(
     }
     // Shape 1: OpenVSX single-extension — top-level object with `namespace`/`name`.
     else if json.get("namespace").is_some() && json.get("name").is_some() {
-        tracing::info!(
-            "OpenVSX min_package_age: detected OpenVSX single-extension response (namespace+name)"
-        );
         filter_openvsx_extension(
             &mut json,
             released_packages_list,
@@ -242,7 +220,6 @@ fn rewrite_json(
             &mut suppressed,
         );
     } else {
-        tracing::info!("OpenVSX min_package_age: unknown JSON shape, passthrough");
         return None;
     }
 
@@ -284,7 +261,6 @@ fn filter_openvsx_extension(
         .to_ascii_lowercase();
 
     if namespace.is_empty() || name.is_empty() {
-        tracing::info!("OpenVSX min_package_age: extension missing namespace/name, skipping");
         return;
     }
 
@@ -292,54 +268,20 @@ fn filter_openvsx_extension(
     let lookup_key = OpenVsxPackageName::from(raw_id.as_str());
     let extension_id: ArcStr = raw_id.into();
 
-    tracing::info!(
-        extension = %extension_id,
-        "OpenVSX min_package_age: filtering single-extension shape"
-    );
-
-    // Check and log the top-level current version even though we don't rewrite it yet.
-    if let Some(current_version_str) = extension.get("version").and_then(|v| v.as_str()) {
-        let Ok(current_version) = PackageVersion::from_str(current_version_str);
-        let too_new = released_packages_list.is_recently_released(
-            &lookup_key,
-            Some(&current_version),
-            cutoff_ts,
-        );
-        tracing::info!(
-            extension = %extension_id,
-            version = %current_version,
-            too_new,
-            "OpenVSX min_package_age: top-level `version` field status (not rewritten in this iteration)"
-        );
-    }
-
-    if let Some(all_versions) = extension
+    let Some(all_versions) = extension
         .get_mut("allVersions")
         .and_then(|v| v.as_object_mut())
-    {
-        let keys: Vec<String> = all_versions.keys().cloned().collect();
-        tracing::info!(
-            extension = %extension_id,
-            total_versions = keys.len(),
-            "OpenVSX min_package_age: inspecting allVersions map"
-        );
-        for key in keys {
-            let Ok(version) = PackageVersion::from_str(&key);
-            if released_packages_list.is_recently_released(&lookup_key, Some(&version), cutoff_ts) {
-                tracing::info!(
-                    extension = %extension_id,
-                    version = %version,
-                    "OpenVSX min_package_age: suppressing too-young version from allVersions"
-                );
-                all_versions.remove(&key);
-                suppressed.push((extension_id.clone(), version));
-            }
+    else {
+        return;
+    };
+
+    let keys: Vec<String> = all_versions.keys().cloned().collect();
+    for key in keys {
+        let Ok(version) = PackageVersion::from_str(&key);
+        if released_packages_list.is_recently_released(&lookup_key, Some(&version), cutoff_ts) {
+            all_versions.remove(&key);
+            suppressed.push((extension_id.clone(), version));
         }
-    } else {
-        tracing::info!(
-            extension = %extension_id,
-            "OpenVSX min_package_age: no `allVersions` object present"
-        );
     }
 }
 
@@ -364,33 +306,19 @@ fn filter_vsmarketplace_extension(
         .to_ascii_lowercase();
 
     if publisher.is_empty() || name.is_empty() {
-        tracing::info!(
-            "OpenVSX min_package_age: VS-Marketplace entry missing publisher/extensionName, skipping"
-        );
         return;
     }
 
-    // NOTE: OpenVSX keys are "publisher/extension" (slash-separated), while VS Marketplace
-    // IDs are usually written "publisher.extension". We use slash here to match the shape
-    // the OpenVSX release list is published under — if Cursor's mirror actually serves
-    // VS-Marketplace keys under a different separator, we'll see misses in the logs.
     let raw_id = format!("{publisher}/{name}");
     let lookup_key = OpenVsxPackageName::from(raw_id.as_str());
     let extension_id: ArcStr = raw_id.into();
 
-    tracing::info!(
-        extension = %extension_id,
-        "OpenVSX min_package_age: filtering VS-Marketplace shape"
-    );
-
     let Some(versions) = extension.get_mut("versions").and_then(|v| v.as_array_mut()) else {
-        tracing::info!(
-            extension = %extension_id,
-            "OpenVSX min_package_age: no `versions` array present"
-        );
         return;
     };
 
+    // Track which version numbers have already been recorded to avoid duplicates
+    // from platform-specific entries (e.g. darwin-arm64, darwin-x64, win32-x64).
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     versions.retain(|v| {
         let Some(version_str) = v.get("version").and_then(|s| s.as_str()) else {
@@ -403,13 +331,11 @@ fn filter_vsmarketplace_extension(
             cutoff_ts,
         );
         if too_new && seen.insert(version_str.to_owned()) {
-            tracing::info!(
-                extension = %extension_id,
-                version = %version,
-                "OpenVSX min_package_age: suppressing too-young version from VS-Marketplace versions[]"
-            );
             suppressed.push((extension_id.clone(), version));
         }
         !too_new
     });
 }
+
+#[cfg(test)]
+mod tests;
