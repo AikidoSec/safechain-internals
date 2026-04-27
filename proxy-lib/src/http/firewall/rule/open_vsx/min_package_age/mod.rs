@@ -3,8 +3,7 @@ use rama::{
     http::{
         Body, Response,
         body::util::BodyExt as _,
-        header::CONTENT_LENGTH,
-        headers::{ContentType, HeaderMapExt as _},
+        headers::{ContentLength, ContentType, HeaderMapExt as _},
     },
     telemetry::tracing,
     utils::str::arcstr::ArcStr,
@@ -68,21 +67,19 @@ impl MinPackageAgeOpenVsx {
         // passthrough untouched rather than buffer the entire body for JSON rewriting.
         // A missing Content-Length (chunked) falls through to collect(); we have not
         // observed chunked metadata responses in practice.
-        let declared_content_length = resp
+        let oversized_content_length = resp
             .headers()
-            .get(CONTENT_LENGTH)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|s| s.parse::<u64>().ok());
+            .typed_get::<ContentLength>()
+            .map(|cl| cl.0)
+            .filter(|&n| n > MAX_METADATA_BODY_BYTES);
 
-        if let Some(declared_len) = declared_content_length {
-            if declared_len > MAX_METADATA_BODY_BYTES {
-                tracing::warn!(
-                    declared_len,
-                    limit = MAX_METADATA_BODY_BYTES,
-                    "OpenVSX metadata response exceeds size cap, skipping rewrite"
-                );
-                return Ok(resp);
-            }
+        if let Some(declared_len) = oversized_content_length {
+            tracing::warn!(
+                declared_len,
+                limit = MAX_METADATA_BODY_BYTES,
+                "OpenVSX metadata response exceeds size cap, skipping rewrite"
+            );
+            return Ok(resp);
         }
 
         let (mut parts, body) = resp.into_parts();
