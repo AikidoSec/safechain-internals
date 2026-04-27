@@ -325,11 +325,8 @@ fn filter_vsmarketplace_extension(
             return true;
         };
         let Ok(version) = PackageVersion::from_str(version_str);
-        let too_new = released_packages_list.is_recently_released(
-            &lookup_key,
-            Some(&version),
-            cutoff_ts,
-        );
+        let too_new =
+            released_packages_list.is_recently_released(&lookup_key, Some(&version), cutoff_ts);
         if too_new && seen.insert(version_str.to_owned()) {
             suppressed.push((extension_id.clone(), version));
         }
