@@ -74,15 +74,15 @@ impl MinPackageAgeOpenVsx {
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.parse::<u64>().ok());
 
-        if let Some(declared_len) = declared_content_length
-            && declared_len > MAX_METADATA_BODY_BYTES
-        {
-            tracing::warn!(
-                declared_len,
-                limit = MAX_METADATA_BODY_BYTES,
-                "OpenVSX metadata response exceeds size cap, skipping rewrite"
-            );
-            return Ok(resp);
+        if let Some(declared_len) = declared_content_length {
+            if declared_len > MAX_METADATA_BODY_BYTES {
+                tracing::warn!(
+                    declared_len,
+                    limit = MAX_METADATA_BODY_BYTES,
+                    "OpenVSX metadata response exceeds size cap, skipping rewrite"
+                );
+                return Ok(resp);
+            }
         }
 
         let (mut parts, body) = resp.into_parts();
