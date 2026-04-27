@@ -38,7 +38,7 @@ jobs:
           winget install --source winget --exact --id Microsoft.WindowsWDK.10.0.26100 --accept-package-agreements --accept-source-agreements --disable-interactivity
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
         with:
-          just-version: "1.50.0"
+          just-version: "1.40.0"
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
         with:
           env-vars: "RUST_TOOLCHAIN=stable"
