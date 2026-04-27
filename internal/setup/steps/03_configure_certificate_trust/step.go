@@ -19,7 +19,7 @@ func (s *Step) InstallName() string {
 }
 
 func (s *Step) InstallDescription() string {
-	return "Configures ecosystem-specific trust settings for npm, pip, and Firefox"
+	return "Configures ecosystem-specific trust settings for Node.js, pip, Firefox, Java, Homebrew, and Git"
 }
 
 func (s *Step) UninstallName() string {
@@ -27,7 +27,7 @@ func (s *Step) UninstallName() string {
 }
 
 func (s *Step) UninstallDescription() string {
-	return "Removes ecosystem-specific trust settings for npm, pip, and Firefox"
+	return "Removes ecosystem-specific trust settings for Node.js, pip, Firefox, Java, Homebrew, and Git"
 }
 
 func (s *Step) Install(ctx context.Context) error {

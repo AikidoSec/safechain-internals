@@ -84,7 +84,7 @@ JetBrains IDEs (IntelliJ IDEA, PyCharm, WebStorm, GoLand, CLion, PhpStorm, Rider
 
 **The IDE must be restarted** after Aikido Endpoint is installed (or after the CA is updated). JetBrains IDEs load certificates at startup and do not watch for changes to the OS trust store at runtime.
 
-> **Note:** Maven and Gradle running inside JetBrains use the project JDK's `cacerts` keystore, not the IDE's trust manager. On macOS, Aikido Endpoint discovers JDKs via `/usr/libexec/java_home -V`, imports its CA into those trust stores automatically, and also applies the `KeychainStore` runtime overrides for Maven and Gradle. If builds still fail, verify which JDK Gradle is actually using and confirm the `aikido-safechain-proxy-ca` alias exists in that JDK's `cacerts` via `keytool`. JDKs installed in non-standard ways that do not appear in `java_home -V` are not auto-configured and must be handled manually.
+> **Note:** Maven and Gradle use the JDK's `cacerts` keystore, not the IDE's trust manager. On macOS, Aikido Endpoint imports its CA into the `cacerts` of every JDK it can discover. Discovery covers `/usr/libexec/java_home -V`, JetBrains-managed JDKs and bundled JBR, Homebrew `openjdk`, and version managers (sdkman, asdf, jenv). If builds still fail, confirm which JDK Maven/Gradle is actually using (`mvn --version`, Gradle's `Settings → Build Tools → Gradle JVM`) and verify the `aikido-safechain-proxy-ca` alias is present in that JDK's `cacerts` via `keytool -list -keystore <jdk>/lib/security/cacerts -storepass changeit`. JDKs installed in non-standard locations are not auto-configured and must be handled manually.
 
 ## Custom / other software
 
