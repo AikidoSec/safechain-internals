@@ -11,6 +11,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -187,14 +188,14 @@ func seedPermissions() PermissionsResponse {
 // ── server ───────────────────────────────────────────────────────────
 
 type server struct {
-	mu                   sync.RWMutex
-	blocks               []BlockEvent
-	tlsEvents            []TlsEvent
-	permissions          PermissionsResponse
-	extensionInstalled   bool
-	extensionActivated   bool
-	vpnAllowed           bool
-	token                string
+	mu                 sync.RWMutex
+	blocks             []BlockEvent
+	tlsEvents          []TlsEvent
+	permissions        PermissionsResponse
+	extensionInstalled bool
+	extensionActivated bool
+	vpnAllowed         bool
+	token              string
 }
 
 func (s *server) writeJSON(w http.ResponseWriter, v any) {
@@ -389,6 +390,62 @@ func (s *server) handleSetupRestart(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, map[string]string{"status": "restarting"})
 }
 
+var mockBlocks = []BlockEvent{
+	{
+		Artifact:    Artifact{Product: "npm", Identifier: "evil-pkg", Version: "1.0.0", DisplayName: "evil-pkg"},
+		BlockReason: "malware",
+		Status:      "blocked",
+		Count:       1,
+	},
+	{
+		Artifact:    Artifact{Product: "pypi", Identifier: "shady-lib", Version: "0.3.1", DisplayName: "shady-lib"},
+		BlockReason: "rejected",
+		Status:      "blocked",
+		Count:       1,
+	},
+	{
+		Artifact:    Artifact{Product: "chrome", Identifier: "abc123extensionid", Version: "2.0.0", DisplayName: "Suspicious Extension"},
+		BlockReason: "block_all",
+		Status:      "blocked",
+		Count:       1,
+	},
+	{
+		Artifact:    Artifact{Product: "maven", Identifier: "log4shell-fork", Version: "3.0.0", DisplayName: "log4shell-fork"},
+		BlockReason: "new_package",
+		Status:      "blocked",
+		Count:       1,
+	},
+}
+
+func simulateBlockEvents(uiAddr, token string) {
+	time.Sleep(5 * time.Second)
+	i := 0
+	for {
+		ev := mockBlocks[i%len(mockBlocks)]
+		ev.ID = fmt.Sprintf("sim-%d", time.Now().UnixMilli())
+		ev.TsMs = time.Now().UnixMilli()
+
+		body, _ := json.Marshal(ev)
+		req, err := http.NewRequest("POST", uiAddr+"/v1/blocked", bytes.NewReader(body))
+		if err != nil {
+			log.Printf("mock: simulate block: %v", err)
+		} else {
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+token)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				log.Printf("mock: simulate block POST failed: %v", err)
+			} else {
+				resp.Body.Close()
+				log.Printf("mock: simulated block event %s (%s)", ev.Artifact.DisplayName, ev.ID)
+			}
+		}
+
+		i++
+		time.Sleep(10 * time.Second)
+	}
+}
+
 func main() {
 	blocks, tlsEvents := seedData()
 	s := &server{blocks: blocks, tlsEvents: tlsEvents, permissions: seedPermissions()}
@@ -417,6 +474,10 @@ func main() {
 	mux.HandleFunc("GET /v1/setup/check", s.handleSetupCheck)
 	mux.HandleFunc("POST /v1/setup/start", s.handleSetupStart)
 	mux.HandleFunc("POST /v1/setup/restart", s.handleSetupRestart)
+
+	uiAddr := "http://127.0.0.1:9876"
+	token := "devtoken"
+	go simulateBlockEvents(uiAddr, token)
 
 	addr := "127.0.0.1:7878"
 	fmt.Printf("Mock daemon listening on %s\n", addr)

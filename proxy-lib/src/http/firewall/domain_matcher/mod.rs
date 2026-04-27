@@ -7,6 +7,10 @@ pub struct DomainMatcher {
 }
 
 impl DomainMatcher {
+    pub fn matches_no_domain(&self) -> bool {
+        self.match_all
+    }
+
     pub fn is_match(&self, domain: &Domain) -> bool {
         if self.match_all {
             return true;

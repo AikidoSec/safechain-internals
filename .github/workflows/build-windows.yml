@@ -43,7 +43,7 @@ jobs:
 
       - name: Set up Wails (v3)
         run: |
-          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha.72
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha.78
           wails3 doctor  # Verify installation
 
       - name: Run tests
@@ -153,8 +153,32 @@ jobs:
       - name: Install Windows SDK + WDK
         shell: powershell
         run: |
-          winget install --source winget --exact --id Microsoft.WindowsSDK.10.0.26100 --accept-package-agreements --accept-source-agreements --disable-interactivity
-          winget install --source winget --exact --id Microsoft.WindowsWDK.10.0.26100 --accept-package-agreements --accept-source-agreements --disable-interactivity
+          $ErrorActionPreference = "Stop"
+
+          winget source reset --force
+          winget source update
+
+          function Install-WingetPackage {
+            param([string]$Id)
+            $maxAttempts = 3
+            for ($i = 1; $i -le $maxAttempts; $i++) {
+              Write-Host "Installing $Id (attempt $i/$maxAttempts)"
+              winget install --source winget --exact --id $Id `
+                --accept-package-agreements --accept-source-agreements `
+                --disable-interactivity --silent
+              if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq -1978335189) {
+                return
+              }
+              Write-Warning "winget install failed with exit code $LASTEXITCODE, retrying..."
+              winget source reset --force
+              winget source update
+              Start-Sleep -Seconds 10
+            }
+            throw "Failed to install $Id after $maxAttempts attempts"
+          }
+
+          Install-WingetPackage -Id Microsoft.WindowsSDK.10.0.26100
+          Install-WingetPackage -Id Microsoft.WindowsWDK.10.0.26100
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5

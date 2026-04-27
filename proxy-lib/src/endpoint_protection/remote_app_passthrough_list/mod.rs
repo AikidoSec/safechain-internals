@@ -6,19 +6,26 @@ use rama::{
     error::{BoxError, ErrorContext, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{Body, Request, Response, Uri},
+    net::address::Domain,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    http::firewall::{IncomingFlowInfo, domain_matcher::DomainMatcher},
+    http::firewall::domain_matcher::DomainMatcher,
     storage::SyncCompactDataStorage,
-    utils::remote_resource::{self, RemoteResource, RemoteResourceSpec},
+    utils::remote_resource::{self, RefreshHandle, RemoteResource, RemoteResourceSpec},
     utils::token::AgentIdentity,
 };
+
+pub struct PassthroughMatchContext<'a> {
+    pub app_bundle_id: Option<&'a str>,
+    pub domain: Option<&'a Domain>,
+}
 
 #[derive(Debug, Clone)]
 pub struct RemoteAppPassthroughList {
     list: RemoteResource<Option<PassthroughList>>,
+    refresh_handle: RefreshHandle,
 }
 
 impl RemoteAppPassthroughList {
@@ -38,20 +45,27 @@ impl RemoteAppPassthroughList {
             uri,
         });
 
-        let (list, _refresh_handle) = remote_resource::try_new(guard, data, client, spec)
+        let (list, refresh_handle) = remote_resource::try_new(guard, data, client, spec)
             .await
             .context("create new remote app passthrough list")?;
 
-        Ok(Self { list })
+        Ok(Self {
+            list,
+            refresh_handle,
+        })
     }
 
-    pub fn is_source_app_passthrough(&self, meta: &IncomingFlowInfo) -> bool {
+    pub fn trigger_refresh(&self) {
+        self.refresh_handle.trigger_refresh();
+    }
+
+    pub fn is_source_app_passthrough(&self, passthrough_context: &PassthroughMatchContext) -> bool {
         let guard = self.list.get();
         let Some(list) = guard.as_ref() else {
             return false;
         };
 
-        list.is_match(meta)
+        list.is_match(passthrough_context)
     }
 }
 
@@ -71,8 +85,8 @@ struct PassthroughList {
 }
 
 impl PassthroughList {
-    fn is_match(&self, meta: &IncomingFlowInfo) -> bool {
-        let Some(bundle_id) = meta.app_bundle_id else {
+    fn is_match(&self, passthrough_context: &PassthroughMatchContext) -> bool {
+        let Some(bundle_id) = passthrough_context.app_bundle_id else {
             return false;
         };
 
@@ -82,7 +96,10 @@ impl PassthroughList {
             return false;
         };
 
-        matcher.is_match(meta.domain)
+        match passthrough_context.domain {
+            Some(domain) => matcher.is_match(domain),
+            None => matcher.matches_no_domain(),
+        }
     }
 }
 

@@ -128,7 +128,7 @@ where
         ),
         HijackLayer::new(
             DomainMatcher::exact(HIJACK_DOMAIN),
-            Arc::new(hijack::new_service(ca_crt_pem_bytes)),
+            Arc::new(hijack::new_service(ca_crt_pem_bytes, firewall.clone())),
         ),
         firewall,
         MapResponseBodyLayer::new_boxed_streaming_body(),

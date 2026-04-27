@@ -17,6 +17,11 @@ type HeartbeatEvent struct {
 	Status      Status              `json:"status"`
 }
 
+type HeartbeatResponse struct {
+	CollectLogsRequestedAt *int64  `json:"collect_logs_requested_at,omitempty"`
+	TargetUpdateVersion    *string `json:"target_update_version,omitempty"`
+}
+
 type SBOMEvent struct {
 	DeviceInfo  device.DeviceInfo   `json:"device"`
 	VersionInfo version.VersionInfo `json:"version"`

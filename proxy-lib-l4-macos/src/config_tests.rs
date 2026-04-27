@@ -31,6 +31,7 @@ fn deserializes_valid_configs() {
             Some(
                 br#"{
                         "peek_duration_s": 12.5,
+                        "peek_unknown_port_duration_s": 0.03,
                         "reporting_endpoint": "https://collector.aikido.dev/report",
                         "aikido_url": "https://app.aikido.dev",
                         "ca_cert_pem": "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n",
@@ -39,6 +40,7 @@ fn deserializes_valid_configs() {
             ),
             ProxyConfig {
                 peek_duration_s: 12.5,
+                peek_unknown_port_duration_s: 0.03,
                 reporting_endpoint: Some(Uri::from_static("https://collector.aikido.dev/report")),
                 aikido_url: Uri::from_static("https://app.aikido.dev"),
                 ca_cert_pem: Some(

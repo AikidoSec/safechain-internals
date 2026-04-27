@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -26,26 +27,31 @@ func Init() {
 }
 
 func sendEvent(ctx context.Context, endpoint string, config *config.ConfigInfo, event any) error {
+	_, err := sendEventWithResponse(ctx, endpoint, config, event)
+	return err
+}
+
+func sendEventWithResponse(ctx context.Context, endpoint string, config *config.ConfigInfo, event any) ([]byte, error) {
 	if config.Token == "" {
-		return fmt.Errorf("token is not set")
+		return nil, fmt.Errorf("token is not set")
 	}
 	if config.DeviceID == "" {
-		return fmt.Errorf("device ID is not set")
+		return nil, fmt.Errorf("device ID is not set")
 	}
 
 	url, err := url.JoinPath(config.GetBaseURL(), endpoint)
 	if err != nil {
-		return fmt.Errorf("failed to build URL for %s: %w", endpoint, err)
+		return nil, fmt.Errorf("failed to build URL for %s: %w", endpoint, err)
 	}
 
 	body, err := json.MarshalIndent(event, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal event: %w", err)
+		return nil, fmt.Errorf("failed to marshal event: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", config.Token)
@@ -53,20 +59,36 @@ func sendEvent(ctx context.Context, endpoint string, config *config.ConfigInfo, 
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send event to %s: %w", endpoint, err)
+		return nil, fmt.Errorf("failed to send event to %s: %w", endpoint, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("request to %s failed with status %d", endpoint, resp.StatusCode)
+		return nil, fmt.Errorf("request to %s failed with status %d", endpoint, resp.StatusCode)
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body from %s: %w", endpoint, err)
 	}
 
 	log.Printf("Event sent successfully to %s", endpoint)
-	return nil
+	return respBody, nil
 }
 
-func SendHeartbeat(ctx context.Context, config *config.ConfigInfo, event *HeartbeatEvent) error {
-	return sendEvent(ctx, HeartbeatEndpoint, config, event)
+func SendHeartbeat(ctx context.Context, config *config.ConfigInfo, event *HeartbeatEvent) (*HeartbeatResponse, error) {
+	body, err := sendEventWithResponse(ctx, HeartbeatEndpoint, config, event)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp HeartbeatResponse
+	if len(body) > 0 {
+		if jsonErr := json.Unmarshal(body, &resp); jsonErr != nil {
+			log.Printf("Failed to decode heartbeat response (non-fatal): %v", jsonErr)
+		}
+	}
+	return &resp, nil
 }
 
 func SendSBOM(ctx context.Context, config *config.ConfigInfo, event *SBOMEvent) error {
