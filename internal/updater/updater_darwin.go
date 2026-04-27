@@ -154,7 +154,7 @@ func installPackageDetached(pkgPath string) error {
 		fmt.Fprintf(logFile, "\n=== %s installer starting for %s ===\n\n", time.Now().UTC().Format(time.RFC3339), pkgPath)
 	}
 
-	cmd := exec.Command("/usr/sbin/installer", "-pkg", pkgPath, "-target", "/")
+	cmd := exec.Command("/usr/sbin/installer", "-verbose", "-pkg", pkgPath, "-target", "/")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	cmd.Stdin = nil
 	if logFile != nil {
