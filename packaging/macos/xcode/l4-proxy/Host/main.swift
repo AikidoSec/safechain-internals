@@ -34,6 +34,7 @@ private struct StartOptions {
     var agentDeviceID: String?
     var resetProfile = false
     var cleanSecrets = false
+    var noFirewall = false
 }
 
 private struct AgentIdentityPayload: Encodable, Equatable {
@@ -53,6 +54,7 @@ private struct ProxyEngineConfigPayload: Encodable, Equatable {
     let hostBundleID: String
     let caCertPEM: String?
     let caKeyPEM: String?
+    let noFirewall: Bool
 
     private enum CodingKeys: String, CodingKey {
         case agentIdentity = "agent_identity"
@@ -61,6 +63,7 @@ private struct ProxyEngineConfigPayload: Encodable, Equatable {
         case hostBundleID = "host_bundle_id"
         case caCertPEM = "ca_cert_pem"
         case caKeyPEM = "ca_key_pem"
+        case noFirewall = "no_firewall"
     }
 
     var isEmpty: Bool {
@@ -766,6 +769,8 @@ private final class TransparentProxyHostCLI {
                 options.resetProfile = true
             case "--clean-secrets":
                 options.cleanSecrets = true
+            case "--no-firewall":
+                options.noFirewall = true
             default:
                 throw CLIError.usage("unknown `start` argument: \(argument)")
             }
@@ -851,7 +856,8 @@ private final class TransparentProxyHostCLI {
             aikidoURL: options.aikidoURL,
             hostBundleID: Bundle.main.bundleIdentifier ?? "com.aikido.endpoint.proxy.l4.dev",
             caCertPEM: ca.certPEM,
-            caKeyPEM: ca.keyPEM
+            caKeyPEM: ca.keyPEM,
+            noFirewall: options.noFirewall
         )
 
         let encoder = JSONEncoder()
@@ -1118,6 +1124,7 @@ private final class TransparentProxyHostCLI {
           --clean-secrets            Delete proxy CA secrets before starting to rotate the MITM CA.
           --reset-profile            Remove the saved Network Extension profile before starting.
           --help                     Show this help text.
+          --no-firewall               Don't setup the firewall
 
         Notes:
           - The transparent proxy extension is managed by macOS after `start`; this host process
