@@ -69,6 +69,8 @@ pub struct Firewall {
     block_rules: Arc<[self::rule::DynRule]>,
     notifier: Option<self::notifier::EventNotifier>,
     passthrough_list: Option<RemoteAppPassthroughList>,
+    agent_identity: Option<AgentIdentity>,
+    remote_endpoint_config: Option<RemoteEndpointConfig>,
 }
 
 pub struct IncomingFlowInfo<'a> {
@@ -126,6 +128,7 @@ impl Firewall {
             None => None,
         };
 
+        let stored_agent_identity = agent_identity.clone();
         let passthrough_list = match agent_identity {
             Some(identity) => {
                 match RemoteAppPassthroughList::try_new(
@@ -149,6 +152,8 @@ impl Firewall {
             }
             None => None,
         };
+
+        let stored_endpoint_config = remote_endpoint_config.clone();
 
         Ok(Self {
             block_rules: Arc::from([
@@ -234,6 +239,8 @@ impl Firewall {
             ]),
             notifier,
             passthrough_list,
+            agent_identity: stored_agent_identity,
+            remote_endpoint_config: stored_endpoint_config,
         })
     }
 
@@ -333,6 +340,22 @@ impl Firewall {
         };
 
         passthrough_list.is_source_app_passthrough(passthrough_context)
+    }
+
+    pub fn is_agent_authorized(&self, req: &Request) -> bool {
+        match &self.agent_identity {
+            Some(identity) => identity.is_authorized(req),
+            None => false,
+        }
+    }
+
+    pub fn trigger_refresh_all(&self) {
+        if let Some(config) = &self.remote_endpoint_config {
+            config.trigger_refresh();
+        }
+        if let Some(list) = &self.passthrough_list {
+            list.trigger_refresh();
+        }
     }
 }
 

@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     http::firewall::domain_matcher::DomainMatcher,
     storage::SyncCompactDataStorage,
-    utils::remote_resource::{self, RemoteResource, RemoteResourceSpec},
+    utils::remote_resource::{self, RefreshHandle, RemoteResource, RemoteResourceSpec},
     utils::token::AgentIdentity,
 };
 
@@ -25,6 +25,7 @@ pub struct PassthroughMatchContext<'a> {
 #[derive(Debug, Clone)]
 pub struct RemoteAppPassthroughList {
     list: RemoteResource<Option<PassthroughList>>,
+    refresh_handle: RefreshHandle,
 }
 
 impl RemoteAppPassthroughList {
@@ -44,11 +45,18 @@ impl RemoteAppPassthroughList {
             uri,
         });
 
-        let (list, _refresh_handle) = remote_resource::try_new(guard, data, client, spec)
+        let (list, refresh_handle) = remote_resource::try_new(guard, data, client, spec)
             .await
             .context("create new remote app passthrough list")?;
 
-        Ok(Self { list })
+        Ok(Self {
+            list,
+            refresh_handle,
+        })
+    }
+
+    pub fn trigger_refresh(&self) {
+        self.refresh_handle.trigger_refresh();
     }
 
     pub fn is_source_app_passthrough(&self, passthrough_context: &PassthroughMatchContext) -> bool {
