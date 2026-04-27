@@ -55,13 +55,13 @@ fn dispatch_filter_by_shape(
 ) -> Vec<(ArcStr, PackageVersion)> {
     let mut suppressed: Vec<(ArcStr, PackageVersion)> = Vec::new();
 
-    /// VS-Marketplace-shaped mirror (Cursor's `marketplace.cursorapi.com`,
-    ///    OpenVSX's own `/vscode/gallery/extensionquery`):
-    ///    ```json
-    ///    { "results": [ { "extensions": [ { "publisher": {"publisherName": "..."},
-    ///                                       "extensionName": "...",
-    ///                                       "versions": [ {"version": "..."} , ... ] } ] } ] }
-    ///    ```
+    // VS-Marketplace-shaped mirror (Cursor's `marketplace.cursorapi.com`,
+    //    OpenVSX's own `/vscode/gallery/extensionquery`):
+    //    ```json
+    //    { "results": [ { "extensions": [ { "publisher": {"publisherName": "..."},
+    //                                       "extensionName": "...",
+    //                                       "versions": [ {"version": "..."} , ... ] } ] } ] }
+    //    ```
     if let Some(results) = json.get_mut("results").and_then(|r| r.as_array_mut()) {
         for result in results.iter_mut() {
             let Some(extensions) = result.get_mut("extensions").and_then(|e| e.as_array_mut())
@@ -78,11 +78,10 @@ fn dispatch_filter_by_shape(
             }
         }
     }
-
-    /// Native OpenVSX query (`/api/-/query` or `/api/v2/-/query`):
-    ///    ```json
-    ///    { "extensions": [ { "namespace": "...", "name": "...", "allVersions": {...}, ... } ] }
-    ///    ```
+    // Native OpenVSX query (`/api/-/query` or `/api/v2/-/query`):
+    //    ```json
+    //    { "extensions": [ { "namespace": "...", "name": "...", "allVersions": {...}, ... } ] }
+    //    ```
     else if let Some(extensions) = json.get_mut("extensions").and_then(|e| e.as_array_mut()) {
         for extension in extensions {
             filter_openvsx_extension(
@@ -93,12 +92,11 @@ fn dispatch_filter_by_shape(
             );
         }
     }
-
-    /// Native OpenVSX single-extension (`/api/{namespace}/{name}`):
-    ///    ```json
-    ///    { "namespace": "...", "name": "...", "version": "...",
-    ///      "allVersions": { "1.2.3": "url", "1.2.2": "url", ... } }
-    ///    ```
+    // Native OpenVSX single-extension (`/api/{namespace}/{name}`):
+    //    ```json
+    //    { "namespace": "...", "name": "...", "version": "...",
+    //      "allVersions": { "1.2.3": "url", "1.2.2": "url", ... } }
+    //    ```
     else if json.get("namespace").is_some() && json.get("name").is_some() {
         filter_openvsx_extension(json, released_packages_list, cutoff_ts, &mut suppressed);
     }
