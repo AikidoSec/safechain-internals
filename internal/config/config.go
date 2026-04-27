@@ -39,7 +39,7 @@ func (c *ConfigInfo) GetBaseURL() string {
 	if c.BaseURL != "" {
 		return c.BaseURL
 	}
-	return "http://localhost:8080"
+	return "https://app.aikido.dev"
 }
 
 func NewConfigInfo(deviceId string) *ConfigInfo {
