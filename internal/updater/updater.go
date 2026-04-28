@@ -20,11 +20,10 @@ var versionRegex = regexp.MustCompile(`^v?\d+\.\d+\.\d+$`)
 // UpdateTo downloads, verifies, and installs the requested target version.
 // On unsupported platforms it logs and returns nil.
 func UpdateTo(ctx context.Context, version string) error {
-	normalized := normalizeVersion(version)
-	if !versionRegex.MatchString(normalized) {
+	if !versionRegex.MatchString(version) {
 		return fmt.Errorf("invalid target version %q: expected MAJOR.MINOR.PATCH", version)
 	}
-	return platformUpdateTo(ctx, normalized)
+	return platformUpdateTo(ctx, version)
 }
 
 // releaseTag converts a version string ("1.2.23" or "v1.2.23") to the
@@ -35,10 +34,4 @@ func releaseTag(version string) string {
 		return version
 	}
 	return "v" + version
-}
-
-// normalizeVersion strips an optional leading "v" so versions can be compared
-// regardless of the source representation.
-func normalizeVersion(version string) string {
-	return strings.TrimPrefix(strings.TrimSpace(version), "v")
 }

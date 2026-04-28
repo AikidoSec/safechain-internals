@@ -553,7 +553,8 @@ func (d *Daemon) handleAutoUpdate(resp *cloud.HeartbeatResponse) {
 		return
 	}
 
-	if target == d.versionInfo.Version || target == d.config.LastHandledTargetUpdateVersion {
+	normalizedTarget := utils.NormalizeVersion(target)
+	if normalizedTarget == utils.NormalizeVersion(d.versionInfo.Version) || normalizedTarget == utils.NormalizeVersion(d.config.LastHandledTargetUpdateVersion) {
 		log.Printf("Update requested to same version %s, already handled, skipping auto-update", target)
 		return
 	}
@@ -564,7 +565,7 @@ func (d *Daemon) handleAutoUpdate(resp *cloud.HeartbeatResponse) {
 	}
 
 	log.Printf("Update requested to version %s (current: %s)", target, d.versionInfo.Version)
-	if err := updater.UpdateTo(d.ctx, target); err != nil {
+	if err := updater.UpdateTo(d.ctx, normalizedTarget); err != nil {
 		log.Printf("Failed to update to version %s: %v", target, err)
 		return
 	}

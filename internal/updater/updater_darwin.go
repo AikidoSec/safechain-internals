@@ -4,12 +4,9 @@ package updater
 
 import (
 	"context"
-	"crypto/sha256"
-	"crypto/x509"
-	"encoding/base64"
-	"encoding/binary"
-	"encoding/xml"
+	"debug/macho"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"os"
@@ -32,8 +29,6 @@ import (
 //     Apple Developer team (Team ID 7VPF8GD6J4).
 //   - spctl (Gatekeeper) markers: the package must be accepted, sourced from a
 //     Notarized Developer ID, and originate from Aikido Security's installer cert.
-//   - Certificate identity: the xar TOC leaf cert must have O=Aikido Security,
-//     OU=7VPF8GD6J4, and CN starting with "Developer ID Installer:".
 //   - Codesign requirement: all Mach-O binaries and .app bundles inside the
 //     payload must satisfy the designated requirement pinning subject.OU to our
 //     team ID.
@@ -147,9 +142,6 @@ func verifyPackageContents(ctx context.Context, pkgPath, expectedVersion string)
 	if err := verifyPackageVersion(ctx, pkgPath, expectedVersion); err != nil {
 		return err
 	}
-	if err := verifyPackageCertificate(ctx, pkgPath); err != nil {
-		return err
-	}
 	if err := verifyPayloadCodesign(ctx, pkgPath); err != nil {
 		return err
 	}
@@ -163,13 +155,12 @@ func verifyPackageVersion(ctx context.Context, pkgPath, expected string) error {
 	}
 	defer os.RemoveAll(extractDir)
 
-	cmd := exec.CommandContext(ctx, "xar", "-xf", pkgPath, "Distribution")
-	cmd.Dir = extractDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to extract Distribution from pkg: %v: %s", err, string(out))
+	expanded := filepath.Join(extractDir, "pkg")
+	if out, err := exec.CommandContext(ctx, "pkgutil", "--expand", pkgPath, expanded).CombinedOutput(); err != nil {
+		return fmt.Errorf("pkgutil --expand failed: %v: %s", err, string(out))
 	}
 
-	data, err := os.ReadFile(filepath.Join(extractDir, "Distribution"))
+	data, err := os.ReadFile(filepath.Join(expanded, "Distribution"))
 	if err != nil {
 		return fmt.Errorf("failed to read Distribution file: %w", err)
 	}
@@ -184,125 +175,10 @@ func verifyPackageVersion(ctx context.Context, pkgPath, expected string) error {
 		return fmt.Errorf("version not found in Distribution file")
 	}
 
-	if normalizeVersion(actual) != normalizeVersion(expected) {
+	if utils.NormalizeVersion(actual) != utils.NormalizeVersion(expected) {
 		return fmt.Errorf("package version %q does not match target %q", actual, expected)
 	}
 	log.Printf("Package version %s matches target", actual)
-	return nil
-}
-
-type xarTOC struct {
-	XMLName xml.Name    `xml:"xar"`
-	TOC     xarTOCInner `xml:"toc"`
-}
-
-type xarTOCInner struct {
-	Signatures  []xarSignature `xml:"signature"`
-	XSignatures []xarSignature `xml:"x-signature"`
-}
-
-type xarSignature struct {
-	KeyInfo xarKeyInfo `xml:"KeyInfo"`
-}
-
-type xarKeyInfo struct {
-	X509Data []xarX509Data `xml:"X509Data"`
-}
-
-type xarX509Data struct {
-	Certificates []string `xml:"X509Certificate"`
-}
-
-func verifyPackageCertificate(ctx context.Context, pkgPath string) error {
-	tocDir, err := os.MkdirTemp("", "aikido-pkg-toc-")
-	if err != nil {
-		return fmt.Errorf("failed to create temp dir: %w", err)
-	}
-	defer os.RemoveAll(tocDir)
-
-	tocPath := filepath.Join(tocDir, "toc.xml")
-	if out, err := exec.CommandContext(ctx, "xar", "--dump-toc="+tocPath, "-f", pkgPath).CombinedOutput(); err != nil {
-		return fmt.Errorf("xar --dump-toc failed: %v: %s", err, string(out))
-	}
-
-	tocData, err := os.ReadFile(tocPath)
-	if err != nil {
-		return fmt.Errorf("failed to read xar TOC: %w", err)
-	}
-
-	var toc xarTOC
-	if err := xml.Unmarshal(tocData, &toc); err != nil {
-		return fmt.Errorf("failed to parse xar TOC XML: %w", err)
-	}
-
-	var certs []*x509.Certificate
-	allSigs := append(toc.TOC.Signatures, toc.TOC.XSignatures...)
-	for _, sig := range allSigs {
-		for _, x509data := range sig.KeyInfo.X509Data {
-			for _, raw := range x509data.Certificates {
-				der, err := base64.StdEncoding.DecodeString(strings.Join(strings.Fields(raw), ""))
-				if err != nil {
-					continue
-				}
-				cert, err := x509.ParseCertificate(der)
-				if err != nil {
-					continue
-				}
-				certs = append(certs, cert)
-			}
-		}
-	}
-
-	if len(certs) == 0 {
-		return fmt.Errorf("no X.509 certificates found in xar TOC")
-	}
-
-	var leaf *x509.Certificate
-	for _, c := range certs {
-		if strings.HasPrefix(c.Subject.CommonName, installerCNPrefix) {
-			leaf = c
-			break
-		}
-	}
-	if leaf == nil {
-		return fmt.Errorf("no leaf certificate with CN prefix %q found in xar TOC", installerCNPrefix)
-	}
-
-	hasOrg := false
-	for _, o := range leaf.Subject.Organization {
-		if o == aikidoOrganization {
-			hasOrg = true
-			break
-		}
-	}
-	if !hasOrg {
-		return fmt.Errorf("leaf certificate Organization does not contain %q: %v", aikidoOrganization, leaf.Subject.Organization)
-	}
-
-	hasOU := false
-	for _, ou := range leaf.Subject.OrganizationalUnit {
-		if ou == aikidoTeamID {
-			hasOU = true
-			break
-		}
-	}
-	if !hasOU {
-		return fmt.Errorf("leaf certificate OrganizationalUnit does not contain %q: %v", aikidoTeamID, leaf.Subject.OrganizationalUnit)
-	}
-
-	expectedTeamInCN := "(" + aikidoTeamID + ")"
-	if !strings.Contains(leaf.Subject.CommonName, expectedTeamInCN) {
-		return fmt.Errorf("leaf certificate CN %q does not contain %q", leaf.Subject.CommonName, expectedTeamInCN)
-	}
-
-	now := time.Now()
-	if now.Before(leaf.NotBefore) || now.After(leaf.NotAfter) {
-		return fmt.Errorf("leaf certificate not valid at current time (notBefore=%s, notAfter=%s)", leaf.NotBefore, leaf.NotAfter)
-	}
-
-	fingerprint := sha256.Sum256(leaf.Raw)
-	log.Printf("Package signing certificate verified (CN=%s, serial=%s, SHA-256=%x, expires=%s)",
-		leaf.Subject.CommonName, leaf.SerialNumber, fingerprint, leaf.NotAfter.Format(time.DateOnly))
 	return nil
 }
 
@@ -313,15 +189,13 @@ func isMachO(path string) bool {
 	}
 	defer f.Close()
 
-	var magic uint32
-	if err := binary.Read(f, binary.LittleEndian, &magic); err != nil {
+	if _, err := macho.NewFile(f); err == nil {
+		return true
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return false
 	}
-
-	switch magic {
-	case 0xfeedface, 0xfeedfacf, // Mach-O 32/64
-		0xcefaedfe, 0xcffaedfe, // Mach-O 32/64 byte-swapped
-		0xbebafeca, 0xcafebabe: // Fat binary (universal)
+	if _, err := macho.NewFatFile(f); err == nil {
 		return true
 	}
 	return false
