@@ -107,6 +107,9 @@ export function InstallPage() {
 
   const currentStep = currentIdx < steps.length ? steps[currentIdx] : null;
   const isRebootStep = currentStep === "reboot";
+  const isLastStep = currentIdx === steps.length - 1;
+  const hasRebootStep = steps.includes("reboot");
+  const isFinishStep = isLastStep && !hasRebootStep;
   const totalDots = steps.length;
 
   async function handleAction() {
@@ -265,6 +268,14 @@ export function InstallPage() {
                   {restarting ? "Restarting…" : "Restart Now"}
                 </button>
               </>
+            ) : isFinishStep ? (
+              <button
+                type="button"
+                className="button-brand button--primary button--normal button--rounded"
+                onClick={handleRestartLater}
+              >
+                Finish
+              </button>
             ) : (
               <button
                 type="button"
