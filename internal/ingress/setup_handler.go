@@ -24,7 +24,14 @@ func IsSetupOk(ctx context.Context, cfg *config.ConfigInfo) bool {
 // The package installer creates an install marker file in the run directory;
 // if that file's modification time is after the last system boot, the user
 // has not rebooted since (re)installing.
+//
+// During an upgrade the preinstall script drops an upgrade marker so we can
+// skip the reboot prompt — upgrades reuse the existing kernel/extension state
+// and don't require the user to reboot.
 func IsRebootRequired() bool {
+	if _, err := os.Stat(platform.GetUpgradeMarkerPath()); err == nil {
+		return false
+	}
 	bootTime, err := platform.GetSystemBootTime()
 	if err != nil || bootTime.IsZero() {
 		return false
