@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{net::IpAddr, sync::Arc};
 
 use radix_trie::{Trie, TrieCommon};
 use rama::{
@@ -6,7 +6,7 @@ use rama::{
     error::{BoxError, ErrorContext, extra::OpaqueError},
     graceful::ShutdownGuard,
     http::{Body, Request, Response, Uri},
-    net::address::Domain,
+    net::{address::Domain, stream::dep::ipnet::IpNet},
 };
 use serde::{Deserialize, Serialize};
 
@@ -67,6 +67,15 @@ impl RemoteAppPassthroughList {
 
         list.is_match(passthrough_context)
     }
+
+    pub fn is_destination_ip_passthrough(&self, addr: IpAddr) -> bool {
+        let guard = self.list.get();
+        let Some(list) = guard.as_ref() else {
+            return false;
+        };
+
+        list.is_destination_ip_passthrough(addr)
+    }
 }
 
 fn passthrough_list_uri(aikido_url: &Uri) -> Result<Uri, BoxError> {
@@ -82,6 +91,7 @@ fn passthrough_list_uri(aikido_url: &Uri) -> Result<Uri, BoxError> {
 #[derive(Debug, Clone)]
 struct PassthroughList {
     apps: Trie<String, DomainMatcher>,
+    cidrs: Vec<IpNet>,
 }
 
 impl PassthroughList {
@@ -101,11 +111,17 @@ impl PassthroughList {
             None => matcher.matches_no_domain(),
         }
     }
+
+    fn is_destination_ip_passthrough(&self, addr: IpAddr) -> bool {
+        self.cidrs.iter().any(|net| net.contains(&addr))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ApiResponse {
     disabled_apps_mac: Vec<ApiAppConfig>,
+    #[serde(default)]
+    passthrough_cidrs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,7 +155,12 @@ impl RemoteResourceSpec for RemoteAppPassthroughListSpec {
             let matcher: DomainMatcher = app_config.domains.into_iter().collect();
             apps.insert(app_config.app_id, matcher);
         }
-        Ok(Arc::new(Some(PassthroughList { apps })))
+        let cidrs = payload
+            .passthrough_cidrs
+            .iter()
+            .filter_map(|s| s.parse::<IpNet>().ok())
+            .collect();
+        Ok(Arc::new(Some(PassthroughList { apps, cidrs })))
     }
 }
 
