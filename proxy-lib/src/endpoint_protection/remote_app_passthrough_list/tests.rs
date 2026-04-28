@@ -149,8 +149,8 @@ fn test_cidr_ipv6_match_and_no_match() {
 fn test_cidr_multiple_ranges_all_checked() {
     let list = cidr_list(&["100.64.0.0/10", "10.0.0.0/8"]);
     assert!(list.is_destination_ip_passthrough(ip("100.64.1.1"))); // first
-    assert!(list.is_destination_ip_passthrough(ip("10.1.2.3")));   // second
-    assert!(!list.is_destination_ip_passthrough(ip("8.8.8.8")));   // neither
+    assert!(list.is_destination_ip_passthrough(ip("10.1.2.3"))); // second
+    assert!(!list.is_destination_ip_passthrough(ip("8.8.8.8"))); // neither
 }
 
 #[test]
