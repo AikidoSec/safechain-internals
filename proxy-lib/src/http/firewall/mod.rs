@@ -352,6 +352,13 @@ impl Firewall {
         passthrough_list.is_source_app_passthrough(passthrough_context)
     }
 
+    pub fn is_passthrough_destination(&self, addr: std::net::IpAddr) -> bool {
+        self.passthrough_list
+            .as_ref()
+            .map(|l| l.is_destination_ip_passthrough(addr))
+            .unwrap_or(false)
+    }
+
     pub fn is_agent_authorized(&self, req: &Request) -> bool {
         match &self.agent_identity {
             Some(identity) => identity.is_authorized(req),

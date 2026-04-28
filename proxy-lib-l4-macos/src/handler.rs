@@ -79,6 +79,8 @@ impl TransparentProxyHandler for FlowHandler {
                 "passthrough: app bundle matches passthrough for any domain"
             );
             FlowAction::Passthrough
+        } else if is_configured_cidr_passthrough(&meta, &self.tcp_mitm_service) {
+            FlowAction::Passthrough
         } else {
             match flow_action(&meta) {
                 TransparentProxyFlowAction::Intercept => FlowAction::Intercept {
@@ -105,6 +107,8 @@ impl TransparentProxyHandler for FlowHandler {
                 protocol = ?meta.source_app_bundle_identifier,
                 "passthrough: app bundle matches passthrough for any domain"
             );
+            FlowAction::Passthrough
+        } else if is_configured_cidr_passthrough(&meta, &self.tcp_mitm_service) {
             FlowAction::Passthrough
         } else {
             match flow_action(&meta) {
@@ -233,6 +237,27 @@ fn remote_host_for_interception(meta: &TransparentProxyFlowMeta) -> Option<HostW
             }
         }
     }
+}
+
+fn is_configured_cidr_passthrough(
+    meta: &TransparentProxyFlowMeta,
+    mitm: &crate::tcp::TcpMitmService,
+) -> bool {
+    let Some(ref endpoint) = meta.remote_endpoint else {
+        return false;
+    };
+    let Host::Address(addr) = &endpoint.host else {
+        return false;
+    };
+    if mitm.is_passthrough_destination(*addr) {
+        tracing::debug!(
+            remote = ?meta.remote_endpoint,
+            app_bundle_id = ?meta.source_app_bundle_identifier,
+            "passthrough: remote IP is within configured CIDR passthrough range"
+        );
+        return true;
+    }
+    false
 }
 
 fn is_chromium_bundle_identifier(identifier: &str) -> bool {
