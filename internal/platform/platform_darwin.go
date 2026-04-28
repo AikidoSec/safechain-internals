@@ -620,13 +620,12 @@ func GetOSVersion() string {
 	return strings.TrimSpace(version)
 }
 
-func GetSystemBootTime() time.Time {
+func GetSystemBootTime() (time.Time, error) {
 	tv, err := unix.SysctlTimeval("kern.boottime")
 	if err != nil {
-		log.Printf("failed to read kern.boottime: %v", err)
-		return time.Time{}
+		return time.Time{}, fmt.Errorf("failed to read kern.boottime: %w", err)
 	}
-	return time.Unix(int64(tv.Sec), int64(tv.Usec)*1000)
+	return time.Unix(int64(tv.Sec), int64(tv.Usec)*1000), nil
 }
 
 func GetRawDeviceID() (string, error) {

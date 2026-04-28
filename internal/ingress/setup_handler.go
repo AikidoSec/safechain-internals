@@ -25,8 +25,8 @@ func IsSetupOk(ctx context.Context, cfg *config.ConfigInfo) bool {
 // if that file's modification time is after the last system boot, the user
 // has not rebooted since (re)installing.
 func IsRebootRequired() bool {
-	bootTime := platform.GetSystemBootTime()
-	if bootTime.IsZero() {
+	bootTime, err := platform.GetSystemBootTime()
+	if err != nil || bootTime.IsZero() {
 		return false
 	}
 	info, err := os.Stat(platform.GetInstallMarkerPath())
