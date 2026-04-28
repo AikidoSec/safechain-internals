@@ -24,12 +24,19 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/utils"
 )
 
-// Markers we require in the `pkgutil --check-signature` output. Together these
-// pin the publisher to Aikido Security and confirm Apple itself vouched for it:
-//   - the package must be signed with a Developer ID issued by Apple (this also
-//     means pkgutil successfully validated the chain to a trusted Apple root),
-//   - notarized by the Apple notary service,
-//   - signed by the Aikido Security Apple Developer team (Team ID 7VPF8GD6J4).
+// Security constants for package verification. Together these pin the publisher
+// to Aikido Security and confirm Apple itself vouched for it:
+//   - pkgutil --check-signature markers: the package must be signed with a
+//     Developer ID issued by Apple (chain validated to a trusted Apple root),
+//     notarized by the Apple notary service, and signed by the Aikido Security
+//     Apple Developer team (Team ID 7VPF8GD6J4).
+//   - spctl (Gatekeeper) markers: the package must be accepted, sourced from a
+//     Notarized Developer ID, and originate from Aikido Security's installer cert.
+//   - Certificate identity: the xar TOC leaf cert must have O=Aikido Security,
+//     OU=7VPF8GD6J4, and CN starting with "Developer ID Installer:".
+//   - Codesign requirement: all Mach-O binaries and .app bundles inside the
+//     payload must satisfy the designated requirement pinning subject.OU to our
+//     team ID.
 //
 // We deliberately do not pin specific cert fingerprints (leaf, intermediate,
 // or root): all three rotate over time and pinning them would brick legitimate
