@@ -467,3 +467,55 @@ func IsProcessAlive(pid int) bool {
 	}
 	return exitCode == STILL_ACTIVE
 }
+
+// SetUserEnvVar persists name in HKCU\Environment for the active console user
+// and broadcasts WM_SETTINGCHANGE so newly-spawned processes pick up the
+// change without a logoff. An empty value clears the variable.
+//
+// The implementation shells out to PowerShell via RunAsCurrentUser because
+// that is how we currently impersonate the interactive user from a
+// LocalSystem service. Acceptable for the cert-config write-rate
+// (a handful of calls per install/heartbeat).
+func SetUserEnvVar(ctx context.Context, name, value string) error {
+	var script string
+	if value == "" {
+		script = fmt.Sprintf(
+			"[Environment]::SetEnvironmentVariable('%s', $null, 'User')",
+			escapePowerShellSingleQuoted(name),
+		)
+	} else {
+		script = fmt.Sprintf(
+			"[Environment]::SetEnvironmentVariable('%s', '%s', 'User')",
+			escapePowerShellSingleQuoted(name),
+			escapePowerShellSingleQuoted(value),
+		)
+	}
+	_, err := RunAsCurrentUser(ctx, "powershell", []string{
+		"-NoProfile",
+		"-NonInteractive",
+		"-Command",
+		script,
+	})
+	return err
+}
+
+// GetUserEnvVar reads name from HKCU\Environment for the active console user
+// (User scope only — not merged with Machine scope, which represents admin
+// policy that should not be captured as the user's value). Returns an empty
+// string with no error when the variable is unset.
+func GetUserEnvVar(ctx context.Context, name string) (string, error) {
+	script := fmt.Sprintf(
+		"$v = [Environment]::GetEnvironmentVariable('%s', 'User'); if ($v) { [Console]::Write($v) }",
+		escapePowerShellSingleQuoted(name),
+	)
+	return RunAsCurrentUser(ctx, "powershell", []string{
+		"-NoProfile",
+		"-NonInteractive",
+		"-Command",
+		script,
+	})
+}
+
+func escapePowerShellSingleQuoted(value string) string {
+	return strings.ReplaceAll(value, "'", "''")
+}
