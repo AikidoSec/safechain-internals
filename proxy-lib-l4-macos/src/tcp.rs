@@ -145,6 +145,10 @@ impl TcpMitmService {
             })
     }
 
+    pub fn is_passthrough_destination(&self, addr: std::net::IpAddr) -> bool {
+        self.firewall.is_passthrough_destination(addr)
+    }
+
     fn new_bridge_service<Ingress, Egress>(
         &self,
         exec: Executor,
