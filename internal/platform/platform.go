@@ -77,3 +77,7 @@ func GetConfigPath() string {
 func GetInstallMarkerPath() string {
 	return filepath.Join(config.RunDir, ".installed_at")
 }
+
+func GetUpgradeMarkerPath() string {
+	return filepath.Join(config.RunDir, ".upgraded")
+}

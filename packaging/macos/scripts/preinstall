@@ -5,9 +5,16 @@ set -e
 echo "Aikido Endpoint Protection Installer - Pre-installation"
 
 UNINSTALL_SCRIPT="/Applications/Aikido Endpoint Protection.app/Contents/Resources/scripts/uninstall"
+RUN_DIR="/Library/Application Support/AikidoSecurity/EndpointProtection/run"
+UPGRADE_MARKER="$RUN_DIR/.upgraded"
 
 if [ -x "$UNINSTALL_SCRIPT" ]; then
     "$UNINSTALL_SCRIPT" --upgrade
+    mkdir -p "$RUN_DIR"
+    touch "$UPGRADE_MARKER"
+    chown root:wheel "$UPGRADE_MARKER"
+    chmod 644 "$UPGRADE_MARKER"
+    echo "Created upgrade marker at $UPGRADE_MARKER"
 else
     echo "No existing installation found, skipping cleanup"
 fi
