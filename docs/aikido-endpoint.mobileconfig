@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>FilterDataProviderBundleIdentifier</key>
+            <string>com.aikido.endpoint.proxy.l4.dist.extension</string>
+            <key>FilterDataProviderDesignatedRequirement</key>
+            <string>identifier "com.aikido.endpoint.proxy.l4.dist.extension" and anchor apple generic and certificate leaf[subject.OU] = "7VPF8GD6J4"</string>
+            <key>FilterSockets</key>
+            <true/>
+            <key>FilterType</key>
+            <string>Plugin</string>
+            <key>PayloadDisplayName</key>
+            <string>Web Content Filter</string>
+            <key>PayloadIdentifier</key>
+            <string>com.apple.webcontent-filter.2DF5FE40-7D1D-489E-960B-E5D403D79A0E</string>
+            <key>PayloadType</key>
+            <string>com.apple.webcontent-filter</string>
+            <key>PayloadUUID</key>
+            <string>2DF5FE40-7D1D-489E-960B-E5D403D79A0E</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>PluginBundleID</key>
+            <string>com.aikido.endpoint.proxy.l4.dist</string>
+            <key>UserDefinedName</key>
+            <string>Aikido Endpoint Proxy</string>
+        </dict>
+        <dict>
+            <key>PayloadType</key>
+            <string>com.apple.system-extension-policy</string>
+            <key>PayloadIdentifier</key>
+            <string>com.aikido.endpoint.proxy.l4.systemextension</string>
+            <key>PayloadUUID</key>
+            <string>7F4B5FB4-1F0D-4456-8492-5F155E2157D1</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>PayloadDisplayName</key>
+            <string>Aikido Endpoint System Extension</string>
+            <key>PayloadDescription</key>
+            <string>Allows the Aikido Endpoint network extension to load without user approval.</string>
+            <key>PayloadOrganization</key>
+            <string>Aikido Security</string>
+            <key>AllowedSystemExtensions</key>
+            <dict>
+                <key>7VPF8GD6J4</key>
+                <array>
+                    <string>com.aikido.endpoint.proxy.l4.dist.extension</string>
+                </array>
+            </dict>
+            <key>AllowedSystemExtensionTypes</key>
+            <dict>
+                <key>7VPF8GD6J4</key>
+                <array>
+                    <string>NetworkExtension</string>
+                </array>
+            </dict>
+        </dict>
+        <dict>
+            <key>PayloadType</key>
+            <string>com.apple.servicemanagement</string>
+            <key>PayloadIdentifier</key>
+            <string>com.aikidosecurity.endpointprotection.servicemanagement</string>
+            <key>PayloadUUID</key>
+            <string>B35B9806-3387-4773-B523-052FB8D463FF</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>PayloadDisplayName</key>
+            <string>Aikido Endpoint Background Activity</string>
+            <key>PayloadDescription</key>
+            <string>Prevents users from disabling Aikido Endpoint Protection background services.</string>
+            <key>PayloadOrganization</key>
+            <string>Aikido Security</string>
+            <key>Rules</key>
+            <array>
+                <dict>
+                    <key>RuleType</key>
+                    <string>LabelPrefix</string>
+                    <key>RuleValue</key>
+                    <string>com.aikidosecurity</string>
+                    <key>Comment</key>
+                    <string>Aikido Endpoint Protection</string>
+                </dict>
+            </array>
+        </dict>
+    </array>
+    <key>PayloadDisplayName</key>
+    <string>Aikido Endpoint</string>
+    <key>PayloadDescription</key>
+    <string>Configures the Aikido Endpoint network extension, content filter, and background activity policy.</string>
+    <key>PayloadOrganization</key>
+    <string>Aikido Security</string>
+    <key>PayloadIdentifier</key>
+    <string>com.aikido.endpoint.proxy.l4.contentfilter.profile</string>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadUUID</key>
+    <string>DEBBEBBF-930A-4371-B7F0-65388BCE7ECD</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+</dict>
+</plist>
