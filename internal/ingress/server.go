@@ -95,6 +95,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("POST /v1/setup/restart", s.handleSetupRestart)
 
 	mux.HandleFunc("POST /v1/logs/collect", s.handleCollectLogs)
+	mux.HandleFunc("POST /v1/config/refresh", s.handleConfigRefresh)
 
 	listener, err := net.Listen("tcp", DefaultBind)
 	if err != nil {
