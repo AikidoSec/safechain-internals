@@ -362,6 +362,11 @@ func setupSystemTray(app *application.App, showDashboard func(), notifWindow *ap
 		if notifWindow.IsVisible() {
 			notifWindow.Hide()
 		}
+		go func() {
+			if err := daemon.RefreshConfig(); err != nil {
+				log.Printf("config refresh on tray click: %v", err)
+			}
+		}()
 		systray.OpenMenu()
 	}
 	systray.OnClick(hideNotifAndOpenMenu)
