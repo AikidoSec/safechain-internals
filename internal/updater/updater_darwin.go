@@ -45,9 +45,6 @@ const (
 	expectedSpctlSource   = "source=Notarized Developer ID"
 	expectedSpctlOrigin   = "origin=Developer ID Installer: Aikido Security (7VPF8GD6J4)"
 
-	aikidoOrganization  = "Aikido Security"
-	aikidoTeamID        = "7VPF8GD6J4"
-	installerCNPrefix   = "Developer ID Installer:"
 	codesignRequirement = `anchor apple generic and certificate leaf[subject.OU] = "7VPF8GD6J4"`
 )
 
