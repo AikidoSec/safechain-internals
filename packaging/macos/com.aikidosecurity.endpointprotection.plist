@@ -5,17 +5,9 @@
         <key>KeepAlive</key>
         <true/>
         <key>ThrottleInterval</key>
-        <integer>60</integer>
+        <integer>5</integer>
         <key>Label</key>
         <string>com.aikidosecurity.endpointprotection</string>
-        <key>LimitLoadToSessionType</key>
-        <array>
-                <string>Aqua</string>
-                <string>Background</string>
-                <string>LoginWindow</string>
-                <string>StandardIO</string>
-                <string>System</string>
-        </array>
 	<key>ProgramArguments</key>
 	<array>
 		<string>/Applications/Aikido Endpoint Protection.app/Contents/Resources/bin/endpoint-protection</string>

@@ -11,17 +11,29 @@ const FINISH_ECOSYSTEM_VISUAL: { id: string; align: "left" | "right" | "center" 
   { id: "skills_sh", align: "right" },
 ];
 
-export function InstallFinishPage() {
+interface Props {
+  stepNumber: number;
+  totalSteps: number;
+}
+
+export function InstallFinishPage({ stepNumber, totalSteps }: Props) {
   return (
     <div className="install-page__main">
       <div className="install-page__finish-grid">
         <div className="install-page__finish-col install-page__finish-col--left">
           <div className="install-page__finish-hero install-page__finish-hero--split">
-            <p className="install-page__finish-status">Certificate installed</p>
-            <h1 className="install-page__title install-page__title--finish">You&apos;re all set</h1>
+            <div className="install-page__finish-step">
+              <div className="install-page__step-badge" aria-hidden>
+                {stepNumber}
+              </div>
+              <p className="install-page__finish-status">
+                Step {stepNumber} of {totalSteps}
+              </p>
+            </div>
+            <h1 className="install-page__title install-page__title--finish">Restart required</h1>
             <p className="install-page__lead install-page__followup-lead install-page__lead--finish">
-              This device now trusts the Aikido Endpoint certificate. Endpoint Protection can secure traffic from your
-              browsers, editors, and package managers while you work.
+              In order for Endpoint Protection to protect your device, you need to restart your computer. Until you do,
+              traffic from your browsers, editors, and package managers will not be secured.
             </p>
           </div>
           <div className="install-page__restart-card install-page__restart-card--info">
@@ -32,10 +44,10 @@ export function InstallFinishPage() {
               </svg>
             </div>
             <div className="install-page__restart-card-content">
-              <p className="install-page__restart-card-title">System restart recommended</p>
+              <p className="install-page__restart-card-title">Restart to activate protection</p>
               <p className="install-page__restart-card-body">
-                A restart ensures all applications pick up the new certificate and network settings. You can restart now
-                or do it later from your system menu.
+                A restart is required for all applications to pick up the new certificate and network settings. You can
+                restart now or do it later from your system menu.
               </p>
             </div>
           </div>

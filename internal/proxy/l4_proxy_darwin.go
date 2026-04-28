@@ -38,6 +38,9 @@ func (p *L4Proxy) Start(ctx context.Context, opts StartOptions) error {
 	if opts.Token != "" && opts.DeviceID != "" {
 		args = append(args, "--agent-token", opts.Token, "--agent-device-id", opts.DeviceID)
 	}
+	if opts.Passthrough {
+		args = append(args, "--no-firewall")
+	}
 
 	log.Printf("Starting L4 transparent proxy: %s %s", platform.SafeChainL4ProxyHostPath, strings.Join(args, " "))
 
