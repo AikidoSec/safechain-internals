@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/AikidoSec/safechain-internals/internal/proxy"
 )
 
 var configRefreshHTTPClient = &http.Client{
@@ -22,7 +24,7 @@ func (s *Server) handleConfigRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, "http://mitm.ramaproxy.org/config/refresh", nil)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, proxy.L4HijackBaseURL+"/config/refresh", nil)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to build refresh request: %v", err), http.StatusInternalServerError)
 		return
