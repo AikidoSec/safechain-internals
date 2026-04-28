@@ -64,8 +64,12 @@ func platformUpdateTo(ctx context.Context, version string) (err error) {
 	tag := releaseTag(version)
 	url := fmt.Sprintf("%s/download/%s/%s", releasesBaseURL, tag, pkgAssetName)
 
-	timestamp := time.Now().UTC().Format("20060102T150405")
-	pkgPath := filepath.Join(os.TempDir(), fmt.Sprintf("AikidoSecurity-EndpointProtection-Update-%s-%s.pkg", version, timestamp))
+	pkgFile, err := os.CreateTemp("", "AikidoSecurity-EndpointProtection-Update-*.pkg")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	pkgPath := pkgFile.Name()
+	pkgFile.Close()
 	// On any failure path we clean up the pkg file. On success we leave it in
 	// place because the detached installer process still needs it.
 	defer func() {
