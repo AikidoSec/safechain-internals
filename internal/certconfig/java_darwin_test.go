@@ -81,6 +81,39 @@ func TestJavaHomesFromJetBrains_EmptyHome(t *testing.T) {
 	}
 }
 
+func TestJavaHomesFromVersionManagers(t *testing.T) {
+	home := t.TempDir()
+
+	sdkmanJDK := filepath.Join(home, ".sdkman", "candidates", "java", "21.0.5-tem")
+	asdfJDK := filepath.Join(home, ".asdf", "installs", "java", "openjdk-21.0.1")
+	jenvJDK := filepath.Join(home, ".jenv", "versions", "21.0")
+	unrelated := filepath.Join(home, ".sdkman", "candidates", "java", "current") // current is a symlink in real installs; treat as plain dir here
+
+	for _, dir := range []string{sdkmanJDK, asdfJDK, jenvJDK, unrelated} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := javaHomesFromVersionManagers(home)
+	want := map[string]bool{sdkmanJDK: true, asdfJDK: true, jenvJDK: true, unrelated: true}
+
+	if len(got) != len(want) {
+		t.Fatalf("got %d homes, want %d: %v", len(got), len(want), got)
+	}
+	for _, h := range got {
+		if !want[h] {
+			t.Fatalf("unexpected home in result: %s", h)
+		}
+	}
+}
+
+func TestJavaHomesFromVersionManagers_EmptyHome(t *testing.T) {
+	if got := javaHomesFromVersionManagers(""); got != nil {
+		t.Fatalf("expected nil for empty homeDir, got %v", got)
+	}
+}
+
 func TestCollectDarwinJavaTrustTargets(t *testing.T) {
 	homes := []string{
 		filepath.Join(t.TempDir(), "corretto-19.0.2", "Contents", "Home"),
