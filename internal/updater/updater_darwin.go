@@ -4,7 +4,13 @@ package updater
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/xml"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -31,7 +37,16 @@ import (
 const (
 	expectedStatus       = "Status: signed by a developer certificate issued by Apple for distribution"
 	expectedNotarization = "Notarization: trusted by the Apple notary service"
-	expectedSigner       = "Developer ID Installer: Aikido Security (7VPF8GD6J4)"
+	expectedSigner       = "1. Developer ID Installer: Aikido Security (7VPF8GD6J4)"
+
+	expectedSpctlAccepted = "accepted"
+	expectedSpctlSource   = "source=Notarized Developer ID"
+	expectedSpctlOrigin   = "origin=Developer ID Installer: Aikido Security (7VPF8GD6J4)"
+
+	aikidoOrganization  = "Aikido Security"
+	aikidoTeamID        = "7VPF8GD6J4"
+	installerCNPrefix   = "Developer ID Installer:"
+	codesignRequirement = `anchor apple generic and certificate leaf[subject.OU] = "7VPF8GD6J4"`
 )
 
 var (
@@ -66,8 +81,12 @@ func platformUpdateTo(ctx context.Context, version string) (err error) {
 		return fmt.Errorf("signature verification failed: %w", err)
 	}
 
-	if err = verifyPackageVersion(ctx, pkgPath, version); err != nil {
-		return fmt.Errorf("version verification failed: %w", err)
+	if err = verifyPackageGatekeeper(ctx, pkgPath); err != nil {
+		return fmt.Errorf("gatekeeper assessment failed: %w", err)
+	}
+
+	if err = verifyPackageContents(ctx, pkgPath, version); err != nil {
+		return fmt.Errorf("contents verification failed: %w", err)
 	}
 
 	if err = installPackageDetached(pkgPath); err != nil {
@@ -92,6 +111,41 @@ func verifyPackageSignature(ctx context.Context, pkgPath string) error {
 	}
 
 	log.Printf("Package signature verified (signer: %s)", expectedSigner)
+	return nil
+}
+
+// verifyPackageGatekeeper runs Apple's Gatekeeper assessment on the package via
+// `spctl -a -vvv -t install`. This is a stronger check than `pkgutil
+// --check-signature` alone: spctl evaluates the file against the live
+// Gatekeeper policy (Notarized Developer ID) and confirms Apple has not
+// revoked the developer/notarization ticket.
+func verifyPackageGatekeeper(ctx context.Context, pkgPath string) error {
+	out, err := exec.CommandContext(ctx, "spctl", "-a", "-vvv", "-t", "install", pkgPath).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("spctl assessment failed: %v: %s", err, string(out))
+	}
+	output := string(out)
+
+	for _, marker := range []string{expectedSpctlAccepted, expectedSpctlSource, expectedSpctlOrigin} {
+		if !strings.Contains(output, marker) {
+			return fmt.Errorf("gatekeeper assessment missing required marker %q:\n%s", marker, output)
+		}
+	}
+
+	log.Printf("Package gatekeeper assessment passed (%s)", expectedSpctlOrigin)
+	return nil
+}
+
+func verifyPackageContents(ctx context.Context, pkgPath, expectedVersion string) error {
+	if err := verifyPackageVersion(ctx, pkgPath, expectedVersion); err != nil {
+		return err
+	}
+	if err := verifyPackageCertificate(ctx, pkgPath); err != nil {
+		return err
+	}
+	if err := verifyPayloadCodesign(ctx, pkgPath); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -127,6 +181,208 @@ func verifyPackageVersion(ctx context.Context, pkgPath, expected string) error {
 		return fmt.Errorf("package version %q does not match target %q", actual, expected)
 	}
 	log.Printf("Package version %s matches target", actual)
+	return nil
+}
+
+type xarTOC struct {
+	XMLName xml.Name    `xml:"xar"`
+	TOC     xarTOCInner `xml:"toc"`
+}
+
+type xarTOCInner struct {
+	Signatures  []xarSignature `xml:"signature"`
+	XSignatures []xarSignature `xml:"x-signature"`
+}
+
+type xarSignature struct {
+	KeyInfo xarKeyInfo `xml:"KeyInfo"`
+}
+
+type xarKeyInfo struct {
+	X509Data []xarX509Data `xml:"X509Data"`
+}
+
+type xarX509Data struct {
+	Certificates []string `xml:"X509Certificate"`
+}
+
+func verifyPackageCertificate(ctx context.Context, pkgPath string) error {
+	tocDir, err := os.MkdirTemp("", "aikido-pkg-toc-")
+	if err != nil {
+		return fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tocDir)
+
+	tocPath := filepath.Join(tocDir, "toc.xml")
+	if out, err := exec.CommandContext(ctx, "xar", "--dump-toc="+tocPath, "-f", pkgPath).CombinedOutput(); err != nil {
+		return fmt.Errorf("xar --dump-toc failed: %v: %s", err, string(out))
+	}
+
+	tocData, err := os.ReadFile(tocPath)
+	if err != nil {
+		return fmt.Errorf("failed to read xar TOC: %w", err)
+	}
+
+	var toc xarTOC
+	if err := xml.Unmarshal(tocData, &toc); err != nil {
+		return fmt.Errorf("failed to parse xar TOC XML: %w", err)
+	}
+
+	var certs []*x509.Certificate
+	allSigs := append(toc.TOC.Signatures, toc.TOC.XSignatures...)
+	for _, sig := range allSigs {
+		for _, x509data := range sig.KeyInfo.X509Data {
+			for _, raw := range x509data.Certificates {
+				der, err := base64.StdEncoding.DecodeString(strings.Join(strings.Fields(raw), ""))
+				if err != nil {
+					continue
+				}
+				cert, err := x509.ParseCertificate(der)
+				if err != nil {
+					continue
+				}
+				certs = append(certs, cert)
+			}
+		}
+	}
+
+	if len(certs) == 0 {
+		return fmt.Errorf("no X.509 certificates found in xar TOC")
+	}
+
+	var leaf *x509.Certificate
+	for _, c := range certs {
+		if strings.HasPrefix(c.Subject.CommonName, installerCNPrefix) {
+			leaf = c
+			break
+		}
+	}
+	if leaf == nil {
+		return fmt.Errorf("no leaf certificate with CN prefix %q found in xar TOC", installerCNPrefix)
+	}
+
+	hasOrg := false
+	for _, o := range leaf.Subject.Organization {
+		if o == aikidoOrganization {
+			hasOrg = true
+			break
+		}
+	}
+	if !hasOrg {
+		return fmt.Errorf("leaf certificate Organization does not contain %q: %v", aikidoOrganization, leaf.Subject.Organization)
+	}
+
+	hasOU := false
+	for _, ou := range leaf.Subject.OrganizationalUnit {
+		if ou == aikidoTeamID {
+			hasOU = true
+			break
+		}
+	}
+	if !hasOU {
+		return fmt.Errorf("leaf certificate OrganizationalUnit does not contain %q: %v", aikidoTeamID, leaf.Subject.OrganizationalUnit)
+	}
+
+	expectedTeamInCN := "(" + aikidoTeamID + ")"
+	if !strings.Contains(leaf.Subject.CommonName, expectedTeamInCN) {
+		return fmt.Errorf("leaf certificate CN %q does not contain %q", leaf.Subject.CommonName, expectedTeamInCN)
+	}
+
+	now := time.Now()
+	if now.Before(leaf.NotBefore) || now.After(leaf.NotAfter) {
+		return fmt.Errorf("leaf certificate not valid at current time (notBefore=%s, notAfter=%s)", leaf.NotBefore, leaf.NotAfter)
+	}
+
+	fingerprint := sha256.Sum256(leaf.Raw)
+	log.Printf("Package signing certificate verified (CN=%s, serial=%s, SHA-256=%x, expires=%s)",
+		leaf.Subject.CommonName, leaf.SerialNumber, fingerprint, leaf.NotAfter.Format(time.DateOnly))
+	return nil
+}
+
+func isMachO(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	var magic uint32
+	if err := binary.Read(f, binary.LittleEndian, &magic); err != nil {
+		return false
+	}
+
+	switch magic {
+	case 0xfeedface, 0xfeedfacf, // Mach-O 32/64
+		0xcefaedfe, 0xcffaedfe, // Mach-O 32/64 byte-swapped
+		0xbebafeca, 0xcafebabe: // Fat binary (universal)
+		return true
+	}
+	return false
+}
+
+func verifyPayloadCodesign(ctx context.Context, pkgPath string) error {
+	extractDir, err := os.MkdirTemp("", "aikido-pkg-expand-")
+	if err != nil {
+		return fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(extractDir)
+
+	expanded := filepath.Join(extractDir, "pkg")
+	out, err := exec.CommandContext(ctx, "pkgutil", "--expand-full", pkgPath, expanded).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("pkgutil --expand-full failed: %v: %s", err, string(out))
+	}
+
+	reqFlag := "-R=" + codesignRequirement
+	var machoCount, bundleCount int
+	var verifyErrors []string
+
+	err = filepath.WalkDir(expanded, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() && strings.HasSuffix(d.Name(), ".app") {
+			bundleCount++
+
+			out, err := exec.CommandContext(ctx, "codesign", "--verify", "--strict", "--deep", reqFlag, path).CombinedOutput()
+			if err != nil {
+				verifyErrors = append(verifyErrors, fmt.Sprintf("%s: %v: %s", path, err, string(out)))
+			} else {
+				log.Printf("App bundle code sign verified: %s", path)
+			}
+			return fs.SkipDir
+		}
+
+		if !d.Type().IsRegular() {
+			return nil
+		}
+
+		if isMachO(path) {
+			machoCount++
+			out, err := exec.CommandContext(ctx, "codesign", "--verify", "--strict", reqFlag, path).CombinedOutput()
+			if err != nil {
+				verifyErrors = append(verifyErrors, fmt.Sprintf("%s: %v: %s", path, err, string(out)))
+			} else {
+				log.Printf("Mach-O binary code sign verified: %s", path)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to walk expanded package: %w", err)
+	}
+
+	if machoCount+bundleCount == 0 {
+		return fmt.Errorf("no signed Mach-O binaries or app bundles found in pkg payload")
+	}
+
+	if len(verifyErrors) > 0 {
+		return fmt.Errorf("codesign verification failed for %d item(s):\n%s", len(verifyErrors), strings.Join(verifyErrors, "\n"))
+	}
+
+	log.Printf("Package payload codesign verified (mach-o=%d, bundles=%d)", machoCount, bundleCount)
 	return nil
 }
 
