@@ -33,7 +33,10 @@ use crate::{
 #[cfg(feature = "pac")]
 use crate::http::firewall::pac::PacScriptGenerator;
 
-use super::{BlockedRequest, RequestAction, Rule};
+use super::{BlockedRequest, HttpRequestMatcherView, RequestAction, Rule};
+
+pub mod min_package_age;
+use min_package_age::MinPackageAgeOpenVsx;
 
 type OpenVsxPackageName = LowerCasePackageName;
 type OpenVsxRemoteMalwareList = RemoteMalwareList<OpenVsxPackageName>;
@@ -47,6 +50,7 @@ pub(in crate::http::firewall) struct RuleOpenVsx {
     remote_malware_list: OpenVsxRemoteMalwareList,
     remote_released_packages_list: OpenVsxRemoteReleasedPackagesList,
     policy_evaluator: Option<PolicyEvaluator<OpenVsxPackageName>>,
+    min_package_age: Option<MinPackageAgeOpenVsx>,
 }
 
 impl RuleOpenVsx {
@@ -54,6 +58,7 @@ impl RuleOpenVsx {
         guard: ShutdownGuard,
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
+        min_package_age: Option<MinPackageAgeOpenVsx>,
         remote_endpoint_config: Option<RemoteEndpointConfig>,
     ) -> Result<Self, BoxError>
     where
@@ -88,6 +93,7 @@ impl RuleOpenVsx {
             remote_malware_list,
             remote_released_packages_list,
             policy_evaluator,
+            min_package_age,
         })
     }
 }
@@ -196,6 +202,43 @@ impl Rule for RuleOpenVsx {
 
         Ok(RequestAction::Allow(req))
     }
+
+    fn match_http_response_payload_inspection_request(
+        &self,
+        req: HttpRequestMatcherView<'_>,
+    ) -> bool {
+        if self.min_package_age.is_none() {
+            return false;
+        }
+
+        let path = req.uri.path();
+        if Self::is_extension_install_asset_path(path) {
+            return false;
+        }
+        let matched = Self::is_metadata_request_path(path);
+        if matched {
+            tracing::debug!(
+                http.url.path = %path,
+                http.method = %req.method,
+                "Open VSX gallery metadata request — will inspect response"
+            );
+        }
+        matched
+    }
+
+    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
+        let Some(min_package_age) = self.min_package_age.as_ref() else {
+            return Ok(resp);
+        };
+
+        min_package_age
+            .remove_new_versions(
+                resp,
+                &self.remote_released_packages_list,
+                self.get_package_age_cutoff_ts(),
+            )
+            .await
+    }
 }
 
 impl RuleOpenVsx {
@@ -222,6 +265,43 @@ impl RuleOpenVsx {
             path,
             ["/Microsoft.VisualStudio.Services.VSIXPackage", ".vsix"],
         )
+    }
+
+    /// Returns true for OpenVSX / Cursor marketplace metadata paths that can carry version lists.
+    fn is_metadata_request_path(path: &str) -> bool {
+        let trimmed = path.trim_start_matches('/').trim_end_matches('/');
+
+        // OpenVSX batch query / search endpoints
+        if trimmed.eq_ignore_ascii_case("api/-/query")
+            || trimmed.eq_ignore_ascii_case("api/v2/-/query")
+            || trimmed.eq_ignore_ascii_case("api/-/search")
+        {
+            return true;
+        }
+
+        // OpenVSX single-extension: /api/{namespace}/{name} — exactly 3 segments.
+        let segs: Vec<&str> = trimmed.split('/').collect();
+        if segs.len() == 3
+            && segs[0].eq_ignore_ascii_case("api")
+            && !segs[1].is_empty()
+            && !segs[2].is_empty()
+            && segs[1] != "-"
+        {
+            return true;
+        }
+
+        // VS-Marketplace-shaped mirrors — both endpoint variants observed in the wild:
+        // - `_apis/public/gallery/extensionquery` (Cursor's `marketplace.cursorapi.com`)
+        // - `vscode/gallery/extensionquery` (OpenVSX's own mirror at `open-vsx.org`,
+        //   used by VSCodium's auto-update poll and its extension search panel)
+        let lower = trimmed.to_ascii_lowercase();
+        if lower.ends_with("_apis/public/gallery/extensionquery")
+            || lower.ends_with("vscode/gallery/extensionquery")
+        {
+            return true;
+        }
+
+        false
     }
 
     /// Parse extension ID (`publisher.extension`) from an Open VSX download URL path.
