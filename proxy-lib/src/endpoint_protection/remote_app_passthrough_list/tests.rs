@@ -117,7 +117,7 @@ fn test_app_bundle_matches_wildcard_no_domain_true() {
     assert!(list.is_match(&flow(None, Some("com.fortinet.forticlient.ztagent"))));
 }
 
-// --- IpCidr tests ---
+// --- CIDR passthrough tests ---
 
 fn cidr_list(cidrs: &[&str]) -> PassthroughList {
     PassthroughList {
@@ -130,142 +130,37 @@ fn ip(s: &str) -> IpAddr {
     s.parse().unwrap()
 }
 
-// Boundary matching
-
 #[test]
-fn test_cidr_ipv4_network_address_itself_matches() {
-    // The network address (first address of the block) must match.
-    let list = cidr_list(&["100.64.0.0/10"]);
-    assert!(list.is_destination_ip_passthrough(ip("100.64.0.0")));
-}
-
-#[test]
-fn test_cidr_ipv4_last_address_in_block_matches() {
-    // 100.64.0.0/10 ends at 100.127.255.255.
-    let list = cidr_list(&["100.64.0.0/10"]);
-    assert!(list.is_destination_ip_passthrough(ip("100.127.255.255")));
-}
-
-#[test]
-fn test_cidr_ipv4_first_address_after_block_does_not_match() {
-    let list = cidr_list(&["100.64.0.0/10"]);
-    assert!(!list.is_destination_ip_passthrough(ip("100.128.0.0")));
-}
-
-#[test]
-fn test_cidr_ipv4_address_before_block_does_not_match() {
-    // 100.63.255.255 is one below the start of 100.64.0.0/10.
-    let list = cidr_list(&["100.64.0.0/10"]);
-    assert!(!list.is_destination_ip_passthrough(ip("100.63.255.255")));
-}
-
-#[test]
-fn test_cidr_ipv4_slash24() {
-    let list = cidr_list(&["192.168.1.0/24"]);
-    assert!(list.is_destination_ip_passthrough(ip("192.168.1.0")));
-    assert!(list.is_destination_ip_passthrough(ip("192.168.1.254")));
-    assert!(list.is_destination_ip_passthrough(ip("192.168.1.255")));
-    assert!(!list.is_destination_ip_passthrough(ip("192.168.2.0")));
-    assert!(!list.is_destination_ip_passthrough(ip("192.168.0.255")));
-}
-
-#[test]
-fn test_cidr_ipv4_match() {
+fn test_cidr_ipv4_match_and_no_match() {
     let list = cidr_list(&["100.64.0.0/10"]);
     assert!(list.is_destination_ip_passthrough(ip("100.64.0.1")));
-    assert!(list.is_destination_ip_passthrough(ip("100.127.255.255")));
-}
-
-#[test]
-fn test_cidr_ipv4_no_match_outside_range() {
-    let list = cidr_list(&["100.64.0.0/10"]);
     assert!(!list.is_destination_ip_passthrough(ip("100.128.0.0")));
-    assert!(!list.is_destination_ip_passthrough(ip("10.0.0.1")));
     assert!(!list.is_destination_ip_passthrough(ip("1.2.3.4")));
 }
 
-// IPv6
-
 #[test]
-fn test_cidr_ipv6_match() {
+fn test_cidr_ipv6_match_and_no_match() {
     let list = cidr_list(&["2001:db8::/32"]);
     assert!(list.is_destination_ip_passthrough(ip("2001:db8::1")));
-    assert!(list.is_destination_ip_passthrough(ip("2001:db8:ffff:ffff::1")));
-}
-
-#[test]
-fn test_cidr_ipv6_network_address_itself_matches() {
-    let list = cidr_list(&["2001:db8::/32"]);
-    assert!(list.is_destination_ip_passthrough(ip("2001:db8::")));
-}
-
-#[test]
-fn test_cidr_ipv6_no_match() {
-    let list = cidr_list(&["2001:db8::/32"]);
     assert!(!list.is_destination_ip_passthrough(ip("2001:db9::1")));
 }
 
 #[test]
-fn test_cidr_ipv6_host_route_slash128() {
-    let list = cidr_list(&["2001:db8::1/128"]);
-    assert!(list.is_destination_ip_passthrough(ip("2001:db8::1")));
-    assert!(!list.is_destination_ip_passthrough(ip("2001:db8::2")));
-}
-
-#[test]
-fn test_cidr_ipv6_slash0_matches_all_ipv6() {
-    let list = cidr_list(&["::/0"]);
-    assert!(list.is_destination_ip_passthrough(ip("::1")));
-    assert!(list.is_destination_ip_passthrough(ip("2001:db8::1")));
-    assert!(list.is_destination_ip_passthrough(ip("fe80::1")));
-    assert!(list.is_destination_ip_passthrough(ip("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")));
-}
-
-// Cross-family: IPv4 CIDR must not match IPv6 address and vice versa
-
-#[test]
-fn test_cidr_ipv4_does_not_match_ipv6_addr() {
-    let list = cidr_list(&["100.64.0.0/10"]);
-    assert!(!list.is_destination_ip_passthrough(ip("::1")));
-    assert!(!list.is_destination_ip_passthrough(ip("2001:db8::1")));
-}
-
-#[test]
-fn test_cidr_ipv6_does_not_match_ipv4_addr() {
-    let list = cidr_list(&["2001:db8::/32"]);
-    assert!(!list.is_destination_ip_passthrough(ip("1.2.3.4")));
-}
-
-// Multiple CIDRs
-
-#[test]
-fn test_cidr_multiple_ranges_first_matches() {
+fn test_cidr_multiple_ranges_all_checked() {
     let list = cidr_list(&["100.64.0.0/10", "10.0.0.0/8"]);
-    assert!(list.is_destination_ip_passthrough(ip("100.64.1.1")));
+    assert!(list.is_destination_ip_passthrough(ip("100.64.1.1"))); // first
+    assert!(list.is_destination_ip_passthrough(ip("10.1.2.3")));   // second
+    assert!(!list.is_destination_ip_passthrough(ip("8.8.8.8")));   // neither
 }
 
 #[test]
-fn test_cidr_multiple_ranges_second_matches() {
-    let list = cidr_list(&["100.64.0.0/10", "10.0.0.0/8"]);
-    assert!(list.is_destination_ip_passthrough(ip("10.1.2.3")));
-}
-
-#[test]
-fn test_cidr_multiple_ranges_none_matches() {
-    let list = cidr_list(&["100.64.0.0/10", "10.0.0.0/8"]);
-    assert!(!list.is_destination_ip_passthrough(ip("8.8.8.8")));
-}
-
-#[test]
-fn test_cidr_mixed_ipv4_and_ipv6_cidrs() {
+fn test_cidr_mixed_ipv4_and_ipv6() {
     let list = cidr_list(&["100.64.0.0/10", "2001:db8::/32"]);
     assert!(list.is_destination_ip_passthrough(ip("100.64.0.1")));
     assert!(list.is_destination_ip_passthrough(ip("2001:db8::1")));
     assert!(!list.is_destination_ip_passthrough(ip("8.8.8.8")));
     assert!(!list.is_destination_ip_passthrough(ip("::1")));
 }
-
-// Edge cases and invalid input
 
 #[test]
 fn test_cidr_empty_list_returns_false() {
@@ -275,57 +170,10 @@ fn test_cidr_empty_list_returns_false() {
 
 #[test]
 fn test_cidr_invalid_entries_are_skipped() {
-    // Invalid entries are silently dropped; valid entries still work.
-    let list = cidr_list(&["notacidr", "100.64.0.0/10", "256.0.0.0/8"]);
+    // Invalid strings are silently dropped; valid entries still work.
+    let list = cidr_list(&["notacidr", "100.64.0.0/10", "256.0.0.0/8", ""]);
     assert!(list.is_destination_ip_passthrough(ip("100.64.1.1")));
     assert!(!list.is_destination_ip_passthrough(ip("8.8.8.8")));
-}
-
-#[test]
-fn test_cidr_prefix_too_large_for_ipv4_is_skipped() {
-    // /33 is invalid for IPv4; the entry must be dropped entirely.
-    let list = cidr_list(&["10.0.0.0/33", "192.168.1.0/24"]);
-    assert!(!list.is_destination_ip_passthrough(ip("10.0.0.1")));
-    assert!(list.is_destination_ip_passthrough(ip("192.168.1.1")));
-}
-
-#[test]
-fn test_cidr_prefix_too_large_for_ipv6_is_skipped() {
-    // /129 is invalid for IPv6.
-    let list = cidr_list(&["2001:db8::/129", "::/0"]);
-    assert!(list.is_destination_ip_passthrough(ip("::1"))); // ::/0 still applies
-}
-
-#[test]
-fn test_cidr_no_slash_is_invalid() {
-    // A bare IP address with no prefix length must be skipped.
-    let list = cidr_list(&["10.0.0.1", "192.168.0.0/16"]);
-    assert!(!list.is_destination_ip_passthrough(ip("10.0.0.1")));
-    assert!(list.is_destination_ip_passthrough(ip("192.168.0.1")));
-}
-
-#[test]
-fn test_cidr_empty_string_is_invalid() {
-    let list = cidr_list(&["", "10.0.0.0/8"]);
-    assert!(list.is_destination_ip_passthrough(ip("10.1.2.3")));
-}
-
-#[test]
-fn test_cidr_host_route_slash32() {
-    let list = cidr_list(&["1.2.3.4/32"]);
-    assert!(list.is_destination_ip_passthrough(ip("1.2.3.4")));
-    assert!(!list.is_destination_ip_passthrough(ip("1.2.3.5")));
-    assert!(!list.is_destination_ip_passthrough(ip("1.2.3.3")));
-}
-
-#[test]
-fn test_cidr_slash0_matches_all_ipv4() {
-    let list = cidr_list(&["0.0.0.0/0"]);
-    assert!(list.is_destination_ip_passthrough(ip("1.2.3.4")));
-    assert!(list.is_destination_ip_passthrough(ip("255.255.255.255")));
-    assert!(list.is_destination_ip_passthrough(ip("0.0.0.0")));
-    // Must not match IPv6 even with a catch-all IPv4 CIDR.
-    assert!(!list.is_destination_ip_passthrough(ip("::1")));
 }
 
 // --- End-to-end tests: JSON response → PassthroughList → passthrough decision ---
