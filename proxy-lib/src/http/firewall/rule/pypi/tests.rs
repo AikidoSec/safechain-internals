@@ -1,10 +1,77 @@
-use crate::package::version::{PackageVersion, PragmaticSemver};
+use rama::{
+    extensions::Extensions as RamaExtensions,
+    http::{Body, BodyExtractExt as _, Response, Uri},
+};
 
+use crate::{
+    endpoint_protection::{EcosystemConfig, ExceptionLists, PolicyEvaluator},
+    http::RequestMetaUri,
+    package::{
+        malware_list::RemoteMalwareList,
+        released_packages_list::{ReleasedPackageData, RemoteReleasedPackagesList},
+        version::{PackageVersion, PragmaticSemver},
+    },
+    utils::time::{SystemDuration, SystemTimestampMilliseconds},
+};
+
+use super::*;
 use super::parser::{
     PackageInfo, normalize_package_name, parse_package_info_from_filename,
     parse_package_info_from_path, parse_package_info_from_url, parse_source_dist_filename,
     parse_wheel_filename,
 };
+
+fn ecosystem_config_with_allowed(allowed: &[&str]) -> EcosystemConfig {
+    EcosystemConfig {
+        block_all_installs: false,
+        request_installs: false,
+        minimum_allowed_age_timestamp: None,
+        exceptions: ExceptionLists {
+            allowed_packages: allowed.iter().map(|v| (*v).into()).collect(),
+            rejected_packages: Default::default(),
+        },
+    }
+}
+
+fn make_test_rule(
+    ecosystem_config: Option<&EcosystemConfig>,
+    recent_releases: &[(&str, &str, u64)],
+) -> RulePyPI {
+    let now_ts = SystemTimestampMilliseconds::now();
+    let released_entries = recent_releases
+        .iter()
+        .map(|(name, version, hours_ago)| ReleasedPackageData {
+            package_name: (*name).to_owned(),
+            version: version.parse().unwrap(),
+            released_on: now_ts - SystemDuration::hours(*hours_ago as u16),
+        })
+        .collect();
+
+    RulePyPI {
+        target_domains: ["pypi.org", "files.pythonhosted.org", "pypi.python.org"]
+            .into_iter()
+            .collect(),
+        remote_malware_list: RemoteMalwareList::from_entries_for_tests(vec![]),
+        remote_released_packages_list: RemoteReleasedPackagesList::from_entries_for_tests(
+            released_entries,
+            now_ts,
+        ),
+        maybe_min_package_age: Some(MinPackageAgePyPI::new(None)),
+        policy_evaluator: ecosystem_config.map(PolicyEvaluator::for_tests),
+    }
+}
+
+fn make_metadata_response(body: &str, path: &str) -> Response {
+    let resp = Response::builder()
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_owned()))
+        .unwrap();
+    let (mut parts, body) = resp.into_parts();
+    let extensions = RamaExtensions::new();
+    extensions.insert(RequestMetaUri(path.parse::<Uri>().unwrap()));
+    parts.extensions = extensions;
+    Response::from_parts(parts, body)
+}
 
 #[test]
 fn test_parse_wheel_filename() {
@@ -258,6 +325,35 @@ fn test_normalize_package_name() {
             input
         );
     }
+}
+
+#[tokio::test]
+async fn wildcard_allowlisted_metadata_skips_min_age_rewrite() {
+    let cfg = ecosystem_config_with_allowed(&["my-*"]);
+    let rule = make_test_rule(Some(&cfg), &[("my-package", "2.0.0", 1), ("my-package", "1.0.0", 72)]);
+    let body = serde_json::json!({
+        "info": {"name": "my-package", "version": "2.0.0"},
+        "releases": {
+            "1.0.0": [{"filename": "my_package-1.0.0.tar.gz"}],
+            "2.0.0": [{"filename": "my_package-2.0.0.tar.gz"}]
+        },
+        "urls": [{"filename": "my_package-2.0.0.tar.gz"}]
+    })
+    .to_string();
+
+    let result = rule
+        .evaluate_response(make_metadata_response(&body, "/pypi/my-package/json"))
+        .await
+        .unwrap();
+    let json: serde_json::Value = result.try_into_json().await.unwrap();
+
+    assert_eq!(json["info"]["version"], "2.0.0");
+    assert!(json["releases"]["1.0.0"].is_array());
+    assert!(json["releases"]["2.0.0"].is_array());
+    assert_eq!(
+        json["urls"],
+        serde_json::json!([{ "filename": "my_package-2.0.0.tar.gz" }])
+    );
 }
 
 #[test]

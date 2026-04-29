@@ -271,3 +271,6 @@ impl RuleGolang {
         Ok(RequestAction::Allow(req))
     }
 }
+
+#[cfg(test)]
+mod tests;
