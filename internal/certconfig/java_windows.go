@@ -85,7 +85,11 @@ func uninstallJavaTrust(ctx context.Context) error {
 
 	current, err := platform.GetUserEnvVar(ctx, javaToolOptionsEnvVar)
 	if err != nil {
-		return fmt.Errorf("read existing JAVA_TOOL_OPTIONS: %w", err)
+		// Best-effort: blindly rewriting JAVA_TOOL_OPTIONS without knowing the
+		// current value would clobber unrelated user options (e.g. -Xmx2g),
+		// so skip the cleanup rather than surface a fatal error.
+		log.Printf("java: failed to read JAVA_TOOL_OPTIONS during uninstall: %v", err)
+		return nil
 	}
 	return platform.SetUserEnvVar(ctx, javaToolOptionsEnvVar, stripJavaToolOptionsAddition(current))
 }

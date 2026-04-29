@@ -288,16 +288,6 @@ func InstallProxyCAForCurrentUser(ctx context.Context, caCertPath string) error 
 	return err
 }
 
-// IsProxyCAInstalledForCurrentUser returns nil when the SafeChain CA is
-// present in the active user's HKCU\...\Root. certutil exits non-zero when
-// the cert is missing — that error is surfaced for callers to test.
-func IsProxyCAInstalledForCurrentUser(ctx context.Context) error {
-	_, err := RunAsCurrentUser(ctx, "certutil", []string{
-		"-user", "-store", "Root", proxyCACertSubject,
-	})
-	return err
-}
-
 func UninstallProxyCAForCurrentUser(ctx context.Context) error {
 	_, err := RunAsCurrentUser(ctx, "certutil", []string{
 		"-user", "-delstore", "Root", proxyCACertSubject,
@@ -510,19 +500,14 @@ func IsProcessAlive(pid int) bool {
 // LocalSystem service. Acceptable for the cert-config write-rate
 // (a handful of calls per install/heartbeat).
 func SetUserEnvVar(ctx context.Context, name, value string) error {
-	var script string
-	if value == "" {
-		script = fmt.Sprintf(
-			"[Environment]::SetEnvironmentVariable('%s', $null, 'User')",
-			escapePowerShellSingleQuoted(name),
-		)
-	} else {
-		script = fmt.Sprintf(
-			"[Environment]::SetEnvironmentVariable('%s', '%s', 'User')",
-			escapePowerShellSingleQuoted(name),
-			escapePowerShellSingleQuoted(value),
-		)
+	valueLiteral := "$null"
+	if value != "" {
+		valueLiteral = "'" + EscapePowerShellSingleQuoted(value) + "'"
 	}
+	script := fmt.Sprintf(
+		"[Environment]::SetEnvironmentVariable('%s', %s, 'User')",
+		EscapePowerShellSingleQuoted(name), valueLiteral,
+	)
 	_, err := RunAsCurrentUser(ctx, "powershell", []string{
 		"-NoProfile",
 		"-NonInteractive",
@@ -539,7 +524,7 @@ func SetUserEnvVar(ctx context.Context, name, value string) error {
 func GetUserEnvVar(ctx context.Context, name string) (string, error) {
 	script := fmt.Sprintf(
 		"$v = [Environment]::GetEnvironmentVariable('%s', 'User'); if ($v) { [Console]::Write($v) }",
-		escapePowerShellSingleQuoted(name),
+		EscapePowerShellSingleQuoted(name),
 	)
 	return RunAsCurrentUser(ctx, "powershell", []string{
 		"-NoProfile",
@@ -549,6 +534,9 @@ func GetUserEnvVar(ctx context.Context, name string) (string, error) {
 	})
 }
 
-func escapePowerShellSingleQuoted(value string) string {
+// EscapePowerShellSingleQuoted escapes value for embedding inside a
+// PowerShell single-quoted literal ('...'), where the only metachar is the
+// single quote itself (escaped by doubling).
+func EscapePowerShellSingleQuoted(value string) string {
 	return strings.ReplaceAll(value, "'", "''")
 }

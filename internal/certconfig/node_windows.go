@@ -26,7 +26,7 @@ func (c *windowsNodeTrustConfigurator) Install(ctx context.Context) error {
 		ctx,
 		fmt.Sprintf(
 			"[Environment]::SetEnvironmentVariable('NODE_EXTRA_CA_CERTS', '%s', 'User')",
-			escapePowerShellSingleQuoted(c.bundlePath),
+			platform.EscapePowerShellSingleQuoted(c.bundlePath),
 		),
 	)
 }
@@ -42,7 +42,7 @@ func (c *windowsNodeTrustConfigurator) Uninstall(ctx context.Context) error {
 	if original != "" {
 		script = fmt.Sprintf(
 			"[Environment]::SetEnvironmentVariable('NODE_EXTRA_CA_CERTS', '%s', 'User')",
-			escapePowerShellSingleQuoted(original),
+			platform.EscapePowerShellSingleQuoted(original),
 		)
 	} else {
 		script = "[Environment]::SetEnvironmentVariable('NODE_EXTRA_CA_CERTS', $null, 'User')"
@@ -66,8 +66,4 @@ func runPowerShellAsCurrentUser(ctx context.Context, script string) error {
 		script,
 	})
 	return err
-}
-
-func escapePowerShellSingleQuoted(value string) string {
-	return strings.ReplaceAll(value, "'", "''")
 }

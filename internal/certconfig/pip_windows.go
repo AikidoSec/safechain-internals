@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+
+	"github.com/AikidoSec/safechain-internals/internal/platform"
 )
 
 type windowsPipTrustConfigurator struct {
@@ -23,7 +25,7 @@ func (c *windowsPipTrustConfigurator) Install(ctx context.Context) error {
 		ctx,
 		fmt.Sprintf(
 			"[Environment]::SetEnvironmentVariable('PIP_CERT', '%s', 'User')",
-			escapePowerShellSingleQuoted(c.bundlePath),
+			platform.EscapePowerShellSingleQuoted(c.bundlePath),
 		),
 	)
 }
@@ -50,7 +52,7 @@ func (c *windowsPipTrustConfigurator) NeedsRepair(ctx context.Context) bool {
 }
 
 func restoreWindowsPipEnvScript(original pipCertSetting) string {
-	path := escapePowerShellSingleQuoted(original.Path)
+	path := platform.EscapePowerShellSingleQuoted(original.Path)
 
 	switch original.EnvVar {
 	case requestsCABundleEnvVar:
