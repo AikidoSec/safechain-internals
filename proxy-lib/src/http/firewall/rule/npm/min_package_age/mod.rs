@@ -55,7 +55,11 @@ impl MinPackageAge {
         req.headers_mut().typed_insert(Accept::json());
     }
 
-    pub(super) async fn remove_new_packages(&self, resp: Response) -> Result<Response, BoxError> {
+    pub(super) async fn remove_new_packages(
+        &self,
+        resp: Response,
+        is_allowed: impl Fn(&str) -> bool,
+    ) -> Result<Response, BoxError> {
         if resp
             .headers()
             .typed_get::<ContentType>()
@@ -84,17 +88,25 @@ impl MinPackageAge {
             }
         };
 
-        let versions_to_remove = Self::get_versions_to_remove(&json, cutoff);
-
-        if versions_to_remove.is_empty() {
-            return Ok(Response::from_parts(parts, Body::from(bytes)));
-        }
-
         let package_name: ArcStr = json
             .get("name")
             .and_then(|n| n.as_str())
             .unwrap_or("unknown package")
             .into();
+
+        if is_allowed(&package_name) {
+            tracing::debug!(
+                package = %package_name,
+                "npm metadata response: package is allowlisted, skipping min-age strip"
+            );
+            return Ok(Response::from_parts(parts, Body::from(bytes)));
+        }
+
+        let versions_to_remove = Self::get_versions_to_remove(&json, cutoff);
+
+        if versions_to_remove.is_empty() {
+            return Ok(Response::from_parts(parts, Body::from(bytes)));
+        }
 
         for key in versions_to_remove.iter() {
             json = Self::remove_version_from_json(json, key);

@@ -245,8 +245,16 @@ impl Rule for RuleVSCode {
             return Ok(resp);
         };
 
+        let policy = self.policy_evaluator.as_ref();
+        let is_allowed = move |extension_id: &str| {
+            policy.is_some_and(|p| {
+                p.evaluate_package_install(&new_vscode_package_name(extension_id))
+                    == PackagePolicyDecision::Allow
+            })
+        };
+
         min_package_age
-            .remove_new_versions(resp, self.get_package_age_cutoff_ts())
+            .remove_new_versions(resp, self.get_package_age_cutoff_ts(), is_allowed)
             .await
     }
 }

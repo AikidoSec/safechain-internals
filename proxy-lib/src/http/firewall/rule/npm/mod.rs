@@ -148,7 +148,16 @@ impl Rule for RuleNpm {
     #[inline(always)]
     async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         match &self.maybe_min_package_age {
-            Some(min_package_age) => min_package_age.remove_new_packages(resp).await,
+            Some(min_package_age) => {
+                let policy = self.policy_evaluator.as_ref();
+                let is_allowed = move |name: &str| {
+                    policy.is_some_and(|p| {
+                        p.evaluate_package_install(&NpmPackageName::from(name))
+                            == PackagePolicyDecision::Allow
+                    })
+                };
+                min_package_age.remove_new_packages(resp, is_allowed).await
+            }
             None => Ok(resp),
         }
     }

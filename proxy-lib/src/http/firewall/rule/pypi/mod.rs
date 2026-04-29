@@ -3,6 +3,7 @@ use std::fmt;
 use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
+    extensions::ExtensionsRef as _,
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
@@ -14,10 +15,13 @@ use crate::{
     endpoint_protection::{
         EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
     },
-    http::firewall::{
-        domain_matcher::DomainMatcher,
-        events::{Artifact, BlockReason},
-        notifier::EventNotifier,
+    http::{
+        RequestMetaUri,
+        firewall::{
+            domain_matcher::DomainMatcher,
+            events::{Artifact, BlockReason},
+            notifier::EventNotifier,
+        },
     },
     package::{
         malware_list::RemoteMalwareList, name_formatter::LowerCasePackageName,
@@ -226,18 +230,35 @@ impl Rule for RulePyPI {
 
     #[inline(always)]
     async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        match &self.maybe_min_package_age {
-            Some(min_package_age) => {
-                min_package_age
-                    .remove_new_packages(
-                        resp,
-                        &self.remote_released_packages_list,
-                        self.get_package_age_cutoff_ts(),
-                    )
-                    .await
+        let Some(min_package_age) = &self.maybe_min_package_age else {
+            return Ok(resp);
+        };
+
+        if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
+            if let Some(package_info) = resp
+                .extensions()
+                .get_ref::<RequestMetaUri>()
+                .and_then(|RequestMetaUri(uri)| parse_package_info_from_path(uri.path()))
+            {
+                if policy_evaluator.evaluate_package_install(&package_info.name)
+                    == PackagePolicyDecision::Allow
+                {
+                    tracing::debug!(
+                        package = %package_info.name,
+                        "PyPI metadata response: package is allowlisted, skipping min-age strip"
+                    );
+                    return Ok(resp);
+                }
             }
-            None => Ok(resp),
         }
+
+        min_package_age
+            .remove_new_packages(
+                resp,
+                &self.remote_released_packages_list,
+                self.get_package_age_cutoff_ts(),
+            )
+            .await
     }
 }
 
