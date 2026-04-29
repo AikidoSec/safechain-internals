@@ -14,12 +14,12 @@ use crate::{
     utils::time::{SystemDuration, SystemTimestampMilliseconds},
 };
 
-use super::*;
 use super::parser::{
     PackageInfo, normalize_package_name, parse_package_info_from_filename,
     parse_package_info_from_path, parse_package_info_from_url, parse_source_dist_filename,
     parse_wheel_filename,
 };
+use super::*;
 
 fn ecosystem_config_with_allowed(allowed: &[&str]) -> EcosystemConfig {
     EcosystemConfig {
@@ -330,7 +330,10 @@ fn test_normalize_package_name() {
 #[tokio::test]
 async fn wildcard_allowlisted_metadata_skips_min_age_rewrite() {
     let cfg = ecosystem_config_with_allowed(&["my-*"]);
-    let rule = make_test_rule(Some(&cfg), &[("my-package", "2.0.0", 1), ("my-package", "1.0.0", 72)]);
+    let rule = make_test_rule(
+        Some(&cfg),
+        &[("my-package", "2.0.0", 1), ("my-package", "1.0.0", 72)],
+    );
     let body = serde_json::json!({
         "info": {"name": "my-package", "version": "2.0.0"},
         "releases": {
