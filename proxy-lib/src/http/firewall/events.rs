@@ -49,7 +49,7 @@ pub struct BlockedEvent {
 impl BlockedEvent {
     pub fn from_info(info: BlockedEventInfo) -> Self {
         Self {
-            ts_ms: SystemTimestampMilliseconds::now(),
+            ts_ms: SystemTimestampMilliseconds::now_precise(),
             artifact: info.artifact,
             block_reason: info.block_reason,
         }
