@@ -110,6 +110,16 @@ impl RulePyPI {
             .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
     }
 
+    /// Returns `true` if the endpoint-protection policy explicitly allowlists
+    /// the given PyPI package name (i.e. evaluates to [`PackagePolicyDecision::Allow`]).
+    /// Used by the metadata-rewrite path to skip the min-age strip for trusted
+    /// packages.
+    fn is_package_allowlisted(&self, name: &PyPIPackageName) -> bool {
+        self.policy_evaluator.as_ref().is_some_and(|policy| {
+            policy.evaluate_package_install(name) == PackagePolicyDecision::Allow
+        })
+    }
+
     fn is_blocked(&self, package_info: &PackageInfo) -> Result<bool, BoxError> {
         let entries = self.remote_malware_list.find_entries(&package_info.name);
         let Some(entries) = entries.entries() else {
@@ -234,16 +244,18 @@ impl Rule for RulePyPI {
             return Ok(resp);
         };
 
-        if let Some(policy_evaluator) = self.policy_evaluator.as_ref()
-            && let Some(package_info) = resp
-                .extensions()
-                .get_ref::<RequestMetaUri>()
-                .and_then(|RequestMetaUri(uri)| parse_package_info_from_path(uri.path()))
-            && policy_evaluator.evaluate_package_install(&package_info.name)
-                == PackagePolicyDecision::Allow
-        {
+        // Resolve the metadata package name from the request URI, then keep it only
+        // if the policy explicitly allowlists it. `Some` here means "skip the strip".
+        let allowlisted_package_name = resp
+            .extensions()
+            .get_ref::<RequestMetaUri>()
+            .and_then(|RequestMetaUri(uri)| parse_package_info_from_path(uri.path()))
+            .map(|package_info| package_info.name)
+            .filter(|name| self.is_package_allowlisted(name));
+
+        if let Some(name) = allowlisted_package_name {
             tracing::debug!(
-                package = %package_info.name,
+                package = %name,
                 "PyPI metadata response: package is allowlisted, skipping min-age strip"
             );
             return Ok(resp);

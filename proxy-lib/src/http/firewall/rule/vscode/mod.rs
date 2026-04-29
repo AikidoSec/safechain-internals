@@ -245,22 +245,26 @@ impl Rule for RuleVSCode {
             return Ok(resp);
         };
 
-        let policy = self.policy_evaluator.as_ref();
-        let is_allowed = move |extension_id: &str| {
-            policy.is_some_and(|p| {
-                p.evaluate_package_install(&new_vscode_package_name(extension_id))
-                    == PackagePolicyDecision::Allow
-            })
-        };
-
         min_package_age
-            .remove_new_versions(resp, self.get_package_age_cutoff_ts(), is_allowed)
+            .remove_new_versions(resp, self.get_package_age_cutoff_ts(), |extension_id| {
+                self.is_extension_allowlisted(&new_vscode_package_name(extension_id))
+            })
             .await
     }
 }
 
 impl RuleVSCode {
     const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(1);
+
+    /// Returns `true` if the endpoint-protection policy explicitly allowlists
+    /// the given extension ID (`publisher.name`), i.e. evaluates to
+    /// [`PackagePolicyDecision::Allow`]. Used by the metadata-rewrite path
+    /// to skip the min-age strip for trusted extensions.
+    fn is_extension_allowlisted(&self, extension_id: &VSCodePackageName) -> bool {
+        self.policy_evaluator.as_ref().is_some_and(|policy| {
+            policy.evaluate_package_install(extension_id) == PackagePolicyDecision::Allow
+        })
+    }
 
     fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
         self.policy_evaluator
