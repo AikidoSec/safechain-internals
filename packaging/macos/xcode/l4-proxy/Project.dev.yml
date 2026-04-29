@@ -7,7 +7,7 @@ options:
 packages:
   RamaAppleNetworkExtension:
     url: https://github.com/plabayo/rama.git
-    revision: d4d9a69c2e7be138580a6e259ee260f78e38c005
+    revision: e4bdf3acb5a769083b3a78cb364aea2a64e05881
   X509:
     url: https://github.com/apple/swift-certificates.git
     from: 1.0.0
@@ -51,6 +51,8 @@ targets:
     dependencies:
       - package: RamaAppleNetworkExtension
         product: RamaAppleNetworkExtension
+      - package: RamaAppleNetworkExtension
+        product: RamaAppleSecureEnclave
     postBuildScripts:
       - name: Bump CFBundleVersion
         script: |

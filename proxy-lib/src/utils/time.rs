@@ -102,6 +102,12 @@ impl SystemTimestampMilliseconds {
         Self(now_unix_ms())
     }
 
+    /// Returns the current timestamp using `SystemTime::now()` directly,
+    /// bypassing the cached/approximate value from `now_unix_ms`.
+    pub fn now_precise() -> Self {
+        SystemTime::now().into()
+    }
+
     #[cfg(test)]
     pub fn is_positive_epoch_msg(self) -> bool {
         self.0 > 0
