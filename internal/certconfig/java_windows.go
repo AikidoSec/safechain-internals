@@ -5,17 +5,37 @@ package certconfig
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/AikidoSec/safechain-internals/internal/platform"
+	"github.com/AikidoSec/safechain-internals/internal/proxy"
 )
 
-// On Windows, every mainstream JDK ships the SunMSCAPI provider, which can
-// expose the Windows certificate store as a JSSE trust store via the
-// Windows-ROOT type. Setting JAVA_TOOL_OPTIONS once in HKCU makes every JVM
-// launched by the user — direct, IDE-bundled, Maven/Gradle-forked, JNI-embedded
-// — read trusted roots from LocalMachine\Root, where platform.InstallProxyCA
-// has already placed the SafeChain CA via `certutil -addstore -f Root`.
+// On Windows, most mainstream OpenJDK/Oracle-derived JDKs ship the SunMSCAPI
+// provider, which exposes Windows certificate stores to JSSE. We point the
+// JVM at the type "Windows-ROOT", which maps to the current user's root store
+// (CurrentUser\Root). That choice gives us two things:
+//
+//   - Coverage: Windows-ROOT has been part of SunMSCAPI since JDK 1.6, so
+//     every realistic JDK on the machine recognizes it (no JDK 11.0.20 /
+//     17.0.8 backport requirement, no surprise failures on JDK 8).
+//   - Scope: per-user trust, not machine-wide. If multiple users share the
+//     box, our MITM CA is only trusted by the active user that the agent
+//     runs setup for.
+//
+// platform.InstallProxyCA already places the SafeChain CA in
+// LocalMachine\Root via `certutil -addstore -f Root` (LocalSystem-scope) for
+// the rest of the trust pipeline (browsers, schannel, etc.). For Java to see
+// it via Windows-ROOT we additionally mirror the cert into the active user's
+// HKCU\...\Root store via platform.InstallProxyCAForCurrentUser.
+//
+// JAVA_TOOL_OPTIONS broadly applies to JVMs launched by the user — direct
+// invocations, Maven/Gradle-forked children, JNI-embedded VMs in IDEs — but
+// Oracle notes it can be disabled or ignored in some launch/security
+// contexts (e.g. setuid/setgid on Unix; equivalent token-mismatch checks on
+// Windows). On a normal Windows desktop session running our agent as a
+// service this is honored; treat exotic launch contexts as best-effort.
 //
 // Caveat: projects that pin -Djavax.net.ssl.trustStore=... in MAVEN_OPTS,
 // gradle.properties, or on the command line override our flag (later -D wins
@@ -33,6 +53,10 @@ const (
 var javaToolOptionsAddition = javaTrustStoreFlag + " " + javaTrustStoreTypeFlag
 
 func installJavaTrust(ctx context.Context) error {
+	if err := platform.InstallProxyCAForCurrentUser(ctx, proxy.GetCaCertPath()); err != nil {
+		return fmt.Errorf("install SafeChain CA into CurrentUser\\Root: %w", err)
+	}
+
 	current, err := platform.GetUserEnvVar(ctx, javaToolOptionsEnvVar)
 	if err != nil {
 		return fmt.Errorf("read existing JAVA_TOOL_OPTIONS: %w", err)
@@ -52,6 +76,13 @@ func javaNeedsRepair(ctx context.Context) bool {
 }
 
 func uninstallJavaTrust(ctx context.Context) error {
+	if err := platform.UninstallProxyCAForCurrentUser(ctx); err != nil {
+		// Best-effort: log and continue with the env var cleanup so a stuck
+		// certutil doesn't leave JAVA_TOOL_OPTIONS pointing at a store we
+		// can no longer service.
+		log.Printf("java: failed to remove SafeChain CA from CurrentUser\\Root: %v", err)
+	}
+
 	current, err := platform.GetUserEnvVar(ctx, javaToolOptionsEnvVar)
 	if err != nil {
 		return fmt.Errorf("read existing JAVA_TOOL_OPTIONS: %w", err)
