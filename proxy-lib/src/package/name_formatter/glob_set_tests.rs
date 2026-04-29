@@ -177,3 +177,82 @@ fn empty_pattern_matches_only_empty_name() {
     assert!(set.match_package_name(&name("")));
     assert!(!set.match_package_name(&name("x")));
 }
+
+#[test]
+fn match_wildcard_only_skips_exact_set() {
+    let set = lower_set(&["@aikidosec/*", "requests"]);
+
+    // wildcard pattern: matches via the trie
+    assert!(set.match_wildcard_only(&name("@aikidosec/ci-api-client")));
+    // exact pattern: must NOT count as a wildcard match
+    assert!(!set.match_wildcard_only(&name("requests")));
+    // unrelated name: no match
+    assert!(!set.match_wildcard_only(&name("numpy")));
+
+    // sanity: the regular matcher still treats both as allowed
+    assert!(set.match_package_name(&name("@aikidosec/ci-api-client")));
+    assert!(set.match_package_name(&name("requests")));
+}
+
+#[test]
+fn match_wildcard_only_treats_any_star_position_as_wildcard() {
+    // Any pattern containing `*` (anywhere) is compiled into the trie, so
+    // `match_wildcard_only` returns true regardless of star position.
+    let set = lower_set(&["trail*", "*lead", "mid*dle", "*"]);
+
+    assert!(set.match_wildcard_only(&name("trail-anything")));
+    assert!(set.match_wildcard_only(&name("anythinglead")));
+    assert!(set.match_wildcard_only(&name("midXdle")));
+    // `*` alone matches everything via wildcard_terminal at the root.
+    assert!(set.match_wildcard_only(&name("totally-unrelated")));
+}
+
+#[test]
+fn match_exact_only_ignores_wildcards() {
+    // `match_exact_only` consults only the exact-match HashSet — wildcard
+    // patterns must never satisfy it, even when the name happens to fall
+    // within a wildcard's reach.
+    let set = lower_set(&["requests", "trail*", "*lead", "mid*dle"]);
+
+    assert!(set.match_exact_only(&name("requests")));
+    assert!(!set.match_exact_only(&name("trail-anything")));
+    assert!(!set.match_exact_only(&name("anythinglead")));
+    assert!(!set.match_exact_only(&name("midXdle")));
+    assert!(!set.match_exact_only(&name("numpy")));
+}
+
+#[test]
+fn wildcard_and_exact_matchers_are_disjoint_per_entry() {
+    // For any single pattern the two predicates partition match results:
+    // an exact pattern only fires `match_exact_only`, a wildcard pattern
+    // only fires `match_wildcard_only`. The pair never both return true
+    // for the same (set, name).
+    let cases = [
+        // (pattern, matching_name, is_wildcard)
+        ("requests", "requests", false),
+        ("@aikidosec/*", "@aikidosec/ci-api-client", true),
+        ("*-test", "pkg-test", true),
+        ("pkg-*-evil", "pkg-x-evil", true),
+        ("*", "anything", true),
+    ];
+
+    for (pattern, matching_name, is_wildcard) in cases {
+        let set = lower_set(&[pattern]);
+        let n = name(matching_name);
+
+        assert!(
+            set.match_package_name(&n),
+            "pattern={pattern:?} should match {matching_name:?}"
+        );
+        assert_eq!(
+            set.match_wildcard_only(&n),
+            is_wildcard,
+            "pattern={pattern:?} match_wildcard_only mismatch"
+        );
+        assert_eq!(
+            set.match_exact_only(&n),
+            !is_wildcard,
+            "pattern={pattern:?} match_exact_only mismatch"
+        );
+    }
+}

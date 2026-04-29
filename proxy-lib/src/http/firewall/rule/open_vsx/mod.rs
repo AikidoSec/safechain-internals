@@ -137,12 +137,20 @@ impl Rule for RuleOpenVsx {
             "Open VSX install asset request"
         );
 
+        let mut bypass_malware = false;
+
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
             let decision = policy_evaluator.evaluate_package_install(&extension.extension_id);
 
             match decision {
-                PackagePolicyDecision::Allow => {
+                // Wildcard allow fully bypasses downstream malware + min-age.
+                PackagePolicyDecision::AllowSkipAgeCheck => {
                     return Ok(RequestAction::Allow(req));
+                }
+                // Exact-match allow bypasses the malware check but stays
+                // subject to min-age below.
+                PackagePolicyDecision::Allow => {
+                    bypass_malware = true;
                 }
                 PackagePolicyDecision::Defer => (),
                 PackagePolicyDecision::BlockAll
@@ -157,7 +165,7 @@ impl Rule for RuleOpenVsx {
             }
         }
 
-        if self.is_package_listed_as_malware(&extension) {
+        if !bypass_malware && self.is_package_listed_as_malware(&extension) {
             tracing::warn!(
                 http.url.path = %path,
                 package = %extension,

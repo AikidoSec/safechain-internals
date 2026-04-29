@@ -146,13 +146,21 @@ impl Rule for RuleMaven {
             "Maven package download request"
         );
 
+        let mut bypass_malware = false;
+
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
             let decision =
                 policy_evaluator.evaluate_package_install(&artifact.fully_qualified_name);
 
             match decision {
-                PackagePolicyDecision::Allow => {
+                // Wildcard allow fully bypasses downstream malware + min-age.
+                PackagePolicyDecision::AllowSkipAgeCheck => {
                     return Ok(RequestAction::Allow(req));
+                }
+                // Exact-match allow bypasses the malware check but stays
+                // subject to min-age below.
+                PackagePolicyDecision::Allow => {
+                    bypass_malware = true;
                 }
                 PackagePolicyDecision::Defer => {}
                 PackagePolicyDecision::BlockAll
@@ -167,7 +175,7 @@ impl Rule for RuleMaven {
             }
         }
 
-        if self.is_package_listed_as_malware(&artifact) {
+        if !bypass_malware && self.is_package_listed_as_malware(&artifact) {
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
                 artifact.into_blocked_artifact(),

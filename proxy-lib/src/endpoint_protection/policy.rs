@@ -15,8 +15,15 @@ use crate::{
 pub enum PackagePolicyDecision {
     /// No policy rule matched — defer to the next check (e.g. the malware list).
     Defer,
-    /// An explicit allow rule matched — bypass all further checks for this package.
+    /// An exact-match `allowed_packages` entry matched (typically the shape an
+    /// approval-flow approval takes). Bypasses install-policy gates AND the
+    /// malware check, but the package is still subject to the min-age check —
+    /// approving a package by name does not vouch for brand-new versions of it.
     Allow,
+    /// A wildcard `allowed_packages` pattern matched (e.g. `@aikidosec/*`).
+    /// Treated as a "trust the whole namespace, all versions" signal: bypasses
+    /// install-policy gates AND malware AND min-age.
+    AllowSkipAgeCheck,
     /// Package is in the `rejected_packages` list — block immediately.
     Rejected,
     /// `block_all_installs` is enabled — block all installs for this ecosystem.
@@ -75,6 +82,20 @@ impl<K: PackageName + Hash> PolicyEvaluator<K> {
                 Self::evaluate_package_install_for_typed_ecosystem_config(config, package_name)
             })
             .unwrap_or(PackagePolicyDecision::Defer)
+    }
+
+    /// Test constructor: build a [`PolicyEvaluator`] populated directly from a
+    /// raw [`EcosystemConfig`], bypassing the broadcast/async refresh path.
+    #[cfg(test)]
+    pub(crate) fn for_tests(ecosystem_config: &super::EcosystemConfig) -> Self
+    where
+        K: PackageName + Eq + Hash,
+    {
+        let cached = Arc::new(ArcSwapOption::const_empty());
+        cached.store(Some(Arc::new(TypedEcosystemConfig::from_raw(
+            ecosystem_config,
+        ))));
+        Self { cached }
     }
 
     pub fn package_age_cutoff_ts(
@@ -166,13 +187,28 @@ impl<K: PackageName + Hash> PolicyEvaluator<K> {
             return PackagePolicyDecision::Rejected;
         }
 
+        // Wildcards (e.g. `@aikidosec/*`) signal "trust the whole namespace,
+        // all versions" and bypass min-age too. Exact-match entries (e.g. an
+        // approval-flow approval) bypass the malware check but stay subject to
+        // min-age — approving a package name doesn't vouch for brand-new
+        // versions of it.
         if ecosystem_cfg
             .allowed_packages
-            .match_package_name(package_name)
+            .match_wildcard_only(package_name)
         {
             tracing::info!(
                 package = %package_name,
-                "package is explicitly allowed by endpoint protection config"
+                "package is explicitly allowed via wildcard pattern by endpoint protection config"
+            );
+            return PackagePolicyDecision::AllowSkipAgeCheck;
+        }
+        if ecosystem_cfg
+            .allowed_packages
+            .match_exact_only(package_name)
+        {
+            tracing::info!(
+                package = %package_name,
+                "package is explicitly allowed via exact-match entry by endpoint protection config"
             );
             return PackagePolicyDecision::Allow;
         }

@@ -89,6 +89,22 @@ impl<K: PackageName + Hash> GlobSet<K> {
         self.match_package_name_ref(package_name.as_ref())
     }
 
+    /// Like [`Self::match_package_name`], but skips the exact-match set — only returns
+    /// `true` when the name matches via a wildcard pattern. Used by callers that
+    /// want to distinguish admin-configured wildcards (e.g. `@aikidosec/*`) from
+    /// approval-flow exact-match entries.
+    #[inline(always)]
+    pub fn match_wildcard_only(&self, package_name: &K) -> bool {
+        self.match_package_name_ref(package_name.as_ref())
+    }
+
+    /// Returns `true` only when `package_name` is in the exact-match set.
+    /// Wildcard patterns are not consulted.
+    #[inline(always)]
+    pub fn match_exact_only(&self, package_name: &K) -> bool {
+        self.exact.contains(package_name)
+    }
+
     pub fn match_package_name_ref<'a>(&'a self, package_name: K::Ref<'a>) -> bool
     where
         K: 'a,

@@ -55,7 +55,11 @@ impl MinPackageAge {
         req.headers_mut().typed_insert(Accept::json());
     }
 
-    pub(super) async fn remove_new_packages(&self, resp: Response) -> Result<Response, BoxError> {
+    pub(super) async fn remove_new_packages(
+        &self,
+        resp: Response,
+        is_allowed: impl Fn(&str) -> bool,
+    ) -> Result<Response, BoxError> {
         if resp
             .headers()
             .typed_get::<ContentType>()
@@ -83,6 +87,16 @@ impl MinPackageAge {
                 return Ok(Response::from_parts(parts, Body::from(bytes)));
             }
         };
+
+        if let Some(name) = json.get("name").and_then(|n| n.as_str())
+            && is_allowed(name)
+        {
+            tracing::debug!(
+                package = %name,
+                "npm metadata response: package is allowlisted, skipping min-age strip"
+            );
+            return Ok(Response::from_parts(parts, Body::from(bytes)));
+        }
 
         let versions_to_remove = Self::get_versions_to_remove(&json, cutoff);
 

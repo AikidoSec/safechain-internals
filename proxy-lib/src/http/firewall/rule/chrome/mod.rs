@@ -140,12 +140,20 @@ impl Rule for RuleChrome {
             package_info.version,
         );
 
+        let mut bypass_malware = false;
+
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
             let decision = policy_evaluator.evaluate_package_install(&package_info.extension_id);
 
             match decision {
-                PackagePolicyDecision::Allow => {
+                // Wildcard allow fully bypasses downstream malware + min-age.
+                PackagePolicyDecision::AllowSkipAgeCheck => {
                     return Ok(RequestAction::Allow(req));
+                }
+                // Exact-match allow bypasses the malware check but stays
+                // subject to min-age below.
+                PackagePolicyDecision::Allow => {
+                    bypass_malware = true;
                 }
                 PackagePolicyDecision::Defer => {}
                 PackagePolicyDecision::BlockAll
@@ -160,7 +168,7 @@ impl Rule for RuleChrome {
             }
         }
 
-        if self.matches_malware_entry(&package_info) {
+        if !bypass_malware && self.matches_malware_entry(&package_info) {
             tracing::info!(
                 http.url.full = %req.uri(),
                 http.request.method = %req.method(),

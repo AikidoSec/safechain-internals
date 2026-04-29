@@ -61,7 +61,7 @@ async fn single_removes_version_newer_than_cutoff() {
     let resp = make_single_extension_response("pub", "ext", &[("1.0.0", &old), ("1.0.1", &recent)]);
     let min_package_age = MinPackageAgeVSCode::new(None);
     let result = min_package_age
-        .remove_new_versions(resp, cutoff_secs_ago(24))
+        .remove_new_versions(resp, cutoff_secs_ago(24), |_| false)
         .await
         .unwrap();
     let json: serde_json::Value = result.try_into_json().await.unwrap();
@@ -80,7 +80,7 @@ async fn single_keeps_version_older_than_cutoff() {
     let resp = make_single_extension_response("pub", "ext", &[("1.0.0", &old)]);
     let min_package_age = MinPackageAgeVSCode::new(None);
     let result = min_package_age
-        .remove_new_versions(resp, cutoff_secs_ago(24))
+        .remove_new_versions(resp, cutoff_secs_ago(24), |_| false)
         .await
         .unwrap();
     let json: serde_json::Value = result.try_into_json().await.unwrap();
@@ -100,7 +100,7 @@ async fn single_removes_all_versions_when_all_too_new() {
         make_single_extension_response("pub", "ext", &[("1.0.0", &recent), ("1.0.1", &recent)]);
     let min_package_age = MinPackageAgeVSCode::new(None);
     let result = min_package_age
-        .remove_new_versions(resp, cutoff_secs_ago(24))
+        .remove_new_versions(resp, cutoff_secs_ago(24), |_| false)
         .await
         .unwrap();
     let json: serde_json::Value = result.try_into_json().await.unwrap();
@@ -119,7 +119,7 @@ async fn batch_removes_version_newer_than_cutoff() {
     let resp = make_extensionquery_response("pub", "ext", &[("1.0.0", &old), ("1.0.1", &recent)]);
     let min_package_age = MinPackageAgeVSCode::new(None);
     let result = min_package_age
-        .remove_new_versions(resp, cutoff_secs_ago(24))
+        .remove_new_versions(resp, cutoff_secs_ago(24), |_| false)
         .await
         .unwrap();
     let json: serde_json::Value = result.try_into_json().await.unwrap();
@@ -138,7 +138,7 @@ async fn batch_keeps_version_older_than_cutoff() {
     let resp = make_extensionquery_response("pub", "ext", &[("1.0.0", &old)]);
     let min_package_age = MinPackageAgeVSCode::new(None);
     let result = min_package_age
-        .remove_new_versions(resp, cutoff_secs_ago(24))
+        .remove_new_versions(resp, cutoff_secs_ago(24), |_| false)
         .await
         .unwrap();
     let json: serde_json::Value = result.try_into_json().await.unwrap();
@@ -167,7 +167,7 @@ async fn strips_cache_headers_when_response_is_rewritten() {
         .unwrap();
     let min_package_age = MinPackageAgeVSCode::new(None);
     let result = min_package_age
-        .remove_new_versions(resp, cutoff_secs_ago(24))
+        .remove_new_versions(resp, cutoff_secs_ago(24), |_| false)
         .await
         .unwrap();
     assert!(
@@ -194,7 +194,7 @@ async fn preserves_cache_headers_when_nothing_removed() {
         .unwrap();
     let min_package_age = MinPackageAgeVSCode::new(None);
     let result = min_package_age
-        .remove_new_versions(resp, cutoff_secs_ago(24))
+        .remove_new_versions(resp, cutoff_secs_ago(24), |_| false)
         .await
         .unwrap();
     assert_eq!(result.headers().get("etag").unwrap(), "abc123");
@@ -214,7 +214,7 @@ async fn passthrough_invalid_json() {
         .unwrap();
     let min_package_age = MinPackageAgeVSCode::new(None);
     let result = min_package_age
-        .remove_new_versions(resp, cutoff_secs_ago(24))
+        .remove_new_versions(resp, cutoff_secs_ago(24), |_| false)
         .await
         .unwrap();
     let body = result.try_into_string().await.unwrap();
@@ -229,9 +229,59 @@ async fn passthrough_non_json_content_type() {
         .unwrap();
     let min_package_age = MinPackageAgeVSCode::new(None);
     let result = min_package_age
-        .remove_new_versions(resp, cutoff_secs_ago(24))
+        .remove_new_versions(resp, cutoff_secs_ago(24), |_| false)
         .await
         .unwrap();
     let body = result.try_into_string().await.unwrap();
     assert_eq!(body, "plain text");
+}
+
+#[tokio::test]
+async fn allowlisted_extension_is_not_rewritten() {
+    let recent = timestamp_hours_ago(1);
+    let old = timestamp_hours_ago(50);
+    let resp = make_single_extension_response("pub", "ext", &[("1.0.0", &old), ("1.0.1", &recent)]);
+    let min_package_age = MinPackageAgeVSCode::new(None);
+    let is_allowed = |id: &str| id == "pub.ext";
+    let result = min_package_age
+        .remove_new_versions(resp, cutoff_secs_ago(24), is_allowed)
+        .await
+        .unwrap();
+    let json: serde_json::Value = result.try_into_json().await.unwrap();
+    let versions: Vec<&str> = json["versions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["version"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        versions,
+        ["1.0.0", "1.0.1"],
+        "allowlisted extension should keep all versions"
+    );
+}
+
+#[tokio::test]
+async fn allowlisted_extension_in_batch_is_not_rewritten() {
+    let recent = timestamp_hours_ago(1);
+    let old = timestamp_hours_ago(50);
+    let resp = make_extensionquery_response("pub", "ext", &[("1.0.0", &old), ("1.0.1", &recent)]);
+    let min_package_age = MinPackageAgeVSCode::new(None);
+    let is_allowed = |id: &str| id == "pub.ext";
+    let result = min_package_age
+        .remove_new_versions(resp, cutoff_secs_ago(24), is_allowed)
+        .await
+        .unwrap();
+    let json: serde_json::Value = result.try_into_json().await.unwrap();
+    let versions: Vec<&str> = json["results"][0]["extensions"][0]["versions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["version"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        versions,
+        ["1.0.0", "1.0.1"],
+        "allowlisted extension should keep all versions in batch responses too"
+    );
 }

@@ -143,7 +143,7 @@ fn evaluate_package_install_allowed_packages_wildcard_prefix_scope() {
     };
 
     let decision = evaluate(&cfg, "@npmcli/arborist");
-    assert_eq!(PackagePolicyDecision::Allow, decision);
+    assert_eq!(PackagePolicyDecision::AllowSkipAgeCheck, decision);
 
     let decision = evaluate(&cfg, "@other/scope");
     assert_eq!(PackagePolicyDecision::BlockAll, decision);
@@ -159,7 +159,7 @@ fn evaluate_package_install_allowed_packages_wildcard_middle() {
     };
 
     let decision = evaluate(&cfg, "@types/node");
-    assert_eq!(PackagePolicyDecision::Allow, decision);
+    assert_eq!(PackagePolicyDecision::AllowSkipAgeCheck, decision);
 }
 
 #[test]
@@ -191,7 +191,7 @@ fn evaluate_package_install_rejected_wildcard_takes_priority_over_allowed_wildca
     assert_eq!(PackagePolicyDecision::Rejected, decision);
 
     let decision = evaluate(&cfg, "pkg-good-test");
-    assert_eq!(PackagePolicyDecision::Allow, decision);
+    assert_eq!(PackagePolicyDecision::AllowSkipAgeCheck, decision);
 }
 
 #[test]
@@ -204,5 +204,77 @@ fn evaluate_package_install_star_only_allows_any_package_name() {
     };
 
     let decision = evaluate(&cfg, "anything-goes");
-    assert_eq!(PackagePolicyDecision::Allow, decision);
+    assert_eq!(PackagePolicyDecision::AllowSkipAgeCheck, decision);
+}
+
+#[test]
+fn wildcard_match_returns_allow_for_all_versions() {
+    let cfg = EcosystemConfig {
+        block_all_installs: false,
+        request_installs: false,
+        minimum_allowed_age_timestamp: None,
+        exceptions: exceptions(&["@aikidosec/*"], &[]),
+    };
+
+    assert_eq!(
+        PackagePolicyDecision::AllowSkipAgeCheck,
+        evaluate(&cfg, "@aikidosec/ci-api-client")
+    );
+}
+
+#[test]
+fn exact_match_returns_allow() {
+    // Exact-match entries (the shape approval-flow approvals take) bypass the
+    // malware check but stay subject to min-age. Only wildcards (which return
+    // `AllowSkipAgeCheck`) bypass min-age too.
+    let cfg = EcosystemConfig {
+        block_all_installs: false,
+        request_installs: false,
+        minimum_allowed_age_timestamp: None,
+        exceptions: exceptions(&["requests"], &[]),
+    };
+
+    assert_eq!(PackagePolicyDecision::Allow, evaluate(&cfg, "requests"));
+}
+
+#[test]
+fn wildcard_takes_priority_over_exact_match_when_both_match() {
+    // If both a wildcard pattern and an exact entry would match the same name,
+    // the wildcard wins because it carries the stronger trust signal.
+    let cfg = EcosystemConfig {
+        block_all_installs: false,
+        request_installs: false,
+        minimum_allowed_age_timestamp: None,
+        exceptions: exceptions(&["requests", "req*"], &[]),
+    };
+
+    assert_eq!(
+        PackagePolicyDecision::AllowSkipAgeCheck,
+        evaluate(&cfg, "requests")
+    );
+}
+
+#[test]
+fn rejected_overrides_both_allow_variants() {
+    let cfg = EcosystemConfig {
+        block_all_installs: false,
+        request_installs: false,
+        minimum_allowed_age_timestamp: None,
+        exceptions: exceptions(
+            &["@aikidosec/*", "requests"],
+            &["@aikidosec/deprecated", "requests"],
+        ),
+    };
+
+    // Exact reject wins over both flavors of allow.
+    assert_eq!(
+        PackagePolicyDecision::Rejected,
+        evaluate(&cfg, "@aikidosec/deprecated")
+    );
+    assert_eq!(PackagePolicyDecision::Rejected, evaluate(&cfg, "requests"));
+    // Sibling wildcard match still returns AllowSkipAgeCheck when not rejected.
+    assert_eq!(
+        PackagePolicyDecision::AllowSkipAgeCheck,
+        evaluate(&cfg, "@aikidosec/ci-api-client")
+    );
 }

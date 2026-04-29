@@ -40,8 +40,10 @@ pub(crate) fn block_reason_for(decision: PackagePolicyDecision) -> BlockReason {
         PackagePolicyDecision::Rejected => BlockReason::Rejected,
         PackagePolicyDecision::BlockAll => BlockReason::BlockAll,
         PackagePolicyDecision::RequestInstall => BlockReason::RequestInstall,
-        PackagePolicyDecision::Allow | PackagePolicyDecision::Defer => {
-            unreachable!("Allow and Defer are not blocking decisions")
+        PackagePolicyDecision::Allow
+        | PackagePolicyDecision::AllowSkipAgeCheck
+        | PackagePolicyDecision::Defer => {
+            unreachable!("Allow, AllowSkipAgeCheck and Defer are not blocking decisions")
         }
     }
 }

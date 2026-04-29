@@ -36,6 +36,7 @@ impl MinPackageAgeVSCode {
         &self,
         resp: Response,
         cutoff_ts: SystemTimestampMilliseconds,
+        is_allowed: impl Fn(&str) -> bool,
     ) -> Result<Response, BoxError> {
         if resp
             .headers()
@@ -58,7 +59,7 @@ impl MinPackageAgeVSCode {
             return Ok(Response::from_parts(parts, Body::from(bytes)));
         }
 
-        let Some(rewrite) = rewrite_json(&bytes, cutoff_ts) else {
+        let Some(rewrite) = rewrite_json(&bytes, cutoff_ts, &is_allowed) else {
             return Ok(Response::from_parts(parts, Body::from(bytes)));
         };
 
@@ -127,7 +128,11 @@ struct RewriteResult {
 /// }
 /// ```
 /// Given a `cutoff_ts` in the past, `0.4.0` is stripped and `0.3.0` is kept.
-fn rewrite_json(bytes: &[u8], cutoff_ts: SystemTimestampMilliseconds) -> Option<RewriteResult> {
+fn rewrite_json(
+    bytes: &[u8],
+    cutoff_ts: SystemTimestampMilliseconds,
+    is_allowed: &dyn Fn(&str) -> bool,
+) -> Option<RewriteResult> {
     let mut json: serde_json::Value = match serde_json::from_slice(bytes) {
         Ok(v) => v,
         Err(err) => {
@@ -155,10 +160,10 @@ fn rewrite_json(bytes: &[u8], cutoff_ts: SystemTimestampMilliseconds) -> Option<
 
     if let Some(extensions) = batch_extensions {
         for extension in extensions {
-            filter_extension_versions(extension, cutoff_ts, &mut suppressed);
+            filter_extension_versions(extension, cutoff_ts, &mut suppressed, is_allowed);
         }
     } else {
-        filter_extension_versions(&mut json, cutoff_ts, &mut suppressed);
+        filter_extension_versions(&mut json, cutoff_ts, &mut suppressed, is_allowed);
     }
 
     if suppressed.is_empty() {
@@ -183,6 +188,7 @@ fn filter_extension_versions(
     extension: &mut serde_json::Value,
     cutoff_ts: SystemTimestampMilliseconds,
     suppressed: &mut Vec<(ArcStr, PackageVersion)>,
+    is_allowed: &dyn Fn(&str) -> bool,
 ) {
     let publisher_name = extension
         .get("publisher")
@@ -202,6 +208,14 @@ fn filter_extension_versions(
     }
 
     let extension_id: ArcStr = format!("{publisher_name}.{extension_name}").into();
+
+    if is_allowed(&extension_id) {
+        tracing::debug!(
+            extension = %extension_id,
+            "VSCode marketplace metadata: extension is allowlisted, skipping min-age strip"
+        );
+        return;
+    }
 
     let Some(versions) = extension.get_mut("versions").and_then(|v| v.as_array_mut()) else {
         return;

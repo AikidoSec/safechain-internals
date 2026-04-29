@@ -149,6 +149,16 @@ impl Rule for RuleGolang {
         else {
             return Ok(resp);
         };
+        if let Some(policy) = self.policy_evaluator.as_ref() {
+            let name = GolangPackageName::from(module_name.as_str());
+            if policy.evaluate_package_install(&name) == PackagePolicyDecision::AllowSkipAgeCheck {
+                tracing::debug!(
+                    module = %module_name,
+                    "Go module list: module is wildcard-allowlisted, skipping min-age strip"
+                );
+                return Ok(resp);
+            }
+        }
         min_package_age
             .rewrite_list_response(
                 resp,
@@ -200,16 +210,26 @@ impl RuleGolang {
             "Go module zip download request"
         );
 
+        let mut bypass_malware = false;
+
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
             let name = GolangPackageName::from(package.fully_qualified_name.as_str());
             let decision = policy_evaluator.evaluate_package_install(&name);
 
             match decision {
-                PackagePolicyDecision::Allow => {
+                // Wildcard allow fully bypasses downstream malware + min-age.
+                PackagePolicyDecision::AllowSkipAgeCheck => {
                     return Ok(RequestAction::Allow(req));
                 }
+                // Exact-match allow bypasses the malware check but stays
+                // subject to min-age below.
+                PackagePolicyDecision::Allow => {
+                    bypass_malware = true;
+                }
                 PackagePolicyDecision::Defer => {}
-                decision => {
+                decision @ (PackagePolicyDecision::BlockAll
+                | PackagePolicyDecision::Rejected
+                | PackagePolicyDecision::RequestInstall) => {
                     return Ok(RequestAction::Block(BlockedRequest::blocked(
                         req,
                         Self::blocked_artifact(&package),
@@ -219,7 +239,7 @@ impl RuleGolang {
             }
         }
 
-        if self.is_package_listed_as_malware(&package) {
+        if !bypass_malware && self.is_package_listed_as_malware(&package) {
             tracing::warn!("Blocked malware from {}", package.fully_qualified_name);
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,

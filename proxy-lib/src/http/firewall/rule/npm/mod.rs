@@ -148,7 +148,16 @@ impl Rule for RuleNpm {
     #[inline(always)]
     async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         match &self.maybe_min_package_age {
-            Some(min_package_age) => min_package_age.remove_new_packages(resp).await,
+            Some(min_package_age) => {
+                let policy = self.policy_evaluator.as_ref();
+                let is_allowed = move |name: &str| {
+                    policy.is_some_and(|p| {
+                        p.evaluate_package_install(&NpmPackageName::from(name))
+                            == PackagePolicyDecision::AllowSkipAgeCheck
+                    })
+                };
+                min_package_age.remove_new_packages(resp, is_allowed).await
+            }
             None => Ok(resp),
         }
     }
@@ -177,12 +186,21 @@ impl RuleNpm {
             return Ok(RequestAction::Allow(req));
         };
 
+        let mut bypass_malware = false;
+
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
             let decision = policy_evaluator.evaluate_package_install(&package.fully_qualified_name);
 
             match decision {
-                PackagePolicyDecision::Allow => {
+                // Wildcard allow (admin-configured `@aikidosec/*`) fully bypasses
+                // downstream malware + min-age checks.
+                PackagePolicyDecision::AllowSkipAgeCheck => {
                     return Ok(RequestAction::Allow(req));
+                }
+                // Exact-match allow (approval-flow) bypasses the malware check
+                // but stays subject to min-age below.
+                PackagePolicyDecision::Allow => {
+                    bypass_malware = true;
                 }
                 PackagePolicyDecision::Defer => {}
                 PackagePolicyDecision::BlockAll
@@ -197,7 +215,7 @@ impl RuleNpm {
             }
         }
 
-        if self.is_package_listed_as_malware(&package) {
+        if !bypass_malware && self.is_package_listed_as_malware(&package) {
             tracing::warn!(
                 name = %package.fully_qualified_name,
                 version = %package.version,

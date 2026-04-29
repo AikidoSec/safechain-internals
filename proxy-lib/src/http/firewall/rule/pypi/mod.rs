@@ -3,6 +3,7 @@ use std::fmt;
 use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
+    extensions::ExtensionsRef as _,
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
@@ -14,10 +15,13 @@ use crate::{
     endpoint_protection::{
         EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
     },
-    http::firewall::{
-        domain_matcher::DomainMatcher,
-        events::{Artifact, BlockReason},
-        notifier::EventNotifier,
+    http::{
+        RequestMetaUri,
+        firewall::{
+            domain_matcher::DomainMatcher,
+            events::{Artifact, BlockReason},
+            notifier::EventNotifier,
+        },
     },
     package::{
         malware_list::RemoteMalwareList, name_formatter::LowerCasePackageName,
@@ -164,12 +168,20 @@ impl Rule for RulePyPI {
         }
 
         // Apply endpoint policy (rejected packages, allow exceptions, block_all_installs).
+        let mut bypass_malware = false;
+
         if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
             let decision = policy_evaluator.evaluate_package_install(&package_info.name);
 
             match decision {
-                PackagePolicyDecision::Allow => {
+                // Wildcard allow fully bypasses downstream malware + min-age.
+                PackagePolicyDecision::AllowSkipAgeCheck => {
                     return Ok(RequestAction::Allow(req));
+                }
+                // Exact-match allow bypasses the malware check but stays
+                // subject to min-age below.
+                PackagePolicyDecision::Allow => {
+                    bypass_malware = true;
                 }
                 PackagePolicyDecision::Defer => {}
                 decision @ (PackagePolicyDecision::BlockAll
@@ -184,7 +196,7 @@ impl Rule for RulePyPI {
             }
         }
 
-        if self.is_blocked(&package_info)? {
+        if !bypass_malware && self.is_blocked(&package_info)? {
             tracing::debug!(package = %package_info.name, version = ?package_info.version, "blocked PyPI package download");
             return Ok(RequestAction::Block(BlockedRequest::blocked(
                 req,
@@ -228,6 +240,9 @@ impl Rule for RulePyPI {
     async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         match &self.maybe_min_package_age {
             Some(min_package_age) => {
+                if self.is_request_for_allowlisted_package(&resp) {
+                    return Ok(resp);
+                }
                 min_package_age
                     .remove_new_packages(
                         resp,
@@ -238,6 +253,31 @@ impl Rule for RulePyPI {
             }
             None => Ok(resp),
         }
+    }
+}
+
+impl RulePyPI {
+    fn is_request_for_allowlisted_package(&self, resp: &Response) -> bool {
+        let Some(policy) = self.policy_evaluator.as_ref() else {
+            return false;
+        };
+        let Some(package_info) = resp
+            .extensions()
+            .get_ref::<RequestMetaUri>()
+            .and_then(|RequestMetaUri(uri)| parse_package_info_from_path(uri.path()))
+        else {
+            return false;
+        };
+        if policy.evaluate_package_install(&package_info.name)
+            == PackagePolicyDecision::AllowSkipAgeCheck
+        {
+            tracing::debug!(
+                package = %package_info.name,
+                "PyPI metadata response: package is wildcard-allowlisted, skipping min-age strip"
+            );
+            return true;
+        }
+        false
     }
 }
 
