@@ -234,22 +234,19 @@ impl Rule for RulePyPI {
             return Ok(resp);
         };
 
-        if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
-            if let Some(package_info) = resp
+        if let Some(policy_evaluator) = self.policy_evaluator.as_ref()
+            && let Some(package_info) = resp
                 .extensions()
                 .get_ref::<RequestMetaUri>()
                 .and_then(|RequestMetaUri(uri)| parse_package_info_from_path(uri.path()))
-            {
-                if policy_evaluator.evaluate_package_install(&package_info.name)
-                    == PackagePolicyDecision::Allow
-                {
-                    tracing::debug!(
-                        package = %package_info.name,
-                        "PyPI metadata response: package is allowlisted, skipping min-age strip"
-                    );
-                    return Ok(resp);
-                }
-            }
+            && policy_evaluator.evaluate_package_install(&package_info.name)
+                == PackagePolicyDecision::Allow
+        {
+            tracing::debug!(
+                package = %package_info.name,
+                "PyPI metadata response: package is allowlisted, skipping min-age strip"
+            );
+            return Ok(resp);
         }
 
         min_package_age
