@@ -8,6 +8,7 @@ import nugetIcon from "../assets/nuget.svg";
 import chromeIcon from "../assets/chrome.png";
 import openVsxIcon from "../assets/open_vsx.png";
 import skillsShIcon from "../assets/skills-sh.svg";
+import golangIcon from "../assets/golang.svg";
 
 export const BLOCK_REASON_LABEL: Record<BlockReason, string> = {
   malware: "Malware",
@@ -26,6 +27,7 @@ const TOOL_ICONS: Record<string, string> = {
   chrome: chromeIcon,
   open_vsx: openVsxIcon,
   skills_sh: skillsShIcon,
+  golang: golangIcon,
 };
 
 export const getToolIcon = (tool: string) => {

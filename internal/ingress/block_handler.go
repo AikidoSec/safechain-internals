@@ -29,17 +29,23 @@ func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	blocked := s.eventStore.Add(event)
-	go s.ui.NotifyBlocked(blocked)
-	if blocked.Artifact.Product == "chrome" && blocked.Artifact.DisplayName == "" {
+
+	if shouldDelayBlockedUINotification(blocked) {
 		go func() {
 			enriched := s.enrichChromeBlockDisplayName(blocked)
+			s.ui.NotifyBlocked(enriched)
 			s.sendBlockedActivity(enriched)
 		}()
 	} else {
+		go s.ui.NotifyBlocked(blocked)
 		go s.sendBlockedActivity(blocked)
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func shouldDelayBlockedUINotification(event BlockEvent) bool {
+	return event.Artifact.Product == "chrome" && event.Artifact.DisplayName == ""
 }
 
 func (s *Server) enrichChromeBlockDisplayName(event BlockEvent) BlockEvent {
@@ -65,7 +71,6 @@ func (s *Server) enrichChromeBlockDisplayName(event BlockEvent) BlockEvent {
 	}
 
 	log.Printf("updated Chrome extension display name for %s: %q", event.Artifact.PackageName, displayName)
-	s.ui.NotifyBlockedUpdated(updated)
 	return updated
 }
 
