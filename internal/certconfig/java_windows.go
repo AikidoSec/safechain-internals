@@ -12,35 +12,12 @@ import (
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
 )
 
-// On Windows, most mainstream OpenJDK/Oracle-derived JDKs ship the SunMSCAPI
-// provider, which exposes Windows certificate stores to JSSE. We point the
-// JVM at the type "Windows-ROOT", which maps to the current user's root store
-// (CurrentUser\Root). That choice gives us two things:
-//
-//   - Coverage: Windows-ROOT has been part of SunMSCAPI since JDK 1.6, so
-//     every realistic JDK on the machine recognizes it (no JDK 11.0.20 /
-//     17.0.8 backport requirement, no surprise failures on JDK 8).
-//   - Scope: per-user trust, not machine-wide. If multiple users share the
-//     box, our MITM CA is only trusted by the active user that the agent
-//     runs setup for.
-//
-// platform.InstallProxyCA already places the SafeChain CA in
-// LocalMachine\Root via `certutil -addstore -f Root` (LocalSystem-scope) for
-// the rest of the trust pipeline (browsers, schannel, etc.). For Java to see
-// it via Windows-ROOT we additionally mirror the cert into the active user's
-// HKCU\...\Root store via platform.InstallProxyCAForCurrentUser.
-//
 // JAVA_TOOL_OPTIONS broadly applies to JVMs launched by the user — direct
 // invocations, Maven/Gradle-forked children, JNI-embedded VMs in IDEs — but
 // Oracle notes it can be disabled or ignored in some launch/security
 // contexts (e.g. setuid/setgid on Unix; equivalent token-mismatch checks on
 // Windows). On a normal Windows desktop session running our agent as a
 // service this is honored; treat exotic launch contexts as best-effort.
-//
-// Caveat: projects that pin -Djavax.net.ssl.trustStore=... in MAVEN_OPTS,
-// gradle.properties, or on the command line override our flag (later -D wins
-// in JVM argument processing). Per-JDK keytool import is the only fallback;
-// add it later if real usage shows the override case is common.
 const (
 	javaToolOptionsEnvVar  = "JAVA_TOOL_OPTIONS"
 	javaTrustStoreFlag     = "-Djavax.net.ssl.trustStore=NUL"
@@ -99,11 +76,6 @@ func javaToolOptionsAlreadyInstalled(value string) bool {
 	return value == javaToolOptionsAddition || strings.HasPrefix(value, javaToolOptionsAddition+" ")
 }
 
-// prependJavaToolOptionsAddition puts our flags before the user's existing
-// options. Within JAVA_TOOL_OPTIONS, the JVM applies -D properties left to
-// right with later wins, so prepending means an existing user
-// -Djavax.net.ssl.trustStore=... still takes effect. We would rather become a
-// no-op for that property than silently override a deliberate user choice.
 func prependJavaToolOptionsAddition(existing string) string {
 	existing = strings.TrimSpace(existing)
 	if existing == "" {
@@ -112,9 +84,6 @@ func prependJavaToolOptionsAddition(existing string) string {
 	return javaToolOptionsAddition + " " + existing
 }
 
-// stripJavaToolOptionsAddition removes only the exact leading prefix that
-// SafeChain installs. Anything else, including standalone or reordered
-// Windows-ROOT flags, is treated as user-managed state and preserved.
 func stripJavaToolOptionsAddition(value string) string {
 	value = strings.TrimSpace(value)
 	if value == javaToolOptionsAddition {
