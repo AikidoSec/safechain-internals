@@ -150,6 +150,8 @@ impl Rule for RuleNpm {
         match &self.maybe_min_package_age {
             Some(min_package_age) => {
                 min_package_age
+                    // Parsing package names out of registry metadata belongs in the rewriter.
+                    // The allowlist policy decision does not; that business logic belongs here.
                     .remove_new_packages(resp, |name| {
                         self.is_package_allowlisted(&NpmPackageName::from(name))
                     })

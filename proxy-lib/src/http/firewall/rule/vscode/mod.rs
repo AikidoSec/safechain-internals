@@ -246,6 +246,8 @@ impl Rule for RuleVSCode {
         };
 
         min_package_age
+            // Parsing extension IDs out of marketplace metadata belongs in the rewriter.
+            // The allowlist policy decision does not; that business logic belongs here.
             .remove_new_versions(resp, self.get_package_age_cutoff_ts(), |extension_id| {
                 self.is_extension_allowlisted(&new_vscode_package_name(extension_id))
             })
