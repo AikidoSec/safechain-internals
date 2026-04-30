@@ -237,6 +237,8 @@ impl Rule for RuleOpenVsx {
         };
 
         min_package_age
+            // Parsing extension IDs out of registry metadata belongs in the rewriter.
+            // The allowlist policy decision does not; that business logic belongs here.
             .remove_new_versions(
                 resp,
                 &self.remote_released_packages_list,
