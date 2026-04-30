@@ -52,8 +52,7 @@ use crate::{
         notifier::EventNotifier,
         rule::{
             DynRule, golang::min_package_age::MinPackageAgeGolang,
-            npm::min_package_age::MinPackageAge,
-            open_vsx::min_package_age::MinPackageAgeOpenVsx,
+            npm::min_package_age::MinPackageAge, open_vsx::min_package_age::MinPackageAgeOpenVsx,
             vscode::min_package_age::MinPackageAgeVSCode,
         },
     },
