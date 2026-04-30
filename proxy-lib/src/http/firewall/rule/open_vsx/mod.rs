@@ -45,6 +45,11 @@ type OpenVsxRemoteReleasedPackagesList = RemoteReleasedPackagesList<OpenVsxPacka
 const OPEN_VSX_PRODUCT_KEY: ArcStr = arcstr!("open_vsx");
 const OPEN_VSX_ECOSYSTEM_KEY: EcosystemKey = EcosystemKey::from_static("open_vsx");
 
+#[inline(always)]
+fn new_open_vsx_package_name(raw: &str) -> OpenVsxPackageName {
+    OpenVsxPackageName::from(raw)
+}
+
 pub(in crate::http::firewall) struct RuleOpenVsx {
     target_domains: DomainMatcher,
     remote_malware_list: OpenVsxRemoteMalwareList,
@@ -236,6 +241,9 @@ impl Rule for RuleOpenVsx {
                 resp,
                 &self.remote_released_packages_list,
                 self.get_package_age_cutoff_ts(),
+                |extension_id| {
+                    self.is_extension_allowlisted(&new_open_vsx_package_name(extension_id))
+                },
             )
             .await
     }
@@ -243,6 +251,16 @@ impl Rule for RuleOpenVsx {
 
 impl RuleOpenVsx {
     const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(1);
+
+    /// Returns `true` if the endpoint-protection policy explicitly allowlists
+    /// the given extension ID (`publisher/extension`), i.e. evaluates to
+    /// [`PackagePolicyDecision::Allow`]. Used by the metadata-rewrite path
+    /// to skip the min-age strip for trusted extensions.
+    fn is_extension_allowlisted(&self, extension_id: &OpenVsxPackageName) -> bool {
+        self.policy_evaluator.as_ref().is_some_and(|policy| {
+            policy.evaluate_package_install(extension_id) == PackagePolicyDecision::Allow
+        })
+    }
 
     fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
         self.policy_evaluator

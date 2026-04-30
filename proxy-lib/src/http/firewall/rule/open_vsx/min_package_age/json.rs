@@ -16,6 +16,7 @@ pub(super) fn rewrite_json(
     bytes: &[u8],
     released_packages_list: &OpenVsxRemoteReleasedPackagesList,
     cutoff_ts: SystemTimestampMilliseconds,
+    is_allowed: &impl Fn(&str) -> bool,
 ) -> Option<RewriteResult> {
     let mut json: serde_json::Value = match serde_json::from_slice(bytes) {
         Ok(v) => v,
@@ -25,7 +26,8 @@ pub(super) fn rewrite_json(
         }
     };
 
-    let suppressed = dispatch_filter_by_shape(&mut json, released_packages_list, cutoff_ts);
+    let suppressed =
+        dispatch_filter_by_shape(&mut json, released_packages_list, cutoff_ts, is_allowed);
     if suppressed.is_empty() {
         return None;
     }
@@ -52,6 +54,7 @@ fn dispatch_filter_by_shape(
     json: &mut serde_json::Value,
     released_packages_list: &OpenVsxRemoteReleasedPackagesList,
     cutoff_ts: SystemTimestampMilliseconds,
+    is_allowed: &impl Fn(&str) -> bool,
 ) -> Vec<(ArcStr, PackageVersion)> {
     let mut suppressed: Vec<(ArcStr, PackageVersion)> = Vec::new();
 
@@ -74,6 +77,7 @@ fn dispatch_filter_by_shape(
                     released_packages_list,
                     cutoff_ts,
                     &mut suppressed,
+                    is_allowed,
                 );
             }
         }
@@ -89,6 +93,7 @@ fn dispatch_filter_by_shape(
                 released_packages_list,
                 cutoff_ts,
                 &mut suppressed,
+                is_allowed,
             );
         }
     }
@@ -98,7 +103,13 @@ fn dispatch_filter_by_shape(
     //      "allVersions": { "1.2.3": "url", "1.2.2": "url", ... } }
     //    ```
     else if json.get("namespace").is_some() && json.get("name").is_some() {
-        filter_openvsx_extension(json, released_packages_list, cutoff_ts, &mut suppressed);
+        filter_openvsx_extension(
+            json,
+            released_packages_list,
+            cutoff_ts,
+            &mut suppressed,
+            is_allowed,
+        );
     }
 
     // else: unknown shape — leave json untouched, return empty vec.
@@ -113,6 +124,7 @@ fn filter_openvsx_extension(
     released_packages_list: &OpenVsxRemoteReleasedPackagesList,
     cutoff_ts: SystemTimestampMilliseconds,
     suppressed: &mut Vec<(ArcStr, PackageVersion)>,
+    is_allowed: &impl Fn(&str) -> bool,
 ) {
     let namespace = extension
         .get("namespace")
@@ -131,6 +143,13 @@ fn filter_openvsx_extension(
 
     let raw_id = format!("{namespace}/{name}");
     let lookup_key = OpenVsxPackageName::from(raw_id.as_str());
+    if is_allowed(&raw_id) {
+        tracing::debug!(
+            extension = %raw_id,
+            "OpenVSX metadata response: extension is allowlisted, skipping min-age strip"
+        );
+        return;
+    }
     let extension_id: ArcStr = raw_id.into();
 
     let Some(all_versions) = extension
@@ -157,6 +176,7 @@ fn filter_vsmarketplace_extension(
     released_packages_list: &OpenVsxRemoteReleasedPackagesList,
     cutoff_ts: SystemTimestampMilliseconds,
     suppressed: &mut Vec<(ArcStr, PackageVersion)>,
+    is_allowed: &impl Fn(&str) -> bool,
 ) {
     let publisher = extension
         .get("publisher")
@@ -176,6 +196,13 @@ fn filter_vsmarketplace_extension(
 
     let raw_id = format!("{publisher}/{name}");
     let lookup_key = OpenVsxPackageName::from(raw_id.as_str());
+    if is_allowed(&raw_id) {
+        tracing::debug!(
+            extension = %raw_id,
+            "OpenVSX metadata response: extension is allowlisted, skipping min-age strip"
+        );
+        return;
+    }
     let extension_id: ArcStr = raw_id.into();
 
     let Some(versions) = extension.get_mut("versions").and_then(|v| v.as_array_mut()) else {

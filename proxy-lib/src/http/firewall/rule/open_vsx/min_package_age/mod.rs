@@ -52,6 +52,7 @@ impl MinPackageAgeOpenVsx {
         resp: Response,
         released_packages_list: &OpenVsxRemoteReleasedPackagesList,
         cutoff_ts: SystemTimestampMilliseconds,
+        is_allowed: impl Fn(&str) -> bool,
     ) -> Result<Response, BoxError> {
         if resp
             .headers()
@@ -96,7 +97,8 @@ impl MinPackageAgeOpenVsx {
             return Ok(Response::from_parts(parts, Body::from(bytes)));
         }
 
-        let Some(rewrite) = rewrite_json(&bytes, released_packages_list, cutoff_ts) else {
+        let Some(rewrite) = rewrite_json(&bytes, released_packages_list, cutoff_ts, &is_allowed)
+        else {
             return Ok(Response::from_parts(parts, Body::from(bytes)));
         };
 

@@ -55,7 +55,12 @@ async fn vs_marketplace_strips_too_young_versions() {
     let released = make_released_packages(&[("pub/ext", "1.0.1", 1)]);
 
     let result = MinPackageAgeOpenVsx::new(None)
-        .remove_new_versions(make_json_response(body), &released, cutoff_24h_ago())
+        .remove_new_versions(
+            make_json_response(body),
+            &released,
+            cutoff_24h_ago(),
+            |_| false,
+        )
         .await
         .unwrap();
 
@@ -82,7 +87,12 @@ async fn vs_marketplace_keeps_old_versions_unchanged() {
     let released = make_released_packages(&[]);
 
     let result = MinPackageAgeOpenVsx::new(None)
-        .remove_new_versions(make_json_response(body), &released, cutoff_24h_ago())
+        .remove_new_versions(
+            make_json_response(body),
+            &released,
+            cutoff_24h_ago(),
+            |_| false,
+        )
         .await
         .unwrap();
 
@@ -109,7 +119,12 @@ async fn vs_marketplace_lookup_is_case_insensitive() {
     let released = make_released_packages(&[("publisher/extname", "1.0.0", 1)]);
 
     let result = MinPackageAgeOpenVsx::new(None)
-        .remove_new_versions(make_json_response(body), &released, cutoff_24h_ago())
+        .remove_new_versions(
+            make_json_response(body),
+            &released,
+            cutoff_24h_ago(),
+            |_| false,
+        )
         .await
         .unwrap();
 
@@ -121,6 +136,37 @@ async fn vs_marketplace_lookup_is_case_insensitive() {
             .is_empty(),
         "case-mismatched response should still resolve against the lowercase release key"
     );
+}
+
+#[tokio::test]
+async fn vs_marketplace_keeps_allowlisted_extension_versions() {
+    let body = r#"{
+      "results":[{"extensions":[{
+        "publisher":{"publisherName":"pub"},
+        "extensionName":"ext",
+        "versions":[{"version":"1.0.1"}]
+      }]}]
+    }"#;
+    let released = make_released_packages(&[("pub/ext", "1.0.1", 1)]);
+
+    let result = MinPackageAgeOpenVsx::new(None)
+        .remove_new_versions(
+            make_json_response(body),
+            &released,
+            cutoff_24h_ago(),
+            |id| id == "pub/ext",
+        )
+        .await
+        .unwrap();
+
+    let json: serde_json::Value = result.try_into_json().await.unwrap();
+    let versions: Vec<&str> = json["results"][0]["extensions"][0]["versions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["version"].as_str().unwrap())
+        .collect();
+    assert_eq!(versions, ["1.0.1"]);
 }
 
 // --- Native OpenVSX single-extension shape (`/api/{ns}/{name}`) ---
@@ -139,7 +185,12 @@ async fn single_extension_strips_too_young_from_all_versions_map() {
     let released = make_released_packages(&[("pub/ext", "1.0.1", 1)]);
 
     let result = MinPackageAgeOpenVsx::new(None)
-        .remove_new_versions(make_json_response(body), &released, cutoff_24h_ago())
+        .remove_new_versions(
+            make_json_response(body),
+            &released,
+            cutoff_24h_ago(),
+            |_| false,
+        )
         .await
         .unwrap();
 
@@ -164,7 +215,12 @@ async fn single_extension_keeps_old_versions_unchanged() {
     let released = make_released_packages(&[]);
 
     let result = MinPackageAgeOpenVsx::new(None)
-        .remove_new_versions(make_json_response(body), &released, cutoff_24h_ago())
+        .remove_new_versions(
+            make_json_response(body),
+            &released,
+            cutoff_24h_ago(),
+            |_| false,
+        )
         .await
         .unwrap();
 
@@ -193,7 +249,12 @@ async fn query_response_strips_too_young_from_extensions_array() {
     let released = make_released_packages(&[("pub/ext", "1.0.1", 1)]);
 
     let result = MinPackageAgeOpenVsx::new(None)
-        .remove_new_versions(make_json_response(body), &released, cutoff_24h_ago())
+        .remove_new_versions(
+            make_json_response(body),
+            &released,
+            cutoff_24h_ago(),
+            |_| false,
+        )
         .await
         .unwrap();
 
@@ -223,7 +284,7 @@ async fn strips_cache_headers_when_response_is_rewritten() {
     let released = make_released_packages(&[("pub/ext", "1.0.0", 1)]);
 
     let result = MinPackageAgeOpenVsx::new(None)
-        .remove_new_versions(resp, &released, cutoff_24h_ago())
+        .remove_new_versions(resp, &released, cutoff_24h_ago(), |_| false)
         .await
         .unwrap();
 
@@ -245,7 +306,7 @@ async fn preserves_cache_headers_when_nothing_rewritten() {
     let released = make_released_packages(&[]); // nothing recent
 
     let result = MinPackageAgeOpenVsx::new(None)
-        .remove_new_versions(resp, &released, cutoff_24h_ago())
+        .remove_new_versions(resp, &released, cutoff_24h_ago(), |_| false)
         .await
         .unwrap();
 
@@ -267,7 +328,7 @@ async fn passthrough_non_json_content_type() {
     let released = make_released_packages(&[("pub/ext", "1.0.0", 1)]);
 
     let result = MinPackageAgeOpenVsx::new(None)
-        .remove_new_versions(resp, &released, cutoff_24h_ago())
+        .remove_new_versions(resp, &released, cutoff_24h_ago(), |_| false)
         .await
         .unwrap();
 
@@ -280,7 +341,7 @@ async fn passthrough_invalid_json() {
     let released = make_released_packages(&[]);
 
     let result = MinPackageAgeOpenVsx::new(None)
-        .remove_new_versions(resp, &released, cutoff_24h_ago())
+        .remove_new_versions(resp, &released, cutoff_24h_ago(), |_| false)
         .await
         .unwrap();
 
@@ -297,7 +358,7 @@ async fn passthrough_unknown_json_shape() {
     let released = make_released_packages(&[]);
 
     let result = MinPackageAgeOpenVsx::new(None)
-        .remove_new_versions(resp, &released, cutoff_24h_ago())
+        .remove_new_versions(resp, &released, cutoff_24h_ago(), |_| false)
         .await
         .unwrap();
 
@@ -316,7 +377,7 @@ async fn passthrough_when_content_length_exceeds_cap() {
     let released = make_released_packages(&[]);
 
     let result = MinPackageAgeOpenVsx::new(None)
-        .remove_new_versions(resp, &released, cutoff_24h_ago())
+        .remove_new_versions(resp, &released, cutoff_24h_ago(), |_| false)
         .await
         .unwrap();
 
