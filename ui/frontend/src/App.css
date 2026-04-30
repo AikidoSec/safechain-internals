@@ -254,9 +254,10 @@ body {
 }
 .events-list .event-product-icon {
   height: 16px;
-  width: 16px;
-  flex: 0 0 16px;
+  width: 22px;
+  flex: 0 0 22px;
   object-fit: contain;
+  object-position: left;
   display: block;
   vertical-align: middle;
 }
@@ -986,11 +987,11 @@ body {
 }
 
 .protected-ecosystems-table__icon {
-  width: 16px;
+  width: 32px;
   height: 16px;
   object-fit: contain;
+  object-position: left;
   display: block;
-  margin: 0 auto;
 }
 
 .protected-ecosystems-table__label-cell {
