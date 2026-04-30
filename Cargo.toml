@@ -61,11 +61,11 @@ windows-sys = "0.61"
 
 [workspace.dependencies.rama]
 git = "https://github.com/plabayo/rama"
-rev = "d4d9a69c2e7be138580a6e259ee260f78e38c005"
+rev = "e4bdf3acb5a769083b3a78cb364aea2a64e05881"
 
 [workspace.dependencies.rama-core]
 git = "https://github.com/plabayo/rama"
-rev = "d4d9a69c2e7be138580a6e259ee260f78e38c005"
+rev = "e4bdf3acb5a769083b3a78cb364aea2a64e05881"
 
 [profile.release]
 strip = true

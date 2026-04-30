@@ -23,12 +23,11 @@ use rama::{
     layer::{ArcLayer, ConsumeErrLayer, HijackLayer},
     net::{
         apple::networkextension::{
-            TcpFlow,
+            NwTcpStream, TcpFlow,
             tproxy::{TransparentProxyFlowMeta, TransparentProxyServiceContext},
         },
-        client::{ConnectorService, EstablishedClientConnection},
         http::server::HttpPeekRouter,
-        proxy::{IoForwardService, ProxyTarget},
+        proxy::IoForwardService,
         tls::server::PeekTlsClientHelloService,
     },
     proxy::socks5::{proxy::mitm::Socks5MitmRelayService, server::Socks5PeekRouter},
@@ -53,21 +52,22 @@ use safechain_proxy_lib::{
         ws_relay::WebSocketMitmRelayService,
     },
     storage,
-    tcp::{is_known_http_port, is_known_tls_port, new_tcp_connector_service_for_proxy},
     tls::{RootCaKeyPair, mitm_relay_policy::TlsMitmRelayPolicyLayer},
     utils::token::AgentIdentity,
 };
 
 type TcpTlsMitmRelay = TlsMitmRelay<CachedBoringMitmCertIssuer<InMemoryBoringMitmCertIssuer>>;
 
-#[derive(Clone)]
-pub(super) struct TcpMitmService {
+struct TcpMitmServiceInner {
     proxy_config: ProxyConfig,
     tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
     tls_mitm_relay: TcpTlsMitmRelay,
     firewall: Firewall,
     ca_crt_pem_bytes: &'static [u8],
 }
+
+#[derive(Clone)]
+pub(super) struct TcpMitmService(Arc<TcpMitmServiceInner>);
 
 impl TcpMitmService {
     pub(super) async fn try_new(ctx: TransparentProxyServiceContext) -> Result<Self, BoxError> {
@@ -117,19 +117,30 @@ impl TcpMitmService {
 
         tracing::debug!("creating tcp mitm state for transparent proxy extension");
 
-        Ok(Self {
+        Ok(Self(Arc::new(TcpMitmServiceInner {
             proxy_config,
             tls_mitm_relay_policy: TlsMitmRelayPolicyLayer::new(firewall.clone()),
             tls_mitm_relay: TlsMitmRelay::new_cached_in_memory(ca_crt, ca_key),
             firewall,
             ca_crt_pem_bytes,
-        })
+        })))
     }
 
-    pub(super) fn new_intercept_service(&self, exec: Executor) -> TcpInterceptService {
+    pub(super) fn proxy_config(&self) -> &ProxyConfig {
+        &self.0.proxy_config
+    }
+
+    pub(super) fn new_intercept_service(
+        &self,
+        exec: Executor,
+        tls_peek_duration: Duration,
+        http_peek_duration: Duration,
+    ) -> TcpInterceptService {
         TcpInterceptService {
             mitm: self.clone(),
             exec,
+            tls_peek_duration,
+            http_peek_duration,
         }
     }
 
@@ -138,11 +149,16 @@ impl TcpMitmService {
             return false;
         };
 
-        self.firewall
+        self.0
+            .firewall
             .is_passthrough_traffic(&PassthroughMatchContext {
                 app_bundle_id: Some(bundle_id),
                 domain: None,
             })
+    }
+
+    pub fn is_passthrough_destination(&self, addr: std::net::IpAddr) -> bool {
+        self.0.firewall.is_passthrough_destination(addr)
     }
 
     fn new_bridge_service<Ingress, Egress>(
@@ -158,11 +174,10 @@ impl TcpMitmService {
     {
         new_tcp_service_inner(
             exec,
-            self.proxy_config.clone(),
-            self.tls_mitm_relay_policy.clone(),
-            self.tls_mitm_relay.clone(),
-            self.firewall.clone(),
-            self.ca_crt_pem_bytes,
+            self.0.tls_mitm_relay_policy.clone(),
+            self.0.tls_mitm_relay.clone(),
+            self.0.firewall.clone(),
+            self.0.ca_crt_pem_bytes,
             within_connect_tunnel,
             tls_peek_duration,
             http_peek_duration,
@@ -173,7 +188,6 @@ impl TcpMitmService {
 #[allow(clippy::too_many_arguments)]
 fn new_tcp_service_inner<Issuer, Ingress, Egress>(
     exec: Executor,
-    proxy_config: ProxyConfig,
     tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
     tls_mitm_relay: TlsMitmRelay<Issuer>,
     firewall: Firewall,
@@ -190,7 +204,6 @@ where
     let http_mitm_svc =
         HttpMitmRelay::new(exec.clone()).with_http_middleware(http_relay_middleware(
             exec,
-            proxy_config,
             tls_mitm_relay_policy.clone(),
             tls_mitm_relay.clone(),
             firewall,
@@ -225,7 +238,6 @@ where
 #[allow(clippy::too_many_arguments)]
 fn http_relay_middleware<S, Issuer>(
     exec: Executor,
-    proxy_config: ProxyConfig,
     tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
     tls_mitm_relay: TlsMitmRelay<Issuer>,
     firewall: Firewall,
@@ -249,7 +261,6 @@ where
     } else {
         new_tcp_service_inner(
             exec.clone(),
-            proxy_config,
             tls_mitm_relay_policy,
             tls_mitm_relay,
             firewall.clone(),
@@ -343,62 +354,24 @@ async fn create_firewall(
 pub(super) struct TcpInterceptService {
     mitm: TcpMitmService,
     exec: Executor,
+    tls_peek_duration: Duration,
+    http_peek_duration: Duration,
 }
 
-impl Service<TcpFlow> for TcpInterceptService {
+impl Service<BridgeIo<TcpFlow, NwTcpStream>> for TcpInterceptService {
     type Output = ();
     type Error = Infallible;
 
-    async fn serve(&self, ingress: TcpFlow) -> Result<Self::Output, Self::Error> {
-        let Some(ProxyTarget(egress_addr)) = ingress.extensions().get_ref().cloned() else {
-            tracing::debug!("missing ProxyTarget in transparent proxy tcp service");
-            return Ok(());
-        };
-
-        let connector = new_tcp_connector_service_for_proxy(self.exec.clone());
-        let tcp_req = rama::tcp::client::Request::new_with_extensions(
-            egress_addr.clone(),
-            ingress.extensions().clone(),
-        );
-
-        let EstablishedClientConnection { conn: egress, .. } =
-            match connector.connect(tcp_req).await {
-                Ok(connection) => connection,
-                Err(err) => {
-                    tracing::debug!(
-                        address = %egress_addr,
-                        error = %err.into_box_error(),
-                        "transparent proxy tcp connect failed"
-                    );
-                    return Ok(());
-                }
-            };
-
-        let cfg = &self.mitm.proxy_config;
-        let port = egress_addr.port;
-        let tls_peek_duration = Duration::from_secs_f64(
-            if is_known_tls_port(port) {
-                cfg.peek_duration_s
-            } else {
-                cfg.peek_unknown_port_duration_s
-            }
-            .max(0.001),
-        );
-        let http_peek_duration = Duration::from_secs_f64(
-            if is_known_http_port(port) {
-                cfg.peek_duration_s
-            } else {
-                cfg.peek_unknown_port_duration_s
-            }
-            .max(0.001),
-        );
+    async fn serve(
+        &self,
+        bridge: BridgeIo<TcpFlow, NwTcpStream>,
+    ) -> Result<Self::Output, Self::Error> {
         let mitm_svc = self.mitm.new_bridge_service(
             self.exec.clone(),
             false,
-            tls_peek_duration,
-            http_peek_duration,
+            self.tls_peek_duration,
+            self.http_peek_duration,
         );
-        let _ = mitm_svc.serve(BridgeIo(ingress, egress)).await;
-        Ok(())
+        mitm_svc.serve(bridge).await
     }
 }

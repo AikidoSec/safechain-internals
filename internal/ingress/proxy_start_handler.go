@@ -27,6 +27,7 @@ func (s *Server) handleProxyStart(w http.ResponseWriter, r *http.Request) {
 		BaseURL:     s.config.GetBaseURL(),
 		Token:       s.config.Token,
 		DeviceID:    s.config.DeviceID,
+		Passthrough: IsRebootRequired(),
 	}
 
 	if err := s.proxy.Start(r.Context(), opts); err != nil {

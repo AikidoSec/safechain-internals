@@ -359,7 +359,7 @@ func (s *server) computeMockSteps() []string {
 		steps = append(steps, "allow-vpn")
 	}
 	if len(steps) > 0 {
-		steps = append(steps, "start-proxy", "install-ca")
+		steps = append(steps, "start-proxy", "install-ca", "reboot")
 	}
 	return steps
 }

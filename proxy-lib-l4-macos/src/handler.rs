@@ -1,12 +1,13 @@
-use std::{convert::Infallible, future::Future};
+use std::{convert::Infallible, future::Future, time::Duration};
 
 use rama::{
     Service,
     error::BoxError,
+    io::BridgeIo,
     net::{
         address::{Host, HostWithPort},
         apple::networkextension::{
-            TcpFlow, UdpFlow,
+            NwTcpStream, NwUdpSocket, TcpFlow, UdpFlow,
             tproxy::{
                 FlowAction, TransparentProxyConfig, TransparentProxyFlowAction,
                 TransparentProxyFlowMeta, TransparentProxyFlowProtocol, TransparentProxyHandler,
@@ -20,9 +21,12 @@ use rama::{
     telemetry::tracing,
     utils::str::any_starts_with_ignore_ascii_case,
 };
-use safechain_proxy_lib::nostd::net::is_passthrough_ip;
+use safechain_proxy_lib::{
+    nostd::net::is_passthrough_ip,
+    tcp::{is_known_http_port, is_known_tls_port},
+};
 
-type UdpFlowService = BoxService<UdpFlow, (), Infallible>;
+type UdpFlowService = BoxService<BridgeIo<UdpFlow, NwUdpSocket>, (), Infallible>;
 
 #[derive(Debug, Clone)]
 pub struct FlowHandlerFactory;
@@ -70,21 +74,50 @@ impl TransparentProxyHandler for FlowHandler {
         &self,
         exec: Executor,
         meta: TransparentProxyFlowMeta,
-    ) -> impl Future<Output = FlowAction<impl Service<TcpFlow, Output = (), Error = Infallible>>>
-    + Send
+    ) -> impl Future<
+        Output = FlowAction<
+            impl Service<BridgeIo<TcpFlow, NwTcpStream>, Output = (), Error = Infallible>,
+        >,
+    > + Send
     + '_ {
         let action = if self.tcp_mitm_service.is_passthrough_flow(&meta) {
-            tracing::warn!(
-                protocol = ?meta.source_app_bundle_identifier,
-                "passthrough: app bundle matches passthrough for any domain"
+            tracing::debug!(
+                app_bundle = ?meta.source_app_bundle_identifier,
+                remote = ?meta.remote_endpoint,
+                "passthrough: app bundle matches passthrough (for any domain)"
+            );
+            FlowAction::Passthrough
+        } else if is_configured_cidr_passthrough(&meta, &self.tcp_mitm_service) {
+            tracing::debug!(
+                app_bundle = ?meta.source_app_bundle_identifier,
+                remote = ?meta.remote_endpoint,
+                "passthrough: CIDR for remote endpoint matches passthrough"
             );
             FlowAction::Passthrough
         } else {
             match flow_action(&meta) {
-                TransparentProxyFlowAction::Intercept => FlowAction::Intercept {
-                    service: self.tcp_mitm_service.new_intercept_service(exec),
-                    meta,
-                },
+                TransparentProxyFlowAction::Intercept => {
+                    let port = meta.remote_endpoint.as_ref().map(|e| e.port).unwrap_or(0);
+                    let cfg = self.tcp_mitm_service.proxy_config();
+                    let tls_peek_duration = peek_duration(if is_known_tls_port(port) {
+                        cfg.peek_duration_s
+                    } else {
+                        cfg.peek_unknown_port_duration_s
+                    });
+                    let http_peek_duration = peek_duration(if is_known_http_port(port) {
+                        cfg.peek_duration_s
+                    } else {
+                        cfg.peek_unknown_port_duration_s
+                    });
+                    FlowAction::Intercept {
+                        service: self.tcp_mitm_service.new_intercept_service(
+                            exec,
+                            tls_peek_duration,
+                            http_peek_duration,
+                        ),
+                        meta,
+                    }
+                }
                 TransparentProxyFlowAction::Passthrough => FlowAction::Passthrough,
                 TransparentProxyFlowAction::Blocked => FlowAction::Blocked,
             }
@@ -97,14 +130,19 @@ impl TransparentProxyHandler for FlowHandler {
         &self,
         _exec: Executor,
         meta: TransparentProxyFlowMeta,
-    ) -> impl Future<Output = FlowAction<impl Service<UdpFlow, Output = (), Error = Infallible>>>
-    + Send
+    ) -> impl Future<
+        Output = FlowAction<
+            impl Service<BridgeIo<UdpFlow, NwUdpSocket>, Output = (), Error = Infallible>,
+        >,
+    > + Send
     + '_ {
         let action = if self.tcp_mitm_service.is_passthrough_flow(&meta) {
             tracing::warn!(
                 protocol = ?meta.source_app_bundle_identifier,
                 "passthrough: app bundle matches passthrough for any domain"
             );
+            FlowAction::Passthrough
+        } else if is_configured_cidr_passthrough(&meta, &self.tcp_mitm_service) {
             FlowAction::Passthrough
         } else {
             match flow_action(&meta) {
@@ -126,6 +164,10 @@ impl TransparentProxyHandler for FlowHandler {
 
         std::future::ready(action)
     }
+}
+
+fn peek_duration(seconds: f64) -> Duration {
+    Duration::from_secs_f64(seconds.max(0.001))
 }
 
 fn flow_action(meta: &TransparentProxyFlowMeta) -> TransparentProxyFlowAction {
@@ -233,6 +275,27 @@ fn remote_host_for_interception(meta: &TransparentProxyFlowMeta) -> Option<HostW
             }
         }
     }
+}
+
+fn is_configured_cidr_passthrough(
+    meta: &TransparentProxyFlowMeta,
+    mitm: &crate::tcp::TcpMitmService,
+) -> bool {
+    let Some(ref endpoint) = meta.remote_endpoint else {
+        return false;
+    };
+    let Host::Address(addr) = &endpoint.host else {
+        return false;
+    };
+    if mitm.is_passthrough_destination(*addr) {
+        tracing::debug!(
+            remote = ?meta.remote_endpoint,
+            app_bundle_id = ?meta.source_app_bundle_identifier,
+            "passthrough: remote IP is within configured CIDR passthrough range"
+        );
+        return true;
+    }
+    false
 }
 
 fn is_chromium_bundle_identifier(identifier: &str) -> bool {

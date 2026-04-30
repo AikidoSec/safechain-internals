@@ -51,7 +51,8 @@ use crate::{
     http::firewall::{
         notifier::EventNotifier,
         rule::{
-            DynRule, npm::min_package_age::MinPackageAge,
+            DynRule, golang::min_package_age::MinPackageAgeGolang,
+            npm::min_package_age::MinPackageAge,
             open_vsx::min_package_age::MinPackageAgeOpenVsx,
             vscode::min_package_age::MinPackageAgeVSCode,
         },
@@ -238,6 +239,16 @@ impl Firewall {
                 .await
                 .context("create block rule: open vsx")?
                 .into_dyn(),
+                self::rule::golang::RuleGolang::try_new(
+                    guard.clone(),
+                    layered_client.clone(),
+                    data.clone(),
+                    remote_endpoint_config.clone(),
+                    Some(MinPackageAgeGolang::new(notifier.clone())),
+                )
+                .await
+                .context("create block rule: golang")?
+                .into_dyn(),
                 self::rule::skills_sh::RuleSkillsSh::try_new(
                     guard,
                     layered_client,
@@ -352,6 +363,13 @@ impl Firewall {
         };
 
         passthrough_list.is_source_app_passthrough(passthrough_context)
+    }
+
+    pub fn is_passthrough_destination(&self, addr: std::net::IpAddr) -> bool {
+        self.passthrough_list
+            .as_ref()
+            .map(|l| l.is_destination_ip_passthrough(addr))
+            .unwrap_or(false)
     }
 
     pub fn is_agent_authorized(&self, req: &Request) -> bool {

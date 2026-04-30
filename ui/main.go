@@ -374,7 +374,6 @@ func setupSystemTray(app *application.App, showDashboard func(), notifWindow *ap
 		systray.PositionWindow(notifWindow, 2)
 		systray.WindowDebounce(200 * time.Millisecond)
 		notifWindow.Show()
-		notifWindow.Focus()
 	}
 
 	go func() {
