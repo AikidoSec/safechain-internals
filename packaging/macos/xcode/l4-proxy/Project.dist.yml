@@ -7,7 +7,7 @@ options:
 packages:
   RamaAppleNetworkExtension:
     url: https://github.com/plabayo/rama.git
-    revision: e4bdf3acb5a769083b3a78cb364aea2a64e05881
+    revision: 8c125c3bab9912124e3f2752eefdc196d85095c2
   X509:
     url: https://github.com/apple/swift-certificates.git
     from: 1.0.0

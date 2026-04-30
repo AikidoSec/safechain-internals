@@ -423,6 +423,19 @@ func RequestAccess(eventID string) error {
 	return nil
 }
 
+func RefreshConfig() error {
+	resp, err := doRequest(http.MethodPost, "/v1/config/refresh", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("config refresh: %s: %s", resp.Status, strings.TrimSpace(string(b)))
+	}
+	return nil
+}
+
 func CollectLogs() error {
 	resp, err := doRequestWithClient(collectLogsHTTPClient, http.MethodPost, "/v1/logs/collect", nil)
 	if err != nil {

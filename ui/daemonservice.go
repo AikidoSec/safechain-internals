@@ -109,6 +109,10 @@ func (s *DaemonService) CloseInstallWindow() {
 	}
 }
 
+func (s *DaemonService) RefreshConfig() error {
+	return daemon.RefreshConfig()
+}
+
 func (s *DaemonService) CollectLogs() error {
 	return daemon.CollectLogs()
 }
