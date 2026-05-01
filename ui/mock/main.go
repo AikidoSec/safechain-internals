@@ -105,7 +105,7 @@ func seedData() ([]BlockEvent, []TlsEvent) {
 			TsMs:        now - 15_000,
 			Artifact:    Artifact{Product: "nuget", Identifier: "Contoso.Analytics", Version: "3.1.0", DisplayName: "Contoso.Analytics"},
 			BlockReason: "request_install",
-			Status:      "request_pending",
+			Status:      "pending",
 			Count:       1,
 		},
 		{
@@ -113,7 +113,7 @@ func seedData() ([]BlockEvent, []TlsEvent) {
 			TsMs:        now - 360_000,
 			Artifact:    Artifact{Product: "chrome", Identifier: "pgojnojmmhpofjgdmaebadhbocahppod", Version: "", DisplayName: ""},
 			BlockReason: "request_install",
-			Status:      "request_approved",
+			Status:      "approved",
 			Count:       32,
 		},
 		{
@@ -121,7 +121,7 @@ func seedData() ([]BlockEvent, []TlsEvent) {
 			TsMs:        now - 400_000,
 			Artifact:    Artifact{Product: "open_vsx", Identifier: "ms-python.python", Version: "2024.0.0", DisplayName: "Python"},
 			BlockReason: "request_install",
-			Status:      "request_rejected",
+			Status:      "rejected",
 			Count:       1,
 		},
 		{
@@ -267,8 +267,8 @@ func (s *server) handleRequestAccess(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 	for i, e := range s.blocks {
 		if e.ID == id {
-			s.blocks[i].Status = "request_pending"
-			log.Printf("mock: request-access for %s → status=request_pending", id)
+			s.blocks[i].Status = "pending"
+			log.Printf("mock: request-access for %s → status=pending", id)
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
