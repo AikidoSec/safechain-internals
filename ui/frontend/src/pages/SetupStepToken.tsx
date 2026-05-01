@@ -8,17 +8,22 @@ interface Props {
   onAction: () => void;
   tokenInput: string;
   onTokenChange: (value: string) => void;
+  invalidToken?: boolean;
 }
 
-export function SetupStepToken({ stepNumber, totalSteps, phase, errorMsg, onAction, tokenInput, onTokenChange }: Props) {
+export function SetupStepToken({ stepNumber, totalSteps, phase, errorMsg, onAction, tokenInput, onTokenChange, invalidToken = false }: Props) {
   return (
     <SetupStepLayout
       stepNumber={stepNumber}
       totalSteps={totalSteps}
       heading="Connect your device"
-      title="Enter your Aikido token"
-      hint="Paste your Aikido Endpoint Protection token to connect this device to your organization."
-      buttonLabel="Set Token"
+      title={invalidToken ? "Replace your Aikido token" : "Enter your Aikido token"}
+      hint={
+        invalidToken
+          ? "The configured token was rejected by Aikido. Paste a valid Endpoint Protection token to reconnect this device."
+          : "Paste your Aikido Endpoint Protection token to connect this device to your organization."
+      }
+      buttonLabel={invalidToken ? "Replace Token" : "Set Token"}
       phase={phase}
       errorMsg={errorMsg}
       onAction={onAction}
