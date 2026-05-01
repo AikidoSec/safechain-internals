@@ -8,6 +8,7 @@ import { TlsEventDetail } from "./pages/TlsEventDetail";
 import { MinPackageAgeEventDetail } from "./pages/MinPackageAgeEventDetail";
 import { ProtectedEcosystems } from "./pages/ProtectedEcosystems";
 import { InstallPage } from "./pages/InstallPage";
+import { TrayNotification } from "./pages/TrayNotification";
 import { getVersion, setupCheck, setupStart } from "./api";
 import logoUrl from "../assets/logo.svg";
 import "./App.css";
@@ -122,6 +123,7 @@ function App() {
     <HashRouter>
       <Routes>
         <Route path="/install" element={<InstallPage />} />
+        <Route path="/tray-notification" element={<TrayNotification />} />
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<EventsList />} />
           <Route path="/events" element={<EventsList />} />

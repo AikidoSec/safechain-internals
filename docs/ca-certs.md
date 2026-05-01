@@ -18,6 +18,28 @@ On Windows, the environment variable is set at the User level via PowerShell.
 
 Firefox maintains its own certificate store and does not trust the OS trust store by default. Aikido Endpoint enables the `security.enterprise_roots.enabled` preference in each detected Firefox profile's `user.js` file, which tells Firefox to also trust certificates in the OS trust store.
 
+## Java
+
+Maven, Gradle, and other Java build tools read trust roots from the JDK's `cacerts` keystore rather than the OS trust store. Aikido Endpoint imports its CA into the `cacerts` of every JDK it can discover on the system.
+
+On macOS, discovery covers:
+
+- JDKs reported by `/usr/libexec/java_home -V`
+- JetBrains-managed JDKs and the bundled JBR inside IDE app bundles
+- Eclipse-bundled JustJ JDKs
+- Homebrew `openjdk` (Apple Silicon and Intel prefixes)
+- Version managers: sdkman, asdf, jenv
+
+JDKs installed in non-standard locations are not auto-configured and must be handled manually.
+
+If a build still fails with a TLS error, confirm which JDK is actually being used (`mvn --version`, or in JetBrains via `Settings → Build Tools → Gradle → Gradle JVM`) and verify the `aikido-safechain-proxy-ca` alias is present in its `cacerts`:
+
+```bash
+keytool -list -keystore <jdk>/lib/security/cacerts -storepass changeit | grep aikido-safechain-proxy-ca
+```
+
+If the alias is missing, the JDK was outside Aikido's discovery — import the CA manually with `keytool -importcert`.
+
 ## Docker
 
 Aikido Endpoint automatically installs the CA into running Docker containers for supported Linux distributions (Debian/Ubuntu, Alpine, RHEL/CentOS/Fedora/Amazon Linux). Containers that start after the agent is active are also reconciled automatically.
@@ -84,7 +106,7 @@ JetBrains IDEs (IntelliJ IDEA, PyCharm, WebStorm, GoLand, CLion, PhpStorm, Rider
 
 **The IDE must be restarted** after Aikido Endpoint is installed (or after the CA is updated). JetBrains IDEs load certificates at startup and do not watch for changes to the OS trust store at runtime.
 
-> **Note:** Maven and Gradle running inside JetBrains use the project JDK's `cacerts` keystore, not the IDE's trust manager. If Maven/Gradle builds fail with certificate errors while the IDE itself works fine, the CA may need to be added to the JDK's trust store separately via `keytool`.
+For Maven and Gradle builds run from inside JetBrains IDEs, see [Java](#java) — those tools use the JDK's `cacerts` keystore, not the IDE's trust manager.
 
 ## Custom / other software
 

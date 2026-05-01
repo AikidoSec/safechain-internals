@@ -17,13 +17,21 @@ use serde::{Deserialize, Deserializer};
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct ProxyConfig {
-    /// Duration in seconds to peek into a connection before deciding how to handle it.
+    /// Duration in seconds to peek into a connection on known ports,
+    /// where we have a high chance it might contain relevant data.
     ///
-    /// This is typically used during protocol detection or early inspection
-    /// of incoming traffic.
+    /// The minimum accepted value is 1 ms; anything lower is clamped up.
     ///
-    /// Defaults to `0.5`.
+    /// Defaults to `0.2`.
     pub peek_duration_s: f64,
+
+    /// Duration in seconds to peek into a connection on unknown ports.
+    ///
+    /// These flows are less likely to carry relevant data flows, so a shorter window wastes
+    /// less time when no relevant data arrives. Floor of 1ms.
+    ///
+    /// Defaults to `0.01`.
+    pub peek_unknown_port_duration_s: f64,
 
     /// Optional identity of the running agent.
     ///
@@ -53,17 +61,23 @@ pub struct ProxyConfig {
 
     /// PEM-encoded root CA private key supplied by the host.
     pub ca_key_pem: Option<String>,
+
+    /// Disables the firewall, this is used for the first time the proxy starts and certs are not trusted yet
+    ///  The daemon will first start the proxy in this mode to obtain the cert and make it trusted.
+    pub no_firewall: bool,
 }
 
 impl Default for ProxyConfig {
     fn default() -> Self {
         Self {
-            peek_duration_s: 0.5,
+            peek_duration_s: 0.2,
+            peek_unknown_port_duration_s: 0.01,
             agent_identity: None,
             reporting_endpoint: None,
             aikido_url: Uri::from_static("https://app.aikido.dev"),
             ca_cert_pem: None,
             ca_key_pem: None,
+            no_firewall: false,
         }
     }
 }

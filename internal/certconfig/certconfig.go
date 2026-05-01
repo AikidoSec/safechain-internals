@@ -22,9 +22,8 @@ func New() *CertConfig {
 			newNodeConfigurator(),
 			newPipConfigurator(),
 			newFirefoxConfigurator(),
-			newMavenConfigurator(),
+			newJavaConfigurator(),
 			newHomebrewConfigurator(),
-			newGradleConfigurator(),
 			newGitConfigurator(),
 		},
 	}

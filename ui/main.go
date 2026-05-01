@@ -14,14 +14,19 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
-	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
-//go:embed build/imageTemplate.png
-var icon []byte
+//go:embed build/assets/DefaultTemplate.svg
+var iconDefault []byte
+
+//go:embed build/assets/NotifTemplate.svg
+var iconNotif []byte
+
+//go:embed build/assets/WarningTemplate.svg
+var iconWarning []byte
 
 type FocusEventPayload struct {
 	EventId   string `json:"eventId"`
@@ -32,6 +37,19 @@ type FocusEventPayload struct {
 var closeInstallWindow func()
 
 var setInstallWindowOnTop func(bool)
+var openDashboardToEvent func(eventId, eventType string)
+var closeTrayNotification func()
+var showTrayNotification func()
+var setTrayIcon func(kind trayIconKind)
+var resetTrayIconIfNotif func()
+
+type trayIconKind int32
+
+const (
+	trayIconKindDefault trayIconKind = iota
+	trayIconKindNotif
+	trayIconKindWarning
+)
 
 type SetupStatePayload struct {
 	SetupRequired bool `json:"setupRequired"`
@@ -89,36 +107,15 @@ func applyFlags(f appFlags) {
 	appserver.SetListenAddr(f.uiURL)
 }
 
-// --- Notifications -------------------------------------------------------
-
-func setupNotifications() *notifications.NotificationService {
-	notifier := notifications.New()
-	notifier.RegisterNotificationCategory(notifications.NotificationCategory{
-		ID:      "aikido-blocked",
-		Actions: []notifications.NotificationAction{{ID: "OPEN", Title: "Open"}},
-	})
-	authorized, _ := notifier.CheckNotificationAuthorization()
-	if !authorized {
-		go func() {
-			ok, _ := notifier.RequestNotificationAuthorization()
-			log.Println("Notifications authorized:", ok)
-		}()
-		return notifier
-	}
-	log.Println("Notifications authorized:", authorized)
-	return notifier
-}
-
 // --- Wails application ---------------------------------------------------
 
 var daemonSvc = &DaemonService{}
 
-func newApp(notifier *notifications.NotificationService) *application.App {
+func newApp() *application.App {
 	return application.New(application.Options{
 		Name:        "Aikido Endpoint Protection",
 		Description: "Aikido Endpoint Protection",
 		Services: []application.Service{
-			application.NewService(notifier),
 			application.NewService(daemonSvc),
 		},
 		Assets: application.AssetOptions{
@@ -159,6 +156,7 @@ type windowManager struct {
 	app           *application.App
 	window        *application.WebviewWindow
 	installWindow *application.WebviewWindow
+	notifWindow   *application.WebviewWindow
 	installMu     sync.Mutex
 }
 
@@ -182,10 +180,31 @@ func installWindowOpts() application.WebviewWindowOptions {
 	}
 }
 
+func trayNotifWindowOpts() application.WebviewWindowOptions {
+	return application.WebviewWindowOptions{
+		Name:           "tray-notification",
+		Width:          360,
+		Height:         160,
+		Hidden:         true,
+		Frameless:      true,
+		DisableResize:  true,
+		AlwaysOnTop:    true,
+		URL:            "/#/tray-notification",
+		BackgroundType: application.BackgroundTypeTransparent,
+		Windows: application.WindowsWindow{
+			HiddenOnTaskbar: true,
+		},
+		Mac: application.MacWindow{
+			CollectionBehavior: application.MacWindowCollectionBehaviorMoveToActiveSpace,
+		},
+	}
+}
+
 func newWindowManager(app *application.App) *windowManager {
 	wm := &windowManager{app: app}
 	wm.window = app.Window.NewWithOptions(mainWindowOpts())
 	wm.installWindow = app.Window.NewWithOptions(installWindowOpts())
+	wm.notifWindow = app.Window.NewWithOptions(trayNotifWindowOpts())
 	wm.interceptClose(wm.window)
 	wm.interceptClose(wm.installWindow)
 	closeInstallWindow = func() {
@@ -268,14 +287,48 @@ func wrapText(text string, maxWidth int) []string {
 
 const maxStatusLines = 4
 
-func setupSystemTray(app *application.App, showDashboard func()) chan<- appserver.ProxyStatusBody {
+func setupSystemTray(app *application.App, showDashboard func(), notifWindow *application.WebviewWindow) chan<- appserver.ProxyStatusBody {
 	systray := app.SystemTray.New()
 	systray.SetTooltip("Aikido Endpoint Protection")
-	if runtime.GOOS == "darwin" {
-		systray.SetTemplateIcon(icon)
-	} else {
-		systray.SetIcon(icon)
+
+	var currentIcon atomic.Int32
+	applyIcon := func(icon []byte) {
+		if runtime.GOOS == "darwin" {
+			systray.SetTemplateIcon(icon)
+		} else {
+			systray.SetIcon(icon)
+		}
 	}
+	var setupHidden atomic.Bool
+	setupHidden.Store(true)
+
+	setTrayIcon = func(kind trayIconKind) {
+		if kind == trayIconKindNotif && trayIconKind(currentIcon.Load()) == trayIconKindWarning {
+			return
+		}
+		currentIcon.Store(int32(kind))
+		switch kind {
+		case trayIconKindNotif:
+			applyIcon(iconNotif)
+		case trayIconKindWarning:
+			applyIcon(iconWarning)
+		default:
+			applyIcon(iconDefault)
+		}
+	}
+	resetTrayIconIfNotif = func() {
+		if trayIconKind(currentIcon.Load()) != trayIconKindNotif {
+			return
+		}
+		if !setupHidden.Load() {
+			setTrayIcon(trayIconKindWarning)
+		} else {
+			setTrayIcon(trayIconKindDefault)
+		}
+	}
+
+	setTrayIcon(trayIconKindDefault)
+	systray.AttachWindow(notifWindow)
 
 	menu := application.NewMenu()
 	statusLines := make([]*application.MenuItem, maxStatusLines)
@@ -299,15 +352,36 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 	menu.AddSeparator()
 	menu.Add("Open Dashboard").OnClick(func(_ *application.Context) {
 		app.Event.Emit("focus_event", FocusEventPayload{EventId: ""})
+		if resetTrayIconIfNotif != nil {
+			resetTrayIconIfNotif()
+		}
 		showDashboard()
 	})
 	systray.SetMenu(menu)
-	if runtime.GOOS == "windows" {
-		systray.OnClick(systray.OpenMenu)
+
+	hideNotifAndOpenMenu := func() {
+		if notifWindow.IsVisible() {
+			notifWindow.Hide()
+		}
+		go func() {
+			if err := daemon.RefreshConfig(); err != nil {
+				log.Printf("config refresh on tray click: %v", err)
+			}
+		}()
+		systray.OpenMenu()
+	}
+	systray.OnClick(hideNotifAndOpenMenu)
+	systray.OnRightClick(hideNotifAndOpenMenu)
+
+	showTrayNotification = func() {
+		if notifWindow.IsVisible() {
+			return
+		}
+		systray.PositionWindow(notifWindow, 2)
+		systray.WindowDebounce(200 * time.Millisecond)
+		notifWindow.Show()
 	}
 
-	var setupHidden atomic.Bool
-	setupHidden.Store(true)
 	go func() {
 		time.Sleep(5 * time.Second)
 		for {
@@ -320,6 +394,11 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 				setupHidden.Store(shouldHide)
 				setupItem.SetHidden(shouldHide)
 				menu.Update()
+				if !shouldHide {
+					setTrayIcon(trayIconKindWarning)
+				} else if trayIconKind(currentIcon.Load()) == trayIconKindWarning {
+					setTrayIcon(trayIconKindDefault)
+				}
 				app.Event.Emit("setup_state", SetupStatePayload{SetupRequired: !shouldHide})
 			}
 			time.Sleep(10 * time.Second)
@@ -351,30 +430,33 @@ func setupSystemTray(app *application.App, showDashboard func()) chan<- appserve
 
 // --- App server (receives events from daemon) ----------------------------
 
-func handleBlockedEventCreated(app *application.App, notifier *notifications.NotificationService, ev daemon.BlockEvent) {
+func handleBlockedEventCreated(app *application.App, ev daemon.BlockEvent) {
 	log.Println("Blocked event:", ev)
 	app.Event.Emit("blocked", ev)
-	if authorized, _ := notifier.CheckNotificationAuthorization(); authorized {
-		notifier.SendNotificationWithActions(notifications.NotificationOptions{
-			ID:         "block-" + ev.ID,
-			Title:      "Aikido Endpoint Protection blocked an event",
-			Body:       ev.Artifact.Product + ": " + ev.Artifact.PackageName,
-			CategoryID: "aikido-blocked",
-			Data:       map[string]interface{}{"eventId": ev.ID, "eventType": "block"},
-		})
+	if setTrayIcon != nil {
+		setTrayIcon(trayIconKindNotif)
+	}
+	if showTrayNotification != nil {
+		showTrayNotification()
 	}
 }
 
 func handleBlockedEventUpdate(app *application.App, ev daemon.BlockEvent) {
 	log.Println("Blocked event updated:", ev)
 	app.Event.Emit("blocked_updated", ev)
+	if setTrayIcon != nil {
+		setTrayIcon(trayIconKindNotif)
+	}
+	if showTrayNotification != nil {
+		showTrayNotification()
+	}
 }
 
-func startAppServer(app *application.App, wm *windowManager, statusCh chan<- appserver.ProxyStatusBody, notifier *notifications.NotificationService) {
+func startAppServer(app *application.App, wm *windowManager, statusCh chan<- appserver.ProxyStatusBody) {
 	srv := appserver.New()
 	srv.SetHandlers(
 		func(ev appserver.ProxyStatusBody) { statusCh <- ev },
-		func(ev daemon.BlockEvent) { handleBlockedEventCreated(app, notifier, ev) },
+		func(ev daemon.BlockEvent) { handleBlockedEventCreated(app, ev) },
 		func(ev daemon.BlockEvent) { handleBlockedEventUpdate(app, ev) },
 		func(ev daemon.TlsTerminationFailedEvent) {
 			log.Println("TLS termination failed event:", ev)
@@ -404,13 +486,34 @@ func main() {
 	flags := parseFlags()
 	applyFlags(flags)
 
-	notifier := setupNotifications()
-	app := newApp(notifier)
+	app := newApp()
 
 	wm := newWindowManager(app)
 
-	statusCh := setupSystemTray(app, wm.showDashboard)
-	startAppServer(app, wm, statusCh, notifier)
+	statusCh := setupSystemTray(app, wm.showDashboard, wm.notifWindow)
+	startAppServer(app, wm, statusCh)
+
+	openDashboardToEvent = func(eventId, eventType string) {
+		if wm.notifWindow != nil {
+			wm.notifWindow.Hide()
+		}
+		if resetTrayIconIfNotif != nil {
+			resetTrayIconIfNotif()
+		}
+		wm.showDashboard()
+		go func() {
+			app.Event.Emit("focus_event", FocusEventPayload{EventId: eventId, EventType: eventType})
+		}()
+	}
+
+	closeTrayNotification = func() {
+		if wm.notifWindow != nil {
+			wm.notifWindow.Hide()
+		}
+		if resetTrayIconIfNotif != nil {
+			resetTrayIconIfNotif()
+		}
+	}
 
 	// On macOS, clicking the app bundle while running triggers a default Wails
 	// listener that shows ALL hidden windows. Register a hook (runs before
@@ -418,22 +521,6 @@ func main() {
 	app.Event.RegisterApplicationEventHook(events.Mac.ApplicationShouldHandleReopen, func(event *application.ApplicationEvent) {
 		wm.showDashboard()
 		event.Cancel()
-	})
-
-	notifier.OnNotificationResponse(func(result notifications.NotificationResult) {
-		if result.Error != nil {
-			return
-		}
-		eventId, _ := result.Response.UserInfo["eventId"].(string)
-		if eventId == "" {
-			return
-		}
-		eventType, _ := result.Response.UserInfo["eventType"].(string)
-		wm.showDashboard()
-		go func() {
-			time.Sleep(500 * time.Millisecond)
-			app.Event.Emit("focus_event", FocusEventPayload{EventId: eventId, EventType: eventType})
-		}()
 	})
 
 	if err := app.Run(); err != nil {

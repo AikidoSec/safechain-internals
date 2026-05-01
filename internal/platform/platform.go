@@ -73,3 +73,11 @@ func GetUIAppPath() string {
 func GetConfigPath() string {
 	return filepath.Join(config.RunDir, "config.json")
 }
+
+func GetInstallMarkerPath() string {
+	return filepath.Join(config.RunDir, ".installed_at")
+}
+
+func GetUpgradeMarkerPath() string {
+	return filepath.Join(config.RunDir, ".upgraded")
+}

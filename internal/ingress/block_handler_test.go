@@ -78,3 +78,51 @@ func TestBuildBlockedActivityEventUsesDisplayName(t *testing.T) {
 		t.Fatalf("expected display name to be used, got %q", got.SBOM.Entries[0].Packages[0].Name)
 	}
 }
+
+func TestShouldDelayBlockedUINotification(t *testing.T) {
+	tests := []struct {
+		name  string
+		event BlockEvent
+		want  bool
+	}{
+		{
+			name: "chrome without display name waits for enrichment",
+			event: BlockEvent{
+				Artifact: Artifact{
+					Product:     "chrome",
+					PackageName: "abcdefghijklmnop",
+				},
+			},
+			want: true,
+		},
+		{
+			name: "chrome with display name does not wait",
+			event: BlockEvent{
+				Artifact: Artifact{
+					Product:     "chrome",
+					PackageName: "abcdefghijklmnop",
+					DisplayName: "Readable Extension",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "non-chrome events do not wait",
+			event: BlockEvent{
+				Artifact: Artifact{
+					Product:     "npm",
+					PackageName: "left-pad",
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shouldDelayBlockedUINotification(tt.event); got != tt.want {
+				t.Fatalf("shouldDelayBlockedUINotification() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

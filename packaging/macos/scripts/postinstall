@@ -41,6 +41,17 @@ chown -R root:wheel "$EP_APP"
 chown -R root:wheel "$LOGS_DIR"
 chown -R root:wheel "$RUN_DIR"
 
+# Create the install marker only on a first install. The daemon compares this
+# file's mtime against the system boot time to detect whether the user has
+# rebooted since installing; preserving it across upgrades avoids forcing a
+# reboot every time the package is updated.
+INSTALL_MARKER="$RUN_DIR/.installed_at"
+if [ ! -f "$INSTALL_MARKER" ]; then
+    touch "$INSTALL_MARKER"
+    chown root:wheel "$INSTALL_MARKER"
+    chmod 644 "$INSTALL_MARKER"
+fi
+
 AIKIDO_TOKEN=""
 CONFIG_FILE="$RUN_DIR/config.json"
 TOKEN_STAGING_FILE="/tmp/aikido_endpoint_token.txt"

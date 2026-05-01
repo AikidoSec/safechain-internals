@@ -189,6 +189,7 @@ func (d *Daemon) startProxy(ctx context.Context) error {
 		BaseURL:     d.config.GetBaseURL(),
 		Token:       d.config.Token,
 		DeviceID:    d.config.DeviceID,
+		Passthrough: ingress.IsRebootRequired(),
 	}
 
 	if err := d.proxy.Start(ctx, opts); err != nil {
@@ -227,8 +228,9 @@ func (d *Daemon) run(ctx context.Context) error {
 		if err := d.uiManager.Launch(ctx, d.ingress.Addr()); err != nil {
 			log.Printf("Failed to launch UI: %v", err)
 		}
+
 		if !proxy.ProxyCAInstalled() {
-			d.uiManager.StartSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
+			d.showSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
 		}
 	}()
 
@@ -438,7 +440,12 @@ func (d *Daemon) heartbeat() error {
 	// Ensure the UI is running, if not, relaunch it
 	d.uiManager.EnsureRunning()
 
-	d.uiManager.NotifyProxyStatusIfChanged(d.proxy.GetStatus())
+	proxyStatus, proxyStatusMessage := d.proxy.GetStatus()
+	if !setupOk {
+		proxyStatus = false
+		proxyStatusMessage = "setup-required"
+	}
+	d.uiManager.NotifyProxyStatusIfChanged(proxyStatus, proxyStatusMessage)
 
 	d.runIfIntervalExceeded(&d.daemonLastStatusLogTime, constants.DaemonStatusLogInterval, func() error {
 		d.printDaemonStatus()
@@ -488,9 +495,24 @@ func (d *Daemon) reportHeartbeat() error {
 	log.Printf("Heartbeat report sent successfully: %s", string(eventJSON))
 
 	d.handleLogCollectRequest(resp)
-	d.handleTargetUpdateVersion(resp)
+	d.handleAutoUpdate(resp)
 
+	d.runIfIntervalExceeded(&d.config.LastSetupWizardShownTime, constants.SetupWizardReshowInterval, func() error {
+		d.showSetupWizard(ingress.ComputeSetupSteps(d.ctx, d.config))
+		return nil
+	})
 	return nil
+}
+
+func (d *Daemon) showSetupWizard(steps []string) {
+	if len(steps) == 0 {
+		return
+	}
+	d.uiManager.StartSetupWizard(steps)
+	d.config.LastSetupWizardShownTime = time.Now()
+	if err := d.config.Save(); err != nil {
+		log.Printf("Failed to save config after showing setup wizard: %v", err)
+	}
 }
 
 func newSBOMRegistry() *sbom.Registry {
@@ -524,20 +546,32 @@ func (d *Daemon) handleLogCollectRequest(resp *cloud.HeartbeatResponse) {
 	}
 }
 
-func (d *Daemon) handleTargetUpdateVersion(resp *cloud.HeartbeatResponse) {
-	if resp.TargetUpdateVersion == nil {
+func (d *Daemon) handleAutoUpdate(resp *cloud.HeartbeatResponse) {
+	if resp.UpdateEnabled == nil || !*resp.UpdateEnabled {
 		return
 	}
-	target := *resp.TargetUpdateVersion
-	if target == "" || target == d.versionInfo.Version {
+	if resp.UpdateVersion == nil {
 		return
 	}
-	if target == d.config.LastHandledTargetUpdateVersion {
+	target := *resp.UpdateVersion
+	if target == "" {
+		log.Printf("Update enabled with empty version, skipping auto-update")
+		return
+	}
+
+	normalizedTarget := utils.NormalizeVersion(target)
+	if normalizedTarget == utils.NormalizeVersion(d.versionInfo.Version) || normalizedTarget == utils.NormalizeVersion(d.config.LastHandledTargetUpdateVersion) {
+		log.Printf("Update requested to same version %s, already handled, skipping auto-update", target)
+		return
+	}
+
+	if !ingress.IsSetupOk(d.ctx, d.config) {
+		log.Printf("Update requested to version %s, but setup is incomplete; skipping auto-update", target)
 		return
 	}
 
 	log.Printf("Update requested to version %s (current: %s)", target, d.versionInfo.Version)
-	if err := updater.UpdateTo(d.ctx, target); err != nil {
+	if err := updater.UpdateTo(d.ctx, normalizedTarget); err != nil {
 		log.Printf("Failed to update to version %s: %v", target, err)
 		return
 	}
