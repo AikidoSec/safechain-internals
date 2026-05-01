@@ -53,6 +53,14 @@ func seedData() ([]BlockEvent, []TlsEvent) {
 
 	blocks := []BlockEvent{
 		{
+			ID:          "block-0",
+			TsMs:        now - 60_000,
+			Artifact:    Artifact{Product: "golang", Identifier: "golang-package", Version: "1.0.0", DisplayName: "golang-package"},
+			BlockReason: "request_install",
+			Status:      "blocked",
+			Count:       1,
+		},
+		{
 			ID:          "block-1",
 			TsMs:        now - 60_000,
 			Artifact:    Artifact{Product: "chrome", Identifier: "mgngmngjioknlgjjaiiamcdbahombpfb", Version: "1.0.0", DisplayName: ""},
@@ -391,6 +399,12 @@ func (s *server) handleSetupRestart(w http.ResponseWriter, r *http.Request) {
 }
 
 var mockBlocks = []BlockEvent{
+	{
+		Artifact:    Artifact{Product: "golang", Identifier: "golang-package", Version: "1.0.0", DisplayName: "golang-package"},
+		BlockReason: "request_install",
+		Status:      "blocked",
+		Count:       1,
+	},
 	{
 		Artifact:    Artifact{Product: "npm", Identifier: "evil-pkg", Version: "1.0.0", DisplayName: "evil-pkg"},
 		BlockReason: "malware",

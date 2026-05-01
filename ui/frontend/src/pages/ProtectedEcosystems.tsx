@@ -19,13 +19,13 @@ const ECOSYSTEMS: EcosystemRow[] = [
   { id: "maven", name: "Maven", icon: getToolIcon("maven") },
   { id: "nuget", name: "NuGet", icon: getToolIcon("nuget") },
   { id: "chrome", name: "Chrome Extensions", icon: getToolIcon("chrome") },
+  { id: "golang", name: "Golang", icon: getToolIcon("golang") },
   { id: "skills_sh", name: "Skills.sh", icon: getToolIcon("skills_sh") },
 ];
 
 export function ProtectedEcosystems() {
   return (
     <div className="protected-ecosystems">
-      <h1>Protected Ecosystems</h1>
       <div className="protected-ecosystems-table-wrap">
         <table className="protected-ecosystems-table">
           <tbody>
