@@ -140,6 +140,8 @@ export function InstallPage() {
     setTokenInput("");
     if (currentIdx + 1 < steps.length) {
       setCurrentIdx((i) => i + 1);
+    } else {
+      closeInstallWindow();
     }
   }
 
