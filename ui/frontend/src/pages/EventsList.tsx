@@ -140,11 +140,11 @@ export function EventsList() {
                   </td>
                   <td className="event-time">{formatEventTimeShort(ev.ts_ms)}</td>
                   <td>
-                    {ev.status === "request_approved" ? (
+                    {ev.status === "approved" ? (
                       <span className="status status-approved">approved</span>
-                    ) : ev.status === "request_pending" ? (
+                    ) : ev.status === "pending" ? (
                       <span className="status status-pending">requested</span>
-                    ) : ev.status === "request_rejected" ? (
+                    ) : ev.status === "rejected" ? (
                       <span className="status status-rejected">rejected</span>
                     ) : (
                       <span className={`reason-badge reason-badge--${ev.block_reason}`}>

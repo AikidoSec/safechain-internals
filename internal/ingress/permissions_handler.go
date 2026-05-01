@@ -22,15 +22,15 @@ func (s *Server) handlePermissionsUpdated(w http.ResponseWriter, r *http.Request
 		return
 	}
 	for _, e := range s.eventStore.List() {
-		if e.Status != "request_pending" {
+		if e.Status != "pending" {
 			continue
 		}
 		ecosystem := perms.Ecosystems[e.Artifact.Product]
 		pkg := strings.ToLower(e.Artifact.PackageName)
 		if sliceContainsFold(ecosystem.Exceptions.AllowedPackages, pkg) {
-			s.eventStore.UpdateStatus(e.ID, "request_approved")
+			s.eventStore.UpdateStatus(e.ID, "approved")
 		} else if sliceContainsFold(ecosystem.Exceptions.RejectedPackages, pkg) {
-			s.eventStore.UpdateStatus(e.ID, "request_rejected")
+			s.eventStore.UpdateStatus(e.ID, "rejected")
 		}
 	}
 	go s.ui.NotifyPermissionsUpdated(perms)

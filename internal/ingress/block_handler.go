@@ -109,6 +109,7 @@ func buildBlockedActivityEvent(event BlockEvent, action string) *cloud.ActivityE
 
 	return &cloud.ActivityEvent{
 		Action:      action,
+		BlockReason: event.BlockReason,
 		VersionInfo: *version.Info,
 		SBOM: sbom.SBOM{
 			Entries: []sbom.EcosystemEntry{

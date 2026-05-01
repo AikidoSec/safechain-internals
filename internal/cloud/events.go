@@ -31,6 +31,7 @@ type SBOMEvent struct {
 
 type ActivityEvent struct {
 	Action      string              `json:"action"`
+	BlockReason string              `json:"block_reason,omitempty"`
 	VersionInfo version.VersionInfo `json:"version"`
 	SBOM        sbom.SBOM           `json:"sbom"`
 }
@@ -46,6 +47,22 @@ type PackageInstallRequest struct {
 type EcosystemPackages struct {
 	Ecosystem string                  `json:"ecosystem"`
 	Packages  []PackageInstallRequest `json:"packages"`
+}
+
+type SubmittedEvent struct {
+	ID             int    `json:"id"`
+	Action         string `json:"action"`
+	BlockReason    string `json:"block_reason"`
+	Ecosystem      string `json:"ecosystem"`
+	PackageID      string `json:"package_id"`
+	PackageName    string `json:"package_name"`
+	PackageVersion string `json:"package_version"`
+	Timestamp      int64  `json:"timestamp"`
+	Status         string `json:"status"`
+}
+
+type FetchSubmittedEventsResponse struct {
+	Events []SubmittedEvent `json:"events"`
 }
 
 // RequestPackageInstallationEvent is the body sent to requestPackageInstallation.
