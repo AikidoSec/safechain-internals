@@ -68,7 +68,7 @@ func sendEventWithResponse(ctx context.Context, endpoint string, config *config.
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		if resp.StatusCode == http.StatusUnauthorized {
 			if config.MarkTokenUnauthorized(tokenUsed) {
 				log.Printf("Cloud auth rejected token %s with status %d; suppressing further cloud requests until the token changes", config.GetAnonymizedToken(), resp.StatusCode)
 				if err := config.Save(); err != nil {
