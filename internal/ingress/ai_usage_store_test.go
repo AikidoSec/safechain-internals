@@ -69,13 +69,13 @@ func TestAiUsageEventStoreAddSeparatesEntriesPerProvider(t *testing.T) {
 	}
 }
 
-func TestServerSnapshotAiUsageReturnsCopyAndDoesNotClear(t *testing.T) {
+func TestServerAiUsageEventsReturnsCopyAndDoesNotClear(t *testing.T) {
 	s := &Server{aiUsageStore: &aiUsageEventStore{}}
 
 	s.aiUsageStore.Add(AiUsageEvent{TsMs: 100, Provider: "anthropic", Model: "claude-opus-4-7"})
 	s.aiUsageStore.Add(AiUsageEvent{TsMs: 200, Provider: "anthropic", Model: "claude-opus-4-7"})
 
-	snap1 := s.SnapshotAiUsage()
+	snap1 := s.AiUsageEvents()
 	if len(snap1) != 1 {
 		t.Fatalf("expected one row in snapshot, got %d", len(snap1))
 	}
@@ -85,14 +85,14 @@ func TestServerSnapshotAiUsageReturnsCopyAndDoesNotClear(t *testing.T) {
 
 	// Mutating the returned slice must not affect the store.
 	snap1[0].TsMs = 999
-	snap2 := s.SnapshotAiUsage()
+	snap2 := s.AiUsageEvents()
 	if snap2[0].TsMs != 200 {
 		t.Fatalf("snapshot must be a copy; store was mutated to ts_ms=%d", snap2[0].TsMs)
 	}
 
-	// A second snapshot after a flush-equivalent call must still see the data —
+	// A second call after a flush-equivalent call must still see the data —
 	// the store is intentionally not cleared.
 	if len(snap2) != 1 {
-		t.Fatalf("expected store to retain data after snapshot, got %d rows", len(snap2))
+		t.Fatalf("expected store to retain data, got %d rows", len(snap2))
 	}
 }

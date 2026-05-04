@@ -476,16 +476,21 @@ func (d *Daemon) reportAiUsage() error {
 	if d.config.Token == "" {
 		return fmt.Errorf("Token is not set, skipping AI usage report")
 	}
-	snapshot := d.ingress.SnapshotAiUsage()
-	if len(snapshot) == 0 {
-		return nil
-	}
+
+	cutoffMs := d.config.LastAiUsageReportTime.UnixMilli()
+	snapshot := d.ingress.AiUsageEvents()
 	models := make([]cloud.AiUsageModel, 0, len(snapshot))
 	for _, ev := range snapshot {
+		if ev.TsMs <= cutoffMs {
+			continue
+		}
 		models = append(models, cloud.AiUsageModel{
 			Provider: ev.Provider,
 			Model:    ev.Model,
 		})
+	}
+	if len(models) == 0 {
+		return nil
 	}
 	event := &cloud.AiUsageStatsEvent{Models: models}
 	if err := cloud.SendAiUsageStats(d.ctx, d.config, event); err != nil {

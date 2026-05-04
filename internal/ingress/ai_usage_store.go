@@ -48,10 +48,6 @@ func (s *aiUsageEventStore) List() []AiUsageEvent {
 	return out
 }
 
-// SnapshotAiUsage returns a copy of every observed (provider, model) pair on
-// this device. The store is not cleared — the cloud is expected to upsert,
-// and we want repeat reports to keep "Last Used" fresh even if a flush is
-// rejected.
-func (s *Server) SnapshotAiUsage() []AiUsageEvent {
+func (s *Server) AiUsageEvents() []AiUsageEvent {
 	return s.aiUsageStore.List()
 }
