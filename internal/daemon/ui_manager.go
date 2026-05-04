@@ -165,6 +165,12 @@ func (m *UIManager) NotifyTlsTerminationFailed(ev any) {
 	m.Client.NotifyTlsTerminationFailed(ev)
 }
 
+// NotifyMinPackageAge sends an informational minimum-package-age log entry to
+// the UI. This path intentionally does not trigger native popup notifications.
+func (m *UIManager) NotifyMinPackageAge(ev any) {
+	m.Client.NotifyMinPackageAge(ev)
+}
+
 // NotifyPermissionsUpdated sends the latest permissions to the UI.
 func (m *UIManager) NotifyPermissionsUpdated(perms any) {
 	m.Client.NotifyPermissionsUpdated(perms)
