@@ -13,12 +13,6 @@ use rama::{
     utils::str::arcstr::{ArcStr, arcstr},
 };
 use serde::Deserialize;
-// NOTE on JSON parsing strategy: the other JSON-parsing firewall rules
-// (npm/pypi/vscode/open_vsx min_package_age) work over `serde_json::Value`
-// because they need to *mutate* the response tree. This rule only reads a
-// single field from the request, so a typed Deserialize struct is both
-// cleaner and stricter. Leaving it typed on purpose.
-
 use crate::{
     http::{
         KnownContentType,
