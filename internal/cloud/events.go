@@ -55,10 +55,6 @@ type RequestPackageInstallationEvent struct {
 	} `json:"sbom"`
 }
 
-// AiUsageModel is one observed (provider, model) pair on this device. The
-// cloud stamps `last_seen_at` server-side on receive — agent-side timestamps
-// are deferred until we have a streaming transport (websockets/SSE) where
-// per-call accuracy actually pays off.
 type AiUsageModel struct {
 	Provider string `json:"provider"`
 	Model    string `json:"model"`

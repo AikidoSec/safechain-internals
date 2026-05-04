@@ -40,6 +40,10 @@ type MinPackageAgeEvent struct {
 	Message   string   `json:"message,omitempty"`
 }
 
+// AiUsageEvent reports an observed call to a third-party AI provider.
+// The proxy posts one event per call (with `ts_ms` populated); the daemon
+// collapses repeats by (provider, model) and keeps only the most recent
+// timestamp.
 type AiUsageEvent struct {
 	ID       string `json:"id,omitempty"`
 	TsMs     int64  `json:"ts_ms"`
