@@ -257,6 +257,7 @@ impl Firewall {
                 .await
                 .context("create block rule: skills.sh")?
                 .into_dyn(),
+                self::rule::anthropic::RuleAnthropic::new(notifier.clone()).into_dyn(),
                 self::rule::hijack::RuleHijack::new().into_dyn(),
             ]),
             notifier,

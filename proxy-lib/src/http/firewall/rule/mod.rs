@@ -49,6 +49,7 @@ pub(crate) fn block_reason_for(decision: PackagePolicyDecision) -> BlockReason {
 #[cfg(feature = "pac")]
 pub use super::pac::PacScriptGenerator;
 
+pub mod anthropic;
 pub mod chrome;
 pub mod golang;
 pub mod hijack;

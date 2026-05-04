@@ -32,7 +32,7 @@ use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::{
     endpoint_protection::types::EndpointConfig,
-    http::firewall::events::MinPackageAgeEvent,
+    http::firewall::events::{AiUsageEvent, MinPackageAgeEvent},
     package::version::{PackageVersion, PackageVersionKey},
     utils::env::{compute_concurrent_request_count, network_service_identifier},
 };
@@ -143,6 +143,12 @@ impl EventNotifier {
         });
     }
 
+    pub fn notify_ai_usage(&self, event: AiUsageEvent) {
+        self.spawn_event_task(|client, reporting_endpoint| {
+            send_ai_usage_event(client, reporting_endpoint, event)
+        });
+    }
+
     fn spawn_event_task<F, Fut>(&self, f: F)
     where
         F: FnOnce(BoxService<Request, Response, OpaqueError>, String) -> Fut + Send + 'static,
@@ -221,6 +227,22 @@ async fn send_tls_termination_failed_event(
     event: TlsTerminationFailedEvent,
 ) {
     let url = format!("{}/events/tls-termination-failed", reporting_endpoint);
+
+    send_event(client, reporting_endpoint, event, &url).await;
+}
+
+async fn send_ai_usage_event(
+    client: BoxService<Request, Response, OpaqueError>,
+    reporting_endpoint: String,
+    event: AiUsageEvent,
+) {
+    tracing::debug!(
+        provider = %event.provider,
+        model = %event.model,
+        "sending ai-usage event notification"
+    );
+
+    let url = format!("{}/events/ai-usage", reporting_endpoint);
 
     send_event(client, reporting_endpoint, event, &url).await;
 }

@@ -21,6 +21,7 @@ type ConfigInfo struct {
 	LastHeartbeatReportTime  time.Time `json:"last_heartbeat_report_time"`
 	LastSBOMReportTime       time.Time `json:"last_sbom_report_time"`
 	LastSetupWizardShownTime time.Time `json:"last_setup_wizard_shown_time"`
+	LastAiUsageReportTime    time.Time `json:"last_ai_usage_report_time"`
 	BaseURL                  string    `json:"base_url,omitempty"`
 	ProxyMode                string    `json:"proxy_mode,omitempty"`
 

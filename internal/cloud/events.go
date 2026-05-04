@@ -54,3 +54,18 @@ type RequestPackageInstallationEvent struct {
 		Ecosystems []EcosystemPackages `json:"ecosystems"`
 	} `json:"sbom"`
 }
+
+// AiUsageModel is one observed (provider, model) pair with its most recent
+// observation timestamp on this device. `last_seen_at` is Unix seconds —
+// matches the `as_endpoint_protection_ai_models.last_seen_at` column type.
+// When omitted, the cloud falls back to stamping receive-time.
+type AiUsageModel struct {
+	Provider   string `json:"provider"`
+	Model      string `json:"model"`
+	LastSeenAt int64  `json:"last_seen_at,omitempty"`
+}
+
+// AiUsageStatsEvent is the body sent to reportAiStats.
+type AiUsageStatsEvent struct {
+	Models []AiUsageModel `json:"models"`
+}
