@@ -249,6 +249,10 @@ func UnsetSystemPAC(ctx context.Context, pacURL string) error {
 	return nil
 }
 
+// proxyCACertSubject is the CN of the SafeChain proxy CA, used as the
+// identifier in `certutil -store` / `-delstore` lookups.
+const proxyCACertSubject = "aikidosafechain.com"
+
 func InstallProxyCA(ctx context.Context, caCertPath string) error {
 	_, err := utils.RunCommand(ctx, "certutil", "-addstore", "-f", "Root", caCertPath)
 	return err
@@ -256,13 +260,13 @@ func InstallProxyCA(ctx context.Context, caCertPath string) error {
 
 func IsProxyCAInstalled(ctx context.Context) error {
 	// certutil returns non-zero exit code if the certificate is not installed
-	_, err := utils.RunCommand(ctx, "certutil", "-store", "Root", "aikidosafechain.com")
+	_, err := utils.RunCommand(ctx, "certutil", "-store", "Root", proxyCACertSubject)
 	return err
 }
 
 func UninstallProxyCA(ctx context.Context) error {
 	commandsToExecute := []utils.Command{
-		{Command: "certutil", Args: []string{"-delstore", "Root", "aikidosafechain.com"}},
+		{Command: "certutil", Args: []string{"-delstore", "Root", proxyCACertSubject}},
 		{Command: "cmdkey", Args: []string{"/delete:safechain-l7-proxy.tls-root-ca-key"}},
 	}
 	_, err := utils.RunCommands(ctx, commandsToExecute)
@@ -270,6 +274,25 @@ func UninstallProxyCA(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// InstallProxyCAForCurrentUser writes caCertPath into HKCU\...\Root of the
+// active console user. Sibling to InstallProxyCA — separate so callers that
+// need user-scope trust (e.g. Java's SunMSCAPI Windows-ROOT, which only
+// reads CurrentUser) can opt in without affecting the system-wide install.
+// `-f` makes certutil overwrite, so this is idempotent.
+func InstallProxyCAForCurrentUser(ctx context.Context, caCertPath string) error {
+	_, err := RunAsCurrentUser(ctx, "certutil", []string{
+		"-user", "-addstore", "-f", "Root", caCertPath,
+	})
+	return err
+}
+
+func UninstallProxyCAForCurrentUser(ctx context.Context) error {
+	_, err := RunAsCurrentUser(ctx, "certutil", []string{
+		"-user", "-delstore", "Root", proxyCACertSubject,
+	})
+	return err
 }
 
 type ServiceRunner interface {
@@ -466,4 +489,42 @@ func IsProcessAlive(pid int) bool {
 		return false
 	}
 	return exitCode == STILL_ACTIVE
+}
+
+func SetUserEnvVar(ctx context.Context, name, value string) error {
+	valueLiteral := "$null"
+	if value != "" {
+		valueLiteral = "'" + EscapePowerShellSingleQuoted(value) + "'"
+	}
+	script := fmt.Sprintf(
+		"[Environment]::SetEnvironmentVariable('%s', %s, 'User')",
+		EscapePowerShellSingleQuoted(name), valueLiteral,
+	)
+	_, err := RunAsCurrentUser(ctx, "powershell", []string{
+		"-NoProfile",
+		"-NonInteractive",
+		"-Command",
+		script,
+	})
+	return err
+}
+
+func GetUserEnvVar(ctx context.Context, name string) (string, error) {
+	script := fmt.Sprintf(
+		"$v = [Environment]::GetEnvironmentVariable('%s', 'User'); if ($v) { [Console]::Write($v) }",
+		EscapePowerShellSingleQuoted(name),
+	)
+	return RunAsCurrentUser(ctx, "powershell", []string{
+		"-NoProfile",
+		"-NonInteractive",
+		"-Command",
+		script,
+	})
+}
+
+// EscapePowerShellSingleQuoted escapes value for embedding inside a
+// PowerShell single-quoted literal ('...'), where the only metachar is the
+// single quote itself (escaped by doubling).
+func EscapePowerShellSingleQuoted(value string) string {
+	return strings.ReplaceAll(value, "'", "''")
 }
