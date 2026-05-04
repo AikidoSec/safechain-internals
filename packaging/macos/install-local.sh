@@ -52,6 +52,8 @@ echo ""
 sudo installer -pkg "$PKG_FILE" -target / -verbose
 
 if [ $? -eq 0 ]; then
+    sudo touch -t 202501151000 "/Library/Application Support/AikidoSecurity/EndpointProtection/run/.installed_at"
+
     echo ""
     echo "========================================="
     echo "✓ Installation Complete!"

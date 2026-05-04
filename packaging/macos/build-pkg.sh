@@ -179,9 +179,14 @@ if /usr/libexec/PlistBuddy -c "Print" "$COMPONENT_PLIST" >/dev/null 2>&1; then
         /usr/libexec/PlistBuddy -c "Set :${IDX}:BundleHasStrictIdentifier false" "$COMPONENT_PLIST" 2>/dev/null || true
         /usr/libexec/PlistBuddy -c "Set :${IDX}:BundleIsRelocatable false" "$COMPONENT_PLIST" 2>/dev/null || true
         /usr/libexec/PlistBuddy -c "Set :${IDX}:BundleIsVersionChecked false" "$COMPONENT_PLIST" 2>/dev/null || true
+        # Drop ChildBundles so PackageInfo / Distribution only advertise the
+        # top-level apps to MDM systems (Intune rejects packages that expose
+        # internal Swift resource bundles or system extensions as installable
+        # bundles). The payload is unaffected.
+        /usr/libexec/PlistBuddy -c "Delete :${IDX}:ChildBundles" "$COMPONENT_PLIST" 2>/dev/null || true
         IDX=$((IDX + 1))
     done
-    echo "Configured $IDX bundle entries in component plist (all non-relocatable)"
+    echo "Configured $IDX bundle entries in component plist (no child bundles, non-relocatable)"
 fi
 
 echo "Building package..."
