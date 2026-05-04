@@ -30,7 +30,7 @@ func (e *eventStore) Add(ev BlockEvent) BlockEvent {
 	}
 	// If the user already requested access for this artifact, carry that request status forward
 	for i := range e.events {
-		if e.events[i].Artifact == ev.Artifact && e.events[i].Status != "blocked" {
+		if e.events[i].Artifact.SameIdentity(ev.Artifact) && e.events[i].Status != "blocked" {
 			blocked.Status = e.events[i].Status
 		}
 	}
@@ -74,6 +74,17 @@ func (e *eventStore) List() []BlockEvent {
 	out := make([]BlockEvent, len(e.events))
 	copy(out, e.events)
 	return out
+}
+
+// LoadHistorical prepends pre-built historical events (oldest-first)
+// without generating new IDs. Used to seed the store on startup.
+func (e *eventStore) LoadHistorical(events []BlockEvent) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.events = append(events, e.events...)
+	if len(e.events) > maxEvents {
+		e.events = e.events[len(e.events)-maxEvents:]
+	}
 }
 
 // UpdateStatus sets the status field on the event with the given id.

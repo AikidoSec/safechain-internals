@@ -7,6 +7,14 @@ type Artifact struct {
 	DisplayName    string `json:"display_name,omitempty"`
 }
 
+// SameIdentity reports whether two artifacts refer to the same package,
+// ignoring DisplayName which may be populated asynchronously.
+func (a Artifact) SameIdentity(b Artifact) bool {
+	return a.Product == b.Product &&
+		a.PackageName == b.PackageName &&
+		a.PackageVersion == b.PackageVersion
+}
+
 // BlockEvent represents a blocked request notification from the proxy.
 type BlockEvent struct {
 	ID          string   `json:"id,omitempty"`

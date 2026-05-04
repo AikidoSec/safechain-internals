@@ -118,7 +118,7 @@ export function EventDetail() {
     setError(null);
     try {
       await requestAccess(id);
-      setEvent((prev) => (prev ? { ...prev, status: "request_pending" } : null));
+      setEvent((prev) => (prev ? { ...prev, status: "pending" } : null));
       setRequestSent(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -170,7 +170,7 @@ export function EventDetail() {
   const canRequest = true;
   const info = BLOCK_REASON_INFO[event.block_reason];
 
-  if (event.status === "request_approved") {
+  if (event.status === "approved") {
     return (
       <div className="event-detail event-detail--full">
         <div className="request-success">
@@ -200,7 +200,7 @@ export function EventDetail() {
     );
   }
 
-  if (event.status === "request_rejected") {
+  if (event.status === "rejected") {
     return (
       <div className="event-detail event-detail--full">
         <div className="request-success">
@@ -230,7 +230,7 @@ export function EventDetail() {
     );
   }
 
-  if (requestSent || event.status === "request_pending") {
+  if (requestSent || event.status === "pending") {
     return (
       <div className="event-detail event-detail--full">
         <div className="request-success">

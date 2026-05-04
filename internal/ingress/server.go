@@ -9,8 +9,10 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"sync"
 
+	"github.com/AikidoSec/safechain-internals/internal/cloud"
 	"github.com/AikidoSec/safechain-internals/internal/config"
 	"github.com/AikidoSec/safechain-internals/internal/proxy"
 )
@@ -110,6 +112,8 @@ func (s *Server) Start(ctx context.Context) error {
 
 	log.Printf("Ingress server listening on %s", s.addr)
 
+	go s.hydrateEventStore(ctx)
+
 	go func() {
 		<-ctx.Done()
 		err := s.Stop()
@@ -123,6 +127,38 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (s *Server) hydrateEventStore(ctx context.Context) {
+	resp, err := cloud.FetchSubmittedEvents(ctx, s.config, 100)
+	if err != nil {
+		log.Printf("failed to fetch submitted events for hydration: %v", err)
+		return
+	}
+
+	if len(resp.Events) == 0 {
+		return
+	}
+
+	events := make([]BlockEvent, 0, len(resp.Events))
+	for _, e := range resp.Events {
+		events = append(events, BlockEvent{
+			ID:          strconv.Itoa(e.ID),
+			TsMs:        e.Timestamp * 1000,
+			BlockReason: e.BlockReason,
+			Status:      e.Status,
+			Count:       1,
+			Artifact: Artifact{
+				Product:        e.Ecosystem,
+				PackageName:    e.PackageID,
+				PackageVersion: e.PackageVersion,
+				DisplayName:    e.PackageName,
+			},
+		})
+	}
+
+	s.eventStore.LoadHistorical(events)
+	log.Printf("hydrated event store with %d historical events", len(events))
 }
 
 func (s *Server) Stop() error {
