@@ -14,8 +14,10 @@ fn test_path_carries_model_count_tokens() {
 }
 
 #[test]
-fn test_path_carries_model_batches() {
-    assert!(path_carries_model("/v1/messages/batches"));
+fn test_path_carries_model_rejects_batches() {
+    // The Batch API body wraps the model under requests[].params.model, which
+    // our top-level Deserialize doesn't handle. Excluded on purpose for now.
+    assert!(!path_carries_model("/v1/messages/batches"));
 }
 
 #[test]

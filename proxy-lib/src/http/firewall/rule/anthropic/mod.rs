@@ -1,18 +1,5 @@
 use std::fmt;
 
-use rama::{
-    error::{BoxError, ErrorContext as _},
-    http::{
-        Body, Method, Request, Response,
-        body::util::BodyExt as _,
-        headers::{ContentType, HeaderMapExt as _},
-        ws::handshake::mitm::{WebSocketRelayDirection, WebSocketRelayOutput},
-    },
-    net::address::Domain,
-    telemetry::tracing,
-    utils::str::arcstr::{ArcStr, arcstr},
-};
-use serde::Deserialize;
 use crate::{
     http::{
         KnownContentType,
@@ -25,6 +12,18 @@ use crate::{
     },
     utils::time::SystemTimestampMilliseconds,
 };
+use rama::{
+    error::{BoxError, ErrorContext as _},
+    http::{
+        Body, Method, Request,
+        body::util::BodyExt as _,
+        headers::{ContentType, HeaderMapExt as _},
+    },
+    net::address::Domain,
+    telemetry::tracing,
+    utils::str::arcstr::{ArcStr, arcstr},
+};
+use serde::Deserialize;
 
 #[cfg(feature = "pac")]
 use crate::http::firewall::pac::PacScriptGenerator;
@@ -61,11 +60,6 @@ impl Rule for RuleAnthropic {
     #[inline(always)]
     fn match_domain(&self, domain: &Domain) -> bool {
         self.target_domains.is_match(domain)
-    }
-
-    #[inline(always)]
-    fn match_ws_handshake<'a>(&self, _: super::WebSocketHandshakeInfo<'a>) -> bool {
-        false
     }
 
     #[cfg(feature = "pac")]
@@ -131,29 +125,13 @@ impl Rule for RuleAnthropic {
             Body::from(bytes),
         )))
     }
-
-    #[inline(always)]
-    async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        Ok(resp)
-    }
-
-    #[inline(always)]
-    async fn evaluate_ws_relay_msg(
-        &self,
-        _: WebSocketRelayDirection,
-        data: WebSocketRelayOutput,
-    ) -> Result<WebSocketRelayOutput, BoxError> {
-        Ok(data)
-    }
 }
 
-/// Endpoints whose request body carries the `model` field.
-/// Other Anthropic endpoints (e.g. `/v1/models`) don't, and we skip them to
-/// avoid uselessly buffering bodies.
+/// Endpoints whose request body carries a top-level `model` field.
 fn path_carries_model(path: &str) -> bool {
     matches!(
         path,
-        "/v1/messages" | "/v1/messages/count_tokens" | "/v1/messages/batches" | "/v1/complete"
+        "/v1/messages" | "/v1/messages/count_tokens" | "/v1/complete"
     )
 }
 
