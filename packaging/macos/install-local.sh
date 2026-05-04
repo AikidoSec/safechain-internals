@@ -56,7 +56,6 @@ if [ $? -eq 0 ]; then
     # boot time. The daemon compares this file's mtime against system boot
     # time to decide whether a post-install reboot is still pending; without
     # this, every local reinstall would prompt for a reboot.
-    # Development-only hack!
     sudo touch -t 202501151000 "/Library/Application Support/AikidoSecurity/EndpointProtection/run/.installed_at"
 
     echo ""
