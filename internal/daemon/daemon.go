@@ -483,9 +483,8 @@ func (d *Daemon) reportAiUsage() error {
 	models := make([]cloud.AiUsageModel, 0, len(snapshot))
 	for _, ev := range snapshot {
 		models = append(models, cloud.AiUsageModel{
-			Provider:   ev.Provider,
-			Model:      ev.Model,
-			LastSeenAt: ev.TsMs / 1000,
+			Provider: ev.Provider,
+			Model:    ev.Model,
 		})
 	}
 	event := &cloud.AiUsageStatsEvent{Models: models}

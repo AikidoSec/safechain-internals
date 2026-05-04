@@ -105,7 +105,7 @@ func TestSendAiUsageStatsHitsCorrectEndpointWithExpectedShape(t *testing.T) {
 
 	event := &AiUsageStatsEvent{
 		Models: []AiUsageModel{
-			{Provider: "anthropic", Model: "claude-opus-4-7", LastSeenAt: 1714824000},
+			{Provider: "anthropic", Model: "claude-opus-4-7"},
 		},
 	}
 
@@ -128,18 +128,16 @@ func TestSendAiUsageStatsHitsCorrectEndpointWithExpectedShape(t *testing.T) {
 	if got.Provider != "anthropic" || got.Model != "claude-opus-4-7" {
 		t.Fatalf("expected anthropic/claude-opus-4-7, got %s/%s", got.Provider, got.Model)
 	}
-	if got.LastSeenAt != 1714824000 {
-		t.Fatalf("expected last_seen_at to round-trip, got %d", got.LastSeenAt)
-	}
 
-	// Wire format must use Wout's keys: `models`, `last_seen_at` (not _ms).
-	for _, want := range []string{`"models"`, `"last_seen_at"`} {
-		if !strings.Contains(string(gotBody), want) {
-			t.Fatalf("expected payload to contain %s, got: %s", want, string(gotBody))
-		}
+	// Wire format must match Wout's spec: `{models: [{provider, model}]}` —
+	// no agent-side timestamp until websockets/SSE.
+	if !strings.Contains(string(gotBody), `"models"`) {
+		t.Fatalf("expected payload to contain top-level `models` field, got: %s", string(gotBody))
 	}
-	if strings.Contains(string(gotBody), `"last_seen_ms"`) || strings.Contains(string(gotBody), `"first_seen_ms"`) || strings.Contains(string(gotBody), `"count"`) {
-		t.Fatalf("payload still contains internal-only fields: %s", string(gotBody))
+	for _, banned := range []string{`"last_seen_at"`, `"last_seen_ms"`, `"first_seen_ms"`, `"count"`, `"ts_ms"`} {
+		if strings.Contains(string(gotBody), banned) {
+			t.Fatalf("payload should not contain %s yet: %s", banned, string(gotBody))
+		}
 	}
 }
 
