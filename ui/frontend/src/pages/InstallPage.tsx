@@ -24,9 +24,9 @@ import { SetupStepAllowVpn } from "./SetupStepAllowVpn";
 import { SetupStepStartProxy } from "./SetupStepStartProxy";
 import { SetupStepInstallCa } from "./SetupStepInstallCa";
 
-type StepId = "token" | "install-extension" | "enable-extension" | "allow-vpn" | "start-proxy" | "install-ca" | "reboot";
+type StepId = "token" | "invalid-token" | "install-extension" | "enable-extension" | "allow-vpn" | "start-proxy" | "install-ca" | "reboot";
 
-const VALID_STEPS = new Set<string>(["token", "install-extension", "enable-extension", "allow-vpn", "start-proxy", "install-ca", "reboot"]);
+const VALID_STEPS = new Set<string>(["token", "invalid-token", "install-extension", "enable-extension", "allow-vpn", "start-proxy", "install-ca", "reboot"]);
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -42,6 +42,7 @@ async function pollUntil(check: () => Promise<boolean>, intervalMs: number, maxA
 
 const STEP_ACTIONS: Partial<Record<StepId, (input?: string) => Promise<void>>> = {
   token: (input) => setToken(input ?? ""),
+  "invalid-token": (input) => setToken(input ?? ""),
   "install-extension": async () => {
     await installExtension();
     if (await isExtensionInstalled()) return;
@@ -114,7 +115,7 @@ export function InstallPage() {
 
   async function handleAction() {
     if (!currentStep || currentStep === "reboot") return;
-    if (currentStep === "token" && !tokenInput.trim()) return;
+    if ((currentStep === "token" || currentStep === "invalid-token") && !tokenInput.trim()) return;
 
     setPhase("working");
     setErrorMsg("");
@@ -122,7 +123,7 @@ export function InstallPage() {
       const action = STEP_ACTIONS[currentStep];
       if (!action) return;
       await action(tokenInput.trim());
-      if (currentStep === "token") {
+      if (currentStep === "token" || currentStep === "invalid-token") {
         handleNext();
       } else {
         setPhase("done");
@@ -139,6 +140,8 @@ export function InstallPage() {
     setTokenInput("");
     if (currentIdx + 1 < steps.length) {
       setCurrentIdx((i) => i + 1);
+    } else {
+      closeInstallWindow();
     }
   }
 
@@ -198,6 +201,15 @@ export function InstallPage() {
             {...stepProps}
             tokenInput={tokenInput}
             onTokenChange={setTokenInput}
+          />
+        );
+      case "invalid-token":
+        return (
+          <SetupStepToken
+            {...stepProps}
+            tokenInput={tokenInput}
+            onTokenChange={setTokenInput}
+            invalidToken
           />
         );
       case "install-extension":

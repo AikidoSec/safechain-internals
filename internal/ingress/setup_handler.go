@@ -48,6 +48,8 @@ func ComputeSetupSteps(ctx context.Context, cfg *config.ConfigInfo) []string {
 
 	if cfg.Token == "" {
 		steps = append(steps, "token")
+	} else if cfg.IsCurrentTokenUnauthorized() {
+		steps = append(steps, "invalid-token")
 	}
 
 	if installed, err := IsNetworkExtensionInstalled(ctx); err != nil || !installed {

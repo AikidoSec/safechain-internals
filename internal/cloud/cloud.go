@@ -32,8 +32,12 @@ func sendEvent(ctx context.Context, endpoint string, config *config.ConfigInfo, 
 }
 
 func sendEventWithResponse(ctx context.Context, endpoint string, config *config.ConfigInfo, event any) ([]byte, error) {
-	if config.Token == "" {
+	tokenUsed := config.Token
+	if tokenUsed == "" {
 		return nil, fmt.Errorf("token is not set")
+	}
+	if config.IsCurrentTokenUnauthorized() {
+		return nil, fmt.Errorf("token is marked unauthorized, skipping request")
 	}
 	if config.DeviceID == "" {
 		return nil, fmt.Errorf("device ID is not set")
@@ -54,7 +58,7 @@ func sendEventWithResponse(ctx context.Context, endpoint string, config *config.
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", config.Token)
+	req.Header.Set("Authorization", tokenUsed)
 	req.Header.Set("X-Device-Id", config.DeviceID)
 
 	resp, err := httpClient.Do(req)
@@ -64,6 +68,14 @@ func sendEventWithResponse(ctx context.Context, endpoint string, config *config.
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusUnauthorized {
+			if config.MarkTokenUnauthorized(tokenUsed) {
+				log.Printf("Cloud auth rejected token %s with status %d; suppressing further cloud requests until the token changes", config.GetAnonymizedToken(), resp.StatusCode)
+				if err := config.Save(); err != nil {
+					log.Printf("Failed to save config after suppressing unauthorized token: %v", err)
+				}
+			}
+		}
 		return nil, fmt.Errorf("request to %s failed with status %d", endpoint, resp.StatusCode)
 	}
 
