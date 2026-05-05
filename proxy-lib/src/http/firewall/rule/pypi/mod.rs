@@ -3,6 +3,7 @@ use std::fmt;
 use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
+    extensions::ExtensionsRef as _,
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
@@ -14,10 +15,13 @@ use crate::{
     endpoint_protection::{
         EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
     },
-    http::firewall::{
-        domain_matcher::DomainMatcher,
-        events::{Artifact, BlockReason},
-        notifier::EventNotifier,
+    http::{
+        RequestMetaUri,
+        firewall::{
+            domain_matcher::DomainMatcher,
+            events::{Artifact, BlockReason},
+            notifier::EventNotifier,
+        },
     },
     package::{
         malware_list::RemoteMalwareList, name_formatter::LowerCasePackageName,
@@ -104,6 +108,16 @@ impl RulePyPI {
             .as_ref()
             .map(|c| c.package_age_cutoff_ts(Self::DEFAULT_MIN_PACKAGE_AGE))
             .unwrap_or_else(|| SystemTimestampMilliseconds::now() - Self::DEFAULT_MIN_PACKAGE_AGE)
+    }
+
+    /// Returns `true` if the endpoint-protection policy explicitly allowlists
+    /// the given PyPI package name (i.e. evaluates to [`PackagePolicyDecision::Allow`]).
+    /// Used by the metadata-rewrite path to skip the min-age strip for trusted
+    /// packages.
+    fn is_package_allowlisted(&self, name: &PyPIPackageName) -> bool {
+        self.policy_evaluator.as_ref().is_some_and(|policy| {
+            policy.evaluate_package_install(name) == PackagePolicyDecision::Allow
+        })
     }
 
     fn is_blocked(&self, package_info: &PackageInfo) -> Result<bool, BoxError> {
@@ -226,18 +240,34 @@ impl Rule for RulePyPI {
 
     #[inline(always)]
     async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
-        match &self.maybe_min_package_age {
-            Some(min_package_age) => {
-                min_package_age
-                    .remove_new_packages(
-                        resp,
-                        &self.remote_released_packages_list,
-                        self.get_package_age_cutoff_ts(),
-                    )
-                    .await
-            }
-            None => Ok(resp),
+        let Some(min_package_age) = &self.maybe_min_package_age else {
+            return Ok(resp);
+        };
+
+        // Resolve the metadata package name from the request URI, then keep it only
+        // if the policy explicitly allowlists it. `Some` here means "skip the strip".
+        let allowlisted_package_name = resp
+            .extensions()
+            .get_ref::<RequestMetaUri>()
+            .and_then(|RequestMetaUri(uri)| parse_package_info_from_path(uri.path()))
+            .map(|package_info| package_info.name)
+            .filter(|name| self.is_package_allowlisted(name));
+
+        if let Some(name) = allowlisted_package_name {
+            tracing::debug!(
+                package = %name,
+                "PyPI metadata response: package is allowlisted, skipping min-age strip"
+            );
+            return Ok(resp);
         }
+
+        min_package_age
+            .remove_new_packages(
+                resp,
+                &self.remote_released_packages_list,
+                self.get_package_age_cutoff_ts(),
+            )
+            .await
     }
 }
 

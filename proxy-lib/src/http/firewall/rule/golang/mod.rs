@@ -149,6 +149,18 @@ impl Rule for RuleGolang {
         else {
             return Ok(resp);
         };
+
+        if let Some(policy_evaluator) = self.policy_evaluator.as_ref() {
+            let name = GolangPackageName::from(module_name.as_str());
+            if policy_evaluator.evaluate_package_install(&name) == PackagePolicyDecision::Allow {
+                tracing::debug!(
+                    module = %module_name,
+                    "Go module list: module is allowlisted, skipping min-age strip"
+                );
+                return Ok(resp);
+            }
+        }
+
         min_package_age
             .rewrite_list_response(
                 resp,

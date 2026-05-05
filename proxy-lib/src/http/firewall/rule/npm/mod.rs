@@ -148,7 +148,15 @@ impl Rule for RuleNpm {
     #[inline(always)]
     async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
         match &self.maybe_min_package_age {
-            Some(min_package_age) => min_package_age.remove_new_packages(resp).await,
+            Some(min_package_age) => {
+                min_package_age
+                    // Parsing package names out of registry metadata belongs in the rewriter.
+                    // The allowlist policy decision does not; that business logic belongs here.
+                    .remove_new_packages(resp, |name| {
+                        self.is_package_allowlisted(&NpmPackageName::from(name))
+                    })
+                    .await
+            }
             None => Ok(resp),
         }
     }
@@ -156,6 +164,16 @@ impl Rule for RuleNpm {
 
 impl RuleNpm {
     const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
+
+    /// Returns `true` if the endpoint-protection policy explicitly allowlists
+    /// the given npm package name (i.e. evaluates to [`PackagePolicyDecision::Allow`]).
+    /// Used by the metadata-rewrite path to skip the min-age strip for trusted
+    /// packages.
+    fn is_package_allowlisted(&self, name: &NpmPackageName) -> bool {
+        self.policy_evaluator.as_ref().is_some_and(|policy| {
+            policy.evaluate_package_install(name) == PackagePolicyDecision::Allow
+        })
+    }
 
     fn get_package_age_cutoff_ts(&self) -> SystemTimestampMilliseconds {
         self.policy_evaluator
