@@ -24,6 +24,9 @@
         <Directory Id="AGENTDIR" Name="EndpointProtection">
           <Directory Id="BINDIR" Name="bin" />
           <Directory Id="SCRIPTSDIR" Name="scripts" />
+          <?if $(var.IncludeDriver) = "1" ?>
+          <Directory Id="DRIVERDIR" Name="driver" />
+          <?endif?>
         </Directory>
       </Directory>
     </StandardDirectory>
@@ -45,6 +48,11 @@
       <ComponentRef Id="PathComponent" />
       <ComponentRef Id="CleanupProgramData" />
       <ComponentRef Id="StoreTokenScript" />
+      <?if $(var.IncludeDriver) = "1" ?>
+      <ComponentGroupRef Id="DriverComponents" />
+      <ComponentRef Id="InstallDriverScript" />
+      <ComponentRef Id="UninstallDriverScript" />
+      <?endif?>
     </Feature>
 
     <!-- Components -->
@@ -79,12 +87,43 @@
       <Component Id="SafeChainL7ProxyExe" Guid="8a745110-05f7-4bb8-8013-5fca733409ef">
         <File Id="SafeChainL7ProxyExeFile" Source="$(var.BinDir)\SafeChainL7Proxy.exe" KeyPath="yes" />
       </Component>
+      <?if $(var.IncludeDriver) = "1" ?>
+      <Component Id="SafeChainL4ProxyExe" Guid="e74a8b9c-7d2e-4cf5-8a9b-cdef01234567">
+        <File Id="SafeChainL4ProxyExeFile" Source="$(var.BinDir)\SafeChainL4Proxy.exe" KeyPath="yes" />
+      </Component>
+      <?endif?>
     </ComponentGroup>
+
+    <?if $(var.IncludeDriver) = "1" ?>
+    <!-- Kernel-mode L4 driver bundle (sys + inf + cat + self-signed cer) -->
+    <ComponentGroup Id="DriverComponents" Directory="DRIVERDIR">
+      <Component Id="DriverSys" Guid="8f1a2b3c-4d5e-4f89-ab12-c3d4e5f60718">
+        <File Id="DriverSysFile" Source="$(var.BinDir)\driver\safechain_lib_l4_proxy_windows_driver.sys" KeyPath="yes" />
+      </Component>
+      <Component Id="DriverInf" Guid="7e2b3c4d-5f6a-4789-9b23-d4e5f6a71829">
+        <File Id="DriverInfFile" Source="$(var.BinDir)\driver\safechain_lib_l4_proxy_windows_driver.inf" KeyPath="yes" />
+      </Component>
+      <Component Id="DriverCat" Guid="6d3c4d5e-6f7b-4f89-ac34-e5f6a71829ba">
+        <File Id="DriverCatFile" Source="$(var.BinDir)\driver\safechain_lib_l4_proxy_windows_driver.cat" KeyPath="yes" />
+      </Component>
+      <Component Id="DriverCer" Guid="5e4d5e6f-7a8c-4f89-9b45-f6a71829bacb">
+        <File Id="DriverCerFile" Source="$(var.BinDir)\driver\safechain-driver.cer" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+    <?endif?>
 
     <DirectoryRef Id="SCRIPTSDIR">
       <Component Id="StoreTokenScript" Guid="d1e2f3a4-5b6c-7d8e-9f0a-1b2c3d4e5f6a">
         <File Id="StoreTokenPs1" Source="$(var.ProjectDir)\packaging\windows\scripts\StoreToken.ps1" KeyPath="yes" />
       </Component>
+      <?if $(var.IncludeDriver) = "1" ?>
+      <Component Id="InstallDriverScript" Guid="4f5e6f7a-8b9d-4cf9-ab56-71829bacbdce">
+        <File Id="InstallDriverPs1" Source="$(var.ProjectDir)\packaging\windows\scripts\install-driver.ps1" KeyPath="yes" />
+      </Component>
+      <Component Id="UninstallDriverScript" Guid="3a6f7a8b-9c0e-4ff9-ac67-829bacbdcef0">
+        <File Id="UninstallDriverPs1" Source="$(var.ProjectDir)\packaging\windows\scripts\uninstall-driver.ps1" KeyPath="yes" />
+      </Component>
+      <?endif?>
     </DirectoryRef>
 
     <!-- Add to PATH -->
@@ -112,8 +151,36 @@
                   Impersonate="no"
                   Return="ignore" />
 
+    <?if $(var.IncludeDriver) = "1" ?>
+    <!-- Install the L4 driver: trust bundled cert, then pnputil /add-driver /install -->
+    <SetProperty Id="InstallDriverPackage" Before="InstallDriverPackage" Sequence="execute"
+                 Value="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[SCRIPTSDIR]install-driver.ps1&quot; -DriverDir &quot;[DRIVERDIR]&quot;" />
+    <CustomAction Id="InstallDriverPackage"
+                  DllEntry="WixQuietExec64"
+                  BinaryRef="Wix4UtilCA_X86"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="check" />
+
+    <!-- Uninstall the L4 driver: pnputil /delete-driver /uninstall /force -->
+    <SetProperty Id="UninstallDriverPackage" Before="UninstallDriverPackage" Sequence="execute"
+                 Value="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[SCRIPTSDIR]uninstall-driver.ps1&quot;" />
+    <CustomAction Id="UninstallDriverPackage"
+                  DllEntry="WixQuietExec64"
+                  BinaryRef="Wix4UtilCA_X86"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+    <?endif?>
+
     <InstallExecuteSequence>
+      <?if $(var.IncludeDriver) = "1" ?>
+      <Custom Action="UninstallDriverPackage" Before="RunTeardown" Condition="(REMOVE~=&quot;ALL&quot;)" />
+      <?endif?>
       <Custom Action="RunTeardown" Before="RemoveFiles" Condition="(REMOVE~=&quot;ALL&quot;)" />
+      <?if $(var.IncludeDriver) = "1" ?>
+      <Custom Action="InstallDriverPackage" After="InstallFiles" Condition="NOT (REMOVE~=&quot;ALL&quot;)" />
+      <?endif?>
       <Custom Action="WriteAikidoToken" Before="StartServices" Condition="AIKIDO_TOKEN" />
     </InstallExecuteSequence>
 
