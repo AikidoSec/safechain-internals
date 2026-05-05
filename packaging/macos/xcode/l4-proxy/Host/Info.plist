@@ -22,5 +22,7 @@
 	<string>$(AIKIDO_L4_EXTENSION_BUNDLE_ID)</string>
 	<key>AikidoL4SharedAccessGroup</key>
 	<string>$(AppIdentifierPrefix)$(AIKIDO_L4_SHARED_ACCESS_GROUP_BUNDLE_ID)</string>
+	<key>AikidoL4ProviderMachServiceName</key>
+	<string>$(APP_GROUP_ID).aikido-l4-mitm-ca</string>
 </dict>
 </plist>

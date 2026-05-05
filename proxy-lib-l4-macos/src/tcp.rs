@@ -1,5 +1,9 @@
+use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
+
+use arc_swap::ArcSwap;
 use rama::{
     Layer, Service,
+    bytes::Bytes,
     combinators::Either,
     error::{BoxError, ErrorContext as _, ErrorExt as _, extra::OpaqueError},
     extensions::ExtensionsRef,
@@ -33,16 +37,13 @@ use rama::{
     proxy::socks5::{proxy::mitm::Socks5MitmRelayService, server::Socks5PeekRouter},
     rt::Executor,
     telemetry::tracing,
-    tls::boring::proxy::{
-        TlsMitmRelay,
-        cert_issuer::{
-            BoringMitmCertIssuer, CachedBoringMitmCertIssuer, InMemoryBoringMitmCertIssuer,
-        },
-    },
+    tls::boring::proxy::{TlsMitmRelay, cert_issuer::BoringMitmCertIssuer},
 };
-use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
 
-use crate::config::ProxyConfig;
+use crate::{
+    config::ProxyConfig,
+    state::{LiveCa, SharedCaState},
+};
 use safechain_proxy_lib::{
     endpoint_protection::remote_app_passthrough_list::PassthroughMatchContext,
     http::{
@@ -52,51 +53,51 @@ use safechain_proxy_lib::{
         ws_relay::WebSocketMitmRelayService,
     },
     storage,
-    tls::{RootCaKeyPair, mitm_relay_policy::TlsMitmRelayPolicyLayer},
+    tls::mitm_relay_policy::TlsMitmRelayPolicyLayer,
     utils::token::AgentIdentity,
 };
-
-type TcpTlsMitmRelay = TlsMitmRelay<CachedBoringMitmCertIssuer<InMemoryBoringMitmCertIssuer>>;
 
 struct TcpMitmServiceInner {
     proxy_config: ProxyConfig,
     tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
-    tls_mitm_relay: TcpTlsMitmRelay,
     firewall: Firewall,
-    ca_crt_pem_bytes: &'static [u8],
+    state: SharedCaState,
 }
 
 #[derive(Clone)]
 pub(super) struct TcpMitmService(Arc<TcpMitmServiceInner>);
 
 impl TcpMitmService {
-    pub(super) async fn try_new(ctx: TransparentProxyServiceContext) -> Result<Self, BoxError> {
+    pub(super) async fn try_new(
+        ctx: TransparentProxyServiceContext,
+    ) -> Result<(Self, SharedCaState), BoxError> {
         let proxy_config = ProxyConfig::from_opaque_config(ctx.opaque_config())
             .context("decode proxy config (json)")?;
 
-        let Some((ca_crt_pem, ca_key_pem)) = proxy_config
-            .ca_cert_pem
-            .as_deref()
-            .zip(proxy_config.ca_key_pem.as_deref())
-        else {
-            return Err(
-                OpaqueError::from_static_str("CA crt or key missing in Opaque Config")
-                    .into_box_error(),
-            );
+        let legacy_pems = match (
+            proxy_config.ca_cert_pem.as_deref(),
+            proxy_config.ca_key_pem.as_deref(),
+        ) {
+            (Some(cert), Some(key)) => Some((cert, key)),
+            (Some(_), None) | (None, Some(_)) => {
+                return Err(OpaqueError::from_static_str(
+                    "legacy MITM CA passthrough requires both `ca_cert_pem` and `ca_key_pem`",
+                )
+                .into_box_error());
+            }
+            (None, None) => None,
         };
+
+        let active = crate::tls::load_or_create_active_ca(legacy_pems)
+            .context("load or mint active MITM CA")?;
+        let live = LiveCa {
+            active: Arc::new(active),
+            pending: None,
+        };
+        let state: SharedCaState = Arc::new(ArcSwap::from_pointee(live));
 
         let data_path =
             crate::utils::storage::storage_dir().context("(app) data path is missing")?;
-        let root_ca = RootCaKeyPair::try_form_pem(ca_crt_pem, ca_key_pem)
-            .context("load config-provided ca crt/key pair")?;
-
-        let ca_crt_pem_bytes: &[u8] = root_ca
-            .certificate()
-            .to_pem()
-            .context("convert cert to pem")?
-            .leak();
-
-        let (ca_crt, ca_key) = root_ca.into_pair();
 
         let guard = ctx
             .executor
@@ -117,13 +118,14 @@ impl TcpMitmService {
 
         tracing::debug!("creating tcp mitm state for transparent proxy extension");
 
-        Ok(Self(Arc::new(TcpMitmServiceInner {
+        let service = Self(Arc::new(TcpMitmServiceInner {
             proxy_config,
             tls_mitm_relay_policy: TlsMitmRelayPolicyLayer::new(firewall.clone()),
-            tls_mitm_relay: TlsMitmRelay::new_cached_in_memory(ca_crt, ca_key),
             firewall,
-            ca_crt_pem_bytes,
-        })))
+            state: state.clone(),
+        }));
+
+        Ok((service, state))
     }
 
     pub(super) fn proxy_config(&self) -> &ProxyConfig {
@@ -172,12 +174,20 @@ impl TcpMitmService {
         Ingress: Io + Unpin + ExtensionsRef,
         Egress: Io + Unpin + ExtensionsRef,
     {
+        // Snapshot the live CA state at flow-build time. Pending rotations
+        // surface to new flows on the next bridge build; in-flight flows keep
+        // serving with whatever they captured. This matches the rama
+        // transparent-proxy demo's approach.
+        let live: Arc<LiveCa> = self.0.state.load_full();
+        let active_relay = live.active.relay.clone();
+        let hijack_pem = live.hijack_cert_pem().clone();
+
         new_tcp_service_inner(
             exec,
             self.0.tls_mitm_relay_policy.clone(),
-            self.0.tls_mitm_relay.clone(),
+            active_relay,
             self.0.firewall.clone(),
-            self.0.ca_crt_pem_bytes,
+            hijack_pem,
             within_connect_tunnel,
             tls_peek_duration,
             http_peek_duration,
@@ -191,7 +201,7 @@ fn new_tcp_service_inner<Issuer, Ingress, Egress>(
     tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
     tls_mitm_relay: TlsMitmRelay<Issuer>,
     firewall: Firewall,
-    ca_crt_pem_bytes: &'static [u8],
+    hijack_pem: Bytes,
     within_connect_tunnel: bool,
     tls_peek_duration: Duration,
     http_peek_duration: Duration,
@@ -207,7 +217,7 @@ where
             tls_mitm_relay_policy.clone(),
             tls_mitm_relay.clone(),
             firewall,
-            ca_crt_pem_bytes,
+            hijack_pem,
             within_connect_tunnel,
             tls_peek_duration,
             http_peek_duration,
@@ -241,7 +251,7 @@ fn http_relay_middleware<S, Issuer>(
     tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
     tls_mitm_relay: TlsMitmRelay<Issuer>,
     firewall: Firewall,
-    ca_crt_pem_bytes: &'static [u8],
+    hijack_pem: Bytes,
     within_connect_tunnel: bool,
     tls_peek_duration: Duration,
     http_peek_duration: Duration,
@@ -264,7 +274,7 @@ where
             tls_mitm_relay_policy,
             tls_mitm_relay,
             firewall.clone(),
-            ca_crt_pem_bytes,
+            hijack_pem.clone(),
             true,
             tls_peek_duration,
             http_peek_duration,
@@ -277,7 +287,7 @@ where
         StreamCompressionLayer::new().with_compress_predicate(MirrorDecompressed::new()),
         HijackLayer::new(
             DomainMatcher::exact(HIJACK_DOMAIN),
-            Arc::new(hijack::new_service(ca_crt_pem_bytes, firewall.clone())),
+            Arc::new(hijack::new_service(hijack_pem, firewall.clone())),
         ),
         firewall,
         MapResponseBodyLayer::new_boxed_streaming_body(),

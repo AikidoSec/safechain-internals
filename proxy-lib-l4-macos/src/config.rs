@@ -56,11 +56,27 @@ pub struct ProxyConfig {
     #[serde(deserialize_with = "deserialize_uri")]
     pub aikido_url: Uri,
 
-    /// PEM-encoded root CA certificate supplied by the host.
+    /// **DEPRECATED — graceful migration only.** PEM-encoded root CA
+    /// certificate forwarded by an older container build that still
+    /// generates the CA itself. The sysext uses it for the current run
+    /// only; it is **never** persisted in the SE-encrypted system
+    /// keychain. Caller is expected to retire it via the XPC
+    /// `generate-ca-crt` + `commit-ca-crt` flow.
     pub ca_cert_pem: Option<String>,
 
-    /// PEM-encoded root CA private key supplied by the host.
+    /// **DEPRECATED — graceful migration only.** PEM-encoded root CA
+    /// private key counterpart to [`ProxyConfig::ca_cert_pem`].
     pub ca_key_pem: Option<String>,
+
+    /// `NEMachServiceName` exposed by the sysext's `Info.plist`. When
+    /// present, the sysext binds an XPC listener under this name so the
+    /// container app can drive `generate-ca-crt` / `commit-ca-crt`.
+    pub xpc_service_name: Option<String>,
+
+    /// Bundle identifier of the container app. Used to pin the XPC
+    /// listener via `PeerSecurityRequirement::TeamIdentity(Some(..))` —
+    /// same Apple Developer team **and** this exact signing identifier.
+    pub container_signing_identifier: Option<String>,
 
     /// Disables the firewall, this is used for the first time the proxy starts and certs are not trusted yet
     ///  The daemon will first start the proxy in this mode to obtain the cert and make it trusted.
@@ -77,6 +93,8 @@ impl Default for ProxyConfig {
             aikido_url: Uri::from_static("https://app.aikido.dev"),
             ca_cert_pem: None,
             ca_key_pem: None,
+            xpc_service_name: None,
+            container_signing_identifier: None,
             no_firewall: false,
         }
     }

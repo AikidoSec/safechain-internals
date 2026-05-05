@@ -62,11 +62,12 @@ pub async fn run_proxy_server(
     let https_client = self::server::http_relay_middleware(
         exec.clone(),
         firewall.clone(),
-        root_ca_key_pair
-            .certificate()
-            .to_pem()
-            .context("root ca cert as pem")?
-            .leak(),
+        rama::bytes::Bytes::from(
+            root_ca_key_pair
+                .certificate()
+                .to_pem()
+                .context("root ca cert as pem")?,
+        ),
         #[cfg(feature = "har")]
         har_export_layer.clone(),
     )
