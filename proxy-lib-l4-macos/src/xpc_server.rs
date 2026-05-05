@@ -24,10 +24,11 @@
 //! the caller has to re-issue `generate-ca-crt` — see [`crate::state`] for
 //! the rationale.
 //!
-//! The listener is pinned to the container app's signing identifier via
-//! [`PeerSecurityRequirement::TeamIdentity`]. We refuse to bind when the
-//! identifier is missing from the engine config — failing closed is safer
-//! than exposing the routes to any other process on the host.
+//! The listener is pinned to the container app's exact code identity via
+//! [`PeerSecurityRequirement::CodeSigning`]: exact bundle identifier and
+//! exact Apple Developer team. We refuse to bind when either value is
+//! missing from the engine config — failing closed is safer than exposing
+//! the routes to any other process on the host.
 
 use std::sync::Arc;
 
@@ -91,14 +92,16 @@ impl CaCommandReply {
 /// `service_name` is the value declared as `NEMachServiceName` in the
 /// extension's `Info.plist`, forwarded by the container app through the
 /// opaque engine config. `container_signing_identifier` is the container
-/// app's `Bundle.main.bundleIdentifier`, used to pin peer access.
+/// app's `Bundle.main.bundleIdentifier`; `container_team_identifier` is the
+/// Apple Developer team identifier derived by the container app.
 ///
-/// Either argument missing or empty is a fail-closed condition: the
+/// Any required argument missing or empty is a fail-closed condition: the
 /// listener is **not** bound, which means `generate-ca-crt` /
 /// `commit-ca-crt` calls from the container will fail loudly.
 pub(crate) fn spawn(
     service_name: Option<String>,
     container_signing_identifier: Option<String>,
+    container_team_identifier: Option<String>,
     state: SharedCaState,
     executor: Executor,
 ) -> Result<(), BoxError> {
@@ -120,12 +123,11 @@ pub(crate) fn spawn(
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .map(ArcStr::from)
         .ok_or_else(|| -> BoxError {
             tracing::error!(
                 "xpc server: `container_signing_identifier` is missing or empty in opaque \
-                 engine config; refusing to bind XPC listener (fail-closed). Set it from the \
-                 container app's `Bundle.main.bundleIdentifier`."
+                 engine config; refusing to bind XPC listener (fail-closed). Set it from \
+                 the container app's `Bundle.main.bundleIdentifier`."
             );
             OpaqueError::from_static_str(
                 "xpc server: missing container_signing_identifier (fail-closed)",
@@ -133,15 +135,32 @@ pub(crate) fn spawn(
             .into_box_error()
         })?;
 
+    let team_identifier = container_team_identifier
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| -> BoxError {
+            tracing::error!(
+                "xpc server: `container_team_identifier` is missing or empty in opaque \
+                 engine config; refusing to bind XPC listener (fail-closed)."
+            );
+            OpaqueError::from_static_str(
+                "xpc server: missing container_team_identifier (fail-closed)",
+            )
+            .into_box_error()
+        })?;
+
+    let requirement = build_peer_code_signing_requirement(signing_identifier, team_identifier)?;
+
     tracing::info!(
         %service_name,
-        %signing_identifier,
-        "xpc server: start config+spawn (peer pinned to same-team + signing identifier)"
+        signing_identifier,
+        team_identifier,
+        "xpc server: start config+spawn (peer pinned to exact team + bundle identifier)"
     );
 
-    let config = XpcListenerConfig::new(service_name.clone()).with_peer_requirement(
-        PeerSecurityRequirement::TeamIdentity(Some(signing_identifier)),
-    );
+    let config = XpcListenerConfig::new(service_name.clone())
+        .with_peer_requirement(PeerSecurityRequirement::CodeSigning(requirement));
 
     let router = XpcMessageRouter::new()
         .with_typed_route::<EmptyRequest, CaCommandReply, _>(
@@ -241,20 +260,34 @@ fn commit_pending(state: &SharedCaState) -> Result<Option<Bytes>, BoxError> {
     crate::tls::persist_pending_ca(&pending).context("persist pending MITM CA")?;
 
     let new_active = build_active_from_pending(&pending);
+    Ok(promote_committed_pending(state, &pending, new_active))
+}
 
+fn promote_committed_pending(
+    state: &SharedCaState,
+    committed_pending: &Arc<PendingCa>,
+    new_active: Arc<ActiveCa>,
+) -> Option<Bytes> {
     let mut previous_der: Option<Bytes> = None;
     state.rcu(|live| {
         // Hold on to whatever was active when this rcu closure ran. rcu may
         // re-run, so we capture every time and keep the latest one — by the
         // time the swap actually lands, this will be the cert we displaced.
         previous_der = Some(live.active.cert_der.clone());
+        // Preserve a newer pending CA that may have been generated while this
+        // commit was persisting the older one. Only clear `pending` when the
+        // slot still points at the CA being promoted.
+        let pending = match live.pending.as_ref() {
+            Some(current) if Arc::ptr_eq(current, committed_pending) => None,
+            Some(current) => Some(current.clone()),
+            None => None,
+        };
         LiveCa {
             active: new_active.clone(),
-            pending: None,
+            pending,
         }
     });
-
-    Ok(previous_der)
+    previous_der
 }
 
 fn build_active_from_pending(pending: &PendingCa) -> Arc<ActiveCa> {
@@ -267,3 +300,29 @@ fn build_active_from_pending(pending: &PendingCa) -> Arc<ActiveCa> {
         cert_der: pending.cert_der.clone(),
     })
 }
+
+fn build_peer_code_signing_requirement(
+    signing_identifier: &str,
+    team_identifier: &str,
+) -> Result<ArcStr, BoxError> {
+    let signing_identifier =
+        sanitize_requirement_atom("container_signing_identifier", signing_identifier)?;
+    let team_identifier = sanitize_requirement_atom("container_team_identifier", team_identifier)?;
+    Ok(ArcStr::from(format!(
+        "anchor apple generic and certificate leaf[subject.OU] = \"{team_identifier}\" and identifier \"{signing_identifier}\""
+    )))
+}
+
+fn sanitize_requirement_atom<'a>(field: &'static str, value: &'a str) -> Result<&'a str, BoxError> {
+    if value.contains('"') || value.contains('\\') {
+        return Err(OpaqueError::from_static_str(
+            "xpc server: invalid code signing requirement component",
+        )
+        .context_field("field", field));
+    }
+    Ok(value)
+}
+
+#[cfg(test)]
+#[path = "xpc_server_tests.rs"]
+mod tests;

@@ -74,9 +74,13 @@ pub struct ProxyConfig {
     pub xpc_service_name: Option<String>,
 
     /// Bundle identifier of the container app. Used to pin the XPC
-    /// listener via `PeerSecurityRequirement::TeamIdentity(Some(..))` —
-    /// same Apple Developer team **and** this exact signing identifier.
+    /// listener to this exact code-signed application.
     pub container_signing_identifier: Option<String>,
+
+    /// Apple Developer team identifier of the container app. Used with
+    /// [`ProxyConfig::container_signing_identifier`] to build the exact
+    /// XPC code-signing requirement.
+    pub container_team_identifier: Option<String>,
 
     /// Disables the firewall, this is used for the first time the proxy starts and certs are not trusted yet
     ///  The daemon will first start the proxy in this mode to obtain the cert and make it trusted.
@@ -95,6 +99,7 @@ impl Default for ProxyConfig {
             ca_key_pem: None,
             xpc_service_name: None,
             container_signing_identifier: None,
+            container_team_identifier: None,
             no_firewall: false,
         }
     }

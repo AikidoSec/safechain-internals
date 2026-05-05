@@ -64,6 +64,7 @@ private struct ProxyEngineConfigPayload: Encodable, Equatable {
     let caKeyPEM: String?
     let xpcServiceName: String?
     let containerSigningIdentifier: String?
+    let containerTeamIdentifier: String?
     let noFirewall: Bool
 
     private enum CodingKeys: String, CodingKey {
@@ -75,6 +76,7 @@ private struct ProxyEngineConfigPayload: Encodable, Equatable {
         case caKeyPEM = "ca_key_pem"
         case xpcServiceName = "xpc_service_name"
         case containerSigningIdentifier = "container_signing_identifier"
+        case containerTeamIdentifier = "container_team_identifier"
         case noFirewall = "no_firewall"
     }
 }
@@ -117,6 +119,10 @@ private final class TransparentProxyHostCLI {
     /// bundle identifier — see the rama crate-level docs.
     private lazy var xpcServiceName = infoString(
         key: "AikidoL4ProviderMachServiceName",
+        fallback: ""
+    )
+    private lazy var sharedAccessGroup = infoString(
+        key: "AikidoL4SharedAccessGroup",
         fallback: ""
     )
     private lazy var logger = Logger(
@@ -193,7 +199,8 @@ private final class TransparentProxyHostCLI {
         let engineConfigJSON = try Self.makeEngineConfigJSON(
             from: options,
             legacyCA: legacyCA,
-            xpcServiceName: xpcServiceName.nilIfEmpty
+            xpcServiceName: xpcServiceName.nilIfEmpty,
+            containerTeamIdentifier: containerTeamIdentifier()
         )
         let existingManagers = try loadManagers()
 
@@ -735,6 +742,18 @@ private final class TransparentProxyHostCLI {
         return name
     }
 
+    private func containerTeamIdentifier() -> String? {
+        let group = sharedAccessGroup.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !group.isEmpty else {
+            return nil
+        }
+        guard let prefix = group.split(separator: ".", maxSplits: 1).first else {
+            return nil
+        }
+        let teamID = String(prefix)
+        return teamID.isEmpty ? nil : teamID
+    }
+
     private func runXpc<T>(_ body: @escaping (RamaXpcClient) async throws -> T) throws -> T {
         let serviceName = try requireXpcServiceName()
         let client = RamaXpcClient(serviceName: serviceName)
@@ -1076,7 +1095,8 @@ private final class TransparentProxyHostCLI {
     private static func makeEngineConfigJSON(
         from options: StartOptions,
         legacyCA: LegacyMITMCASecrets?,
-        xpcServiceName: String?
+        xpcServiceName: String?,
+        containerTeamIdentifier: String?
     ) throws -> String? {
         let agentIdentity: AgentIdentityPayload?
         if let token = options.agentToken, let deviceID = options.agentDeviceID {
@@ -1096,6 +1116,7 @@ private final class TransparentProxyHostCLI {
             caKeyPEM: legacyCA?.keyPEM,
             xpcServiceName: xpcServiceName,
             containerSigningIdentifier: containerSigningIdentifier,
+            containerTeamIdentifier: containerTeamIdentifier,
             noFirewall: options.noFirewall
         )
 

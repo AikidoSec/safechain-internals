@@ -43,8 +43,11 @@ impl FlowHandler {
         let (tcp_mitm_service, ca_state) = crate::tcp::TcpMitmService::try_new(ctx).await?;
 
         let cfg = tcp_mitm_service.proxy_config();
-        if cfg.xpc_service_name.is_some() || cfg.container_signing_identifier.is_some() {
-            // Both fields must be set together — the inner spawn enforces
+        if cfg.xpc_service_name.is_some()
+            || cfg.container_signing_identifier.is_some()
+            || cfg.container_team_identifier.is_some()
+        {
+            // All XPC identity fields must be set together — the inner spawn enforces
             // that and fails closed if either is missing. We swallow the
             // result here so a misconfigured XPC config does not bring the
             // whole transparent proxy down: TLS interception keeps working,
@@ -52,6 +55,7 @@ impl FlowHandler {
             if let Err(err) = crate::xpc_server::spawn(
                 cfg.xpc_service_name.clone(),
                 cfg.container_signing_identifier.clone(),
+                cfg.container_team_identifier.clone(),
                 ca_state,
                 executor,
             ) {
@@ -63,9 +67,10 @@ impl FlowHandler {
             }
         } else {
             tracing::warn!(
-                "neither xpc_service_name nor container_signing_identifier set in opaque \
-                 engine config; XPC server not spawned. `generate-ca-crt` / `commit-ca-crt` \
-                 will not be available until both are provided."
+                "xpc_service_name, container_signing_identifier, and \
+                 container_team_identifier are all unset in opaque engine config; XPC \
+                 server not spawned. `generate-ca-crt` / `commit-ca-crt` will not be \
+                 available until all required identity fields are provided."
             );
         }
 
