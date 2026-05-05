@@ -26,7 +26,7 @@
       <string>RamaAppleNetworkExtension.RamaTransparentProxyProvider</string>
     </dict>
     <key>NEMachServiceName</key>
-    <string>$(APP_GROUP_ID).aikido-l4-mitm-ca</string>
+    <string>$(APP_GROUP_ID).aikido-l4-xpc</string>
   </dict>
 </dict>
 </plist>
