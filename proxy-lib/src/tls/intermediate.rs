@@ -32,30 +32,9 @@ use crate::{
 
 mod storage;
 
-use storage::{DataProxyIntCACrt, load_crt_from_secret_storage, store_crt_in_secret_storage};
-
-const AIKIDO_SECRET_INT_CA_KEY: &str = "tls-int-ca-key";
+use storage::{load_keypair_from_secret_storage, store_keypair_in_secret_storage};
 
 const RENEWAL_THRESHOLD_SECS: u64 = 2 * 24 * 3600; // 2 days
-
-#[derive(Serialize, Deserialize)]
-enum DataProxyIntCAKey {
-    V1 { key: Vec<u8>, fp: Vec<u8> },
-}
-
-impl DataProxyIntCAKey {
-    fn key(&self) -> &[u8] {
-        match self {
-            DataProxyIntCAKey::V1 { key, .. } => key.as_slice(),
-        }
-    }
-
-    fn crt_fingerprint(&self) -> &[u8] {
-        match self {
-            DataProxyIntCAKey::V1 { fp, .. } => fp.as_slice(),
-        }
-    }
-}
 
 fn needs_renewal(not_after_unix: i64) -> bool {
     let threshold = SystemTime::now() + Duration::from_secs(RENEWAL_THRESHOLD_SECS);
@@ -192,44 +171,28 @@ pub(super) async fn load_or_create_int_ca_key_pair<C>(
 where
     C: Service<Request, Output = Response, Error = OpaqueError>,
 {
-    // Try to load existing key + cert
-    if let Some(key_data) = secrets.load_secret::<DataProxyIntCAKey>(AIKIDO_SECRET_INT_CA_KEY)? {
-        tracing::debug!("int CA key found — loading matching cert from secret storage");
+    // NOTE: --use-aikido-ca is only meaningful on macOS.
+    // Adding a self-signed CA to the macOS system trust store requires root/admin
+    // privileges (sudo security add-trusted-cert ...), which the proxy does not have.
+    // The Aikido intermediate CA is already trusted on enrolled devices via the device
+    // enrollment flow, avoiding the need for elevated permissions.
+    // On other platforms this function is not called — see proxy-bin-l4/src/tcp/mod.rs.
 
-        match load_crt_from_secret_storage(secrets, key_data.crt_fingerprint())
-            .context("load int CA cert from secret storage")?
-        {
-            Some((crt_data, not_after_unix)) if !needs_renewal(not_after_unix) => {
-                tracing::debug!("int CA cert is valid and not due for renewal, reusing");
-
-                let crt_x509 = X509::from_der(crt_data.crt_der())
-                    .context("parse stored int CA cert from DER")?;
-                let crt_fp = crt_x509
-                    .digest(MessageDigest::sha256())
-                    .context("recompute int CA cert fingerprint")?;
-
-                if !crt_fp.eq(key_data.crt_fingerprint()) {
-                    return Err(OpaqueError::from_static_str(
-                        "stored int CA cert fingerprint mismatch",
-                    )
-                    .context_hex_field("computed_fp", crt_fp)
-                    .context_hex_field("expected_fp", key_data.crt_fingerprint().to_vec()));
-                }
-
-                let key_x509 = PKey::private_key_from_der(key_data.key())
-                    .context("parse stored int CA private key from DER")?;
-
-                return Ok(RootCaKeyPair::new(crt_x509, key_x509));
-            }
-            Some(_) => {
-                tracing::info!("int CA cert is due for renewal, generating new key pair");
-            }
-            None => {
-                tracing::info!("int CA cert not found, will generate and sign a new one");
-            }
+    if let Some((key_der, crt_der, not_after_unix)) =
+        load_keypair_from_secret_storage(secrets)
+            .context("load int CA keypair from secret storage")?
+    {
+        if !needs_renewal(not_after_unix) {
+            tracing::debug!("int CA keypair found and not due for renewal, reusing");
+            let crt_x509 = X509::from_der(&crt_der)
+                .context("parse stored int CA cert from DER")?;
+            let private_key = PKey::private_key_from_der(&key_der)
+                .context("parse stored int CA private key from DER")?;
+            return Ok(RootCaKeyPair::new(crt_x509, private_key));
         }
+        tracing::info!("int CA cert is due for renewal, generating new keypair");
     } else {
-        tracing::debug!("no int CA key in secret storage, generating new key pair");
+        tracing::debug!("no int CA keypair in secret storage, generating new one");
     }
 
     // Generate new keypair, build CSR, get signed cert from Aikido Core
@@ -257,7 +220,7 @@ where
 
     tracing::info!(
         not_after_unix,
-        "intermediate CA cert signed successfully, storing key and cert"
+        "intermediate CA cert signed successfully, storing keypair"
     );
 
     let key_der = private_key
@@ -266,18 +229,8 @@ where
 
     let crt_der = crt_x509.to_der().context("encode int CA cert to DER")?;
 
-    let key_data = DataProxyIntCAKey::V1 {
-        key: key_der,
-        fp: crt_fp.clone(),
-    };
-    let crt_data = DataProxyIntCACrt::V1 { crt: crt_der };
-
-    secrets
-        .store_secret(AIKIDO_SECRET_INT_CA_KEY, &key_data)
-        .context("store int CA key in secret storage")?;
-
-    store_crt_in_secret_storage(secrets, &crt_data, &crt_fp, not_after_unix)
-        .context("store int CA cert in secret storage")?;
+    store_keypair_in_secret_storage(secrets, key_der, crt_der, crt_fp, not_after_unix)
+        .context("store int CA keypair in secret storage")?;
 
     Ok(RootCaKeyPair::new(crt_x509, private_key))
 }
