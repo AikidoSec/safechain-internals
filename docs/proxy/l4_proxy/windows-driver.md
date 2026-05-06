@@ -41,7 +41,7 @@ just windows-driver-package-stage
 That produces a staged package under:
 
 ```text
-dist/windows-driver-package/debug
+dist/windows-driver-package/debug-amd64
 ```
 
 By default staging:
@@ -49,6 +49,15 @@ By default staging:
 - renders the checked-in `.inx` template into a concrete `.inf`;
 - runs `Inf2Cat` when available;
 - signs the generated catalog with the configured local code-signing cert.
+
+> The staging directory is suffixed with the target arch (`-amd64` /
+> `-arm64`) so amd64 and arm64 packages can coexist. To stage an arm64 build
+> instead, pass `-TargetArch arm64`:
+>
+> ```powershell
+> just windows-driver-package-stage debug -TargetArch arm64
+> # -> dist/windows-driver-package/debug-arm64
+> ```
 
 > Hint:
 >
@@ -96,6 +105,83 @@ Day-to-day usage should generally rely on:
 - the PowerShell packaging/install/update scripts for driver lifecycle;
 - `safechain-l4-proxy` for runtime registration;
 - the driver's own proxy-PID exit handling to clear stale runtime config.
+
+## Building And Installing On ARM64 Windows
+
+The driver and the full MSI build are dual-arch; the same `.inx` template
+ships `NTAMD64` and `NTARM64` decorations and `build-msi.ps1` accepts a
+`-TargetArch` flag.
+
+To produce an end-to-end signed MSI on an ARM64 Windows host (typically a
+Parallels VM on Apple Silicon):
+
+```powershell
+just windows-msi-arm64
+# -> dist\EndpointProtection-arm64.msi
+```
+
+The matching x64 invocation is `just windows-msi-x64`. Both stage their
+binaries under `bin\<arch>\` so amd64 and arm64 builds can coexist.
+
+### Extra ARM64 build-tool prerequisites
+
+In addition to the requirements at the top of this document, ARM64 builds
+need:
+
+- The **ARM64 MSVC toolset**: VS Component
+  `Microsoft.VisualStudio.Component.VC.Tools.ARM64`.
+- The **ClangCL toolset** (some Rust crates such as `aws-lc-sys` invoke
+  it via cmake's MSBuild generator): VS Components
+  `Microsoft.VisualStudio.Component.VC.Llvm.Clang` and
+  `Microsoft.VisualStudio.Component.VC.Llvm.ClangToolset`.
+
+Install in one shot from elevated PowerShell (adjust to your VS edition):
+
+```powershell
+winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override `
+  "--quiet --wait `
+   --add Microsoft.VisualStudio.Workload.VCTools `
+   --add Microsoft.VisualStudio.Component.VC.Tools.ARM64 `
+   --add Microsoft.VisualStudio.Component.VC.Llvm.Clang `
+   --add Microsoft.VisualStudio.Component.VC.Llvm.ClangToolset `
+   --add Microsoft.VisualStudio.Component.Windows11SDK.22621 `
+   --includeRecommended"
+```
+
+If a build fails with `MSB8020: The build tools for ClangCL ... cannot be
+found` while building `aws-lc-sys`, that's the ClangCL components missing.
+
+A self-signed driver catalog is rejected by the kernel-mode Code Integrity
+policy on stock Windows. Before installing a locally-built MSI on a fresh
+ARM64 VM:
+
+1. **Disable Secure Boot** in the VM firmware. In Parallels: shut the VM
+   down completely, open VM settings -> Hardware -> Boot Order -> Advanced,
+   uncheck "Enable Secure Boot". (If the toggle is greyed out, remove the
+   "TPM Chip" hardware entry first.) `bcdedit /set testsigning on` silently
+   does nothing while Secure Boot is on.
+2. From an elevated PowerShell:
+   ```powershell
+   bcdedit /set testsigning on
+   shutdown /r /t 0
+   ```
+3. After the reboot the desktop must show a "Test Mode" watermark in the
+   bottom-right corner. Confirm with:
+   ```powershell
+   Confirm-SecureBootUEFI         # False (or "not supported on this platform")
+   bcdedit | findstr testsigning  # testsigning  Yes
+   ```
+4. Install the MSI:
+   ```powershell
+   msiexec /i dist\EndpointProtection-arm64.msi /l*v dist\arm64-install.log
+   ```
+
+When you are done testing, restore production signing policy:
+
+```powershell
+bcdedit /set testsigning off
+# re-enable Secure Boot in the VM firmware
+```
 
 ## Update An Existing Driver
 

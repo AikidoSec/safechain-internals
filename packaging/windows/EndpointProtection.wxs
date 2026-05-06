@@ -146,7 +146,7 @@
                  Value="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[SCRIPTSDIR]StoreToken.ps1&quot; -Token &quot;[AIKIDO_TOKEN]&quot;" />
     <CustomAction Id="WriteAikidoToken"
                   DllEntry="WixQuietExec64"
-                  BinaryRef="Wix4UtilCA_X86"
+                  BinaryRef="Wix4UtilCA_X64"
                   Execute="deferred"
                   Impersonate="no"
                   Return="ignore" />
@@ -157,7 +157,7 @@
                  Value="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[SCRIPTSDIR]install-driver.ps1&quot; -DriverDir &quot;[DRIVERDIR]&quot;" />
     <CustomAction Id="InstallDriverPackage"
                   DllEntry="WixQuietExec64"
-                  BinaryRef="Wix4UtilCA_X86"
+                  BinaryRef="Wix4UtilCA_X64"
                   Execute="deferred"
                   Impersonate="no"
                   Return="check" />
@@ -167,7 +167,7 @@
                  Value="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[SCRIPTSDIR]uninstall-driver.ps1&quot;" />
     <CustomAction Id="UninstallDriverPackage"
                   DllEntry="WixQuietExec64"
-                  BinaryRef="Wix4UtilCA_X86"
+                  BinaryRef="Wix4UtilCA_X64"
                   Execute="deferred"
                   Impersonate="no"
                   Return="ignore" />

@@ -15,6 +15,15 @@
 #    MSI's deferred custom actions then trust the bundled .cer on the
 #    target machine and install the driver via pnputil.
 #
+# Target architecture (-TargetArch amd64|arm64) selects which CPU arch to
+# build for end-to-end (Rust target, GOARCH, Wails arch, WiX -arch and the
+# driver INF/CAT decoration). When -TargetArch is supplied the resulting MSI
+# is named EndpointProtection-<arch>.msi and -Local stages binaries under
+# $BinDir\<arch>\ to keep amd64 and arm64 builds from clobbering each other.
+# When -TargetArch is omitted the script falls back to the legacy amd64
+# defaults and the legacy EndpointProtection.msi name (this is what CI relies
+# on).
+#
 # Requirements:
 # - WiX Toolset v4+ (`dotnet tool install -g wix`).
 # - For -Local: Rust + cargo, Go, wails3, Visual Studio C++ Build Tools,
@@ -39,10 +48,23 @@ param(
     [switch]$IncludeDriver,
 
     [Parameter(Mandatory = $false)]
+    [ValidateSet("amd64", "arm64")]
+    [string]$TargetArch,
+
+    [Parameter(Mandatory = $false)]
     [string]$CertSubject = "CN=SafeChain Test"
 )
 
 $ErrorActionPreference = "Stop"
+
+# Track whether the caller explicitly requested an arch. CI invokes this script
+# without -TargetArch and expects the legacy `EndpointProtection.msi` filename
+# and a flat $BinDir layout; -TargetArch is reserved for the local dual-arch
+# flow, which auto-stages binaries under $BinDir\<arch>\.
+$TargetArchExplicit = $PSBoundParameters.ContainsKey('TargetArch')
+if (-not $TargetArchExplicit) {
+    $TargetArch = "amd64"
+}
 
 # `-Local` and `-IncludeDriver` are equivalent: there is no realistic way to
 # obtain a signed driver bundle locally without source-building, and CI never
@@ -51,6 +73,29 @@ $ErrorActionPreference = "Stop"
 if ($Local -or $IncludeDriver) {
     $Local = $true
     $IncludeDriver = $true
+}
+
+# Per-arch derivations. Kept in one place so every downstream call (cargo,
+# go, wails, wix, build-driver.ps1) consumes consistent values.
+$RustTriple = switch ($TargetArch) {
+    "amd64" { "x86_64-pc-windows-msvc" }
+    "arm64" { "aarch64-pc-windows-msvc" }
+}
+$GoArch = switch ($TargetArch) {
+    "amd64" { "amd64" }
+    "arm64" { "arm64" }
+}
+$WixArch = switch ($TargetArch) {
+    "amd64" { "x64" }
+    "arm64" { "arm64" }
+}
+$WailsArch = $GoArch
+
+# In -Local mode auto-stage binaries under $BinDir\<arch>\ so amd64 and arm64
+# builds don't clobber each other. CI's flat layout (-BinDir .\bin) is left
+# untouched.
+if ($Local) {
+    $BinDir = Join-Path $BinDir $TargetArch
 }
 
 $ProjectDir = (Get-Item (Split-Path -Parent $MyInvocation.MyCommand.Path)).Parent.Parent.FullName
@@ -81,6 +126,7 @@ if (-not (Test-Path $BinDir)) {
 Write-Host "==> Building MSI for Aikido Endpoint Protection v$Version" -ForegroundColor Cyan
 Write-Host "  WiX product version : $WixVersion"
 Write-Host "  Mode                : $(if ($Local) { 'LOCAL (full build)' } else { 'CI (use existing bins)' })"
+Write-Host "  Target arch         : $TargetArch (rust=$RustTriple, go=$GoArch, wix=$WixArch)"
 Write-Host "  Include driver      : $IncludeDriver"
 Write-Host "  BinDir              : $BinDir"
 Write-Host "  OutputDir           : $OutputDir"
@@ -144,11 +190,43 @@ function Find-VsDevCmd {
 }
 
 function Get-HostArch {
-    switch ($env:PROCESSOR_ARCHITECTURE) {
+    # When this script is launched by an x64 process on Windows-on-ARM (e.g.
+    # the native-x64 `just` binary spawning powershell.exe under WOW64 x64
+    # emulation), PROCESSOR_ARCHITECTURE reports "AMD64" while the real OS
+    # arch is in PROCESSOR_ARCHITEW6432. Always prefer the W6432 value when
+    # set so we pick the right MSVC host tools regardless of who launched us.
+    $real = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+    switch ($real) {
         "ARM64" { return "arm64" }
         "AMD64" { return "amd64" }
         "x86"   { return "x86" }
         default { return "amd64" }
+    }
+}
+
+# Map our internal host-arch token (amd64/arm64/x86) to the MSVC `Host<X>`
+# outer subdirectory name under VS Build Tools (e.g. amd64 -> HostX64).
+function Get-MsvcHostDirName {
+    param([Parameter(Mandatory)] [string]$HostArch)
+    switch ($HostArch) {
+        "amd64" { "HostX64" }
+        "arm64" { "HostARM64" }
+        "x86"   { "HostX86" }
+        default { throw "Unknown host arch: $HostArch" }
+    }
+}
+
+# Map our internal arch token (amd64/arm64/x86) to MSVC's *inner* target
+# subdirectory name (e.g. amd64 -> x64). MSVC nests its tools as
+# `bin\Host<host>\<target>\link.exe` where <target> uses x64/arm64/x86 -
+# NOT amd64.
+function Get-MsvcTargetDirName {
+    param([Parameter(Mandatory)] [string]$Arch)
+    switch ($Arch) {
+        "amd64" { "x64" }
+        "arm64" { "arm64" }
+        "x86"   { "x86" }
+        default { throw "Unknown arch: $Arch" }
     }
 }
 
@@ -176,11 +254,7 @@ function Import-VsDevEnv {
 }
 
 if ($Local) {
-    $RustTriple = "x86_64-pc-windows-msvc"
-    $GoOS = "windows"
-    $GoArch = "amd64"
-
-    $env:GOOS = $GoOS
+    $env:GOOS = "windows"
     $env:GOARCH = $GoArch
     $env:CGO_ENABLED = "0"
 
@@ -272,10 +346,11 @@ if ($Local) {
 
         $hostMsvcDir = Split-Path $linkPath -Parent
         $hostBinDir  = Split-Path (Split-Path $hostMsvcDir -Parent) -Parent
-        $expectedHost = "Host" + $hostArch
+        $expectedHost = Get-MsvcHostDirName -HostArch $hostArch
+        $expectedTargetDir = Get-MsvcTargetDirName -Arch $hostArch
         $nativeHostBin = Get-ChildItem $hostBinDir -Directory -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -ieq $expectedHost } |
-            ForEach-Object { Join-Path $_.FullName $hostArch } |
+            ForEach-Object { Join-Path $_.FullName $expectedTargetDir } |
             Where-Object { Test-Path (Join-Path $_ "link.exe") } |
             Select-Object -First 1
         if (-not $nativeHostBin) {
@@ -331,6 +406,7 @@ Install the matching component, e.g. on ARM64:
         Push-Location $ProjectDir
         try {
             & cargo build --release -p safechain-l7-proxy --target $RustTriple
+            if ($LASTEXITCODE -ne 0) { throw "cargo build -p safechain-l7-proxy failed with exit code $LASTEXITCODE" }
         } finally {
             Pop-Location
         }
@@ -342,6 +418,7 @@ Install the matching component, e.g. on ARM64:
         Push-Location $ProjectDir
         try {
             & cargo build --release -p safechain-l4-proxy --target $RustTriple
+            if ($LASTEXITCODE -ne 0) { throw "cargo build -p safechain-l4-proxy failed with exit code $LASTEXITCODE" }
         } finally {
             Pop-Location
         }
@@ -349,10 +426,10 @@ Install the matching component, e.g. on ARM64:
                   -Destination (Join-Path $BinDir "SafeChainL4Proxy.exe") -Force
     }
 
-    Invoke-Tool "Building + staging + self-signing kernel driver" {
+    Invoke-Tool "Building + staging + self-signing kernel driver ($TargetArch)" {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $BuildDriverScript `
             -Profile dev `
-            -TargetArch amd64 `
+            -TargetArch $TargetArch `
             -BundleDir (Join-Path $BinDir "driver") `
             -CertSubject $CertSubject
     }
@@ -412,11 +489,16 @@ if ($missing) {
 # Build the MSI
 # ----------------------------------------------------------------------------
 
-$OutputMsi = Join-Path $OutputDir "EndpointProtection.msi"
+$MsiBaseName = if ($TargetArchExplicit) {
+    "EndpointProtection-$WixArch"
+} else {
+    "EndpointProtection"
+}
+$OutputMsi = Join-Path $OutputDir "$MsiBaseName.msi"
 $IncludeDriverDefine = if ($IncludeDriver) { "1" } else { "0" }
 
 Write-Host ""
-Write-Host "==> Building MSI -> $OutputMsi" -ForegroundColor Cyan
+Write-Host "==> Building MSI -> $OutputMsi (-arch $WixArch)" -ForegroundColor Cyan
 
 & wix eula accept wix7 | Out-Null
 
@@ -427,7 +509,7 @@ Write-Host "==> Building MSI -> $OutputMsi" -ForegroundColor Cyan
     -d "IncludeDriver=$IncludeDriverDefine" `
     -ext WixToolset.UI.wixext `
     -ext WixToolset.Util.wixext `
-    -arch x64 `
+    -arch $WixArch `
     -o $OutputMsi
 
 if ($LASTEXITCODE -ne 0) {

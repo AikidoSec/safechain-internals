@@ -16,17 +16,18 @@ param(
     [ValidateSet("dev", "release")]
     [string]$Profile = "dev",
 
-    # Target architecture for the driver build. The product ships x64 only
-    # (the .inx is NTAMD64-only and the MSI is built with -arch x64), so we
-    # default to amd64 unconditionally. This makes the driver step succeed
-    # on ARM64 build hosts (e.g. Apple Silicon under Parallels) without
-    # producing an unusable ARM64 .sys.
+    # Target architecture for the driver build. Both amd64 and arm64 are
+    # supported: the .inx ships NTAMD64 + NTARM64 decorations and build-msi.ps1
+    # produces a per-arch MSI (`EndpointProtection-x64.msi` /
+    # `EndpointProtection-arm64.msi`). Defaults to amd64 to preserve the
+    # historical CI behavior; arm64 is intended for local Parallels ARM64
+    # Windows test installs.
     [Parameter(Mandatory = $false)]
     [ValidateSet("amd64", "arm64")]
     [string]$TargetArch = "amd64",
 
     [Parameter(Mandatory = $false)]
-    [string]$BundleDir = ".\bin\driver",
+    [string]$BundleDir = ".\bin\$TargetArch\driver",
 
     [Parameter(Mandatory = $false)]
     [string]$CertSubject = "CN=SafeChain Test",
@@ -48,7 +49,7 @@ $DriverDir = Join-Path $ProjectDir "proxy-lib-l4-windows-driver"
 $WorkspaceCargoToml = Join-Path $ProjectDir "Cargo.toml"
 
 $StageProfile = if ($Profile -eq "release") { "release" } else { "debug" }
-$StagingDir = Join-Path $ProjectDir "dist\windows-driver-package\$StageProfile"
+$StagingDir = Join-Path $ProjectDir "dist\windows-driver-package\$StageProfile-$TargetArch"
 
 $RustTriple = switch ($TargetArch) {
     "amd64" { "x86_64-pc-windows-msvc" }

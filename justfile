@@ -268,8 +268,14 @@ windows-driver-qa: windows-driver-quick-qa windows-driver-build
 windows-driver-package-stage profile="debug" *ARGS:
     ./packaging/windows/stage-driver-package.ps1 -Profile {{profile}} {{ARGS}}
 
-windows-driver-package-install package_dir="dist/windows-driver-package/debug":
+windows-driver-package-install package_dir="dist/windows-driver-package/debug-amd64":
     ./packaging/windows/install-driver-package.ps1 -PackageDir {{package_dir}}
+
+windows-msi-x64:
+    powershell -NoProfile -ExecutionPolicy Bypass -File ./packaging/windows/build-msi.ps1 -Local -TargetArch amd64
+
+windows-msi-arm64:
+    powershell -NoProfile -ExecutionPolicy Bypass -File ./packaging/windows/build-msi.ps1 -Local -TargetArch arm64
 
 windows-driver-package-install-fresh-debug:
     just rust-quick-qa

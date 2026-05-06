@@ -128,7 +128,12 @@ $TemplatePath = Join-Path $DriverDir "safechain_lib_l4_proxy_windows_driver.inx"
 $OutputDir = if ($OutputDir) {
     [System.IO.Path]::GetFullPath($OutputDir)
 } else {
-    Join-Path $ProjectDir "dist\windows-driver-package\$Profile"
+    Join-Path $ProjectDir "dist\windows-driver-package\$Profile-$TargetArch"
+}
+
+$Inf2CatOs = switch ($TargetArch) {
+    "amd64" { "10_X64" }
+    "arm64" { "10_ARM64" }
 }
 
 if (-not $DriverSysPath) {
@@ -204,7 +209,7 @@ if (-not $SkipInf2Cat) {
         Write-Host "Running Inf2Cat to generate catalog..."
         Write-Host "  using: $($inf2cat.Source)"
 
-        & $inf2cat.Source /driver:$OutputDir /os:10_X64
+        & $inf2cat.Source /driver:$OutputDir /os:$Inf2CatOs
         if ($LASTEXITCODE -ne 0) {
             throw "Inf2Cat failed with exit code $LASTEXITCODE"
         }
