@@ -16,4 +16,5 @@ type StartOptions struct {
 	BaseURL     string
 	Token       string
 	DeviceID    string
+	UseAikidoCa bool
 }
