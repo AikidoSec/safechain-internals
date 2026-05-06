@@ -245,6 +245,7 @@ Export recent logs to a file for sharing or later analysis:
 
 ```bash
 mkdir -p .aikido/logs
+ts=$(date +%Y%m%dT%H%M%S)
 log show --last 30m --style compact --debug --info \
 --predicate 'subsystem == "com.aikido.endpoint.proxy.l4"
   OR process == "com.aikido.endpoint.proxy.l4.dev.extension"

@@ -12,6 +12,19 @@
 	<array>
 		<string>$(APP_GROUP_ID)</string>
 	</array>
+	<!--
+	  DEPRECATED — graceful-period only. Pre-PR builds wrote the MITM CA
+	  to the data-protection keychain under this access group. Without the
+	  entitlement, the host CLI cannot see those items even though they are
+	  still physically present, which silently breaks the legacy passthrough
+	  in `start` and the cleanup in `cleanup-legacy-ca-crt` / `delete-ca-crt`.
+	  Drop this entitlement together with the legacy lookup/delete code in
+	  Host/main.swift once the graceful period ends.
+	-->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)$(AIKIDO_L4_SHARED_ACCESS_GROUP_BUNDLE_ID)</string>
+	</array>
 	<key>com.apple.security.network.client</key>
 	<true/>
 </dict>
