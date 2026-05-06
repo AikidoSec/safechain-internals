@@ -28,6 +28,7 @@ func (s *Server) handleProxyStart(w http.ResponseWriter, r *http.Request) {
 		Token:       s.config.Token,
 		DeviceID:    s.config.DeviceID,
 		Passthrough: IsRebootRequired(),
+		UseAikidoCa: s.config.UseAikidoCa,
 	}
 
 	if err := s.proxy.Start(r.Context(), opts); err != nil {

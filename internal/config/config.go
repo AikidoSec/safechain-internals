@@ -23,6 +23,7 @@ type ConfigInfo struct {
 	LastSetupWizardShownTime time.Time `json:"last_setup_wizard_shown_time"`
 	BaseURL                  string    `json:"base_url,omitempty"`
 	ProxyMode                string    `json:"proxy_mode,omitempty"`
+	UseAikidoCa              bool      `json:"use_aikido_ca,omitempty"`
 
 	LastHandledLogCollectRequestAt int64  `json:"last_handled_log_collect_request_at,omitempty"`
 	LastHandledTargetUpdateVersion string `json:"last_handled_target_update_version,omitempty"`

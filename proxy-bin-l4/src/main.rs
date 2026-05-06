@@ -118,6 +118,11 @@ pub struct Args {
     /// Set the limit of max open file descriptors for this process and its children.
     #[arg(long, value_name = "N", default_value_t = 262_144)]
     pub ulimit: rama::unix::utils::rlim_t,
+
+    /// Use Aikido Core intermediate CA instead of a local self-signed root CA.
+    /// Requires a valid agent identity (token + device_id in config.json).
+    #[arg(long = "use-aikido-ca", default_value_t = false)]
+    pub use_aikido_ca: bool,
 }
 
 #[tokio::main]
@@ -174,6 +179,7 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
                 SocketAddr::V6(bind_ipv6),
                 Executor::graceful(graceful.guard()),
                 peek_duration,
+                args.use_aikido_ca,
                 agent_identity.clone(),
                 args.reporting_endpoint.clone(),
                 args.aikido_url.clone(),
@@ -191,6 +197,7 @@ async fn run_with_args(args: Args) -> Result<(), BoxError> {
         SocketAddr::V4(args.bind_ipv4),
         Executor::graceful(graceful.guard()),
         peek_duration,
+        args.use_aikido_ca,
         agent_identity,
         args.reporting_endpoint,
         args.aikido_url,

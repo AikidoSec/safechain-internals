@@ -51,6 +51,10 @@ impl AgentIdentity {
         Ok(())
     }
 
+    pub fn device_id(&self) -> &str {
+        self.device_id.as_ref()
+    }
+
     pub fn load(data_dir: &Path) -> Option<Self> {
         let identity = Self::try_load_from_path(&data_dir.join("config.json"));
 
