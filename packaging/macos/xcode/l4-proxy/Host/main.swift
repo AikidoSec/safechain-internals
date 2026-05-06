@@ -149,10 +149,10 @@ private final class TransparentProxyHostCLI {
                 try commitCaCrt()
                 return EXIT_SUCCESS
             case .cleanupLegacyCaCrt:
-                cleanupLegacyCaCrt()
+                try cleanupLegacyCaCrt()
                 return EXIT_SUCCESS
             case .deleteCaCrt:
-                deleteCaCrt()
+                try deleteCaCrt()
                 return EXIT_SUCCESS
             case .installExtension:
                 try installExtension()
@@ -354,36 +354,44 @@ private final class TransparentProxyHostCLI {
         }
     }
 
-    private func cleanupLegacyCaCrt() {
+    private func cleanupLegacyCaCrt() throws {
         let outcome = deleteLegacyDataProtectionEntries()
         switch outcome {
         case .ok:
             print("legacy-ca-crt: cleaned")
         case .partial(let messages):
-            print("legacy-ca-crt: cleaned (with warnings)")
-            for message in messages {
-                Self.writeStderr("warn: \(message)\n")
-            }
+            // Exit non-zero so automation can distinguish "cleaned" from
+            // "still left behind". Print the marker line first anyway so a
+            // caller scanning stdout can see we tried.
+            print("legacy-ca-crt: cleanup-incomplete")
+            throw CLIError.runtime(
+                "cleanup-legacy-ca-crt: \(messages.joined(separator: "; "))"
+            )
         }
     }
 
-    private func deleteCaCrt() {
+    private func deleteCaCrt() throws {
         // No XPC: we are nuking every keychain artefact that may carry
         // MITM CA material on this machine. The sysext's in-memory copy
         // of the CA survives until the next sysext restart — that is
         // expected: callers pair `delete-ca-crt` with a tunnel
         // stop/restart when a hard reset is intended.
-        deleteLegacyDataProtectionEntries()
-        let systemKeychainResult = deleteSystemKeychainCAEntries()
-        switch systemKeychainResult {
-        case .ok:
+        let legacyOutcome = deleteLegacyDataProtectionEntries()
+        let systemOutcome = deleteSystemKeychainCAEntries()
+
+        var warnings: [String] = []
+        if case .partial(let m) = legacyOutcome { warnings.append(contentsOf: m) }
+        if case .partial(let m) = systemOutcome { warnings.append(contentsOf: m) }
+
+        if warnings.isEmpty {
             print("ca-crt: deleted")
-        case .partial(let messages):
-            print("ca-crt: deleted (with warnings)")
-            for message in messages {
-                Self.writeStderr("warn: \(message)\n")
-            }
+            return
         }
+        // Exit non-zero so automation can distinguish full delete from
+        // partial. Marker line is still emitted up-front for stdout-scanning
+        // callers.
+        print("ca-crt: delete-incomplete")
+        throw CLIError.runtime("delete-ca-crt: \(warnings.joined(separator: "; "))")
     }
 
     private func installExtension() throws {
