@@ -126,7 +126,11 @@ jobs:
           path: SafeChainL7Proxy.exe
 
   build-windows-l4-proxy:
-    runs-on: windows-latest
+    # Pinned to windows-2022: the current windows-latest image breaks
+    # cmake's "Visual Studio 17 2022" generator detection used by
+    # rama-boring-sys, which fails the BoringSSL build. The other Windows
+    # jobs in this workflow are not affected.
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
