@@ -1,71 +1,7 @@
 use super::*;
 use rama::utils::str::arcstr::ArcStr;
 
-// --- path_carries_model: OpenAI JSON endpoints whose body has `model` ---
-
-#[test]
-fn test_path_carries_model_responses() {
-    assert!(path_carries_model("/v1/responses"));
-}
-
-#[test]
-fn test_path_carries_model_responses_compact() {
-    assert!(path_carries_model("/v1/responses/compact"));
-}
-
-#[test]
-fn test_path_carries_model_chat_completions() {
-    assert!(path_carries_model("/v1/chat/completions"));
-}
-
-#[test]
-fn test_path_carries_model_embeddings() {
-    assert!(path_carries_model("/v1/embeddings"));
-}
-
-#[test]
-fn test_path_carries_model_moderations() {
-    assert!(path_carries_model("/v1/moderations"));
-}
-
-#[test]
-fn test_path_carries_model_codex_responses() {
-    assert!(path_carries_model("/backend-api/codex/responses"));
-}
-
-// --- path_carries_model: paths we should ignore ---
-
-#[test]
-fn test_path_carries_model_rejects_models_listing() {
-    assert!(!path_carries_model("/v1/models"));
-}
-
-#[test]
-fn test_path_carries_model_rejects_codex_root() {
-    assert!(!path_carries_model("/backend-api/codex"));
-}
-
-#[test]
-fn test_path_carries_model_rejects_codex_subpath() {
-    assert!(!path_carries_model("/backend-api/codex/responses/extra"));
-}
-
-#[test]
-fn test_path_carries_model_rejects_files() {
-    assert!(!path_carries_model("/v1/files"));
-}
-
-#[test]
-fn test_path_carries_model_rejects_audio_transcriptions() {
-    assert!(!path_carries_model("/v1/audio/transcriptions"));
-}
-
-#[test]
-fn test_path_carries_model_rejects_other_chatgpt_backend_paths() {
-    assert!(!path_carries_model("/backend-api/models"));
-}
-
-// --- parse_model_field: typical OpenAI request bodies ---
+// --- parse_model_field: typical Codex Ingress prompt bodies ---
 
 #[test]
 fn test_parse_model_basic() {
@@ -85,11 +21,8 @@ fn test_parse_model_with_extra_fields() {
 
 #[test]
 fn test_parse_model_trims_whitespace() {
-    let body = br#"{"model":"  text-embedding-3-large  ","input":"hello"}"#;
-    assert_eq!(
-        parse_model_field(body),
-        Some(ArcStr::from("text-embedding-3-large"))
-    );
+    let body = br#"{"model":"  gpt-5.4  ","input":"hello"}"#;
+    assert_eq!(parse_model_field(body), Some(ArcStr::from("gpt-5.4")));
 }
 
 // --- parse_model_field: malformed inputs ---
@@ -117,3 +50,4 @@ fn test_parse_model_wrong_type() {
     let body = br#"{"model":42}"#;
     assert!(parse_model_field(body).is_none());
 }
+
