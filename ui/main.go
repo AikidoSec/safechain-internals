@@ -59,6 +59,7 @@ func init() {
 	application.RegisterEvent[daemon.BlockEvent]("blocked")
 	application.RegisterEvent[daemon.BlockEvent]("blocked_updated")
 	application.RegisterEvent[daemon.TlsTerminationFailedEvent]("tls_termination_failed")
+	application.RegisterEvent[daemon.MinPackageAgeEvent]("min_package_age")
 	application.RegisterEvent[daemon.PermissionsResponse]("permissions_updated")
 	application.RegisterEvent[FocusEventPayload]("focus_event")
 	application.RegisterEvent[SetupStatePayload]("setup_state")
@@ -362,6 +363,11 @@ func setupSystemTray(app *application.App, showDashboard func(), notifWindow *ap
 		if notifWindow.IsVisible() {
 			notifWindow.Hide()
 		}
+		go func() {
+			if err := daemon.RefreshConfig(); err != nil {
+				log.Printf("config refresh on tray click: %v", err)
+			}
+		}()
 		systray.OpenMenu()
 	}
 	systray.OnClick(hideNotifAndOpenMenu)
@@ -374,7 +380,6 @@ func setupSystemTray(app *application.App, showDashboard func(), notifWindow *ap
 		systray.PositionWindow(notifWindow, 2)
 		systray.WindowDebounce(200 * time.Millisecond)
 		notifWindow.Show()
-		notifWindow.Focus()
 	}
 
 	go func() {
@@ -456,6 +461,10 @@ func startAppServer(app *application.App, wm *windowManager, statusCh chan<- app
 		func(ev daemon.TlsTerminationFailedEvent) {
 			log.Println("TLS termination failed event:", ev)
 			app.Event.Emit("tls_termination_failed", ev)
+		},
+		func(ev daemon.MinPackageAgeEvent) {
+			log.Println("Min package age event:", ev)
+			app.Event.Emit("min_package_age", ev)
 		},
 		func(ev daemon.PermissionsResponse) {
 			log.Println("Permissions updated")

@@ -47,6 +47,14 @@ type TlsTerminationFailedEvent struct {
 	Error   string `json:"error"`
 }
 
+type MinPackageAgeEvent struct {
+	ID        string `json:"id,omitempty"`
+	TsMs      int64  `json:"ts_ms"`
+	Ecosystem string `json:"ecosystem,omitempty"`
+	Title     string `json:"title,omitempty"`
+	Message   string `json:"message,omitempty"`
+}
+
 type EcosystemExceptions struct {
 	AllowedPackages  []string `json:"allowed_packages"`
 	RejectedPackages []string `json:"rejected_packages"`
@@ -76,6 +84,25 @@ func (e *TlsTerminationFailedEvent) Validate() error {
 	}
 	if e.SNI == "" {
 		return fmt.Errorf("missing or empty required field: sni")
+	}
+	return nil
+}
+
+func (e *MinPackageAgeEvent) Validate() error {
+	if e.ID == "" {
+		return fmt.Errorf("missing or empty required field: id")
+	}
+	if e.TsMs == 0 {
+		return fmt.Errorf("missing or empty required field: ts_ms")
+	}
+	if e.Ecosystem == "" {
+		return fmt.Errorf("missing or empty required field: ecosystem")
+	}
+	if e.Title == "" {
+		return fmt.Errorf("missing or empty required field: title")
+	}
+	if e.Message == "" {
+		return fmt.Errorf("missing or empty required field: message")
 	}
 	return nil
 }

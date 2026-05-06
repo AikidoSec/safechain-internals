@@ -225,6 +225,12 @@ func RunCommandWithEnv(ctx context.Context, env []string, command string, args .
 	return string(output), err
 }
 
+// NormalizeVersion strips an optional leading "v" so versions can be compared
+// regardless of the source representation.
+func NormalizeVersion(version string) string {
+	return strings.TrimPrefix(strings.TrimSpace(version), "v")
+}
+
 func GetRandomFreePort() (int, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

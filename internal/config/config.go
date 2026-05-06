@@ -27,6 +27,7 @@ type ConfigInfo struct {
 
 	LastHandledLogCollectRequestAt int64  `json:"last_handled_log_collect_request_at,omitempty"`
 	LastHandledTargetUpdateVersion string `json:"last_handled_target_update_version,omitempty"`
+	LastUnauthorizedToken          string `json:"last_unauthorized_token,omitempty"`
 }
 
 func (c *ConfigInfo) GetProxyMode() string {
@@ -80,6 +81,25 @@ func (c *ConfigInfo) GetAnonymizedToken() string {
 		return "***" + c.Token[len(c.Token)-4:]
 	}
 	return c.Token
+}
+
+// SetToken records a new token and clears any prior unauthorized marker so
+// the daemon will retry against core.
+func (c *ConfigInfo) SetToken(token string) {
+	c.Token = token
+	c.LastUnauthorizedToken = ""
+}
+
+func (c *ConfigInfo) IsCurrentTokenUnauthorized() bool {
+	return c.Token != "" && c.Token == c.LastUnauthorizedToken
+}
+
+func (c *ConfigInfo) MarkTokenUnauthorized(token string) bool {
+	if token == "" || c.Token != token || c.LastUnauthorizedToken == token {
+		return false
+	}
+	c.LastUnauthorizedToken = token
+	return true
 }
 
 func (c *ConfigInfo) String() string {

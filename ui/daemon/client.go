@@ -195,6 +195,49 @@ func GetTlsEvent(eventID string) (TlsTerminationFailedEvent, error) {
 	return out, nil
 }
 
+// ListMinPackageAgeEvents fetches GET /v1/min-package-age-events?limit=N.
+func ListMinPackageAgeEvents(limit int) ([]MinPackageAgeEvent, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	resp, err := doRequest(http.MethodGet, fmt.Sprintf("/v1/min-package-age-events?limit=%d", limit), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("list min package age events: %s", resp.Status)
+	}
+	var out []MinPackageAgeEvent
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].TsMs > out[j].TsMs
+	})
+	return out, nil
+}
+
+// GetMinPackageAgeEvent fetches GET /v1/min-package-age-events/:id.
+func GetMinPackageAgeEvent(eventID string) (MinPackageAgeEvent, error) {
+	var out MinPackageAgeEvent
+	if err := validateEventID(eventID); err != nil {
+		return out, err
+	}
+	resp, err := doRequest(http.MethodGet, "/v1/min-package-age-events/"+eventID, nil)
+	if err != nil {
+		return out, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return out, fmt.Errorf("get min package age event: %s", resp.Status)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
 // CertificateStatus is returned by GET /v1/certificate/status.
 type CertificateStatus struct {
 	NeedsInstall bool `json:"needs_install"`
@@ -419,6 +462,19 @@ func RequestAccess(eventID string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("request-access: %s", resp.Status)
+	}
+	return nil
+}
+
+func RefreshConfig() error {
+	resp, err := doRequest(http.MethodPost, "/v1/config/refresh", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("config refresh: %s: %s", resp.Status, strings.TrimSpace(string(b)))
 	}
 	return nil
 }

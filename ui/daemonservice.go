@@ -43,6 +43,14 @@ func (s *DaemonService) GetTlsEvent(eventId string) (daemon.TlsTerminationFailed
 	return daemon.GetTlsEvent(eventId)
 }
 
+func (s *DaemonService) ListMinPackageAgeEvents(limit int) ([]daemon.MinPackageAgeEvent, error) {
+	return daemon.ListMinPackageAgeEvents(limit)
+}
+
+func (s *DaemonService) GetMinPackageAgeEvent(eventId string) (daemon.MinPackageAgeEvent, error) {
+	return daemon.GetMinPackageAgeEvent(eventId)
+}
+
 func (s *DaemonService) GetVersion() (string, error) {
 	return daemon.GetVersion()
 }
@@ -107,6 +115,10 @@ func (s *DaemonService) CloseInstallWindow() {
 	if closeInstallWindow != nil {
 		closeInstallWindow()
 	}
+}
+
+func (s *DaemonService) RefreshConfig() error {
+	return daemon.RefreshConfig()
 }
 
 func (s *DaemonService) CollectLogs() error {

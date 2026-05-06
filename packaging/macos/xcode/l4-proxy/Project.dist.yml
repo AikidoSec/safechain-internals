@@ -7,7 +7,7 @@ options:
 packages:
   RamaAppleNetworkExtension:
     url: https://github.com/plabayo/rama.git
-    revision: d4d9a69c2e7be138580a6e259ee260f78e38c005
+    revision: 9a0d105b73761fde9320dec76f5cfe071375bb7b
   X509:
     url: https://github.com/apple/swift-certificates.git
     from: 1.0.0
@@ -58,6 +58,8 @@ targets:
     dependencies:
       - package: RamaAppleNetworkExtension
         product: RamaAppleNetworkExtension
+      - package: RamaAppleNetworkExtension
+        product: RamaAppleSecureEnclave
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aikido.endpoint.proxy.l4.dist.extension

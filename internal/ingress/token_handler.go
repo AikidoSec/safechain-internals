@@ -29,7 +29,7 @@ func (s *Server) handleSetToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.config.Token = body.Token
+	s.config.SetToken(body.Token)
 	if err := s.config.Save(); err != nil {
 		log.Printf("ingress: failed to save config after setting token: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

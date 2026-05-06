@@ -254,9 +254,10 @@ body {
 }
 .events-list .event-product-icon {
   height: 16px;
-  width: 16px;
-  flex: 0 0 16px;
+  width: 22px;
+  flex: 0 0 22px;
   object-fit: contain;
+  object-position: left;
   display: block;
   vertical-align: middle;
 }
@@ -986,11 +987,11 @@ body {
 }
 
 .protected-ecosystems-table__icon {
-  width: 16px;
+  width: 32px;
   height: 16px;
   object-fit: contain;
+  object-position: left;
   display: block;
-  margin: 0 auto;
 }
 
 .protected-ecosystems-table__label-cell {
@@ -1373,6 +1374,17 @@ body {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--primary-aik-100);
+}
+
+.install-page__finish-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.install-page__finish-step .install-page__finish-status {
+  margin: 0;
 }
 
 .install-page__finish-hero--split .install-page__followup-lead {

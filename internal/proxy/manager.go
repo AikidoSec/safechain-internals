@@ -16,5 +16,6 @@ type StartOptions struct {
 	BaseURL     string
 	Token       string
 	DeviceID    string
+	Passthrough bool
 	UseAikidoCa bool
 }

@@ -1,6 +1,7 @@
 mod no_firewall;
 
 mod firewall_chrome;
+mod firewall_go;
 mod firewall_maven;
 mod firewall_npm;
 mod firewall_nuget;

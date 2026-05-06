@@ -51,7 +51,8 @@ use crate::{
     http::firewall::{
         notifier::EventNotifier,
         rule::{
-            DynRule, npm::min_package_age::MinPackageAge,
+            DynRule, golang::min_package_age::MinPackageAgeGolang,
+            npm::min_package_age::MinPackageAge, open_vsx::min_package_age::MinPackageAgeOpenVsx,
             vscode::min_package_age::MinPackageAgeVSCode,
         },
     },
@@ -231,10 +232,21 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
+                    Some(MinPackageAgeOpenVsx::new(notifier.clone())),
                     remote_endpoint_config.clone(),
                 )
                 .await
                 .context("create block rule: open vsx")?
+                .into_dyn(),
+                self::rule::golang::RuleGolang::try_new(
+                    guard.clone(),
+                    layered_client.clone(),
+                    data.clone(),
+                    remote_endpoint_config.clone(),
+                    Some(MinPackageAgeGolang::new(notifier.clone())),
+                )
+                .await
+                .context("create block rule: golang")?
                 .into_dyn(),
                 self::rule::skills_sh::RuleSkillsSh::try_new(
                     guard,

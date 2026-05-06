@@ -26,3 +26,15 @@ export interface TlsTerminationFailedEvent {
   app_path?: string;
   error: string;
 }
+
+export interface MinPackageAgeEvent {
+  id: string;
+  ts_ms: number;
+  ecosystem: string;
+  title: string;
+  message: string;
+}
+
+export type LogEvent =
+  | ({ type: "tls" } & TlsTerminationFailedEvent)
+  | ({ type: "min_package_age" } & MinPackageAgeEvent);

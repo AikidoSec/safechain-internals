@@ -24,9 +24,9 @@ import { SetupStepAllowVpn } from "./SetupStepAllowVpn";
 import { SetupStepStartProxy } from "./SetupStepStartProxy";
 import { SetupStepInstallCa } from "./SetupStepInstallCa";
 
-type StepId = "token" | "install-extension" | "enable-extension" | "allow-vpn" | "start-proxy" | "install-ca";
+type StepId = "token" | "invalid-token" | "install-extension" | "enable-extension" | "allow-vpn" | "start-proxy" | "install-ca" | "reboot";
 
-const VALID_STEPS = new Set<string>(["token", "install-extension", "enable-extension", "allow-vpn", "start-proxy", "install-ca"]);
+const VALID_STEPS = new Set<string>(["token", "invalid-token", "install-extension", "enable-extension", "allow-vpn", "start-proxy", "install-ca", "reboot"]);
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -40,8 +40,9 @@ async function pollUntil(check: () => Promise<boolean>, intervalMs: number, maxA
   return false;
 }
 
-const STEP_ACTIONS: Record<StepId, (input?: string) => Promise<void>> = {
+const STEP_ACTIONS: Partial<Record<StepId, (input?: string) => Promise<void>>> = {
   token: (input) => setToken(input ?? ""),
+  "invalid-token": (input) => setToken(input ?? ""),
   "install-extension": async () => {
     await installExtension();
     if (await isExtensionInstalled()) return;
@@ -75,7 +76,6 @@ export function InstallPage() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [tokenInput, setTokenInput] = useState("");
-  const [showFinish, setShowFinish] = useState(false);
   const [confirmingRestart, setConfirmingRestart] = useState(false);
   const [restarting, setRestarting] = useState(false);
 
@@ -107,17 +107,23 @@ export function InstallPage() {
   }, []);
 
   const currentStep = currentIdx < steps.length ? steps[currentIdx] : null;
-  const totalDots = steps.length + 1;
+  const isRebootStep = currentStep === "reboot";
+  const isLastStep = currentIdx === steps.length - 1;
+  const hasRebootStep = steps.includes("reboot");
+  const isFinishStep = isLastStep && !hasRebootStep;
+  const totalDots = steps.length;
 
   async function handleAction() {
-    if (!currentStep) return;
-    if (currentStep === "token" && !tokenInput.trim()) return;
+    if (!currentStep || currentStep === "reboot") return;
+    if ((currentStep === "token" || currentStep === "invalid-token") && !tokenInput.trim()) return;
 
     setPhase("working");
     setErrorMsg("");
     try {
-      await STEP_ACTIONS[currentStep](tokenInput.trim());
-      if (currentStep === "token") {
+      const action = STEP_ACTIONS[currentStep];
+      if (!action) return;
+      await action(tokenInput.trim());
+      if (currentStep === "token" || currentStep === "invalid-token") {
         handleNext();
       } else {
         setPhase("done");
@@ -132,10 +138,10 @@ export function InstallPage() {
     setPhase("idle");
     setErrorMsg("");
     setTokenInput("");
-    if (currentIdx + 1 >= steps.length) {
-      setShowFinish(true);
-    } else {
+    if (currentIdx + 1 < steps.length) {
       setCurrentIdx((i) => i + 1);
+    } else {
+      closeInstallWindow();
     }
   }
 
@@ -178,7 +184,7 @@ export function InstallPage() {
     );
   }
 
-  const showBottomBar = phase === "done" || showFinish;
+  const showBottomBar = phase === "done" || isRebootStep;
   const stepProps = {
     stepNumber: currentIdx + 1,
     totalSteps: steps.length,
@@ -197,6 +203,15 @@ export function InstallPage() {
             onTokenChange={setTokenInput}
           />
         );
+      case "invalid-token":
+        return (
+          <SetupStepToken
+            {...stepProps}
+            tokenInput={tokenInput}
+            onTokenChange={setTokenInput}
+            invalidToken
+          />
+        );
       case "install-extension":
         return <SetupStepInstallExtension {...stepProps} />;
       case "enable-extension":
@@ -213,6 +228,8 @@ export function InstallPage() {
         );
       case "install-ca":
         return <SetupStepInstallCa {...stepProps} />;
+      case "reboot":
+        return <InstallFinishPage stepNumber={stepProps.stepNumber} totalSteps={stepProps.totalSteps} />;
       default:
         return null;
     }
@@ -229,22 +246,22 @@ export function InstallPage() {
           <span
             key={i}
             role="tab"
-            aria-selected={showFinish ? i === totalDots - 1 : i === currentIdx}
-            className={`install-page__dot${(showFinish ? i === totalDots - 1 : i === currentIdx) ? " install-page__dot--active" : ""}`}
+            aria-selected={i === currentIdx}
+            className={`install-page__dot${i === currentIdx ? " install-page__dot--active" : ""}`}
           />
         ))}
       </div>
 
       <div className="install-page__scroll">
-        <div className={`install-page__body${showFinish ? " install-page__body--followup" : ""}`}>
-          {showFinish ? <InstallFinishPage /> : renderStep()}
+        <div className={`install-page__body${isRebootStep ? " install-page__body--followup" : ""}`}>
+          {renderStep()}
         </div>
       </div>
 
       {showBottomBar && (
         <div className="install-page__finish-bar">
           <div className="install-page__finish-bar-inner">
-            {showFinish ? (
+            {isRebootStep ? (
               <>
                 <button
                   type="button"
@@ -263,6 +280,14 @@ export function InstallPage() {
                   {restarting ? "Restarting…" : "Restart Now"}
                 </button>
               </>
+            ) : isFinishStep ? (
+              <button
+                type="button"
+                className="button-brand button--primary button--normal button--rounded"
+                onClick={handleRestartLater}
+              >
+                Finish
+              </button>
             ) : (
               <button
                 type="button"
