@@ -409,7 +409,7 @@ impl Firewall {
                 Err(err) => {
                     tracing::warn!(
                         error = %err,
-                        "failed to initialize endpoint config; config-based policy checks disabled"
+                        "failed read the config from a file"
                     );
                     None
                 }
