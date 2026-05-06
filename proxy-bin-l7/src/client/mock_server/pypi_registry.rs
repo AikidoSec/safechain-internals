@@ -4,7 +4,7 @@ use rama::{
     Service,
     http::{
         Request, Response, StatusCode,
-        service::web::response::{IntoResponse, Json},
+        service::web::response::{Html, IntoResponse, Json},
     },
     service::service_fn,
 };
@@ -19,10 +19,32 @@ pub(super) fn web_svc() -> impl Service<Request, Output = Response, Error = Infa
 /// Handles PyPI registry requests for the mock server.
 ///
 /// Serves the legacy JSON metadata for [`FRESH_PYPI_PACKAGE_NAME`] at
-/// `/pypi/<name>/json`, including both a stable older release (`0.9.0`) and
-/// the current fresh version. All other paths return `200 OK` with an empty body.
+/// `/pypi/<name>/json` and the PEP 503 Simple HTML index at `/simple/<name>/`,
+/// each including both a stable older release (`0.9.0`) and the current fresh
+/// version. All other paths return `200 OK` with an empty body.
 async fn handle(req: Request) -> Result<Response, Infallible> {
     let path = req.uri().path();
+
+    if path == format!("/simple/{FRESH_PYPI_PACKAGE_NAME}/") {
+        let body = format!(
+            r#"<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="pypi:repository-version" content="1.0">
+    <title>Links for {name}</title>
+  </head>
+  <body>
+    <h1>Links for {name}</h1>
+    <a href="https://files.pythonhosted.org/packages/source/b/{name}/{name}-0.9.0.tar.gz">{name}-0.9.0.tar.gz</a><br/>
+    <a href="https://files.pythonhosted.org/packages/source/b/{name}/{name}-{version}.tar.gz">{name}-{version}.tar.gz</a><br/>
+  </body>
+</html>
+"#,
+            name = FRESH_PYPI_PACKAGE_NAME,
+            version = FRESH_PYPI_PACKAGE_VERSION,
+        );
+        return Ok(Html(body).into_response());
+    }
 
     if path == format!("/pypi/{FRESH_PYPI_PACKAGE_NAME}/json") {
         let body = json!({
