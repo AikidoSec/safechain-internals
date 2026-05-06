@@ -13,6 +13,7 @@ private enum HostCommand {
     case status
     case generateCaCrt
     case commitCaCrt
+    case cleanupLegacyCaCrt
     case deleteCaCrt
     case installExtension
     case allowVpn
@@ -146,6 +147,9 @@ private final class TransparentProxyHostCLI {
                 return EXIT_SUCCESS
             case .commitCaCrt:
                 try commitCaCrt()
+                return EXIT_SUCCESS
+            case .cleanupLegacyCaCrt:
+                cleanupLegacyCaCrt()
                 return EXIT_SUCCESS
             case .deleteCaCrt:
                 deleteCaCrt()
@@ -321,12 +325,45 @@ private final class TransparentProxyHostCLI {
         // data-protection-keychain entries (idempotent; no-op when absent).
         // This is the only point at which legacy state is removed: until
         // commit lands, callers may need it for rollback.
-        deleteLegacyDataProtectionEntries()
+        let legacyOutcome = deleteLegacyDataProtectionEntries()
 
         if let der = reply.cert_der_b64 {
             print("previous_cert_der_b64: \(der)")
         } else {
             print("previous_cert_der_b64:")
+        }
+
+        // The new CA is already active in the sysext. If we could not retire
+        // the legacy plaintext key material, surface that to the caller via a
+        // non-zero exit so it doesn't get logged-and-forgotten — leaving the
+        // old private key sitting in the data-protection keychain is a real
+        // (if narrow) audit finding. The caller still has the previous DER
+        // it needs from stdout above, and can re-run commit-ca-crt to retry
+        // the cleanup; both keychain ops are idempotent.
+        if case .partial(let messages) = legacyOutcome {
+            // The sysext swap succeeded and the new CA is live, but the
+            // legacy plaintext key material is still sitting in the
+            // data-protection keychain. The sysext now prefers SE-backed CAs
+            // over legacy, so this is not a runtime regression — but the
+            // caller MUST know about it (audit / hygiene). Run
+            // `cleanup-legacy-ca-crt` to retry; both keychain ops are
+            // idempotent.
+            throw CLIError.runtime(
+                "commit-ca-crt: rotation committed in sysext, but legacy data-protection keychain cleanup failed (\(messages.joined(separator: "; "))). Run `cleanup-legacy-ca-crt` to retry."
+            )
+        }
+    }
+
+    private func cleanupLegacyCaCrt() {
+        let outcome = deleteLegacyDataProtectionEntries()
+        switch outcome {
+        case .ok:
+            print("legacy-ca-crt: cleaned")
+        case .partial(let messages):
+            print("legacy-ca-crt: cleaned (with warnings)")
+            for message in messages {
+                Self.writeStderr("warn: \(message)\n")
+            }
         }
     }
 
@@ -850,7 +887,9 @@ private final class TransparentProxyHostCLI {
         }
     }
 
-    private func deleteLegacyDataProtectionEntries() {
+    @discardableResult
+    private func deleteLegacyDataProtectionEntries() -> DeleteOutcome {
+        var warnings: [String] = []
         for service in Self.legacySecretServices {
             let query: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
@@ -865,11 +904,13 @@ private final class TransparentProxyHostCLI {
             case errSecItemNotFound:
                 continue
             default:
-                log(
-                    "WARNING: failed to delete legacy data-protection keychain entry \(service): OSStatus \(status)"
-                )
+                let msg =
+                    "failed to delete legacy data-protection keychain entry \(service): OSStatus \(status)"
+                log(msg)
+                warnings.append(msg)
             }
         }
+        return warnings.isEmpty ? .ok : .partial(warnings)
     }
 
     // MARK: - System Keychain (SE-encrypted CA storage)
@@ -1008,6 +1049,9 @@ private final class TransparentProxyHostCLI {
         case "commit-ca-crt":
             try assertNoExtraArgs(arguments, command: "commit-ca-crt")
             return .commitCaCrt
+        case "cleanup-legacy-ca-crt":
+            try assertNoExtraArgs(arguments, command: "cleanup-legacy-ca-crt")
+            return .cleanupLegacyCaCrt
         case "delete-ca-crt":
             try assertNoExtraArgs(arguments, command: "delete-ca-crt")
             return .deleteCaCrt
@@ -1230,6 +1274,7 @@ private final class TransparentProxyHostCLI {
           "Aikido Network Extension" status
           "Aikido Network Extension" generate-ca-crt
           "Aikido Network Extension" commit-ca-crt
+          "Aikido Network Extension" cleanup-legacy-ca-crt
           "Aikido Network Extension" delete-ca-crt
           "Aikido Network Extension" install-extension
           "Aikido Network Extension" allow-vpn
@@ -1252,6 +1297,11 @@ private final class TransparentProxyHostCLI {
                                  entries in the data-protection keychain. Prints the previous
                                  active cert DER (base64) on stdout as
                                  `previous_cert_der_b64: <b64>` (empty when nothing was displaced).
+                                 Exits non-zero if the rotation succeeded but the legacy
+                                 cleanup step failed; run `cleanup-legacy-ca-crt` to retry.
+          cleanup-legacy-ca-crt  Idempotent. Wipes the legacy data-protection keychain entries
+                                 left over from pre-sysext-owned-CA installs. Safe to run any
+                                 time; does not touch the SE-encrypted active CA.
           delete-ca-crt          Wipe every MITM CA artefact from the keychains: SE-wrapped
                                  key blob, encrypted cert, encrypted key (system keychain),
                                  and the legacy data-protection entries. Idempotent. Note: the
