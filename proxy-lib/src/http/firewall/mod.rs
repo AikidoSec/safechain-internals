@@ -403,7 +403,7 @@ impl Firewall {
                     None
                 }
             }
-        } else {            
+        } else {
             match Self::read_config_file(config_file?).await {
                 Ok(config) => Some(EndpointConfigSource::from_config(config)),
                 Err(err) => {
