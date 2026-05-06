@@ -146,11 +146,12 @@ async fn try_new_tcp_service(
     let root_ca_key_pair = tls::load_or_create_root_ca_key_pair(&secret_storage, &data_storage)
         .context("prepare proxy traffic CA crt/key pair")?;
 
-    let ca_crt_pem_bytes: &[u8] = root_ca_key_pair
-        .certificate()
-        .to_pem()
-        .context("convert cert to pem")?
-        .leak();
+    let ca_crt_pem_bytes = rama::bytes::Bytes::from(
+        root_ca_key_pair
+            .certificate()
+            .to_pem()
+            .context("convert cert to pem")?,
+    );
 
     let (ca_crt, ca_key) = root_ca_key_pair.into_pair();
 
@@ -181,7 +182,7 @@ async fn try_new_tcp_service(
         tls_mitm_relay_policy,
         tls_mitm_relay,
         firewall,
-        ca_crt_pem_bytes,
+        ca_crt_pem_bytes.clone(),
         false,
     );
 
@@ -201,7 +202,7 @@ fn new_tcp_service_inner<Issuer, Ingress, Egress>(
     tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
     tls_mitm_relay: TlsMitmRelay<Issuer>,
     firewall: Firewall,
-    ca_crt_pem_bytes: &'static [u8],
+    ca_crt_pem_bytes: rama::bytes::Bytes,
     within_connect_tunnel: bool,
 ) -> impl Service<BridgeIo<Ingress, Egress>, Output = (), Error = Infallible> + Clone
 where
@@ -248,7 +249,7 @@ fn http_relay_middleware<S, Issuer>(
     tls_mitm_relay_policy: TlsMitmRelayPolicyLayer,
     tls_mitm_relay: TlsMitmRelay<Issuer>,
     firewall: Firewall,
-    ca_crt_pem_bytes: &'static [u8],
+    ca_crt_pem_bytes: rama::bytes::Bytes,
     within_connect_tunnel: bool,
 ) -> impl Layer<S, Service: Service<Request, Output = Response, Error = BoxError> + Clone>
 + Send
@@ -270,7 +271,7 @@ where
             tls_mitm_relay_policy,
             tls_mitm_relay,
             firewall.clone(),
-            ca_crt_pem_bytes,
+            ca_crt_pem_bytes.clone(),
             true,
         )
         .boxed()

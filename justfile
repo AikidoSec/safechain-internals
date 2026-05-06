@@ -215,10 +215,14 @@ macos-l4-log-stream:
         OR process == "com.aikido.endpoint.proxy.l4.dev.extension" \
         OR process == "Aikido Network Extension"'
 
+
+macos-l4-cli *ARGS:
+    "{{xcode_l4_installed_app_exe}}" {{ARGS}}
+
 macos-l4-start *ARGS:
-    "{{xcode_l4_installed_app_exe}}" start {{ARGS}}
+    just macos-l4-cli start {{ARGS}}
     @for i in $(seq 1 120); do \
-        status="$("{{xcode_l4_installed_app_exe}}" status | sed -n 's/^status: //p')"; \
+        status="$(just macos-l4-cli status | sed -n 's/^status: //p')"; \
         echo "$i) status: $status"; \
         case "$status" in \
             connected) \
@@ -229,13 +233,13 @@ macos-l4-start *ARGS:
         sleep 0.5; \
     done; \
     echo "timed out waiting for macOS L4 proxy to become active" >&2; \
-    "{{xcode_l4_installed_app_exe}}" status; \
+    just macos-l4-cli status; \
     exit 1
 
 macos-l4-stop:
-    "{{xcode_l4_installed_app_exe}}" stop
+    just macos-l4-cli stop
     @for i in $(seq 1 120); do \
-        status="$("{{xcode_l4_installed_app_exe}}" status | sed -n 's/^status: //p')"; \
+        status="$(just macos-l4-cli status | sed -n 's/^status: //p')"; \
         echo "$i) status: $status"; \
         case "$status" in \
             disconnected) \

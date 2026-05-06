@@ -1,18 +1,20 @@
-import CryptoKit
 import Darwin
 import Foundation
 import NetworkExtension
 import OSLog
 import ObjectiveC
+import RamaAppleXpcClient
 import Security
 import SystemExtensions
-import X509
 
 private enum HostCommand {
     case start(StartOptions)
     case stop(StopOptions)
     case status
-    case cleanSecrets
+    case generateCaCrt
+    case commitCaCrt
+    case cleanupLegacyCaCrt
+    case deleteCaCrt
     case installExtension
     case allowVpn
     case isExtensionInstalled
@@ -23,7 +25,6 @@ private enum HostCommand {
 
 private struct StopOptions {
     var removeProfile = false
-    var cleanSecrets = false
     var deactivateExtension = false
 }
 
@@ -33,7 +34,6 @@ private struct StartOptions {
     var agentToken: String?
     var agentDeviceID: String?
     var resetProfile = false
-    var cleanSecrets = false
     var noFirewall = false
 }
 
@@ -47,13 +47,25 @@ private struct AgentIdentityPayload: Encodable, Equatable {
     }
 }
 
+/// Engine-config payload forwarded to the sysext through the opaque
+/// `providerConfiguration` blob. Wire shape must stay in sync with
+/// `ProxyConfig` in `proxy-lib-l4-macos/src/config.rs`.
 private struct ProxyEngineConfigPayload: Encodable, Equatable {
     let agentIdentity: AgentIdentityPayload?
     let reportingEndpoint: String?
     let aikidoURL: String?
     let hostBundleID: String
+    /// **DEPRECATED — graceful migration only.** PEM forwarded from
+    /// the legacy data-protection keychain when an older container
+    /// generated the CA before the sysext owned that responsibility.
+    /// The sysext uses it for the run only and never persists it.
     let caCertPEM: String?
+    /// **DEPRECATED — graceful migration only.** Counterpart to
+    /// [`Self.caCertPEM`].
     let caKeyPEM: String?
+    let xpcServiceName: String?
+    let containerSigningIdentifier: String?
+    let containerTeamIdentifier: String?
     let noFirewall: Bool
 
     private enum CodingKeys: String, CodingKey {
@@ -63,18 +75,14 @@ private struct ProxyEngineConfigPayload: Encodable, Equatable {
         case hostBundleID = "host_bundle_id"
         case caCertPEM = "ca_cert_pem"
         case caKeyPEM = "ca_key_pem"
+        case xpcServiceName = "xpc_service_name"
+        case containerSigningIdentifier = "container_signing_identifier"
+        case containerTeamIdentifier = "container_team_identifier"
         case noFirewall = "no_firewall"
-    }
-
-    var isEmpty: Bool {
-        agentIdentity == nil
-            && reportingEndpoint == nil
-            && aikidoURL == nil
-            && caCertPEM == nil
     }
 }
 
-private struct MITMCASecrets: Equatable {
+private struct LegacyMITMCASecrets: Equatable {
     let certPEM: String
     let keyPEM: String
 }
@@ -105,6 +113,19 @@ private final class TransparentProxyHostCLI {
         key: "AikidoL4ExtensionBundleIdentifier",
         fallback: "com.aikido.endpoint.proxy.l4.dev.extension"
     )
+    /// `NEMachServiceName` exposed by the sysext's `Info.plist`. Forwarded
+    /// to the sysext so `XpcListenerConfig::new` and our client agree on
+    /// the same string. Intentionally read from the Host's `Info.plist`
+    /// (single source of truth) instead of being re-derived from the
+    /// bundle identifier — see the rama crate-level docs.
+    private lazy var xpcServiceName = infoString(
+        key: "AikidoL4ProviderMachServiceName",
+        fallback: ""
+    )
+    private lazy var sharedAccessGroup = infoString(
+        key: "AikidoL4SharedAccessGroup",
+        fallback: ""
+    )
     private lazy var logger = Logger(
         subsystem: "com.aikido.endpoint.proxy.l4", category: "host-main")
     func run(arguments: [String]) -> Int32 {
@@ -121,8 +142,17 @@ private final class TransparentProxyHostCLI {
             case .status:
                 try status()
                 return EXIT_SUCCESS
-            case .cleanSecrets:
-                cleanSecrets()
+            case .generateCaCrt:
+                try generateCaCrt()
+                return EXIT_SUCCESS
+            case .commitCaCrt:
+                try commitCaCrt()
+                return EXIT_SUCCESS
+            case .cleanupLegacyCaCrt:
+                try cleanupLegacyCaCrt()
+                return EXIT_SUCCESS
+            case .deleteCaCrt:
+                try deleteCaCrt()
                 return EXIT_SUCCESS
             case .installExtension:
                 try installExtension()
@@ -163,12 +193,19 @@ private final class TransparentProxyHostCLI {
             )
         }
 
-        if options.cleanSecrets {
-            cleanSecrets()
+        let legacyCA = loadLegacyMITMCAOrNil()
+        if legacyCA != nil {
+            log(
+                "DEPRECATED: forwarding legacy MITM CA from data-protection keychain to sysext via opaque config. The sysext will use it for this run only and will NOT persist it. Rotate via `generate-ca-crt` + `commit-ca-crt` to retire the legacy CA."
+            )
         }
 
-        let ca = try loadOrCreateMITMCA()
-        let engineConfigJSON = try Self.makeEngineConfigJSON(from: options, ca: ca)
+        let engineConfigJSON = try Self.makeEngineConfigJSON(
+            from: options,
+            legacyCA: legacyCA,
+            xpcServiceName: xpcServiceName.nilIfEmpty,
+            containerTeamIdentifier: containerTeamIdentifier()
+        )
         let existingManagers = try loadManagers()
 
         if options.resetProfile {
@@ -222,10 +259,6 @@ private final class TransparentProxyHostCLI {
             waitUntilDisconnected(manager: manager, attempts: 40)
         }
 
-        if options.cleanSecrets {
-            cleanSecrets()
-        }
-
         if options.removeProfile {
             let managersToRemove = matchingManagers(from: managers)
             if !managersToRemove.isEmpty {
@@ -254,6 +287,111 @@ private final class TransparentProxyHostCLI {
         }
 
         print("status: \(statusString(manager.connection.status))")
+    }
+
+    // MARK: - CA commands
+
+    private func generateCaCrt() throws {
+        let serviceName = try requireXpcServiceName()
+        log("generate-ca-crt: invoking XPC route on \(serviceName)")
+        let reply = try runXpc { client in
+            try await client.call(AikidoL4GenerateCaCrt.self)
+        }
+        if !reply.ok {
+            throw CLIError.runtime(
+                "generate-ca-crt failed in sysext: \(reply.error ?? "unknown error)")")
+        }
+        guard let der = reply.cert_der_b64 else {
+            throw CLIError.runtime(
+                "generate-ca-crt sysext reply missing `cert_der_b64`; refusing to claim success"
+            )
+        }
+        // Single line: `cert_der_b64: <base64>`. Stable for callers parsing
+        // stdout (e.g. the Go daemon).
+        print("cert_der_b64: \(der)")
+    }
+
+    private func commitCaCrt() throws {
+        let serviceName = try requireXpcServiceName()
+        log("commit-ca-crt: invoking XPC route on \(serviceName)")
+        let reply = try runXpc { client in
+            try await client.call(AikidoL4CommitCaCrt.self)
+        }
+        if !reply.ok {
+            throw CLIError.runtime(
+                "commit-ca-crt failed in sysext: \(reply.error ?? "unknown error)")")
+        }
+        // sysext successfully swapped the active CA. Now retire the legacy
+        // data-protection-keychain entries (idempotent; no-op when absent).
+        // This is the only point at which legacy state is removed: until
+        // commit lands, callers may need it for rollback.
+        let legacyOutcome = deleteLegacyDataProtectionEntries()
+
+        if let der = reply.cert_der_b64 {
+            print("previous_cert_der_b64: \(der)")
+        } else {
+            print("previous_cert_der_b64:")
+        }
+
+        // The new CA is already active in the sysext. If we could not retire
+        // the legacy plaintext key material, surface that to the caller via a
+        // non-zero exit so it doesn't get logged-and-forgotten — leaving the
+        // old private key sitting in the data-protection keychain is a real
+        // (if narrow) audit finding. The caller still has the previous DER
+        // it needs from stdout above, and can re-run commit-ca-crt to retry
+        // the cleanup; both keychain ops are idempotent.
+        if case .partial(let messages) = legacyOutcome {
+            // The sysext swap succeeded and the new CA is live, but the
+            // legacy plaintext key material is still sitting in the
+            // data-protection keychain. The sysext now prefers SE-backed CAs
+            // over legacy, so this is not a runtime regression — but the
+            // caller MUST know about it (audit / hygiene). Run
+            // `cleanup-legacy-ca-crt` to retry; both keychain ops are
+            // idempotent.
+            throw CLIError.runtime(
+                "commit-ca-crt: rotation committed in sysext, but legacy data-protection keychain cleanup failed (\(messages.joined(separator: "; "))). Run `cleanup-legacy-ca-crt` to retry."
+            )
+        }
+    }
+
+    private func cleanupLegacyCaCrt() throws {
+        let outcome = deleteLegacyDataProtectionEntries()
+        switch outcome {
+        case .ok:
+            print("legacy-ca-crt: cleaned")
+        case .partial(let messages):
+            // Exit non-zero so automation can distinguish "cleaned" from
+            // "still left behind". Print the marker line first anyway so a
+            // caller scanning stdout can see we tried.
+            print("legacy-ca-crt: cleanup-incomplete")
+            throw CLIError.runtime(
+                "cleanup-legacy-ca-crt: \(messages.joined(separator: "; "))"
+            )
+        }
+    }
+
+    private func deleteCaCrt() throws {
+        // No XPC: we are nuking every keychain artefact that may carry
+        // MITM CA material on this machine. The sysext's in-memory copy
+        // of the CA survives until the next sysext restart — that is
+        // expected: callers pair `delete-ca-crt` with a tunnel
+        // stop/restart when a hard reset is intended.
+        let legacyOutcome = deleteLegacyDataProtectionEntries()
+        let systemOutcome = deleteSystemKeychainCAEntries()
+
+        var warnings: [String] = []
+        if case .partial(let m) = legacyOutcome { warnings.append(contentsOf: m) }
+        if case .partial(let m) = systemOutcome { warnings.append(contentsOf: m) }
+
+        if warnings.isEmpty {
+            print("ca-crt: deleted")
+            return
+        }
+        // Exit non-zero so automation can distinguish full delete from
+        // partial. Marker line is still emitted up-front for stdout-scanning
+        // callers.
+        print("ca-crt: delete-incomplete")
+        throw CLIError.runtime("delete-ca-crt: \(warnings.joined(separator: "; "))")
     }
 
     private func installExtension() throws {
@@ -318,6 +456,8 @@ private final class TransparentProxyHostCLI {
         let allowed = selectManager(from: managers) != nil
         print("vpn-allowed: \(allowed)")
     }
+
+    // MARK: - NE machinery
 
     private func loadManagers() throws -> [NETransparentProxyManager] {
         try waitForResult("load transparent proxy managers") { completion in
@@ -635,33 +775,239 @@ private final class TransparentProxyHostCLI {
         }
     }
 
-    private static let secretAccount = "safechain-lib-l4-proxy-macos"
-    private static let secretServiceKeyPEM = "tls-root-selfsigned-ca-key"
-    private static let secretServiceCertPEM = "tls-root-selfsigned-ca-crt"
-    private static let secretServiceKeys = [
-        secretServiceKeyPEM,
-        secretServiceCertPEM,
-    ]
+    // MARK: - XPC plumbing
 
-    private func cleanSecrets() {
-        for key in Self.secretServiceKeys {
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: key,
-                kSecAttrAccount as String: Self.secretAccount,
-                kSecUseDataProtectionKeychain as String: true,
-            ]
+    private func requireXpcServiceName() throws -> String {
+        let name = xpcServiceName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            throw CLIError.runtime(
+                "AikidoL4ProviderMachServiceName missing from Info.plist; the host CLI cannot reach the sysext over XPC. Rebuild the Host bundle with the patched Info.plist."
+            )
+        }
+        return name
+    }
 
-            let status = SecItemDelete(query as CFDictionary)
-            if status == errSecSuccess {
-                log("deleted keychain secret: \(key)")
-            } else if status != errSecItemNotFound {
-                log("failed to delete keychain secret \(key): OSStatus \(status)")
+    private func containerTeamIdentifier() -> String? {
+        let group = sharedAccessGroup.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !group.isEmpty else {
+            return nil
+        }
+        guard let prefix = group.split(separator: ".", maxSplits: 1).first else {
+            return nil
+        }
+        let teamID = String(prefix)
+        return teamID.isEmpty ? nil : teamID
+    }
+
+    private func runXpc<T>(_ body: @escaping (RamaXpcClient) async throws -> T) throws -> T {
+        let serviceName = try requireXpcServiceName()
+        let client = RamaXpcClient(serviceName: serviceName)
+
+        var result: Result<T, Error>?
+        let semaphore = DispatchSemaphore(value: 0)
+
+        Task.detached {
+            do {
+                let value = try await body(client)
+                result = .success(value)
+            } catch {
+                result = .failure(error)
             }
+            semaphore.signal()
         }
 
-        print("secrets: cleaned")
+        // 30s is plenty for one-shot generate / commit calls. Persist of a
+        // freshly-minted CA does an SE encrypt + 3 keychain writes — sub-second
+        // in practice. Tunable here if it ever changes.
+        let deadline = DispatchTime.now() + .seconds(30)
+        if semaphore.wait(timeout: deadline) == .timedOut {
+            throw CLIError.runtime(
+                "timed out waiting for XPC reply from sysext (service: \(serviceName))"
+            )
+        }
+
+        switch result {
+        case .success(let value):
+            return value
+        case .failure(let err):
+            throw CLIError.runtime(
+                "XPC call to sysext failed (service: \(serviceName)): \(err.localizedDescription)"
+            )
+        case .none:
+            throw CLIError.runtime(
+                "XPC call to sysext returned no result (service: \(serviceName))"
+            )
+        }
     }
+
+    // MARK: - Legacy data-protection keychain (graceful migration)
+
+    /// **DEPRECATED — graceful migration only.** Older container builds
+    /// stored the CA inside the user's data-protection keychain under
+    /// these constants. We keep the ability to *load* such material so it
+    /// can be passed to the sysext while a customer migrates; we never
+    /// store anything there ourselves anymore. Once the graceful period
+    /// ends the entire branch (constants + helpers) can be removed.
+    private static let legacySecretAccount = "safechain-lib-l4-proxy-macos"
+    private static let legacySecretServiceKeyPEM = "tls-root-selfsigned-ca-key"
+    private static let legacySecretServiceCertPEM = "tls-root-selfsigned-ca-crt"
+    private static let legacySecretServices = [
+        legacySecretServiceKeyPEM,
+        legacySecretServiceCertPEM,
+    ]
+
+    private func loadLegacyMITMCAOrNil() -> LegacyMITMCASecrets? {
+        let key = try? loadLegacySecret(service: Self.legacySecretServiceKeyPEM)
+        let cert = try? loadLegacySecret(service: Self.legacySecretServiceCertPEM)
+        guard let key = key ?? nil, let cert = cert ?? nil else {
+            return nil
+        }
+        return LegacyMITMCASecrets(certPEM: cert, keyPEM: key)
+    }
+
+    private func loadLegacySecret(service: String) throws -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: Self.legacySecretAccount,
+            kSecUseDataProtectionKeychain as String: true,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+
+        switch status {
+        case errSecSuccess:
+            guard let data = item as? Data else {
+                throw CLIError.runtime("legacy keychain item for \(service) did not return Data")
+            }
+            guard let value = String(data: data, encoding: .utf8) else {
+                throw CLIError.runtime("legacy keychain item for \(service) was not valid UTF-8")
+            }
+            return value
+        case errSecItemNotFound:
+            return nil
+        default:
+            throw CLIError.runtime(
+                "failed to load legacy keychain secret \(service): OSStatus \(status)")
+        }
+    }
+
+    @discardableResult
+    private func deleteLegacyDataProtectionEntries() -> DeleteOutcome {
+        var warnings: [String] = []
+        for service in Self.legacySecretServices {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: Self.legacySecretAccount,
+                kSecUseDataProtectionKeychain as String: true,
+            ]
+            let status = SecItemDelete(query as CFDictionary)
+            switch status {
+            case errSecSuccess:
+                log("deleted legacy data-protection keychain entry: \(service)")
+            case errSecItemNotFound:
+                continue
+            default:
+                let msg =
+                    "failed to delete legacy data-protection keychain entry \(service): OSStatus \(status)"
+                log(msg)
+                warnings.append(msg)
+            }
+        }
+        return warnings.isEmpty ? .ok : .partial(warnings)
+    }
+
+    // MARK: - System Keychain (SE-encrypted CA storage)
+
+    /// Service / account constants must match the sysext side
+    /// (`proxy-lib-l4-macos/src/tls.rs`). Keep in sync.
+    private static let systemCAAccount = "com.aikido.endpoint.proxy.l4"
+    private static let systemCAServiceCert = "aikido-l4-mitm-ca-crt"
+    private static let systemCAServiceKey = "aikido-l4-mitm-ca-key"
+    private static let systemCAServiceSEKey = "aikido-l4-mitm-ca-se-key"
+    private static let systemCAAllServices = [
+        systemCAServiceSEKey,
+        systemCAServiceCert,
+        systemCAServiceKey,
+    ]
+
+    private enum DeleteOutcome {
+        case ok
+        case partial([String])
+    }
+
+    private func deleteSystemKeychainCAEntries() -> DeleteOutcome {
+        // We must hit the file-based System Keychain
+        // (`/Library/Keychains/System.keychain`), which is what the sysext
+        // writes to via `SecKeychainAddGenericPassword`. The modern
+        // `SecItem*` APIs default to the user's keychains and ignore that
+        // file even with `kSecUseDataProtectionKeychain: false`, so we have
+        // to drive the same legacy `SecKeychain*` family rama uses on the
+        // sysext side. Writing/deleting there requires root privileges (or
+        // an admin auth prompt); the Aikido CLI runs as root in the
+        // daemon-driven flow.
+        var keychain: SecKeychain?
+        let openStatus = "/Library/Keychains/System.keychain".withCString { path in
+            SecKeychainOpen(path, &keychain)
+        }
+        guard openStatus == errSecSuccess, let keychain else {
+            return .partial([
+                "failed to open /Library/Keychains/System.keychain: OSStatus \(openStatus)"
+            ])
+        }
+
+        var warnings: [String] = []
+        for service in Self.systemCAAllServices {
+            let serviceBytes = Array(service.utf8)
+            let accountBytes = Array(Self.systemCAAccount.utf8)
+            var item: SecKeychainItem?
+
+            let findStatus = serviceBytes.withUnsafeBufferPointer { svc in
+                accountBytes.withUnsafeBufferPointer { acc in
+                    SecKeychainFindGenericPassword(
+                        keychain,
+                        UInt32(svc.count),
+                        svc.baseAddress,
+                        UInt32(acc.count),
+                        acc.baseAddress,
+                        nil,
+                        nil,
+                        &item
+                    )
+                }
+            }
+
+            switch findStatus {
+            case errSecSuccess:
+                guard let item else {
+                    continue
+                }
+                let deleteStatus = SecKeychainItemDelete(item)
+                if deleteStatus == errSecSuccess {
+                    log("deleted System Keychain entry: \(service)")
+                } else {
+                    let msg =
+                        "failed to delete System Keychain entry \(service): OSStatus \(deleteStatus)"
+                    log(msg)
+                    warnings.append(msg)
+                }
+            case errSecItemNotFound:
+                continue
+            default:
+                let msg =
+                    "failed to look up System Keychain entry \(service): OSStatus \(findStatus)"
+                log(msg)
+                warnings.append(msg)
+            }
+        }
+        return warnings.isEmpty ? .ok : .partial(warnings)
+    }
+
+    // MARK: - Logging
 
     private func log(_ message: String) {
         logger.info("\(message, privacy: .public)")
@@ -703,44 +1049,43 @@ private final class TransparentProxyHostCLI {
             let stopArguments = Array(arguments.dropFirst())
             return .stop(try parseStopOptions(arguments: stopArguments))
         case "status":
-            guard arguments.count == 1 else {
-                throw CLIError.usage("`status` does not accept additional arguments")
-            }
+            try assertNoExtraArgs(arguments, command: "status")
             return .status
-        case "clean-secrets":
-            guard arguments.count == 1 else {
-                throw CLIError.usage("`clean-secrets` does not accept additional arguments")
-            }
-            return .cleanSecrets
+        case "generate-ca-crt":
+            try assertNoExtraArgs(arguments, command: "generate-ca-crt")
+            return .generateCaCrt
+        case "commit-ca-crt":
+            try assertNoExtraArgs(arguments, command: "commit-ca-crt")
+            return .commitCaCrt
+        case "cleanup-legacy-ca-crt":
+            try assertNoExtraArgs(arguments, command: "cleanup-legacy-ca-crt")
+            return .cleanupLegacyCaCrt
+        case "delete-ca-crt":
+            try assertNoExtraArgs(arguments, command: "delete-ca-crt")
+            return .deleteCaCrt
         case "install-extension":
-            guard arguments.count == 1 else {
-                throw CLIError.usage("`install-extension` does not accept additional arguments")
-            }
+            try assertNoExtraArgs(arguments, command: "install-extension")
             return .installExtension
         case "allow-vpn":
-            guard arguments.count == 1 else {
-                throw CLIError.usage("`allow-vpn` does not accept additional arguments")
-            }
+            try assertNoExtraArgs(arguments, command: "allow-vpn")
             return .allowVpn
         case "is-extension-installed":
-            guard arguments.count == 1 else {
-                throw CLIError.usage(
-                    "`is-extension-installed` does not accept additional arguments")
-            }
+            try assertNoExtraArgs(arguments, command: "is-extension-installed")
             return .isExtensionInstalled
         case "is-extension-activated":
-            guard arguments.count == 1 else {
-                throw CLIError.usage(
-                    "`is-extension-activated` does not accept additional arguments")
-            }
+            try assertNoExtraArgs(arguments, command: "is-extension-activated")
             return .isExtensionActivated
         case "is-vpn-allowed":
-            guard arguments.count == 1 else {
-                throw CLIError.usage("`is-vpn-allowed` does not accept additional arguments")
-            }
+            try assertNoExtraArgs(arguments, command: "is-vpn-allowed")
             return .isVpnAllowed
         default:
             throw CLIError.usage("unknown command: \(first)")
+        }
+    }
+
+    private static func assertNoExtraArgs(_ arguments: [String], command: String) throws {
+        guard arguments.count == 1 else {
+            throw CLIError.usage("`\(command)` does not accept additional arguments")
         }
     }
 
@@ -767,8 +1112,6 @@ private final class TransparentProxyHostCLI {
                     flag: argument, arguments: arguments, index: &index)
             case "--reset-profile":
                 options.resetProfile = true
-            case "--clean-secrets":
-                options.cleanSecrets = true
             case "--no-firewall":
                 options.noFirewall = true
             default:
@@ -795,8 +1138,6 @@ private final class TransparentProxyHostCLI {
             switch argument {
             case "--remove-profile":
                 options.removeProfile = true
-            case "--clean-secrets":
-                options.cleanSecrets = true
             case "--deactivate-extension":
                 options.deactivateExtension = true
             default:
@@ -841,7 +1182,9 @@ private final class TransparentProxyHostCLI {
 
     private static func makeEngineConfigJSON(
         from options: StartOptions,
-        ca: MITMCASecrets
+        legacyCA: LegacyMITMCASecrets?,
+        xpcServiceName: String?,
+        containerTeamIdentifier: String?
     ) throws -> String? {
         let agentIdentity: AgentIdentityPayload?
         if let token = options.agentToken, let deviceID = options.agentDeviceID {
@@ -850,13 +1193,18 @@ private final class TransparentProxyHostCLI {
             agentIdentity = nil
         }
 
+        let containerSigningIdentifier = Bundle.main.bundleIdentifier ?? "com.aikido.endpoint.proxy.l4.dev"
+
         let payload = ProxyEngineConfigPayload(
             agentIdentity: agentIdentity,
             reportingEndpoint: options.reportingEndpoint,
             aikidoURL: options.aikidoURL,
-            hostBundleID: Bundle.main.bundleIdentifier ?? "com.aikido.endpoint.proxy.l4.dev",
-            caCertPEM: ca.certPEM,
-            caKeyPEM: ca.keyPEM,
+            hostBundleID: containerSigningIdentifier,
+            caCertPEM: legacyCA?.certPEM,
+            caKeyPEM: legacyCA?.keyPEM,
+            xpcServiceName: xpcServiceName,
+            containerSigningIdentifier: containerSigningIdentifier,
+            containerTeamIdentifier: containerTeamIdentifier,
             noFirewall: options.noFirewall
         )
 
@@ -867,167 +1215,6 @@ private final class TransparentProxyHostCLI {
             throw CLIError.runtime("failed to encode transparent proxy config as UTF-8 JSON")
         }
         return json
-    }
-
-    private func loadOrCreateMITMCA() throws -> MITMCASecrets {
-        let existingKey = try loadSecret(service: Self.secretServiceKeyPEM)
-        let existingCert = try loadSecret(service: Self.secretServiceCertPEM)
-
-        if let keyPEM = existingKey, let certPEM = existingCert {
-            log("loaded MITM CA PEM from keychain")
-            return MITMCASecrets(certPEM: certPEM, keyPEM: keyPEM)
-        }
-
-        if existingKey != nil || existingCert != nil {
-            log("MITM CA keychain state incomplete; deleting partial CA material and regenerating")
-            cleanSecrets()
-        }
-
-        let generated = try generateSelfSignedCAPEM()
-        try storeSecret(service: Self.secretServiceKeyPEM, value: generated.keyPEM)
-        try storeSecret(service: Self.secretServiceCertPEM, value: generated.certPEM)
-        log("generated and stored new MITM CA PEM in keychain")
-        return generated
-    }
-
-    private func loadSecret(service: String) throws -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: Self.secretAccount,
-            kSecUseDataProtectionKeychain as String: true,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-
-        switch status {
-        case errSecSuccess:
-            guard let data = item as? Data else {
-                throw CLIError.runtime("keychain item for \(service) did not return Data")
-            }
-            guard let value = String(data: data, encoding: .utf8) else {
-                throw CLIError.runtime("keychain item for \(service) was not valid UTF-8")
-            }
-            return value
-        case errSecItemNotFound:
-            return nil
-        default:
-            throw CLIError.runtime("failed to load keychain secret \(service): OSStatus \(status)")
-        }
-    }
-
-    private func storeSecret(service: String, value: String) throws {
-        guard let data = value.data(using: .utf8) else {
-            throw CLIError.runtime("failed to encode keychain secret \(service) as UTF-8")
-        }
-
-        let baseQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: Self.secretAccount,
-            kSecUseDataProtectionKeychain as String: true,
-        ]
-
-        let updateAttrs: [String: Any] = [
-            kSecValueData as String: data
-        ]
-
-        let updateStatus = SecItemUpdate(baseQuery as CFDictionary, updateAttrs as CFDictionary)
-        if updateStatus == errSecSuccess {
-            return
-        }
-
-        if updateStatus != errSecItemNotFound {
-            throw CLIError.runtime(
-                "failed to update keychain secret \(service): OSStatus \(updateStatus)")
-        }
-
-        var addQuery = baseQuery
-        addQuery[kSecValueData as String] = data
-        if let accessControl = createAccessControl() {
-            addQuery[kSecAttrAccessControl as String] = accessControl
-        }
-
-        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
-        if addStatus != errSecSuccess {
-            throw CLIError.runtime(
-                "failed to add keychain secret \(service): OSStatus \(addStatus)")
-        }
-    }
-
-    private func generateSelfSignedCAPEM() throws -> MITMCASecrets {
-        let signingKey = P256.Signing.PrivateKey()
-        let now = Date()
-        let calendar = Calendar(identifier: .gregorian)
-        guard let notValidAfter = calendar.date(byAdding: .day, value: 3650, to: now) else {
-            throw CLIError.runtime("failed to compute CA certificate expiry date")
-        }
-
-        let subject = try DistinguishedName {
-            CommonName("Aikido Endpoint L4 Proxy Root CA")
-            OrganizationName("Aikido")
-            OrganizationalUnitName("Endpoint")
-            CountryName("BE")
-        }
-
-        let certificate = try Certificate(
-            version: .v3,
-            serialNumber: .init(),
-            publicKey: .init(signingKey.publicKey),
-            notValidBefore: now,
-            notValidAfter: notValidAfter,
-            issuer: subject,
-            subject: subject,
-            signatureAlgorithm: .ecdsaWithSHA256,
-            extensions: try Certificate.Extensions {
-                Critical(BasicConstraints.isCertificateAuthority(maxPathLength: 0))
-                Critical(
-                    KeyUsage(
-                        digitalSignature: true,
-                        nonRepudiation: false,
-                        keyEncipherment: false,
-                        dataEncipherment: false,
-                        keyAgreement: false,
-                        keyCertSign: true,
-                        cRLSign: true,
-                        encipherOnly: false,
-                        decipherOnly: false
-                    )
-                )
-            },
-            issuerPrivateKey: .init(signingKey)
-        )
-
-        let certPEM = try certificate.serializeAsPEM().pemString
-        let keyPEM = try Certificate.PrivateKey(signingKey).serializeAsPEM().pemString
-
-        guard certPEM.contains("BEGIN CERTIFICATE") else {
-            throw CLIError.runtime("generated CA certificate PEM had unexpected format")
-        }
-        guard keyPEM.contains("BEGIN PRIVATE KEY") || keyPEM.contains("BEGIN EC PRIVATE KEY") else {
-            throw CLIError.runtime("generated CA private key PEM had unexpected format")
-        }
-
-        return MITMCASecrets(certPEM: certPEM, keyPEM: keyPEM)
-    }
-
-    private func createAccessControl() -> SecAccessControl? {
-        var error: Unmanaged<CFError>?
-        let access = SecAccessControlCreateWithFlags(
-            nil,
-            kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-            [],
-            &error
-        )
-
-        if let err = error {
-            logError("failed to create access control for keychain secret", err.takeRetainedValue())
-        }
-
-        return access
     }
 
     private func runProcessCaptureStdout(
@@ -1093,7 +1280,10 @@ private final class TransparentProxyHostCLI {
           "Aikido Network Extension" start [options]
           "Aikido Network Extension" stop [options]
           "Aikido Network Extension" status
-          "Aikido Network Extension" clean-secrets
+          "Aikido Network Extension" generate-ca-crt
+          "Aikido Network Extension" commit-ca-crt
+          "Aikido Network Extension" cleanup-legacy-ca-crt
+          "Aikido Network Extension" delete-ca-crt
           "Aikido Network Extension" install-extension
           "Aikido Network Extension" allow-vpn
           "Aikido Network Extension" is-extension-installed
@@ -1103,8 +1293,27 @@ private final class TransparentProxyHostCLI {
         Commands:
           start                  Install or update the transparent proxy profile and request that it starts.
           stop                   Request that the transparent proxy tunnel stops.
-          status                 Show the current Network Extension status and saved engine config.
-          clean-secrets          Delete proxy CA secrets from the keychain.
+          status                 Show the current Network Extension status.
+          generate-ca-crt        Ask the sysext to mint a fresh MITM CA in memory and park it
+                                 as the pending one. The active TLS interception keeps using
+                                 the previous CA, but the hijack endpoint serves the pending
+                                 PEM so callers can install trust before commit. Prints the
+                                 new cert DER (base64) on stdout as `cert_der_b64: <b64>`.
+          commit-ca-crt          Persist the pending CA in the SE-encrypted system keychain
+                                 and atomically swap it in as the active CA. Fails when no
+                                 pending CA is parked. On success, also wipes any legacy CA
+                                 entries in the data-protection keychain. Prints the previous
+                                 active cert DER (base64) on stdout as
+                                 `previous_cert_der_b64: <b64>` (empty when nothing was displaced).
+                                 Exits non-zero if the rotation succeeded but the legacy
+                                 cleanup step failed; run `cleanup-legacy-ca-crt` to retry.
+          cleanup-legacy-ca-crt  Idempotent. Wipes the legacy data-protection keychain entries
+                                 left over from pre-sysext-owned-CA installs. Safe to run any
+                                 time; does not touch the SE-encrypted active CA.
+          delete-ca-crt          Wipe every MITM CA artefact from the keychains: SE-wrapped
+                                 key blob, encrypted cert, encrypted key (system keychain),
+                                 and the legacy data-protection entries. Idempotent. Note: the
+                                 sysext keeps its in-memory CA copy until restart.
           install-extension      Install the system extension (triggers Network Extension approval).
           allow-vpn              Save the VPN profile (triggers Allow VPN Configuration approval).
           is-extension-installed Check if the system extension appears in the extensions list (no prompts).
@@ -1113,7 +1322,6 @@ private final class TransparentProxyHostCLI {
 
         Stop options:
           --remove-profile             Remove the saved Network Extension profile after stopping.
-          --clean-secrets              Delete proxy CA secrets from the keychain.
           --deactivate-extension       Deactivate the system extension (for uninstall).
 
         Start options:
@@ -1121,15 +1329,16 @@ private final class TransparentProxyHostCLI {
           --aikido-url URL           Override the Aikido app base URL used by the extension.
           --agent-token TOKEN        Agent token to forward to the extension config.
           --agent-device-id ID       Agent device identifier to forward to the extension config.
-          --clean-secrets            Delete proxy CA secrets before starting to rotate the MITM CA.
           --reset-profile            Remove the saved Network Extension profile before starting.
+          --no-firewall              Don't setup the firewall.
           --help                     Show this help text.
-          --no-firewall               Don't setup the firewall
 
         Notes:
           - The transparent proxy extension is managed by macOS after `start`; this host process
             does not need to stay alive for the proxy to keep running.
           - Provide both `--agent-token` and `--agent-device-id` together or omit both.
+          - `generate-ca-crt` / `commit-ca-crt` reach the sysext over XPC. The Mach service name
+            comes from the Host bundle's `AikidoL4ProviderMachServiceName` Info.plist key.
         """
     }
 
@@ -1143,6 +1352,12 @@ private final class TransparentProxyHostCLI {
 
 private enum AssociatedKeys {
     static var systemExtensionDelegate: UInt8 = 0
+}
+
+extension String {
+    fileprivate var nilIfEmpty: String? {
+        isEmpty ? nil : self
+    }
 }
 
 private final class SystemExtensionRequestDelegate: NSObject, OSSystemExtensionRequestDelegate {

@@ -39,7 +39,40 @@ pub struct FlowHandler {
 
 impl FlowHandler {
     async fn try_new(ctx: TransparentProxyServiceContext) -> Result<Self, BoxError> {
-        let tcp_mitm_service = crate::tcp::TcpMitmService::try_new(ctx).await?;
+        let executor = ctx.executor.clone();
+        let (tcp_mitm_service, ca_state) = crate::tcp::TcpMitmService::try_new(ctx).await?;
+
+        let cfg = tcp_mitm_service.proxy_config();
+        if cfg.xpc_service_name.is_some()
+            || cfg.container_signing_identifier.is_some()
+            || cfg.container_team_identifier.is_some()
+        {
+            // All XPC identity fields must be set together — the inner spawn enforces
+            // that and fails closed if either is missing. We swallow the
+            // result here so a misconfigured XPC config does not bring the
+            // whole transparent proxy down: TLS interception keeps working,
+            // only `generate-ca-crt` / `commit-ca-crt` become unavailable.
+            if let Err(err) = crate::xpc_server::spawn(
+                cfg.xpc_service_name.clone(),
+                cfg.container_signing_identifier.clone(),
+                cfg.container_team_identifier.clone(),
+                ca_state,
+                executor,
+            ) {
+                tracing::error!(
+                    error = %err,
+                    "failed to spawn aikido L4 sysext XPC server; CA generate/commit \
+                     routes will be unavailable"
+                );
+            }
+        } else {
+            tracing::warn!(
+                "xpc_service_name, container_signing_identifier, and \
+                 container_team_identifier are all unset in opaque engine config; XPC \
+                 server not spawned. `generate-ca-crt` / `commit-ca-crt` will not be \
+                 available until all required identity fields are provided."
+            );
+        }
 
         let proxy_config = TransparentProxyConfig::new().with_rules(vec![
             TransparentProxyNetworkRule::any().with_protocol(TransparentProxyRuleProtocol::Tcp),

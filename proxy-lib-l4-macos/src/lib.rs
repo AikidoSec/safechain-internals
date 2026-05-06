@@ -10,8 +10,11 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 mod config;
 mod handler;
 mod init;
+mod state;
 mod tcp;
+mod tls;
 mod utils;
+mod xpc_server;
 
 transparent_proxy_ffi! {
     init = self::init::init,

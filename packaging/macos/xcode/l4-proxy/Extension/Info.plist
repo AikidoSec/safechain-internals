@@ -25,6 +25,8 @@
       <key>com.apple.networkextension.app-proxy</key>
       <string>RamaAppleNetworkExtension.RamaTransparentProxyProvider</string>
     </dict>
+    <key>NEMachServiceName</key>
+    <string>$(APP_GROUP_ID).aikido-l4-xpc</string>
   </dict>
 </dict>
 </plist>

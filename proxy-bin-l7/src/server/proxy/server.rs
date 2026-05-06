@@ -60,11 +60,12 @@ pub(super) fn new_app_mitm_server<S: Io + ExtensionsRef + Unpin>(
 ) -> Result<impl Service<S, Output = (), Error = Infallible> + Clone, BoxError> {
     let exec = Executor::graceful(guard);
 
-    let ca_crt_pem_bytes: &[u8] = root_ca
-        .certificate()
-        .to_pem()
-        .context("root ca cert as pem")?
-        .leak();
+    let ca_crt_pem_bytes = rama::bytes::Bytes::from(
+        root_ca
+            .certificate()
+            .to_pem()
+            .context("root ca cert as pem")?,
+    );
 
     let (ca_crt, ca_key) = root_ca.into_pair();
 
@@ -105,7 +106,7 @@ pub(super) fn new_app_mitm_server<S: Io + ExtensionsRef + Unpin>(
 pub fn http_relay_middleware<S>(
     exec: Executor,
     firewall: Firewall,
-    ca_crt_pem_bytes: &'static [u8],
+    ca_crt_pem_bytes: rama::bytes::Bytes,
     #[cfg(feature = "har")] har_export_layer: HARExportLayer,
 ) -> impl Layer<S, Service: Service<Request, Output = Response, Error = BoxError> + Clone>
 + Send

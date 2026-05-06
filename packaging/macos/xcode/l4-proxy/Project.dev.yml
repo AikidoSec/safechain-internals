@@ -8,9 +8,6 @@ packages:
   RamaAppleNetworkExtension:
     url: https://github.com/plabayo/rama.git
     revision: 9a0d105b73761fde9320dec76f5cfe071375bb7b
-  X509:
-    url: https://github.com/apple/swift-certificates.git
-    from: 1.0.0
 
 targets:
   AikidoNetworkExtensionHost:
@@ -22,8 +19,8 @@ targets:
       - target: AikidoNetworkExtensionSysext
         embed: true
         codeSign: true
-      - package: X509
-        product: X509
+      - package: RamaAppleNetworkExtension
+        product: RamaAppleXpcClient
     settings:
       base:
         PRODUCT_NAME: "Aikido Network Extension"
@@ -41,6 +38,7 @@ targets:
         NE_ENTITLEMENT_SUFFIX: ""
         AIKIDO_L4_EXTENSION_BUNDLE_ID: com.aikido.endpoint.proxy.l4.dev.extension
         AIKIDO_L4_SHARED_ACCESS_GROUP_BUNDLE_ID: com.aikido.endpoint.proxy.l4.dev.extension
+        APP_GROUP_ID: "$(AppIdentifierPrefix)com.aikido.endpoint.proxy.l4.dev.extension"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   AikidoNetworkExtensionSysext:
@@ -80,6 +78,7 @@ targets:
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
         NE_ENTITLEMENT_SUFFIX: ""
         AIKIDO_L4_SHARED_ACCESS_GROUP_BUNDLE_ID: com.aikido.endpoint.proxy.l4.dev.extension
+        APP_GROUP_ID: "$(AppIdentifierPrefix)com.aikido.endpoint.proxy.l4.dev.extension"
         ENABLE_DEBUG_DYLIB: NO
         OTHER_LDFLAGS:
           - "$(SRCROOT)/../../../../target/universal/libsafechain_lib_l4_proxy_macos.a"

@@ -13,6 +13,8 @@ crate-type = ["staticlib"]
 [features]
 
 [target.'cfg(target_os = "macos")'.dependencies]
+arc-swap = { workspace = true }
+base64 = { workspace = true }
 jemallocator = { workspace = true }
 moka = { workspace = true }
 rustls-platform-verifier = { workspace = true }
@@ -26,6 +28,7 @@ tracing-oslog = { workspace = true }
 workspace = true
 features = [
     "net-apple-networkextension",
+    "net-apple-xpc",
     "tcp",
     "udp",
     "dns",

@@ -2,6 +2,7 @@ use std::convert::Infallible;
 
 use rama::{
     Service,
+    bytes::Bytes,
     http::{
         HeaderValue, Request, Response, StatusCode,
         header::CONTENT_TYPE,
@@ -39,14 +40,14 @@ use crate::http::firewall::Firewall;
 pub const HIJACK_DOMAIN: Domain = Domain::from_static("mitm.ramaproxy.org");
 
 pub fn new_service(
-    root_ca_pem: &'static [u8],
+    root_ca_pem: Bytes,
     firewall: Firewall,
 ) -> impl Service<Request, Output = Response, Error = Infallible> {
     Router::new()
         .with_get("/", Html(STATIC_INDEX_PAGE))
         .with_get("/ping", StatusCode::OK)
         .with_get("/data/root.ca.pem", move || {
-            let mut resp = root_ca_pem.into_response();
+            let mut resp = root_ca_pem.clone().into_response();
             resp.headers_mut().insert(
                 CONTENT_TYPE,
                 HeaderValue::from_static("application/x-pem-file"),
