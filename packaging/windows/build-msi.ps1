@@ -52,7 +52,19 @@ param(
     [string]$TargetArch,
 
     [Parameter(Mandatory = $false)]
-    [string]$CertSubject = "CN=SafeChain Test"
+    [string]$CertSubject = "CN=SafeChain Test",
+
+    # When set, generate a fresh 0.0.<unix-timestamp> version, sync it into
+    # every relevant file (internal/version/version.go, Cargo.toml, INF,
+    # Wails/MSIX/NSIS manifests, ...), build the MSI with that version, and
+    # restore the original version on exit. Mirrors the macOS local builder's
+    # `--generate-version` flag (packaging/macos/build-and-sign-local.sh).
+    #
+    # Useful for local dev so that every rebuild has a unique MSI Version
+    # (cleaner Add/Remove Programs entries; pnputil sees a strictly newer
+    # DriverVer; logs disambiguate which build is running).
+    [Parameter(Mandatory = $false)]
+    [switch]$GenerateVersion
 )
 
 $ErrorActionPreference = "Stop"
@@ -110,10 +122,110 @@ if (-not [System.IO.Path]::IsPathRooted($OutputDir)) {
     $OutputDir = [System.IO.Path]::GetFullPath((Join-Path (Get-Location).Path $OutputDir))
 }
 
+# Optional: stamp a fresh 0.0.<unix-timestamp> version across the repo so
+# every rebuild produces a uniquely-versioned MSI / driver / daemon. The
+# original repo version is captured here and restored in `finally` below.
+$SyncVersionsScript = Join-Path $ProjectDir "scripts\sync-versions.ps1"
+$OriginalRepoVersion = $null
+
+function Get-CurrentRepoVersion {
+    # Source of truth: workspace.package.version in the top-level Cargo.toml,
+    # marked "# keep in sync with GH releases". Mirrors what sync-versions.sh
+    # treats as canonical.
+    $cargoToml = Join-Path $ProjectDir "Cargo.toml"
+    if (-not (Test-Path -LiteralPath $cargoToml)) {
+        throw "Cannot read repo version: $cargoToml not found"
+    }
+    $content = [System.IO.File]::ReadAllText($cargoToml)
+    $m = [Regex]::Match($content, '(?m)^version = "([^"]+)".*# keep in sync with GH releases')
+    if (-not $m.Success) {
+        throw "Cannot parse workspace version from $cargoToml"
+    }
+    return $m.Groups[1].Value
+}
+
+# Convert a Cargo SemVer (major.minor.patch) into a Windows-Installer-compatible
+# ProductVersion string. Windows Installer enforces stricter limits than
+# VS_VERSIONINFO / DriverVer:
+#
+#   major  in 0..=255
+#   minor  in 0..=255
+#   build  in 0..=65535
+#   revision: ignored by MSI version comparisons
+#
+# (Stage-driver-package.ps1 / proxy-lib-l4-windows-driver/build.rs use a 4-part
+# w.x.y.z encoding instead, where each component is u16. Those formats accept
+# wider values than ProductVersion does.)
+#
+# Local dev builds emit `0.0.<unix-timestamp>` whose patch is ~1.78 * 10^9 and
+# overflows the build field, triggering WIX1148. To produce a valid MSI version
+# while preserving monotonic ordering across rebuilds (so MajorUpgrade keeps
+# detecting the upgrade), we split a wide u32 patch over the major / minor /
+# build slots so the packed `(major<<24) | (minor<<16) | build` value matches
+# the original u32:
+#
+#   patch <= 65535 -> "<major>.<minor>.<patch>"      (no change for releases)
+#   patch >  65535 -> "<patch>>>24 & 0xFF>.<patch>>>16 & 0xFF>.<patch & 0xFFFF>"
+#
+# Two consecutive timestamps differ by 1 in the packed form, so MSI sees a
+# strictly increasing ProductVersion across rebuilds.
+function Convert-CargoVersionToMsiProductVersion {
+    param([Parameter(Mandatory = $true)][string]$CargoVersion)
+
+    $parts = $CargoVersion.Split('.')
+    if ($parts.Count -lt 3) {
+        throw "Cargo version '$CargoVersion' must have at least 3 components"
+    }
+
+    [byte]$major = 0
+    if (-not [byte]::TryParse($parts[0], [ref]$major)) {
+        throw "Cargo version '$CargoVersion' major component '$($parts[0])' must fit in a u8 (0..=255) for an MSI ProductVersion"
+    }
+    [byte]$minor = 0
+    if (-not [byte]::TryParse($parts[1], [ref]$minor)) {
+        throw "Cargo version '$CargoVersion' minor component '$($parts[1])' must fit in a u8 (0..=255) for an MSI ProductVersion"
+    }
+
+    [uint32]$patch = 0
+    if (-not [uint32]::TryParse($parts[2], [ref]$patch)) {
+        throw "Cargo version '$CargoVersion' patch component '$($parts[2])' is not a non-negative integer"
+    }
+
+    if ($patch -le 65535) {
+        return "{0}.{1}.{2}" -f $major, $minor, $patch
+    }
+
+    if ($major -ne 0 -or $minor -ne 0) {
+        throw "Cannot encode '$CargoVersion' for MSI: only 0.0.<u32> patches above 65535 can be split into MSI ProductVersion fields"
+    }
+
+    $newMajor = ($patch -shr 24) -band 0xFF
+    $newMinor = ($patch -shr 16) -band 0xFF
+    $newBuild = $patch -band 0xFFFF
+    return "{0}.{1}.{2}" -f $newMajor, $newMinor, $newBuild
+}
+
+if ($GenerateVersion) {
+    if (-not (Test-Path -LiteralPath $SyncVersionsScript)) {
+        throw "GenerateVersion requested but $SyncVersionsScript is missing"
+    }
+
+    $OriginalRepoVersion = Get-CurrentRepoVersion
+    $epoch = [int64]([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())
+    $Version = "0.0.$epoch"
+
+    Write-Host ""
+    Write-Host "==> Generating fresh version $Version (was $OriginalRepoVersion); will restore on exit" -ForegroundColor Cyan
+    & $SyncVersionsScript -Version $Version
+    if ($LASTEXITCODE -ne 0) {
+        throw "sync-versions.ps1 failed while applying generated version $Version"
+    }
+}
+
 if ($Version -eq "dev" -or [string]::IsNullOrEmpty($Version)) {
     $WixVersion = "0.0.0"
 } else {
-    $WixVersion = $Version
+    $WixVersion = Convert-CargoVersionToMsiProductVersion -CargoVersion $Version
 }
 
 if (-not (Test-Path $OutputDir)) {
@@ -128,9 +240,12 @@ Write-Host "  WiX product version : $WixVersion"
 Write-Host "  Mode                : $(if ($Local) { 'LOCAL (full build)' } else { 'CI (use existing bins)' })"
 Write-Host "  Target arch         : $TargetArch (rust=$RustTriple, go=$GoArch, wix=$WixArch)"
 Write-Host "  Include driver      : $IncludeDriver"
+Write-Host "  Generate version    : $GenerateVersion"
 Write-Host "  BinDir              : $BinDir"
 Write-Host "  OutputDir           : $OutputDir"
 Write-Host "  ProjectDir          : $ProjectDir"
+
+try {
 
 # ----------------------------------------------------------------------------
 # Local-build steps (only run with -Local)
@@ -523,3 +638,19 @@ Write-Host "MSI built successfully: $OutputMsi" -ForegroundColor Green
 $hash = Get-FileHash -Path $OutputMsi -Algorithm SHA256
 Write-Host "SHA256: $($hash.Hash)"
 $hash.Hash | Out-File -FilePath "$OutputMsi.sha256" -NoNewline
+}
+finally {
+    if ($GenerateVersion -and $OriginalRepoVersion) {
+        Write-Host ""
+        Write-Host "==> Restoring repo versions to $OriginalRepoVersion" -ForegroundColor Cyan
+        try {
+            & $SyncVersionsScript -Version $OriginalRepoVersion
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "sync-versions.ps1 returned $LASTEXITCODE while restoring to $OriginalRepoVersion; check repo state with 'git status'."
+            }
+        } catch {
+            Write-Warning "Failed to restore repo versions to ${OriginalRepoVersion}: $_"
+            Write-Warning "Run scripts/sync-versions.ps1 -Version $OriginalRepoVersion manually to clean up."
+        }
+    }
+}

@@ -164,6 +164,47 @@ function Get-WorkspaceVersion {
     return $match.Matches[0].Groups[1].Value
 }
 
+# Convert a Cargo SemVer (major.minor.patch) into the four-part w.x.y.z form
+# used by INF DriverVer and Windows VS_VERSIONINFO. Each component must fit in
+# a u16 (0..=65535). Local dev versions (scripts\sync-versions.ps1 -Dev) emit
+# 0.0.<unix-timestamp> whose patch overflows u16, so we split a wide patch into
+# (high16, low16) and place those in fields 3 and 4. This keeps every dev build
+# unique while still producing a valid Windows version.
+#
+# Layout (must match parse_version_quad in proxy-lib-l4-windows-driver/build.rs):
+#   patch <= 65535 -> "<major>.<minor>.<patch>.0"
+#   patch >  65535 -> "<major>.<minor>.<patch>>16.<patch & 0xFFFF>"
+function Convert-CargoVersionToWindowsQuad {
+    param([Parameter(Mandatory = $true)][string]$CargoVersion)
+
+    $parts = $CargoVersion.Split('.')
+    if ($parts.Count -lt 3) {
+        throw "Cargo version '$CargoVersion' must have at least 3 components"
+    }
+
+    [uint16]$major = 0
+    if (-not [uint16]::TryParse($parts[0], [ref]$major)) {
+        throw "Cargo version '$CargoVersion' major component '$($parts[0])' does not fit in u16"
+    }
+    [uint16]$minor = 0
+    if (-not [uint16]::TryParse($parts[1], [ref]$minor)) {
+        throw "Cargo version '$CargoVersion' minor component '$($parts[1])' does not fit in u16"
+    }
+
+    [uint32]$patch = 0
+    if (-not [uint32]::TryParse($parts[2], [ref]$patch)) {
+        throw "Cargo version '$CargoVersion' patch component '$($parts[2])' is not a non-negative integer"
+    }
+
+    if ($patch -le 65535) {
+        return "{0}.{1}.{2}.0" -f $major, $minor, $patch
+    }
+
+    $patchHi = ($patch -shr 16) -band 0xFFFF
+    $patchLo = $patch -band 0xFFFF
+    return "{0}.{1}.{2}.{3}" -f $major, $minor, $patchHi, $patchLo
+}
+
 if (-not (Test-Path $TemplatePath)) {
     throw "INF template not found: $TemplatePath"
 }
@@ -177,7 +218,7 @@ Copy-Item -LiteralPath $DriverSysPath -Destination (Join-Path $OutputDir $Driver
 
 $infContents = Get-Content -LiteralPath $TemplatePath -Raw
 $workspaceVersion = Get-WorkspaceVersion -CargoTomlPath $WorkspaceCargoToml
-$driverVersion = "$workspaceVersion.0"
+$driverVersion = Convert-CargoVersionToWindowsQuad -CargoVersion $workspaceVersion
 $driverDate = Get-Date -Format 'MM/dd/yyyy'
 $infContents = [Regex]::Replace(
     $infContents,

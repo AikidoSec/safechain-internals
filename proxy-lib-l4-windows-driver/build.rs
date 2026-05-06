@@ -62,9 +62,9 @@ fn main() -> Result<(), wdk_build::ConfigError> {
         .map_err(|source| wdk_build::IoError::with_path(&bindings_path, source))?;
 
     let version = env!("CARGO_PKG_VERSION");
-    let [major, minor, patch] = parse_version_triplet(version);
-    let file_version_commas = format!("{major},{minor},{patch},0");
-    let file_version_dots = format!("{major}.{minor}.{patch}.0");
+    let [major, minor, field3, field4] = parse_version_quad(version);
+    let file_version_commas = format!("{major},{minor},{field3},{field4}");
+    let file_version_dots = format!("{major}.{minor}.{field3}.{field4}");
     let rc_contents = format!(
         r#"#include <winver.h>
 
@@ -141,19 +141,49 @@ END
 #[cfg(not(target_os = "windows"))]
 fn main() {}
 
+/// Parse `CARGO_PKG_VERSION` ("major.minor.patch") into the four `u16`s of a
+/// Windows `VS_VERSIONINFO` `FILEVERSION` / `PRODUCTVERSION`.
+///
+/// Each field of `FILEVERSION` is a `WORD` (`u16`), capped at 65535. Cargo
+/// SemVer's three components technically allow `u64` each, and our local
+/// dev-build version scheme (`scripts/sync-versions.ps1 -Dev`) uses
+/// `0.0.<unix-timestamp>` which overflows `u16` for any timestamp after
+/// 1970-01-01 18:12:15 UTC.
+///
+/// To stay within the resource format while keeping every dev build unique,
+/// we split a wide patch into two `u16`s that occupy fields 3 and 4 of the
+/// 4-tuple:
+///   patch <= u16::MAX  =>  [major, minor, patch, 0]            (historic layout)
+///   patch >  u16::MAX  =>  [major, minor, patch_hi16, patch_lo16]
+///
+/// Major and minor are still required to fit in `u16`; that has always been
+/// the case for our release versions and there is no reason to relax it.
 #[cfg(target_os = "windows")]
-fn parse_version_triplet(version: &str) -> [u16; 3] {
+fn parse_version_quad(version: &str) -> [u16; 4] {
     let mut parts = version.split('.');
-    let parse = |part: Option<&str>| -> u16 {
-        part.expect("CARGO_PKG_VERSION should have three numeric parts")
-            .parse()
-            .expect("CARGO_PKG_VERSION should contain only numeric components")
+    let parse_u16_field = |part: Option<&str>, name: &str| -> u16 {
+        part.unwrap_or_else(|| panic!("CARGO_PKG_VERSION missing {name} component"))
+            .parse::<u16>()
+            .unwrap_or_else(|err| {
+                panic!("CARGO_PKG_VERSION {name} component must fit in u16: {err}")
+            })
     };
-    [
-        parse(parts.next()),
-        parse(parts.next()),
-        parse(parts.next()),
-    ]
+
+    let major = parse_u16_field(parts.next(), "major");
+    let minor = parse_u16_field(parts.next(), "minor");
+
+    let patch_str = parts
+        .next()
+        .expect("CARGO_PKG_VERSION should have a patch component");
+    let patch_u32 = patch_str.parse::<u32>().unwrap_or_else(|err| {
+        panic!("CARGO_PKG_VERSION patch component must be a non-negative integer: {err}")
+    });
+
+    if let Ok(patch_u16) = u16::try_from(patch_u32) {
+        [major, minor, patch_u16, 0]
+    } else {
+        [major, minor, (patch_u32 >> 16) as u16, (patch_u32 & 0xFFFF) as u16]
+    }
 }
 
 #[cfg(target_os = "windows")]
