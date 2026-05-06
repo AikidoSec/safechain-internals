@@ -13,22 +13,23 @@
 //! | `aikido-l4-mitm-ca-crt`    | SE-encrypted CA cert PEM |
 //! | `aikido-l4-mitm-ca-key`    | SE-encrypted CA key PEM |
 //!
-//! The Secure Enclave is **mandatory** on this path. If the host hardware
-//! does not have a usable SE, [`load_or_create_active_ca`] returns a hard
-//! error — we deliberately do not fall back to plaintext keychain storage,
-//! because that would silently downgrade the security guarantee callers are
-//! expecting.
+//! The Secure Enclave is **mandatory** for the SE-encrypted store. If the
+//! host has no usable SE and we'd have to mint + persist, [`load_or_create_active_ca`]
+//! hard-errors rather than fall back to plaintext keychain storage. The
+//! legacy passthrough below is the one deliberate exception, scoped to
+//! existing graceful-migration installs.
 //!
 //! ## Legacy passthrough (graceful period)
 //!
 //! Older container builds generated the CA themselves and forwarded the
 //! plaintext PEMs through the opaque config. Those PEMs are considered
 //! polluted (they passed through an insecure plain-text boundary) and we
-//! must NOT persist them in the SE-encrypted store. When [`load_or_create_active_ca`]
-//! receives `legacy_pems`, it parses + uses them for this run only, leaves
-//! the SE-encrypted slots untouched, and emits a deprecation warning. The
-//! caller is expected to issue `generate-ca-crt` + `commit-ca-crt` to retire
-//! the legacy CA at its earliest convenience.
+//! must NOT persist them in the SE-encrypted store. They are used **run-only**
+//! and **only when the SE-encrypted store is empty** — once a `commit-ca-crt`
+//! lands, the SE-backed CA wins on every subsequent boot regardless of what
+//! the container forwards (see [`load_or_create_active_ca`] for precedence
+//! details). The caller is expected to issue `generate-ca-crt` +
+//! `commit-ca-crt` to retire the legacy CA at its earliest convenience.
 //!
 //! ## Module shape
 //!
@@ -78,20 +79,45 @@ const CA_ORG_NAME: &str = "Aikido Endpoint L4 Proxy Root CA";
 
 /// Boot-path resolver for the active MITM CA.
 ///
+/// Precedence is **SE-backed first, legacy second**: as soon as a
+/// `commit-ca-crt` lands an SE-encrypted CA, every subsequent boot picks
+/// it up regardless of what the container forwards in `legacy_pems`. That
+/// keeps a successful commit durable even if the container's best-effort
+/// legacy-keychain cleanup later fails — the legacy entry becomes dead
+/// weight, never re-promoted.
+///
 /// `legacy_pems` carries `(cert_pem, key_pem)` forwarded through the opaque
-/// config by the container app for the graceful-migration period. When set,
-/// those PEMs are used **for this run only** and are *not* written to the
-/// SE-encrypted system keychain — they are considered polluted, and the
-/// caller is expected to rotate them out via the XPC commands.
+/// config by the container app for the graceful-migration period. They are
+/// used **only** when the SE-encrypted system keychain is empty, **for the
+/// run only**, and are *never* written to the SE store.
 ///
-/// In all other cases the SE-encrypted system keychain is the source of
-/// truth: the existing CA is loaded, or — on first boot / after
-/// `delete-ca-crt` — a fresh CA is minted and persisted.
+/// On first boot (or after `delete-ca-crt`) with no legacy material, a fresh
+/// CA is minted and persisted via Secure Enclave.
 ///
-/// Hard-errors when the host hardware does not expose a usable Secure Enclave.
+/// Hard-errors when the host hardware does not expose a usable Secure
+/// Enclave **and** there is nothing to load — i.e. when we'd actually need
+/// to mint and persist. The legacy-passthrough fallback is the one
+/// deliberate exception: an existing graceful-migration install on
+/// SE-less hardware keeps working until it can be rotated out elsewhere.
 pub(crate) fn load_or_create_active_ca(
     legacy_pems: Option<(&str, &str)>,
 ) -> Result<ActiveCa, BoxError> {
+    // SE-backed CA wins whenever it exists, no matter what the container
+    // forwarded. Only probe the system keychain when SE is actually
+    // available — without SE we can't decrypt anything stored there.
+    if se_is_available()
+        && let Some((cert, key)) = try_load_se_encrypted_ca()?
+    {
+        tracing::info!(
+            cert_service = CA_SERVICE_CERT,
+            key_service = CA_SERVICE_KEY,
+            se_service = SE_SERVICE_KEY,
+            account = CA_ACCOUNT,
+            "loaded MITM CA from SE-encrypted system keychain"
+        );
+        return active_ca_from_pair(cert, key);
+    }
+
     if let Some((cert_pem, key_pem)) = legacy_pems {
         tracing::warn!(
             "DEPRECATED: using legacy MITM CA forwarded by the container app via opaque \
@@ -107,17 +133,6 @@ pub(crate) fn load_or_create_active_ca(
     }
 
     require_secure_enclave()?;
-
-    if let Some((cert, key)) = try_load_se_encrypted_ca()? {
-        tracing::info!(
-            cert_service = CA_SERVICE_CERT,
-            key_service = CA_SERVICE_KEY,
-            se_service = SE_SERVICE_KEY,
-            account = CA_ACCOUNT,
-            "loaded MITM CA from SE-encrypted system keychain"
-        );
-        return active_ca_from_pair(cert, key);
-    }
 
     tracing::info!(
         "no MITM CA found in SE-encrypted system keychain; minting + persisting a fresh one"

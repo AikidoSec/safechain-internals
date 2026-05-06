@@ -892,29 +892,65 @@ private final class TransparentProxyHostCLI {
     }
 
     private func deleteSystemKeychainCAEntries() -> DeleteOutcome {
-        // The System Keychain (`/Library/Keychains/System.keychain`) is the
-        // file-based keychain that the sysext writes to. Removing items from
-        // it requires either root privileges or the user authorizing an
-        // admin auth dialog. The Aikido CLI is expected to run as root in
-        // the daemon-driven flow, so we keep it as a plain `SecItemDelete`
-        // and surface the OSStatus to the caller if it fails.
+        // We must hit the file-based System Keychain
+        // (`/Library/Keychains/System.keychain`), which is what the sysext
+        // writes to via `SecKeychainAddGenericPassword`. The modern
+        // `SecItem*` APIs default to the user's keychains and ignore that
+        // file even with `kSecUseDataProtectionKeychain: false`, so we have
+        // to drive the same legacy `SecKeychain*` family rama uses on the
+        // sysext side. Writing/deleting there requires root privileges (or
+        // an admin auth prompt); the Aikido CLI runs as root in the
+        // daemon-driven flow.
+        var keychain: SecKeychain?
+        let openStatus = "/Library/Keychains/System.keychain".withCString { path in
+            SecKeychainOpen(path, &keychain)
+        }
+        guard openStatus == errSecSuccess, let keychain else {
+            return .partial([
+                "failed to open /Library/Keychains/System.keychain: OSStatus \(openStatus)"
+            ])
+        }
+
         var warnings: [String] = []
         for service in Self.systemCAAllServices {
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: service,
-                kSecAttrAccount as String: Self.systemCAAccount,
-                kSecUseDataProtectionKeychain as String: false,
-            ]
-            let status = SecItemDelete(query as CFDictionary)
-            switch status {
+            let serviceBytes = Array(service.utf8)
+            let accountBytes = Array(Self.systemCAAccount.utf8)
+            var item: SecKeychainItem?
+
+            let findStatus = serviceBytes.withUnsafeBufferPointer { svc in
+                accountBytes.withUnsafeBufferPointer { acc in
+                    SecKeychainFindGenericPassword(
+                        keychain,
+                        UInt32(svc.count),
+                        svc.baseAddress,
+                        UInt32(acc.count),
+                        acc.baseAddress,
+                        nil,
+                        nil,
+                        &item
+                    )
+                }
+            }
+
+            switch findStatus {
             case errSecSuccess:
-                log("deleted System Keychain entry: \(service)")
+                guard let item else {
+                    continue
+                }
+                let deleteStatus = SecKeychainItemDelete(item)
+                if deleteStatus == errSecSuccess {
+                    log("deleted System Keychain entry: \(service)")
+                } else {
+                    let msg =
+                        "failed to delete System Keychain entry \(service): OSStatus \(deleteStatus)"
+                    log(msg)
+                    warnings.append(msg)
+                }
             case errSecItemNotFound:
                 continue
             default:
                 let msg =
-                    "failed to delete System Keychain entry \(service): OSStatus \(status)"
+                    "failed to look up System Keychain entry \(service): OSStatus \(findStatus)"
                 log(msg)
                 warnings.append(msg)
             }
