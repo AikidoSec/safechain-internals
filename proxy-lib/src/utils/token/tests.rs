@@ -86,3 +86,10 @@ fn test_add_request_headers() {
     );
     assert_eq!(req.headers().get("x-device-id").unwrap(), "abc123");
 }
+
+#[test]
+fn test_device_id_accessor() {
+    let identity: AgentIdentity =
+        serde_json::from_str(r#"{"token":"tok","device_id":"dev-42"}"#).unwrap();
+    assert_eq!(identity.device_id(), "dev-42");
+}
