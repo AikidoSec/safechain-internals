@@ -263,11 +263,7 @@ async fn test_pypi_https_package_new_package_blocked() {
 #[tokio::test]
 #[tracing_test::traced_test]
 async fn test_pypi_https_simple_index_min_package_age_rewrite() {
-    // Regression coverage for the dispatch in `RulePyPI::evaluate_response`:
-    // a real package's Simple HTML index must still flow through the min-age
-    // rewriter (not the test-command synthesis short-circuit). We expect the
-    // recent `FRESH_PYPI_PACKAGE_VERSION` link to be stripped while the older
-    // `0.9.0` link survives.
+    // Coverage for simple HTML index must
     let runtime = e2e::runtime::get().await;
     let client = runtime.client_with_http_proxy().await;
 
