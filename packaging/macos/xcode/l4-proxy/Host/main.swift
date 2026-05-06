@@ -412,7 +412,7 @@ private final class TransparentProxyHostCLI {
         print("vpn-allowed: \(allowed)")
     }
 
-    // MARK: - NE machinery (unchanged)
+    // MARK: - NE machinery
 
     private func loadManagers() throws -> [NETransparentProxyManager] {
         try waitForResult("load transparent proxy managers") { completion in

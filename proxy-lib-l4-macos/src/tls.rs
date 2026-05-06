@@ -23,8 +23,8 @@
 //!
 //! Older container builds generated the CA themselves and forwarded the
 //! plaintext PEMs through the opaque config. Those PEMs are considered
-//! polluted (they passed through a less-trusted boundary) and we must NOT
-//! persist them in the SE-encrypted store. When [`load_or_create_active_ca`]
+//! polluted (they passed through an insecure plain-text boundary) and we
+//! must NOT persist them in the SE-encrypted store. When [`load_or_create_active_ca`]
 //! receives `legacy_pems`, it parses + uses them for this run only, leaves
 //! the SE-encrypted slots untouched, and emits a deprecation warning. The
 //! caller is expected to issue `generate-ca-crt` + `commit-ca-crt` to retire

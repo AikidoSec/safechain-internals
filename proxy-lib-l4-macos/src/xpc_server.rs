@@ -99,30 +99,26 @@ impl CaCommandReply {
 /// listener is **not** bound, which means `generate-ca-crt` /
 /// `commit-ca-crt` calls from the container will fail loudly.
 pub(crate) fn spawn(
-    service_name: Option<String>,
-    container_signing_identifier: Option<String>,
-    container_team_identifier: Option<String>,
+    service_name: Option<ArcStr>,
+    container_signing_identifier: Option<ArcStr>,
+    container_team_identifier: Option<ArcStr>,
     state: SharedCaState,
     executor: Executor,
 ) -> Result<(), BoxError> {
-    let service_name = service_name
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| -> BoxError {
-            tracing::error!(
-                "xpc server: `xpc_service_name` is missing or empty in opaque engine config; \
+    let service_name =
+        service_name
+            .filter(|s| !s.trim().is_empty())
+            .ok_or_else(|| -> BoxError {
+                tracing::error!(
+                    "xpc server: `xpc_service_name` is missing or empty in opaque engine config; \
                  refusing to bind XPC listener (fail-closed)."
-            );
-            OpaqueError::from_static_str("xpc server: missing xpc_service_name (fail-closed)")
-                .into_box_error()
-        })?;
+                );
+                OpaqueError::from_static_str("xpc server: missing xpc_service_name (fail-closed)")
+                    .into_box_error()
+            })?;
 
     let signing_identifier = container_signing_identifier
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
+        .filter(|s| !s.trim().is_empty())
         .ok_or_else(|| -> BoxError {
             tracing::error!(
                 "xpc server: `container_signing_identifier` is missing or empty in opaque \
@@ -136,9 +132,7 @@ pub(crate) fn spawn(
         })?;
 
     let team_identifier = container_team_identifier
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
+        .filter(|s| !s.trim().is_empty())
         .ok_or_else(|| -> BoxError {
             tracing::error!(
                 "xpc server: `container_team_identifier` is missing or empty in opaque \
@@ -150,12 +144,13 @@ pub(crate) fn spawn(
             .into_box_error()
         })?;
 
-    let requirement = build_peer_code_signing_requirement(signing_identifier, team_identifier)?;
+    let requirement =
+        build_peer_code_signing_requirement(signing_identifier.as_str(), team_identifier.as_str())?;
 
     tracing::info!(
         %service_name,
-        signing_identifier,
-        team_identifier,
+        %signing_identifier,
+        %team_identifier,
         "xpc server: start config+spawn (peer pinned to exact team + bundle identifier)"
     );
 

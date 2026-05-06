@@ -14,7 +14,7 @@ crate-type = ["staticlib"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 arc-swap = { workspace = true }
-base64 = "0.22"
+base64 = { workspace = true }
 jemallocator = { workspace = true }
 moka = { workspace = true }
 rustls-platform-verifier = { workspace = true }

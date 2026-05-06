@@ -19,6 +19,7 @@ rust-version = "1.93"
 [workspace.dependencies]
 apple-native-keyring-store = "0.2"
 arc-swap = "1.9"
+base64 = "0.22"
 bindgen = "0.71"
 clap = { version = "4.6" }
 humantime = "2.3"

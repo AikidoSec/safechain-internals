@@ -3,6 +3,7 @@ use std::borrow::Cow;
 use rama::{
     error::{BoxError, ErrorContext as _},
     http::Uri,
+    utils::str::arcstr::ArcStr,
 };
 use safechain_proxy_lib::utils::token::AgentIdentity;
 use serde::{Deserialize, Deserializer};
@@ -71,16 +72,16 @@ pub struct ProxyConfig {
     /// `NEMachServiceName` exposed by the sysext's `Info.plist`. When
     /// present, the sysext binds an XPC listener under this name so the
     /// container app can drive `generate-ca-crt` / `commit-ca-crt`.
-    pub xpc_service_name: Option<String>,
+    pub xpc_service_name: Option<ArcStr>,
 
     /// Bundle identifier of the container app. Used to pin the XPC
     /// listener to this exact code-signed application.
-    pub container_signing_identifier: Option<String>,
+    pub container_signing_identifier: Option<ArcStr>,
 
     /// Apple Developer team identifier of the container app. Used with
     /// [`ProxyConfig::container_signing_identifier`] to build the exact
     /// XPC code-signing requirement.
-    pub container_team_identifier: Option<String>,
+    pub container_team_identifier: Option<ArcStr>,
 
     /// Disables the firewall, this is used for the first time the proxy starts and certs are not trusted yet
     ///  The daemon will first start the proxy in this mode to obtain the cert and make it trusted.
