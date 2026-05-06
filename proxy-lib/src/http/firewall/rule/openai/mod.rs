@@ -2,10 +2,7 @@ use std::fmt;
 
 use crate::{
     http::firewall::{
-        domain_matcher::DomainMatcher,
-        events::AiUsageEvent,
-        notifier::EventNotifier,
-        rule::Rule,
+        domain_matcher::DomainMatcher, events::AiUsageEvent, notifier::EventNotifier, rule::Rule,
     },
     utils::time::SystemTimestampMilliseconds,
 };

@@ -50,4 +50,3 @@ fn test_parse_model_wrong_type() {
     let body = br#"{"model":42}"#;
     assert!(parse_model_field(body).is_none());
 }
-
