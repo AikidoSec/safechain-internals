@@ -91,6 +91,28 @@ jobs:
 
       - uses: ilammy/setup-nasm@72793074d3c8cdda771dba85f6deafe00623038b
 
+      - name: Install Visual Studio 2022 Build Tools (C++)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          # Suppresses the line-by-line download progress bar (animated, ugly in CI logs).
+          $ProgressPreference = "SilentlyContinue"
+          $installerUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
+          $installerPath = Join-Path $env:RUNNER_TEMP "vs_buildtools.exe"
+          Write-Host "Downloading VS 2022 Build Tools installer..."
+          Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+          Write-Host "Running VS 2022 Build Tools installer (quiet)..."
+          $proc = Start-Process -FilePath $installerPath -Wait -PassThru -ArgumentList @(
+            '--quiet', '--wait', '--norestart', '--nocache',
+            '--add', 'Microsoft.VisualStudio.Workload.VCTools',
+            '--includeRecommended'
+          )
+          # 0 = success, 3010 = success but reboot pending; both are fine for our use.
+          if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+            throw "VS 2022 Build Tools installer exited with code $($proc.ExitCode)"
+          }
+          Write-Host "VS 2022 Build Tools installed."
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561
         with:
@@ -143,6 +165,28 @@ jobs:
           fi
 
       - uses: ilammy/setup-nasm@72793074d3c8cdda771dba85f6deafe00623038b
+
+      - name: Install Visual Studio 2022 Build Tools (C++)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          # Suppresses the line-by-line download progress bar (animated, ugly in CI logs).
+          $ProgressPreference = "SilentlyContinue"
+          $installerUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
+          $installerPath = Join-Path $env:RUNNER_TEMP "vs_buildtools.exe"
+          Write-Host "Downloading VS 2022 Build Tools installer..."
+          Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+          Write-Host "Running VS 2022 Build Tools installer (quiet)..."
+          $proc = Start-Process -FilePath $installerPath -Wait -PassThru -ArgumentList @(
+            '--quiet', '--wait', '--norestart', '--nocache',
+            '--add', 'Microsoft.VisualStudio.Workload.VCTools',
+            '--includeRecommended'
+          )
+          # 0 = success, 3010 = success but reboot pending; both are fine for our use.
+          if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+            throw "VS 2022 Build Tools installer exited with code $($proc.ExitCode)"
+          }
+          Write-Host "VS 2022 Build Tools installed."
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561
