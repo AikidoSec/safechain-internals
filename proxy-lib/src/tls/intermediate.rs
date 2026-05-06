@@ -30,10 +30,11 @@ use crate::{
     utils::token::AgentIdentity,
 };
 
+mod storage;
+
+use storage::{DataProxyIntCACrt, load_crt_from_secret_storage, store_crt_in_secret_storage};
+
 const AIKIDO_SECRET_INT_CA_KEY: &str = "tls-int-ca-key";
-const AIKIDO_SECRET_INT_CA_CRT_META: &str = "tls-int-ca-crt-meta";
-const AIKIDO_SECRET_INT_CA_CRT_CHUNK_PREFIX: &str = "tls-int-ca-crt-chunk";
-const CRT_SECRET_CHUNK_SIZE_BYTES: usize = 768;
 
 const RENEWAL_THRESHOLD_SECS: u64 = 2 * 24 * 3600; // 2 days
 
@@ -54,124 +55,6 @@ impl DataProxyIntCAKey {
             DataProxyIntCAKey::V1 { fp, .. } => fp.as_slice(),
         }
     }
-}
-
-#[derive(Serialize, Deserialize)]
-enum DataProxyIntCACrt {
-    V1 { crt: Vec<u8> },
-}
-
-impl DataProxyIntCACrt {
-    fn crt_der(&self) -> &[u8] {
-        match self {
-            DataProxyIntCACrt::V1 { crt } => crt.as_slice(),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-enum DataProxyIntCACrtMeta {
-    V1 {
-        chunks: usize,
-        fp: Vec<u8>,
-        not_after_unix: i64,
-    },
-}
-
-impl DataProxyIntCACrtMeta {
-    fn chunks(&self) -> usize {
-        match self {
-            DataProxyIntCACrtMeta::V1 { chunks, .. } => *chunks,
-        }
-    }
-
-    fn crt_fingerprint(&self) -> &[u8] {
-        match self {
-            DataProxyIntCACrtMeta::V1 { fp, .. } => fp.as_slice(),
-        }
-    }
-
-    fn not_after_unix(&self) -> i64 {
-        match self {
-            DataProxyIntCACrtMeta::V1 { not_after_unix, .. } => *not_after_unix,
-        }
-    }
-}
-
-fn crt_chunk_key(index: usize) -> String {
-    format!("{AIKIDO_SECRET_INT_CA_CRT_CHUNK_PREFIX}-{index}")
-}
-
-fn store_crt(
-    secrets: &SyncSecrets,
-    crt_data: &DataProxyIntCACrt,
-    crt_fp: &[u8],
-    not_after_unix: i64,
-) -> Result<(), BoxError> {
-    let crt_der = crt_data.crt_der();
-    let chunk_count = crt_der.len().div_ceil(CRT_SECRET_CHUNK_SIZE_BYTES);
-    if chunk_count == 0 {
-        return Err(OpaqueError::from_static_str(
-            "refusing to store empty intermediate CA crt bytes",
-        )
-        .into_box_error());
-    }
-
-    for (idx, chunk) in crt_der.chunks(CRT_SECRET_CHUNK_SIZE_BYTES).enumerate() {
-        let key = crt_chunk_key(idx);
-        secrets
-            .store_secret(&key, &chunk.to_vec())
-            .context("store int CA crt chunk")
-            .context_str_field("chunk_key", &key)?;
-    }
-
-    let meta = DataProxyIntCACrtMeta::V1 {
-        chunks: chunk_count,
-        fp: crt_fp.to_vec(),
-        not_after_unix,
-    };
-    secrets
-        .store_secret(AIKIDO_SECRET_INT_CA_CRT_META, &meta)
-        .context("store int CA crt meta")
-}
-
-fn load_crt(
-    secrets: &SyncSecrets,
-    expected_fp: &[u8],
-) -> Result<Option<(DataProxyIntCACrt, i64)>, BoxError> {
-    let Some(meta) = secrets.load_secret::<DataProxyIntCACrtMeta>(AIKIDO_SECRET_INT_CA_CRT_META)?
-    else {
-        return Ok(None);
-    };
-
-    if !meta.crt_fingerprint().eq(expected_fp) {
-        return Err(
-            OpaqueError::from_static_str("unexpected int CA crt meta fingerprint")
-                .context_hex_field("expected_fingerprint", expected_fp.to_vec())
-                .context_hex_field("found_fingerprint", meta.crt_fingerprint().to_vec()),
-        );
-    }
-
-    let not_after_unix = meta.not_after_unix();
-
-    let mut crt_der = Vec::new();
-    for idx in 0..meta.chunks() {
-        let key = crt_chunk_key(idx);
-        let Some(chunk) = secrets
-            .load_secret::<Vec<u8>>(&key)
-            .context("load int CA crt chunk")
-            .context_str_field("chunk_key", &key)?
-        else {
-            return Err(OpaqueError::from_static_str("missing int CA crt chunk")
-                .context_str_field("chunk_key", &key));
-        };
-        crt_der.extend_from_slice(&chunk);
-    }
-
-    Ok(Some((
-        DataProxyIntCACrt::V1 { crt: crt_der },
-        not_after_unix,
-    )))
 }
 
 fn needs_renewal(not_after_unix: i64) -> bool {
@@ -313,7 +196,7 @@ where
     if let Some(key_data) = secrets.load_secret::<DataProxyIntCAKey>(AIKIDO_SECRET_INT_CA_KEY)? {
         tracing::debug!("int CA key found — loading matching cert from secret storage");
 
-        match load_crt(secrets, key_data.crt_fingerprint())
+        match load_crt_from_secret_storage(secrets, key_data.crt_fingerprint())
             .context("load int CA cert from secret storage")?
         {
             Some((crt_data, not_after_unix)) if !needs_renewal(not_after_unix) => {
@@ -393,7 +276,7 @@ where
         .store_secret(AIKIDO_SECRET_INT_CA_KEY, &key_data)
         .context("store int CA key in secret storage")?;
 
-    store_crt(secrets, &crt_data, &crt_fp, not_after_unix)
+    store_crt_in_secret_storage(secrets, &crt_data, &crt_fp, not_after_unix)
         .context("store int CA cert in secret storage")?;
 
     Ok(RootCaKeyPair::new(crt_x509, private_key))
