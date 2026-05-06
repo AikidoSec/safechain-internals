@@ -105,7 +105,7 @@ struct SignCsrRequest<'a> {
 
 #[derive(Deserialize)]
 struct SignCsrResponse {
-    cert: String,
+    cert_pem: String,
 }
 
 async fn fetch_signed_cert<C>(
@@ -120,7 +120,7 @@ where
     let csr_str = std::str::from_utf8(csr_pem).context("CSR PEM is valid UTF-8")?;
 
     let sign_url = format!(
-        "{}/pki/sign-csr",
+        "{}/api/endpoint_protection/callbacks/certificates/signCSR",
         aikido_url.to_string().trim_end_matches('/')
     );
     let body_str = serde_json::to_string(&SignCsrRequest { csr: csr_str })
@@ -158,7 +158,7 @@ where
     let parsed: SignCsrResponse =
         serde_json::from_str(&body).context("parse sign-csr response JSON")?;
 
-    Ok(parsed.cert.into_bytes())
+    Ok(parsed.cert_pem.into_bytes())
 }
 
 pub(super) async fn load_or_create_int_ca_key_pair<C>(
