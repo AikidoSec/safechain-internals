@@ -53,8 +53,19 @@ var (
 	pkgRefVersionRegex  = regexp.MustCompile(`<pkg-ref\b[^>]*\bversion="([^"]+)"`)
 )
 
+// Indirections so tests can substitute steps and assert that the installer is
+// never reached if any verifier returns an error.
+var (
+	runningAsRootFn           = platform.RunningAsRoot
+	downloadBinaryFn          = utils.DownloadBinary
+	verifyPackageSignatureFn  = verifyPackageSignature
+	verifyPackageGatekeeperFn = verifyPackageGatekeeper
+	verifyPackageContentsFn   = verifyPackageContents
+	installPackageDetachedFn  = installPackageDetached
+)
+
 func platformUpdateTo(ctx context.Context, version string) (err error) {
-	if !platform.RunningAsRoot() {
+	if !runningAsRootFn() {
 		return fmt.Errorf("auto-update requires root privileges")
 	}
 
@@ -76,23 +87,23 @@ func platformUpdateTo(ctx context.Context, version string) (err error) {
 	}()
 
 	log.Printf("Downloading %s from %s", pkgAssetName, url)
-	if err = utils.DownloadBinary(ctx, url, pkgPath); err != nil {
+	if err = downloadBinaryFn(ctx, url, pkgPath); err != nil {
 		return fmt.Errorf("failed to download %s: %w", pkgAssetName, err)
 	}
 
-	if err = verifyPackageSignature(ctx, pkgPath); err != nil {
+	if err = verifyPackageSignatureFn(ctx, pkgPath); err != nil {
 		return fmt.Errorf("signature verification failed: %w", err)
 	}
 
-	if err = verifyPackageGatekeeper(ctx, pkgPath); err != nil {
+	if err = verifyPackageGatekeeperFn(ctx, pkgPath); err != nil {
 		return fmt.Errorf("gatekeeper assessment failed: %w", err)
 	}
 
-	if err = verifyPackageContents(ctx, pkgPath, version); err != nil {
+	if err = verifyPackageContentsFn(ctx, pkgPath, version); err != nil {
 		return fmt.Errorf("contents verification failed: %w", err)
 	}
 
-	if err = installPackageDetached(pkgPath); err != nil {
+	if err = installPackageDetachedFn(pkgPath); err != nil {
 		return fmt.Errorf("failed to start installer: %w", err)
 	}
 
