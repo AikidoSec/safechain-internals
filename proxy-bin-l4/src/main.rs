@@ -119,7 +119,7 @@ pub struct Args {
     #[arg(long, value_name = "N", default_value_t = 262_144)]
     pub ulimit: rama::unix::utils::rlim_t,
 
-    /// Use Aikido Core KMS-backed intermediate CA instead of a local self-signed root CA.
+    /// Use Aikido Core intermediate CA instead of a local self-signed root CA.
     /// Requires a valid agent identity (token + device_id in config.json).
     #[arg(long = "use-aikido-ca", default_value_t = false)]
     pub use_aikido_ca: bool,
