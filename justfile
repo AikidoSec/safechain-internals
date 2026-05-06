@@ -306,14 +306,14 @@ windows-driver-test *ARGS:
     cargo test {{ARGS}}
 
 [working-directory: './proxy-lib-l4-windows-driver']
-windows-driver-build profile="dev" *ARGS:
+windows-driver-build profile="dev" target_arch="amd64" *ARGS:
    @cargo install cargo-wdk
    @cargo install cargo-make
-   $env:STAMPINF_VERSION=((Get-Content '..\Cargo.toml' | Select-String '^version = "([^"]+)"').Matches[0].Groups[1].Value + '.0'); cargo wdk build --profile {{profile}} {{ARGS}}
+   $env:STAMPINF_VERSION=((Get-Content '..\Cargo.toml' | Select-String '^version = "([^"]+)"').Matches[0].Groups[1].Value + '.0'); cargo wdk build --profile {{profile}} --target-arch {{target_arch}} {{ARGS}}
 
 [working-directory: './proxy-lib-l4-windows-driver']
-windows-driver-build-verify profile="dev" *ARGS:
-    just windows-driver-build {{profile}} --verify-signature {{ARGS}}
+windows-driver-build-verify profile="dev" target_arch="amd64" *ARGS:
+    just windows-driver-build {{profile}} {{target_arch}} --verify-signature {{ARGS}}
 
 run-windows-driver-cli *ARGS:
     cargo run \

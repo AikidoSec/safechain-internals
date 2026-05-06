@@ -11,6 +11,14 @@ param(
     [ValidateSet("debug", "release")]
     [string]$Profile = "debug",
 
+    # Target architecture used for the cargo build. The product ships x64
+    # only, so we default to amd64 unconditionally - this also matches how
+    # build-driver.ps1 invokes `cargo wdk build --target-arch amd64`, which
+    # places the .sys under target\<rust-triple>\<profile>\.
+    [Parameter(Mandatory = $false)]
+    [ValidateSet("amd64", "arm64")]
+    [string]$TargetArch = "amd64",
+
     [Parameter(Mandatory = $false)]
     [string]$DriverSysPath,
 
@@ -111,7 +119,11 @@ $ErrorActionPreference = "Stop"
 $ProjectDir = (Get-Item (Split-Path -Parent $MyInvocation.MyCommand.Path)).Parent.Parent.FullName
 $DriverDir = Join-Path $ProjectDir "proxy-lib-l4-windows-driver"
 $WorkspaceCargoToml = Join-Path $ProjectDir "Cargo.toml"
-$DefaultDriverSysPath = Join-Path $ProjectDir "target\$Profile\safechain_lib_l4_proxy_windows_driver.sys"
+$RustTriple = switch ($TargetArch) {
+    "amd64" { "x86_64-pc-windows-msvc" }
+    "arm64" { "aarch64-pc-windows-msvc" }
+}
+$DefaultDriverSysPath = Join-Path $ProjectDir "target\$RustTriple\$Profile\safechain_lib_l4_proxy_windows_driver.sys"
 $TemplatePath = Join-Path $DriverDir "safechain_lib_l4_proxy_windows_driver.inx"
 $OutputDir = if ($OutputDir) {
     [System.IO.Path]::GetFullPath($OutputDir)

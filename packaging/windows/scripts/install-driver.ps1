@@ -83,8 +83,20 @@ if (-not (Test-Path $CatPath)) {
 }
 
 Write-Host "Trusting bundled driver code-signing certificate ($CerPath)..."
-Import-Certificate -FilePath $CerPath -CertStoreLocation "Cert:\LocalMachine\Root" -ErrorAction SilentlyContinue | Out-Null
-Import-Certificate -FilePath $CerPath -CertStoreLocation "Cert:\LocalMachine\TrustedPublisher" -ErrorAction SilentlyContinue | Out-Null
+# Use certutil instead of Import-Certificate: the latter throws a terminating
+# UnauthorizedAccessException on some hardened/virtualized hosts (e.g. Parallels
+# ARM64 Windows) that -ErrorAction SilentlyContinue cannot suppress, which
+# aborts the whole MSI custom action. certutil exits non-zero on failure
+# without throwing, so we can continue and let pnputil decide whether the
+# trust state is sufficient.
+& certutil.exe -f -addstore Root $CerPath
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "certutil -addstore Root returned $LASTEXITCODE; assuming cert is already trusted or test-signing covers it."
+}
+& certutil.exe -f -addstore TrustedPublisher $CerPath
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "certutil -addstore TrustedPublisher returned $LASTEXITCODE; continuing."
+}
 
 Write-Host "Installing driver package via pnputil ($InfPath)..."
 & pnputil.exe /add-driver $InfPath /install

@@ -16,6 +16,15 @@ param(
     [ValidateSet("dev", "release")]
     [string]$Profile = "dev",
 
+    # Target architecture for the driver build. The product ships x64 only
+    # (the .inx is NTAMD64-only and the MSI is built with -arch x64), so we
+    # default to amd64 unconditionally. This makes the driver step succeed
+    # on ARM64 build hosts (e.g. Apple Silicon under Parallels) without
+    # producing an unusable ARM64 .sys.
+    [Parameter(Mandatory = $false)]
+    [ValidateSet("amd64", "arm64")]
+    [string]$TargetArch = "amd64",
+
     [Parameter(Mandatory = $false)]
     [string]$BundleDir = ".\bin\driver",
 
@@ -41,6 +50,12 @@ $WorkspaceCargoToml = Join-Path $ProjectDir "Cargo.toml"
 $StageProfile = if ($Profile -eq "release") { "release" } else { "debug" }
 $StagingDir = Join-Path $ProjectDir "dist\windows-driver-package\$StageProfile"
 
+$RustTriple = switch ($TargetArch) {
+    "amd64" { "x86_64-pc-windows-msvc" }
+    "arm64" { "aarch64-pc-windows-msvc" }
+}
+$DriverSysPath = Join-Path $ProjectDir "target\$RustTriple\$StageProfile\safechain_lib_l4_proxy_windows_driver.sys"
+
 $CreateCertScript = Join-Path $ProjectDir "packaging\windows\create-test-cert.ps1"
 $StageScript = Join-Path $ProjectDir "packaging\windows\stage-driver-package.ps1"
 
@@ -56,9 +71,11 @@ $BundledCertFileName = "safechain-driver.cer"
 Write-Host "==> Building Windows L4 driver and staging MSI bundle" -ForegroundColor Cyan
 Write-Host "  cargo profile  : $Profile"
 Write-Host "  stage profile  : $StageProfile"
+Write-Host "  target arch    : $TargetArch ($RustTriple)"
 Write-Host "  cert subject   : $CertSubject"
 Write-Host "  cert export    : $CertExportDir"
 Write-Host "  staging dir    : $StagingDir"
+Write-Host "  driver .sys    : $DriverSysPath"
 Write-Host "  bundle output  : $BundleDir"
 
 if (-not (Test-Path $CreateCertScript)) { throw "Missing helper: $CreateCertScript" }
@@ -83,7 +100,7 @@ if (-not $SkipBuild) {
     if ($LASTEXITCODE -ne 0) { throw "cargo install cargo-wdk failed with exit code $LASTEXITCODE" }
 
     Write-Host ""
-    Write-Host "==> Building driver via 'cargo wdk build --profile $Profile'" -ForegroundColor Cyan
+    Write-Host "==> Building driver via 'cargo wdk build --profile $Profile --target-arch $TargetArch'" -ForegroundColor Cyan
 
     $versionMatch = Select-String -Path $WorkspaceCargoToml -Pattern '^\s*version = "([^"]+)"' | Select-Object -First 1
     if (-not $versionMatch) { throw "Could not determine workspace version from $WorkspaceCargoToml" }
@@ -92,7 +109,7 @@ if (-not $SkipBuild) {
 
     Push-Location $DriverDir
     try {
-        & cargo wdk build --profile $Profile
+        & cargo wdk build --profile $Profile --target-arch $TargetArch
         if ($LASTEXITCODE -ne 0) { throw "cargo wdk build failed with exit code $LASTEXITCODE" }
     } finally {
         Pop-Location
@@ -103,6 +120,8 @@ Write-Host ""
 Write-Host "==> Staging driver package + signing catalog" -ForegroundColor Cyan
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StageScript `
     -Profile $StageProfile `
+    -TargetArch $TargetArch `
+    -DriverSysPath $DriverSysPath `
     -CertSubject $CertSubject `
     -NoTimestamp
 if ($LASTEXITCODE -ne 0) { throw "stage-driver-package.ps1 failed with exit code $LASTEXITCODE" }

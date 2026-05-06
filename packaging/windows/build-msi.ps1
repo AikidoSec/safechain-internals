@@ -44,7 +44,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if ($Local) {
+# `-Local` and `-IncludeDriver` are equivalent: there is no realistic way to
+# obtain a signed driver bundle locally without source-building, and CI never
+# packages the driver. Treat either flag as "do a full source rebuild and
+# include the driver".
+if ($Local -or $IncludeDriver) {
+    $Local = $true
     $IncludeDriver = $true
 }
 
@@ -347,6 +352,7 @@ Install the matching component, e.g. on ARM64:
     Invoke-Tool "Building + staging + self-signing kernel driver" {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $BuildDriverScript `
             -Profile dev `
+            -TargetArch amd64 `
             -BundleDir (Join-Path $BinDir "driver") `
             -CertSubject $CertSubject
     }
