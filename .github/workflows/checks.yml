@@ -30,6 +30,28 @@ jobs:
         with:
           toolchain: stable
           components: clippy, rustfmt
+      - name: Install Visual Studio 2022 Build Tools (C++)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          # Suppresses the line-by-line download progress bar (animated, ugly in CI logs).
+          $ProgressPreference = "SilentlyContinue"
+          $installerUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
+          $installerPath = Join-Path $env:RUNNER_TEMP "vs_buildtools.exe"
+          Write-Host "Downloading VS 2022 Build Tools installer..."
+          Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+          Write-Host "Running VS 2022 Build Tools installer (quiet)..."
+          $proc = Start-Process -FilePath $installerPath -Wait -PassThru -ArgumentList @(
+            '--quiet', '--wait', '--norestart', '--nocache',
+            '--add', 'Microsoft.VisualStudio.Workload.VCTools',
+            '--includeRecommended'
+          )
+          # 0 = success, 3010 = success but reboot pending; both are fine for our use.
+          if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+            throw "VS 2022 Build Tools installer exited with code $($proc.ExitCode)"
+          }
+          Write-Host "VS 2022 Build Tools installed."
       - name: Install Windows SDK + WDK
         if: runner.os == 'Windows'
         shell: powershell
