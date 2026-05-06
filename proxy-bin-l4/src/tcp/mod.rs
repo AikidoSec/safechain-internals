@@ -153,9 +153,7 @@ async fn try_new_tcp_service(
 
     let root_ca_key_pair = if use_aikido_ca {
         let identity = agent_identity.as_ref().ok_or_else(|| {
-            OpaqueError::from_static_str(
-                "agent identity required when --use-aikido-ca is set",
-            )
+            OpaqueError::from_static_str("agent identity required when --use-aikido-ca is set")
         })?;
         let http_client = new_http_client_for_internal(Executor::graceful(guard.clone()))
             .context("create http client for intermediate CA signing")?;

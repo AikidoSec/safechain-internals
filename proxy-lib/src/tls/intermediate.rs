@@ -1,12 +1,12 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use rama::http::Uri;
 use rama::{
     Service,
     error::{BoxError, ErrorContext as _, ErrorExt as _, extra::OpaqueError},
     http::{
-        Body, Method, Request, Response,
+        Body, BodyExtractExt as _, Method, Request, Response,
         header::{CONTENT_TYPE, HeaderValue},
-        BodyExtractExt as _,
     },
     telemetry::tracing,
     tls::boring::core::{
@@ -22,7 +22,6 @@ use rama::{
         },
     },
 };
-use rama::http::Uri;
 use serde::{Deserialize, Serialize};
 
 use super::RootCaKeyPair;
@@ -146,11 +145,11 @@ fn load_crt(
     };
 
     if !meta.crt_fingerprint().eq(expected_fp) {
-        return Err(OpaqueError::from_static_str(
-            "unexpected int CA crt meta fingerprint",
-        )
-        .context_hex_field("expected_fingerprint", expected_fp.to_vec())
-        .context_hex_field("found_fingerprint", meta.crt_fingerprint().to_vec()));
+        return Err(
+            OpaqueError::from_static_str("unexpected int CA crt meta fingerprint")
+                .context_hex_field("expected_fingerprint", expected_fp.to_vec())
+                .context_hex_field("found_fingerprint", meta.crt_fingerprint().to_vec()),
+        );
     }
 
     let not_after_unix = meta.not_after_unix();
@@ -169,7 +168,10 @@ fn load_crt(
         crt_der.extend_from_slice(&chunk);
     }
 
-    Ok(Some((DataProxyIntCACrt::V1 { crt: crt_der }, not_after_unix)))
+    Ok(Some((
+        DataProxyIntCACrt::V1 { crt: crt_der },
+        not_after_unix,
+    )))
 }
 
 fn needs_renewal(not_after_unix: i64) -> bool {
@@ -180,13 +182,14 @@ fn needs_renewal(not_after_unix: i64) -> bool {
 
 fn asn1_time_to_unix(t: &rama::tls::boring::core::asn1::Asn1TimeRef) -> Result<i64, BoxError> {
     let epoch = Asn1Time::from_unix(0).context("create unix epoch Asn1Time")?;
-    let diff = epoch.diff(t).context("compute diff from epoch to not_after")?;
+    let diff = epoch
+        .diff(t)
+        .context("compute diff from epoch to not_after")?;
     Ok(diff.days as i64 * 86400 + diff.secs as i64)
 }
 
 fn generate_ec_p256_key() -> Result<PKey<Private>, BoxError> {
-    let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)
-        .context("create EC P-256 group")?;
+    let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).context("create EC P-256 group")?;
     let ec_key = EcKey::generate(&group).context("generate EC P-256 key")?;
     PKey::from_ec_key(ec_key).context("wrap EC key as PKey")
 }
@@ -258,16 +261,13 @@ where
         "{}/pki/sign-csr",
         aikido_url.to_string().trim_end_matches('/')
     );
-    let body_str =
-        serde_json::to_string(&SignCsrRequest { csr: csr_str }).context("serialize sign-csr body")?;
+    let body_str = serde_json::to_string(&SignCsrRequest { csr: csr_str })
+        .context("serialize sign-csr body")?;
 
     let mut req = Request::builder()
         .method(Method::POST)
         .uri(sign_url.as_str())
-        .header(
-            CONTENT_TYPE,
-            HeaderValue::from_static("application/json"),
-        )
+        .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
         .body(Body::from(body_str))
         .context("build sign-csr HTTP request")?;
 
@@ -289,7 +289,10 @@ where
             .into_box_error());
     }
 
-    let body = resp.try_into_string().await.context("read sign-csr response body")?;
+    let body = resp
+        .try_into_string()
+        .await
+        .context("read sign-csr response body")?;
     let parsed: SignCsrResponse =
         serde_json::from_str(&body).context("parse sign-csr response JSON")?;
 
@@ -307,9 +310,7 @@ where
     C: Service<Request, Output = Response, Error = OpaqueError>,
 {
     // Try to load existing key + cert
-    if let Some(key_data) =
-        secrets.load_secret::<DataProxyIntCAKey>(AIKIDO_SECRET_INT_CA_KEY)?
-    {
+    if let Some(key_data) = secrets.load_secret::<DataProxyIntCAKey>(AIKIDO_SECRET_INT_CA_KEY)? {
         tracing::debug!("int CA key found — loading matching cert from secret storage");
 
         match load_crt(secrets, key_data.crt_fingerprint())
@@ -318,8 +319,8 @@ where
             Some((crt_data, not_after_unix)) if !needs_renewal(not_after_unix) => {
                 tracing::debug!("int CA cert is valid and not due for renewal, reusing");
 
-                let crt_x509 =
-                    X509::from_der(crt_data.crt_der()).context("parse stored int CA cert from DER")?;
+                let crt_x509 = X509::from_der(crt_data.crt_der())
+                    .context("parse stored int CA cert from DER")?;
                 let crt_fp = crt_x509
                     .digest(MessageDigest::sha256())
                     .context("recompute int CA cert fingerprint")?;

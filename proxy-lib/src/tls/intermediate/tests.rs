@@ -33,16 +33,10 @@ fn test_needs_renewal() {
     assert!(needs_renewal(0));
     // expires in 1 day → needs renewal (< 2 days threshold)
     let one_day = SystemTime::now() + Duration::from_secs(86400);
-    let one_day_unix = one_day
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
+    let one_day_unix = one_day.duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
     assert!(needs_renewal(one_day_unix));
     // expires in 3 days → does not need renewal
     let three_days = SystemTime::now() + Duration::from_secs(3 * 86400);
-    let three_days_unix = three_days
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
+    let three_days_unix = three_days.duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
     assert!(!needs_renewal(three_days_unix));
 }

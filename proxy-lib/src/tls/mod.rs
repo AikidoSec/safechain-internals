@@ -27,8 +27,8 @@ use crate::{
     utils::token::AgentIdentity,
 };
 
-pub mod mitm_relay_policy;
 mod intermediate;
+pub mod mitm_relay_policy;
 mod root;
 
 #[derive(Clone)]
