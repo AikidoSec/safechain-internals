@@ -3,6 +3,7 @@ use std::fmt;
 use rama::{
     Service,
     error::{BoxError, ErrorContext as _, extra::OpaqueError},
+    extensions::ExtensionsRef as _,
     graceful::ShutdownGuard,
     http::{Request, Response, Uri},
     net::address::Domain,
@@ -14,10 +15,13 @@ use crate::{
     endpoint_protection::{
         EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
     },
-    http::firewall::{
-        domain_matcher::DomainMatcher,
-        events::{Artifact, BlockReason},
-        notifier::EventNotifier,
+    http::{
+        RequestMetaUri,
+        firewall::{
+            domain_matcher::DomainMatcher,
+            events::{Artifact, BlockReason},
+            notifier::EventNotifier,
+        },
     },
     package::{
         malware_list::RemoteMalwareList, name_formatter::LowerCasePackageName,
@@ -37,6 +41,9 @@ use self::min_package_age::MinPackageAgePyPI;
 
 mod parser;
 use parser::{PackageInfo, parse_package_info_from_path};
+
+mod test_packages;
+use test_packages::{is_test_package, synthesize_metadata_response};
 
 type PyPIPackageName = LowerCasePackageName;
 type PyPIRemoteMalwareList = RemoteMalwareList<PyPIPackageName>;
@@ -184,6 +191,15 @@ impl Rule for RulePyPI {
             }
         }
 
+        if is_test_package(&package_info.name) {
+            tracing::debug!(package = %package_info.name, version = ?package_info.version, "blocked PyPI test package download (synthetic test command)");
+            return Ok(RequestAction::Block(BlockedRequest::blocked(
+                req,
+                Self::blocked_artifact(package_info),
+                BlockReason::Malware,
+            )));
+        }
+
         if self.is_blocked(&package_info)? {
             tracing::debug!(package = %package_info.name, version = ?package_info.version, "blocked PyPI package download");
             return Ok(RequestAction::Block(BlockedRequest::blocked(
@@ -219,13 +235,30 @@ impl Rule for RulePyPI {
         &self,
         req: HttpRequestMatcherView<'_>,
     ) -> bool {
-        self.maybe_min_package_age.is_some()
-            && parse_package_info_from_path(req.uri.path())
-                .is_some_and(|package_info| package_info.is_metadata_request())
+        let Some(package_info) = parse_package_info_from_path(req.uri.path()) else {
+            return false;
+        };
+        if !package_info.is_metadata_request() {
+            return false;
+        }
+        // Either we have min-package-age rewriting active (which inspects every
+        // metadata response), or this is one of our sentinel test packages
+        self.maybe_min_package_age.is_some() || is_test_package(&package_info.name)
     }
 
     #[inline(always)]
     async fn evaluate_response(&self, resp: Response) -> Result<Response, BoxError> {
+        if let Some(synthetic) = resp
+            .extensions()
+            .get_ref::<RequestMetaUri>()
+            .and_then(|RequestMetaUri(uri)| synthesize_metadata_response(uri))
+        {
+            tracing::info!(
+                "PyPI test-command metadata synthesized: returning offline index for sentinel package"
+            );
+            return Ok(synthetic);
+        }
+
         match &self.maybe_min_package_age {
             Some(min_package_age) => {
                 min_package_age
