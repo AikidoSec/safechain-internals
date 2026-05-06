@@ -4,7 +4,7 @@ use arc_swap::ArcSwapOption;
 use rama::{graceful::ShutdownGuard, telemetry::tracing};
 use tokio::sync::broadcast;
 
-use super::{EcosystemConfig, EndpointConfig, RemoteEndpointConfig};
+use super::{EcosystemConfig, EndpointConfig, EndpointConfigSource};
 use crate::{
     endpoint_protection::EcosystemKey,
     package::name_formatter::{GlobSet, PackageName},
@@ -44,7 +44,7 @@ impl<K: PackageName + Hash> Clone for PolicyEvaluator<K> {
 }
 
 impl<K: PackageName + Hash> PolicyEvaluator<K> {
-    pub fn new(guard: ShutdownGuard, ecosystem: EcosystemKey, config: RemoteEndpointConfig) -> Self
+    pub fn new(guard: ShutdownGuard, ecosystem: EcosystemKey, config: EndpointConfigSource) -> Self
     where
         K: PackageName + Eq + Hash + Send + Sync + 'static,
     {
@@ -106,7 +106,7 @@ impl<K: PackageName + Hash> PolicyEvaluator<K> {
     async fn run_update_loop(
         guard: ShutdownGuard,
         ecosystem: EcosystemKey,
-        config: RemoteEndpointConfig,
+        config: EndpointConfigSource,
         cached: Arc<ArcSwapOption<TypedEcosystemConfig<K>>>,
         mut updates: broadcast::Receiver<Arc<Option<EndpointConfig>>>,
     ) where

@@ -16,7 +16,7 @@ use rama::{
 
 use crate::{
     endpoint_protection::{
-        EcosystemKey, PackagePolicyDecision, PolicyEvaluator, RemoteEndpointConfig,
+        EcosystemKey, EndpointConfigSource, PackagePolicyDecision, PolicyEvaluator,
     },
     http::firewall::{
         domain_matcher::DomainMatcher,
@@ -64,7 +64,7 @@ impl RuleOpenVsx {
         remote_malware_list_https_client: C,
         sync_storage: SyncCompactDataStorage,
         min_package_age: Option<MinPackageAgeOpenVsx>,
-        remote_endpoint_config: Option<RemoteEndpointConfig>,
+        remote_endpoint_config: Option<EndpointConfigSource>,
     ) -> Result<Self, BoxError>
     where
         C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,

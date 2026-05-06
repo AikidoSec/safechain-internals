@@ -19,6 +19,43 @@ use crate::{
 
 use super::types::{EcosystemConfig, EndpointConfig};
 
+#[derive(Clone, Debug)]
+pub enum EndpointConfigSource {
+    Remote(RemoteEndpointConfig),
+    Local(Arc<Option<EndpointConfig>>),
+}
+
+impl EndpointConfigSource {
+    pub fn current(&self) -> Arc<Option<EndpointConfig>> {
+        match self {
+            Self::Local(conf) => conf.clone(),
+            Self::Remote(conf) => conf.current(),
+        }
+    }
+
+    pub fn subscribe(
+        &self,
+    ) -> (
+        Arc<Option<EndpointConfig>>,
+        broadcast::Receiver<Arc<Option<EndpointConfig>>>,
+    ) {
+        match self {
+            Self::Remote(r) => r.subscribe(),
+            Self::Local(c) => {
+                let (tx, rx) = broadcast::channel(1);
+                drop(tx); // closed immediately; update loop exits via RecvError::Closed
+                (c.clone(), rx)
+            }
+        }
+    }
+
+    pub fn trigger_refresh(&self) {
+        if let Self::Remote(remote_config) = self {
+            remote_config.trigger_refresh();
+        }
+    }
+}
+
 pub struct RemoteEndpointConfig {
     config: RemoteResource<Option<EndpointConfig>>,
     refresh_handle: RefreshHandle,

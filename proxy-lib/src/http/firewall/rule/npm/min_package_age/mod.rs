@@ -11,32 +11,24 @@ use rama::{
 use serde_json::json;
 
 use crate::{
-    endpoint_protection::RemoteEndpointConfig,
     http::{
         KnownContentType,
         firewall::{
             events::{Artifact, MinPackageAgeEvent},
             notifier::EventNotifier,
-            rule::npm::NPM_ECOSYSTEM_KEY,
         },
         headers::make_response_uncacheable,
     },
-    utils::time::{SystemDuration, SystemTimestampMilliseconds},
+    utils::time::SystemTimestampMilliseconds,
 };
 
 pub(in crate::http::firewall) struct MinPackageAge {
     notifier: Option<EventNotifier>,
-    config: Option<RemoteEndpointConfig>,
 }
 
-const DEFAULT_MIN_PACKAGE_AGE: SystemDuration = SystemDuration::days(2);
-
 impl MinPackageAge {
-    pub(in crate::http::firewall) fn new(
-        notifier: Option<EventNotifier>,
-        config: Option<RemoteEndpointConfig>,
-    ) -> Self {
-        Self { notifier, config }
+    pub(in crate::http::firewall) fn new(notifier: Option<EventNotifier>) -> Self {
+        Self { notifier }
     }
 
     pub(super) fn modify_request_headers(&self, req: &mut Request) {
@@ -55,7 +47,11 @@ impl MinPackageAge {
         req.headers_mut().typed_insert(Accept::json());
     }
 
-    pub(super) async fn remove_new_packages(&self, resp: Response) -> Result<Response, BoxError> {
+    pub(super) async fn remove_new_packages(
+        &self,
+        resp: Response,
+        cutoff_ts: SystemTimestampMilliseconds,
+    ) -> Result<Response, BoxError> {
         if resp
             .headers()
             .typed_get::<ContentType>()
@@ -65,8 +61,6 @@ impl MinPackageAge {
         {
             return Ok(resp);
         }
-
-        let cutoff = self.get_cutoff_timestamp();
 
         let (mut parts, body) = resp.into_parts();
 
@@ -84,7 +78,7 @@ impl MinPackageAge {
             }
         };
 
-        let versions_to_remove = Self::get_versions_to_remove(&json, cutoff);
+        let versions_to_remove = Self::get_versions_to_remove(&json, cutoff_ts);
 
         if versions_to_remove.is_empty() {
             return Ok(Response::from_parts(parts, Body::from(bytes)));
@@ -220,24 +214,6 @@ impl MinPackageAge {
         } else {
             vec![]
         }
-    }
-
-    fn get_cutoff_timestamp(&self) -> SystemTimestampMilliseconds {
-        let maybe_minimum_allowed_age_timestamp = self
-            .config
-            .as_ref()
-            .and_then(|c| {
-                c.map_ecosystem_config(&NPM_ECOSYSTEM_KEY, |ecosystem_config| {
-                    ecosystem_config.minimum_allowed_age_timestamp
-                })
-            })
-            .flatten();
-
-        if let Some(timestamp) = maybe_minimum_allowed_age_timestamp {
-            return timestamp;
-        }
-
-        SystemTimestampMilliseconds::now() - DEFAULT_MIN_PACKAGE_AGE
     }
 }
 

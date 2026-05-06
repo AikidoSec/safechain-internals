@@ -45,7 +45,7 @@ mod pac;
 
 use crate::{
     endpoint_protection::{
-        RemoteEndpointConfig,
+        EndpointConfigSource, RemoteEndpointConfig,
         remote_app_passthrough_list::{PassthroughMatchContext, RemoteAppPassthroughList},
     },
     http::firewall::{
@@ -71,7 +71,7 @@ pub struct Firewall {
     notifier: Option<self::notifier::EventNotifier>,
     passthrough_list: Option<RemoteAppPassthroughList>,
     agent_identity: Option<AgentIdentity>,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
+    remote_endpoint_config: Option<EndpointConfigSource>,
 }
 
 pub struct IncomingFlowInfo<'a> {
@@ -126,7 +126,7 @@ impl Firewall {
                 )
                 .await
                 {
-                    Ok(config) => Some(config),
+                    Ok(config) => Some(EndpointConfigSource::Remote(config)),
                     Err(err) => {
                         tracing::warn!(
                             error = %err,
@@ -200,10 +200,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    Some(MinPackageAge::new(
-                        notifier.clone(),
-                        remote_endpoint_config.clone(),
-                    )),
+                    Some(MinPackageAge::new(notifier.clone())),
                     remote_endpoint_config.clone(),
                 )
                 .await
