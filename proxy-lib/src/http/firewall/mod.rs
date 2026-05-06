@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use rama::{
     Layer as _, Service,
@@ -45,7 +45,7 @@ mod pac;
 
 use crate::{
     endpoint_protection::{
-        RemoteEndpointConfig,
+        EndpointConfig, EndpointConfigSource, RemoteEndpointConfig,
         remote_app_passthrough_list::{PassthroughMatchContext, RemoteAppPassthroughList},
     },
     http::firewall::{
@@ -71,7 +71,7 @@ pub struct Firewall {
     notifier: Option<self::notifier::EventNotifier>,
     passthrough_list: Option<RemoteAppPassthroughList>,
     agent_identity: Option<AgentIdentity>,
-    remote_endpoint_config: Option<RemoteEndpointConfig>,
+    remote_endpoint_config: Option<EndpointConfigSource>,
 }
 
 pub struct IncomingFlowInfo<'a> {
@@ -109,35 +109,22 @@ impl Firewall {
         reporting_endpoint: Option<Uri>,
         agent_identity: Option<AgentIdentity>,
         aikido_url: Uri,
+        config_file: Option<PathBuf>,
     ) -> Result<Self, BoxError> {
         let layered_client = try_new_layered_client(client.clone())?;
         let notifier = new_event_notifier(guard.clone(), client, reporting_endpoint);
 
         let endpoint_config_uri = Self::endpoint_config_uri(&aikido_url)?;
-        let remote_endpoint_config = match agent_identity.as_ref() {
-            Some(identity) => {
-                match RemoteEndpointConfig::try_new(
-                    guard.clone(),
-                    endpoint_config_uri.clone(),
-                    identity.clone(),
-                    data.clone(),
-                    layered_client.clone(),
-                    notifier.clone(),
-                )
-                .await
-                {
-                    Ok(config) => Some(config),
-                    Err(err) => {
-                        tracing::warn!(
-                            error = %err,
-                            "failed to initialize endpoint config; config-based policy checks disabled"
-                        );
-                        None
-                    }
-                }
-            }
-            None => None,
-        };
+        let config_source = Self::create_config_source(
+            guard.clone(),
+            &endpoint_config_uri,
+            agent_identity.clone(),
+            data.clone(),
+            layered_client.clone(),
+            notifier.clone(),
+            config_file,
+        )
+        .await;
 
         let stored_agent_identity = agent_identity.clone();
         let passthrough_list = match agent_identity {
@@ -164,7 +151,7 @@ impl Firewall {
             None => None,
         };
 
-        let stored_endpoint_config = remote_endpoint_config.clone();
+        let stored_endpoint_config = config_source.clone();
 
         Ok(Self {
             block_rules: Arc::from([
@@ -173,7 +160,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     Some(MinPackageAgeVSCode::new(notifier.clone())),
-                    remote_endpoint_config.clone(),
+                    config_source.clone(),
                 )
                 .await
                 .context("create block rule: vscode")?
@@ -182,7 +169,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    remote_endpoint_config.clone(),
+                    config_source.clone(),
                 )
                 .await
                 .context("create block rule: nuget")?
@@ -191,7 +178,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    remote_endpoint_config.clone(),
+                    config_source.clone(),
                 )
                 .await
                 .context("create block rule: chrome")?
@@ -200,11 +187,8 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    Some(MinPackageAge::new(
-                        notifier.clone(),
-                        remote_endpoint_config.clone(),
-                    )),
-                    remote_endpoint_config.clone(),
+                    Some(MinPackageAge::new(notifier.clone())),
+                    config_source.clone(),
                 )
                 .await
                 .context("create block rule: npm")?
@@ -214,7 +198,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     notifier.clone(),
-                    remote_endpoint_config.clone(),
+                    config_source.clone(),
                 )
                 .await
                 .context("create block rule: pypi")?
@@ -223,7 +207,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    remote_endpoint_config.clone(),
+                    config_source.clone(),
                 )
                 .await
                 .context("create block rule: maven")?
@@ -233,7 +217,7 @@ impl Firewall {
                     layered_client.clone(),
                     data.clone(),
                     Some(MinPackageAgeOpenVsx::new(notifier.clone())),
-                    remote_endpoint_config.clone(),
+                    config_source.clone(),
                 )
                 .await
                 .context("create block rule: open vsx")?
@@ -242,7 +226,7 @@ impl Firewall {
                     guard.clone(),
                     layered_client.clone(),
                     data.clone(),
-                    remote_endpoint_config.clone(),
+                    config_source.clone(),
                     Some(MinPackageAgeGolang::new(notifier.clone())),
                 )
                 .await
@@ -252,7 +236,7 @@ impl Firewall {
                     guard,
                     layered_client,
                     data,
-                    remote_endpoint_config,
+                    config_source,
                 )
                 .await
                 .context("create block rule: skills.sh")?
@@ -385,6 +369,63 @@ impl Firewall {
         if let Some(list) = &self.passthrough_list {
             list.trigger_refresh();
         }
+    }
+
+    async fn create_config_source<C>(
+        guard: ShutdownGuard,
+        endpoint_config_uri: &Uri,
+        agent_identity: Option<AgentIdentity>,
+        data: SyncCompactDataStorage,
+        client: C,
+        notifier: Option<EventNotifier>,
+        config_file: Option<PathBuf>,
+    ) -> Option<EndpointConfigSource>
+    where
+        C: Service<Request, Output = Response, Error = OpaqueError> + Clone + Send + 'static,
+    {
+        if let Some(identity) = agent_identity.as_ref() {
+            match RemoteEndpointConfig::try_new(
+                guard,
+                endpoint_config_uri.clone(),
+                identity.clone(),
+                data,
+                client,
+                notifier,
+            )
+            .await
+            {
+                Ok(config) => Some(EndpointConfigSource::Remote(config)),
+                Err(err) => {
+                    tracing::warn!(
+                        error = %err,
+                        "failed to initialize endpoint config; config-based policy checks disabled"
+                    );
+                    None
+                }
+            }
+        } else {
+            match Self::read_config_file(config_file?).await {
+                Ok(config) => Some(EndpointConfigSource::from_config(config)),
+                Err(err) => {
+                    tracing::warn!(
+                        error = %err,
+                        "failed read the config from a file"
+                    );
+                    None
+                }
+            }
+        }
+    }
+
+    async fn read_config_file(config_file: PathBuf) -> Result<EndpointConfig, BoxError> {
+        let bytes = tokio::fs::read(&config_file)
+            .await
+            .context("read endpoint config file")?;
+
+        let config = serde_json::from_slice::<EndpointConfig>(&bytes)
+            .context("parse endpoint config file")?;
+
+        Ok(config)
     }
 }
 

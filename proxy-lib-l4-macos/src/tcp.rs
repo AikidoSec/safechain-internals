@@ -338,6 +338,7 @@ async fn create_firewall(
             reporting_endpoint,
             agent_identity,
             aikido_url,
+            None,
         ) => {
             result
         }
