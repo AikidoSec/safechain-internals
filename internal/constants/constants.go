@@ -10,5 +10,6 @@ const (
 	HeartbeatReportInterval   = 3 * time.Minute
 	SBOMReportInterval        = 24 * time.Hour
 	SetupWizardReshowInterval = 24 * time.Hour
+	AiUsageReportInterval     = 10 * time.Minute
 	ProxyStartMaxRetries      = 100
 )

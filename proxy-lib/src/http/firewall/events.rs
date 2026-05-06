@@ -74,6 +74,17 @@ pub struct TlsTerminationFailedEvent {
     pub error: String,
 }
 
+/// Reports a single observed call to a third-party AI provider.
+/// Detection only — no blocking, no token counts (yet).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiUsageEvent {
+    pub ts_ms: SystemTimestampMilliseconds,
+    /// Provider/company key, e.g. `"anthropic"`, `"openai"`, `"gemini"`.
+    pub provider: ArcStr,
+    /// Model identifier as sent by the client, e.g. `"claude-3-5-sonnet-20241022"`.
+    pub model: ArcStr,
+}
+
 #[cfg(test)]
 #[path = "events_tests.rs"]
 mod tests;

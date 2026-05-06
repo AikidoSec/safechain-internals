@@ -2,8 +2,11 @@ package cloud
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/AikidoSec/safechain-internals/internal/config"
@@ -72,6 +75,69 @@ func TestUnauthorizedTokenIsSuppressedUntilTokenChanges(t *testing.T) {
 	}
 	if requests != 2 {
 		t.Fatalf("expected request after token change, got %d total requests", requests)
+	}
+}
+
+func TestSendAiUsageStatsHitsCorrectEndpointWithExpectedShape(t *testing.T) {
+	withTempRunDir(t)
+	Init()
+
+	var (
+		gotPath string
+		gotBody []byte
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
+		gotBody = body
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cfg := &config.ConfigInfo{
+		Token:    "good-token",
+		DeviceID: "device-1",
+		BaseURL:  server.URL,
+	}
+
+	event := &AiUsageStatsEvent{
+		Models: []AiUsageModel{
+			{Provider: "anthropic", Model: "claude-opus-4-7"},
+		},
+	}
+
+	if err := SendAiUsageStats(context.Background(), cfg, event); err != nil {
+		t.Fatalf("expected SendAiUsageStats to succeed, got %v", err)
+	}
+
+	if want := "/" + ReportAiStatsEndpoint; gotPath != want {
+		t.Fatalf("expected POST to %q, got %q", want, gotPath)
+	}
+
+	var decoded AiUsageStatsEvent
+	if err := json.Unmarshal(gotBody, &decoded); err != nil {
+		t.Fatalf("failed to decode body as AiUsageStatsEvent: %v\nraw: %s", err, string(gotBody))
+	}
+	if len(decoded.Models) != 1 {
+		t.Fatalf("expected one model, got %d", len(decoded.Models))
+	}
+	got := decoded.Models[0]
+	if got.Provider != "anthropic" || got.Model != "claude-opus-4-7" {
+		t.Fatalf("expected anthropic/claude-opus-4-7, got %s/%s", got.Provider, got.Model)
+	}
+
+	// Wire format must match Wout's spec: `{models: [{provider, model}]}` —
+	// no agent-side timestamp until websockets/SSE.
+	if !strings.Contains(string(gotBody), `"models"`) {
+		t.Fatalf("expected payload to contain top-level `models` field, got: %s", string(gotBody))
+	}
+	for _, banned := range []string{`"last_seen_at"`, `"last_seen_ms"`, `"first_seen_ms"`, `"count"`, `"ts_ms"`} {
+		if strings.Contains(string(gotBody), banned) {
+			t.Fatalf("payload should not contain %s yet: %s", banned, string(gotBody))
+		}
 	}
 }
 

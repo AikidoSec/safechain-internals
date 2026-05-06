@@ -42,6 +42,7 @@ type Server struct {
 	eventStore    *eventStore
 	tlsEventStore *tlsEventStore
 	minAgeStore   *minPackageAgeEventStore
+	aiUsageStore  *aiUsageEventStore
 	chromeNames   *chromeExtensionNameResolver
 	mu            sync.RWMutex
 }
@@ -54,6 +55,7 @@ func New(cfg *config.ConfigInfo, ui UIProvider, proxy proxy.ProxyManager) *Serve
 		eventStore:    &eventStore{},
 		tlsEventStore: &tlsEventStore{},
 		minAgeStore:   &minPackageAgeEventStore{},
+		aiUsageStore:  &aiUsageEventStore{},
 		chromeNames:   newChromeExtensionNameResolver(),
 	}
 }
@@ -70,6 +72,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("POST /events/tls-termination-failed", s.handleTlsTerminationFailed)
 	mux.HandleFunc("POST /events/min-package-age", s.handleMinPackageAge)
 	mux.HandleFunc("POST /events/permissions", s.handlePermissionsUpdated)
+	mux.HandleFunc("POST /events/ai-usage", s.handleAiUsage)
 	mux.HandleFunc("GET /ping", s.handlePing)
 
 	mux.HandleFunc("POST /v1/events/{id}/request-access", s.handleRequestBypass)
@@ -80,6 +83,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("GET /v1/tls-events/{id}", s.handleGetTlsEventByID)
 	mux.HandleFunc("GET /v1/min-package-age-events", s.handleMinPackageAgeEvents)
 	mux.HandleFunc("GET /v1/min-package-age-events/{id}", s.handleGetMinPackageAgeEventByID)
+	mux.HandleFunc("GET /v1/ai-usage-events", s.handleAiUsageEvents)
 
 	mux.HandleFunc("GET /v1/version", s.handleVersion)
 

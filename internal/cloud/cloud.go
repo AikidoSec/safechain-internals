@@ -114,3 +114,7 @@ func SendActivity(ctx context.Context, config *config.ConfigInfo, event *Activit
 func SendRequestPackageInstallation(ctx context.Context, config *config.ConfigInfo, event *RequestPackageInstallationEvent) error {
 	return sendEvent(ctx, RequestPackageInstallationEndpoint, config, event)
 }
+
+func SendAiUsageStats(ctx context.Context, config *config.ConfigInfo, event *AiUsageStatsEvent) error {
+	return sendEvent(ctx, ReportAiStatsEndpoint, config, event)
+}

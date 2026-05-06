@@ -54,3 +54,13 @@ type RequestPackageInstallationEvent struct {
 		Ecosystems []EcosystemPackages `json:"ecosystems"`
 	} `json:"sbom"`
 }
+
+type AiUsageModel struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+}
+
+// AiUsageStatsEvent is the body sent to reportAiStats.
+type AiUsageStatsEvent struct {
+	Models []AiUsageModel `json:"models"`
+}
