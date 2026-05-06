@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use rama::{
-    error::{BoxError, ErrorContext as _},
-    http::{Response, service::web::response::IntoResponse},
+    Service,
+    error::{BoxError, ErrorContext as _, extra::OpaqueError},
+    http::{Request, Response, service::web::response::IntoResponse},
     net::tls::{
         ApplicationProtocol, DataEncoding,
         server::{
@@ -21,9 +22,13 @@ use rama::{
 
 use secrecy::{ExposeSecret, SecretBox};
 
-use crate::storage::{SyncCompactDataStorage, SyncSecrets};
+use crate::{
+    storage::{SyncCompactDataStorage, SyncSecrets},
+    utils::token::AgentIdentity,
+};
 
 pub mod mitm_relay_policy;
+mod intermediate;
 mod root;
 
 #[derive(Clone)]
@@ -90,6 +95,10 @@ impl RootCaKeyPair {
 pub struct RootCA(Arc<SecretBox<String>>);
 
 impl RootCA {
+    pub fn new(pem: NonEmptyStr) -> Self {
+        RootCA(Arc::new(SecretBox::new(Box::new(pem.as_ref().to_owned()))))
+    }
+
     pub fn as_http_response(&self) -> Response {
         let ca = self.0.expose_secret();
         ca.clone().into_response()
@@ -164,4 +173,24 @@ pub fn load_or_create_root_ca_key_pair(
     data_storage: &SyncCompactDataStorage,
 ) -> Result<RootCaKeyPair, BoxError> {
     self::root::new_root_tls_crt_key_pair(secrets, data_storage)
+}
+
+pub async fn load_or_create_int_ca_key_pair<C>(
+    secrets: &SyncSecrets,
+    data_storage: &SyncCompactDataStorage,
+    identity: &AgentIdentity,
+    aikido_url: &rama::http::Uri,
+    http_client: &C,
+) -> Result<RootCaKeyPair, BoxError>
+where
+    C: Service<Request, Output = Response, Error = OpaqueError>,
+{
+    self::intermediate::load_or_create_int_ca_key_pair(
+        secrets,
+        data_storage,
+        identity,
+        aikido_url,
+        http_client,
+    )
+    .await
 }

@@ -60,6 +60,7 @@ pub async fn start_tcp_server(
     bind: SocketAddr,
     executor: Executor,
     peek_duration: Duration,
+    use_aikido_ca: bool,
     agent_identity: Option<AgentIdentity>,
     reporting_endpoint: Option<Uri>,
     aikido_url: Uri,
@@ -69,6 +70,7 @@ pub async fn start_tcp_server(
     let tcp_svc = try_new_tcp_service(
         executor.clone(),
         peek_duration,
+        use_aikido_ca,
         agent_identity,
         reporting_endpoint,
         aikido_url,
@@ -137,14 +139,39 @@ async fn try_new_tcp_listener(
 async fn try_new_tcp_service(
     executor: Executor,
     peek_duration: Duration,
+    use_aikido_ca: bool,
     agent_identity: Option<AgentIdentity>,
     reporting_endpoint: Option<Uri>,
     aikido_url: Uri,
     data_storage: SyncCompactDataStorage,
     secret_storage: SyncSecrets,
 ) -> Result<impl Service<TcpStream, Output = (), Error = Infallible> + Clone, BoxError> {
-    let root_ca_key_pair = tls::load_or_create_root_ca_key_pair(&secret_storage, &data_storage)
-        .context("prepare proxy traffic CA crt/key pair")?;
+    let guard = executor
+        .guard()
+        .cloned()
+        .context("L4 engine runtime is expected to inject shutdown guard")?;
+
+    let root_ca_key_pair = if use_aikido_ca {
+        let identity = agent_identity.as_ref().ok_or_else(|| {
+            OpaqueError::from_static_str(
+                "agent identity required when --use-aikido-ca is set",
+            )
+        })?;
+        let http_client = new_http_client_for_internal(Executor::graceful(guard.clone()))
+            .context("create http client for intermediate CA signing")?;
+        tls::load_or_create_int_ca_key_pair(
+            &secret_storage,
+            &data_storage,
+            identity,
+            &aikido_url,
+            &http_client,
+        )
+        .await
+        .context("load or create intermediate CA key pair")?
+    } else {
+        tls::load_or_create_root_ca_key_pair(&secret_storage, &data_storage)
+            .context("prepare proxy traffic CA crt/key pair")?
+    };
 
     let ca_crt_pem_bytes: &[u8] = root_ca_key_pair
         .certificate()
@@ -153,11 +180,6 @@ async fn try_new_tcp_service(
         .leak();
 
     let (ca_crt, ca_key) = root_ca_key_pair.into_pair();
-
-    let guard = executor
-        .guard()
-        .cloned()
-        .context("L4 engine runtime is expected to inject shutdown guard")?;
 
     tracing::debug!("creating firewall state for transparent proxy extension");
     let firewall = create_firewall(
