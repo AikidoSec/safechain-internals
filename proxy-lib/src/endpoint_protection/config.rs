@@ -26,6 +26,10 @@ pub enum EndpointConfigSource {
 }
 
 impl EndpointConfigSource {
+    pub fn from_config(config: EndpointConfig) -> Self {
+        Self::Local(Arc::new(Some(config)))
+    }
+    
     pub fn current(&self) -> Arc<Option<EndpointConfig>> {
         match self {
             Self::Local(conf) => conf.clone(),
