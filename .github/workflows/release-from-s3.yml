@@ -1,0 +1,39 @@
+name: Release from S3
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  S3_BASE_URL: https://aikido-endpoint-binaries.s3.eu-west-1.amazonaws.com
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download installers from S3
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          echo "Downloading installers for ${TAG} from ${S3_BASE_URL}"
+          curl --fail --location --show-error --silent \
+            "${S3_BASE_URL}/${TAG}/EndpointProtection.msi" \
+            --output EndpointProtection.msi
+          curl --fail --location --show-error --silent \
+            "${S3_BASE_URL}/${TAG}/EndpointProtection.pkg" \
+            --output EndpointProtection.pkg
+          ls -la EndpointProtection.msi EndpointProtection.pkg
+
+      - name: Create draft GitHub release
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
+        with:
+          draft: true
+          files: |
+            EndpointProtection.msi
+            EndpointProtection.pkg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
