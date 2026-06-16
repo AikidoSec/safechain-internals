@@ -1,4 +1,4 @@
-# Aikido Endpoint Protection — Doctor (Windows)
+# Aikido Endpoint Protection -- Doctor (Windows)
 
 $AppDir  = "C:\Program Files\AikidoSecurity\EndpointProtection"
 $Healthy = "$AppDir\scripts\Healthy.ps1"
@@ -16,13 +16,40 @@ function Fail($name, $detail = $null) {
     $script:status = 1
 }
 
-function ExpectConfig($name, $actual, $expected) {
+function ExpectEnv($var, $expected) {
+    $actual = [System.Environment]::GetEnvironmentVariable($var, "User")
     if ($actual -eq $expected) {
-        Ok $name
+        Ok $var
     } else {
         $got = if ($actual) { $actual } else { "<not set>" }
-        Fail $name "expected '$expected', got '$got'"
+        Fail $var "expected '$expected', got '$got'"
     }
+}
+
+function IsSetEnv($var) {
+    $actual = [System.Environment]::GetEnvironmentVariable($var, "User")
+    if ($actual) { Ok $var } else { Fail $var "not set" }
+}
+
+function CheckGemrc {
+    $gemrc = "$env:USERPROFILE\.gemrc"
+    if (-not (Test-Path $gemrc)) {
+        Fail "~/.gemrc" "file not found"
+        return
+    }
+    $lines = Get-Content $gemrc
+    $inBlock = $false
+    $certPath = $null
+    foreach ($line in $lines) {
+        if ($line -match "# aikido-endpoint-ruby-gemrc-start") { $inBlock = $true }
+        if ($inBlock -and $line -match "^:ssl_ca_cert:\s+(.+)") { $certPath = $Matches[1].Trim() }
+        if ($line -match "# aikido-endpoint-ruby-gemrc-end") { $inBlock = $false }
+    }
+    if (-not $certPath) {
+        Fail "~/.gemrc" "Aikido block not found or :ssl_ca_cert: missing"
+        return
+    }
+    if (Test-Path $certPath) { Ok "~/.gemrc :ssl_ca_cert" } else { Fail "~/.gemrc :ssl_ca_cert" "cert file not found: $certPath" }
 }
 
 Write-Host "Aikido Endpoint Protection -- Doctor"
@@ -38,11 +65,7 @@ if (Test-Path $AppDir) {
 
 if (Test-Path $Healthy) {
     & $Healthy | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        Ok "Health check"
-    } else {
-        Fail "Health check" "returned exit code $LASTEXITCODE"
-    }
+    if ($LASTEXITCODE -eq 0) { Ok "Health check" } else { Fail "Health check" "returned exit code $LASTEXITCODE" }
 } else {
     Fail "Health check" "script not found: $Healthy"
 }
@@ -62,25 +85,40 @@ $files = @(
 )
 
 foreach ($f in $files) {
-    if (Test-Path "$RunDir\$f") {
-        Ok $f
-    } else {
-        Fail $f "missing from $RunDir"
-    }
+    if (Test-Path "$RunDir\$f") { Ok $f } else { Fail $f "missing from $RunDir" }
 }
 
 Write-Host "`nPackage manager CA configuration"
 
-$npmCafile = (npm config get cafile 2>$null) -replace "`r|`n", ""
-ExpectConfig "npm cafile" $npmCafile "$RunDir\endpoint-protection-combined-ca.pem"
+# Node.js
+ExpectEnv "NODE_EXTRA_CA_CERTS" "$RunDir\endpoint-protection-combined-ca.pem"
+ExpectEnv "npm_config_cafile"   "$RunDir\endpoint-protection-combined-ca.pem"
 
-$nodeExtraCa = [System.Environment]::GetEnvironmentVariable("NODE_EXTRA_CA_CERTS", "Machine")
-ExpectConfig "NODE_EXTRA_CA_CERTS (Machine)" $nodeExtraCa "$RunDir\endpoint-protection-combined-ca.pem"
+# Python
+ExpectEnv "PIP_CERT"           "$RunDir\endpoint-protection-pip-combined-ca.pem"
+ExpectEnv "REQUESTS_CA_BUNDLE" "$RunDir\endpoint-protection-pip-combined-ca.pem"
+ExpectEnv "SSL_CERT_FILE"      "$RunDir\endpoint-protection-openssl-combined-ca.pem"
 
-$pipCert = (pip config get global.cert 2>$null) -replace "`r|`n", ""
-ExpectConfig "pip global.cert" $pipCert "$RunDir\endpoint-protection-pip-combined-ca.pem"
+# Java
+$javaOpts = [System.Environment]::GetEnvironmentVariable("JAVA_TOOL_OPTIONS", "User")
+if ($javaOpts -and $javaOpts.Contains("-Djavax.net.ssl.trustStore=NUL") -and $javaOpts.Contains("-Djavax.net.ssl.trustStoreType=Windows-ROOT")) {
+    Ok "JAVA_TOOL_OPTIONS"
+} else {
+    Fail "JAVA_TOOL_OPTIONS" "expected to contain '-Djavax.net.ssl.trustStore=NUL' and '-Djavax.net.ssl.trustStoreType=Windows-ROOT'"
+}
 
+# Ruby
+ExpectEnv "BUNDLE_SSL_CA_CERT" "$RunDir\endpoint-protection-ruby-combined-ca.pem"
+CheckGemrc
+
+# Git (gitconfig, not an env var)
 $gitCa = (git config --global http.sslCAInfo 2>$null) -replace "`r|`n", ""
-ExpectConfig "git http.sslCAInfo" $gitCa "$RunDir\endpoint-protection-git-combined-ca.pem"
+$expectedGitCa = "$RunDir\endpoint-protection-git-combined-ca.pem"
+if ($gitCa -eq $expectedGitCa) {
+    Ok "git http.sslCAInfo"
+} else {
+    $got = if ($gitCa) { $gitCa } else { "<not set>" }
+    Fail "git http.sslCAInfo" "expected '$expectedGitCa', got '$got'"
+}
 
 exit $status
