@@ -57,6 +57,13 @@
                     <string>NetworkExtension</string>
                 </array>
             </dict>
+            <key>RemovableSystemExtensions</key>
+            <dict>
+                <key>7VPF8GD6J4</key>
+                <array>
+                    <string>com.aikido.endpoint.proxy.l4.dist.extension</string>
+                </array>
+            </dict>
         </dict>
         <dict>
             <key>PayloadType</key>
