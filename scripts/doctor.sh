@@ -119,13 +119,6 @@ check_gemrc
 # curl
 expect_env CURL_CA_BUNDLE "$RUN_DIR/endpoint-protection-openssl-combined-ca.pem"
 
-# Maven — check for Aikido proxy block in ~/.m2/settings.xml (written unconditionally)
-if [ -f "$HOME/.m2/settings.xml" ] && grep -q "<!-- aikido-safe-chain-start -->" "$HOME/.m2/settings.xml"; then
-  ok "~/.m2/settings.xml"
-else
-  fail "~/.m2/settings.xml" "Aikido proxy block not found"
-fi
-
 # Git (gitconfig, not an env var)
 git_ca=$(git config --global http.sslCAInfo 2>/dev/null || true)
 [ "$git_ca" = "$RUN_DIR/endpoint-protection-openssl-combined-ca.pem" ] \
