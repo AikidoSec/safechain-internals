@@ -99,7 +99,19 @@ echo "Package manager CA configuration"
 
 # Node.js
 expect_env NODE_EXTRA_CA_CERTS "$RUN_DIR/endpoint-protection-combined-ca.pem"
-expect_env npm_config_cafile   "$RUN_DIR/endpoint-protection-npm-cafile.pem"
+
+if ! command -v npm &>/dev/null; then
+  echo "  [SKIP] npm cafile -- npm not found"
+else
+  npm_cafile=$(npm config get cafile 2>/dev/null || true)
+  if [ -z "$npm_cafile" ] || [ "$npm_cafile" = "null" ]; then
+    ok "npm cafile"
+  elif [ "$npm_cafile" = "$RUN_DIR/endpoint-protection-npm-cafile.pem" ]; then
+    ok "npm cafile"
+  else
+    fail "npm cafile" "expected null or '$RUN_DIR/endpoint-protection-npm-cafile.pem', got '$npm_cafile'"
+  fi
+fi
 
 # Python
 expect_env PIP_CERT                      "$RUN_DIR/endpoint-protection-pip-combined-ca.pem"

@@ -92,7 +92,19 @@ Write-Host "`nPackage manager CA configuration"
 
 # Node.js
 ExpectEnv "NODE_EXTRA_CA_CERTS" "$RunDir\endpoint-protection-combined-ca.pem"
-ExpectEnv "npm_config_cafile"   "$RunDir\endpoint-protection-combined-ca.pem"
+
+if (Get-Command npm -ErrorAction SilentlyContinue) {
+    $npmCafile = (npm config get cafile 2>$null) -replace "`r|`n", ""
+    if (-not $npmCafile -or $npmCafile -eq "null") {
+        Ok "npm cafile"
+    } elseif ($npmCafile -eq "$RunDir\endpoint-protection-npm-cafile.pem") {
+        Ok "npm cafile"
+    } else {
+        Fail "npm cafile" "expected null or '$RunDir\endpoint-protection-npm-cafile.pem', got '$npmCafile'"
+    }
+} else {
+    Write-Host "  [SKIP] npm cafile -- npm not found"
+}
 
 # Python
 ExpectEnv "PIP_CERT"           "$RunDir\endpoint-protection-pip-combined-ca.pem"
