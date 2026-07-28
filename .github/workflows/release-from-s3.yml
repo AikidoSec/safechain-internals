@@ -19,6 +19,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
           echo "Downloading installers for ${TAG} from ${S3_BASE_URL}"
           curl --fail --location --show-error --silent \
             "${S3_BASE_URL}/${TAG}/EndpointProtection.msi" \
@@ -26,7 +27,13 @@ jobs:
           curl --fail --location --show-error --silent \
             "${S3_BASE_URL}/${TAG}/EndpointProtection.pkg" \
             --output EndpointProtection.pkg
-          ls -la EndpointProtection.msi EndpointProtection.pkg
+          cp EndpointProtection.pkg EndpointProtection-mdm.pkg
+          cp EndpointProtection.pkg "EndpointProtection-${VERSION}.pkg"
+          cp EndpointProtection.msi "EndpointProtection-${VERSION}.msi"
+          ls -la EndpointProtection.msi EndpointProtection.pkg \
+            EndpointProtection-mdm.pkg \
+            "EndpointProtection-${VERSION}.pkg" \
+            "EndpointProtection-${VERSION}.msi"
 
       - name: Create draft GitHub release
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
@@ -35,5 +42,8 @@ jobs:
           files: |
             EndpointProtection.msi
             EndpointProtection.pkg
+            EndpointProtection-mdm.pkg
+            EndpointProtection-*.pkg
+            EndpointProtection-*.msi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
