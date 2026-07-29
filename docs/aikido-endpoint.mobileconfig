@@ -5,28 +5,39 @@
     <key>PayloadContent</key>
     <array>
         <dict>
-            <key>FilterDataProviderBundleIdentifier</key>
-            <string>com.aikido.endpoint.proxy.l4.dist.extension</string>
-            <key>FilterDataProviderDesignatedRequirement</key>
-            <string>identifier "com.aikido.endpoint.proxy.l4.dist.extension" and anchor apple generic and certificate leaf[subject.OU] = "7VPF8GD6J4"</string>
-            <key>FilterSockets</key>
-            <true/>
-            <key>FilterType</key>
-            <string>Plugin</string>
-            <key>PayloadDisplayName</key>
-            <string>Web Content Filter</string>
-            <key>PayloadIdentifier</key>
-            <string>com.apple.webcontent-filter.2DF5FE40-7D1D-489E-960B-E5D403D79A0E</string>
             <key>PayloadType</key>
-            <string>com.apple.webcontent-filter</string>
+            <string>com.apple.vpn.managed</string>
+            <key>PayloadIdentifier</key>
+            <string>com.aikido.endpoint.proxy.l4.transparentproxy</string>
             <key>PayloadUUID</key>
-            <string>2DF5FE40-7D1D-489E-960B-E5D403D79A0E</string>
+            <string>2C3F9095-B2EF-4D76-BD5F-8B9B196CED16</string>
             <key>PayloadVersion</key>
             <integer>1</integer>
-            <key>PluginBundleID</key>
-            <string>com.aikido.endpoint.proxy.l4.dist</string>
+            <key>PayloadDisplayName</key>
+            <string>Aikido Endpoint Transparent Proxy</string>
+            <key>PayloadDescription</key>
+            <string>Allows the Aikido Endpoint transparent proxy configuration to be added without user approval.</string>
+            <key>PayloadOrganization</key>
+            <string>Aikido Security</string>
             <key>UserDefinedName</key>
-            <string>Aikido Endpoint Proxy</string>
+            <string>Aikido Endpoint Proxy (MDM)</string>
+            <key>VPNType</key>
+            <string>TransparentProxy</string>
+            <key>VPNSubType</key>
+            <string>com.aikido.endpoint.proxy.l4.dist</string>
+            <key>TransparentProxy</key>
+            <dict>
+                <key>AuthenticationMethod</key>
+                <string>Password</string>
+                <key>ProviderType</key>
+                <string>app-proxy</string>
+                <key>ProviderBundleIdentifier</key>
+                <string>com.aikido.endpoint.proxy.l4.dist.extension</string>
+                <key>ProviderDesignatedRequirement</key>
+                <string>identifier "com.aikido.endpoint.proxy.l4.dist.extension" and anchor apple generic and certificate leaf[subject.OU] = "7VPF8GD6J4"</string>
+                <key>RemoteAddress</key>
+                <string>127.0.0.1</string>
+            </dict>
         </dict>
         <dict>
             <key>PayloadType</key>
