@@ -42,7 +42,6 @@ jobs:
           files: |
             EndpointProtection.msi
             EndpointProtection.pkg
-            EndpointProtection-mdm.pkg
             EndpointProtection-*.pkg
             EndpointProtection-*.msi
         env:
