@@ -34,8 +34,14 @@ jobs:
             "${S3_BASE_URL}/${TAG}/EndpointProtection-amd64.el9.rpm" \
             --output EndpointProtection-amd64.el9.rpm
           curl --fail --location --show-error --silent \
+            "${S3_BASE_URL}/${TAG}/EndpointProtection-amd64.el10.rpm" \
+            --output EndpointProtection-amd64.el10.rpm
+          curl --fail --location --show-error --silent \
             "${S3_BASE_URL}/${TAG}/EndpointProtection-arm64.deb" \
             --output EndpointProtection-arm64.deb
+          curl --fail --location --show-error --silent \
+            "${S3_BASE_URL}/${TAG}/EndpointProtection-arm64.el9.rpm" \
+            --output EndpointProtection-arm64.el9.rpm
           curl --fail --location --show-error --silent \
             "${S3_BASE_URL}/${TAG}/EndpointProtection-arm64.el10.rpm" \
             --output EndpointProtection-arm64.el10.rpm
@@ -48,7 +54,9 @@ jobs:
             "EndpointProtection-${VERSION}.msi" \
             EndpointProtection-amd64.deb \
             EndpointProtection-amd64.el9.rpm \
+            EndpointProtection-amd64.el10.rpm \
             EndpointProtection-arm64.deb \
+            EndpointProtection-arm64.el9.rpm \
             EndpointProtection-arm64.el10.rpm
 
       - name: Create draft GitHub release
@@ -62,7 +70,9 @@ jobs:
             EndpointProtection-*.msi
             EndpointProtection-amd64.deb
             EndpointProtection-amd64.el9.rpm
+            EndpointProtection-amd64.el10.rpm
             EndpointProtection-arm64.deb
+            EndpointProtection-arm64.el9.rpm
             EndpointProtection-arm64.el10.rpm
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
