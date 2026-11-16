@@ -20,6 +20,7 @@ set -euo pipefail
 
 readonly INSTALLER_URL="https://raw.githubusercontent.com/AikidoSec/safe-chain/main/install-scripts/install-endpoint-linux.sh"
 START=/usr/bin/aikido-endpoint-protection-start
+LOG_DIR=/var/log/aikidosecurity/endpoint-protection
 TEST_URL="https://registry.npmjs.org/safe-chain-test/-/safe-chain-test-0.0.1-security.tgz"
 
 in_actions() { [ "${GITHUB_ACTIONS:-}" = "true" ]; }
@@ -28,6 +29,18 @@ endgroup() { if in_actions; then echo "::endgroup::"; fi; }
 fail() {
     if in_actions; then echo "::error title=Aikido Device Protection::$1"; else echo "Error: $1" >&2; fi
     exit 1
+}
+
+# The runner is gone after the job, so its log files can't be read later:
+# print the end of the agent's logs into the job log before failing.
+show_agent_logs() {
+    endgroup
+    group "Agent logs (last 100 lines)"
+    for f in "$LOG_DIR/endpoint-protection.log" "$LOG_DIR/endpoint-protection.err"; do
+        echo "--- $f"
+        as_root tail -n 100 "$f" 2>/dev/null || echo "(not readable)"
+    done
+    endgroup
 }
 
 [ "$(uname -s)" = "Linux" ] || fail "Only Linux runners are supported (this job runs on $(uname -s))."
@@ -66,7 +79,11 @@ endgroup
 group "Start Aikido Device Protection"
 # With systemd running (hosted runners) the package already started the unit
 # and this only waits; in a job container it starts the daemon.
-as_root "$START" --wait-for-healthy
+as_root "$START" --wait-for-healthy || {
+    rc=$?
+    show_agent_logs
+    fail "The agent did not start or never became healthy (exit $rc). The end of its logs is in the 'Agent logs' group above."
+}
 
 # Healthy can pass through the proxy.addr.txt fallback before setup has written
 # /etc/profile.d/aikido-proxy.sh, so exporting now would miss the proxy
@@ -81,7 +98,10 @@ for _ in $(seq 1 60); do
     fi
     sleep 1
 done
-[ "${ready:-}" = 1 ] || fail "The agent started but did not finish setup within 60s. Logs: /var/log/aikidosecurity/endpoint-protection/"
+if [ "${ready:-}" != 1 ]; then
+    show_agent_logs
+    fail "The agent started but did not finish setup within 60s. The end of its logs is in the 'Agent logs' group above."
+fi
 echo "Setup complete."
 endgroup
 
