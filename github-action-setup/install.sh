@@ -23,11 +23,30 @@ START=/usr/bin/aikido-endpoint-protection-start
 LOG_DIR=/var/log/aikidosecurity/endpoint-protection
 TEST_URL="https://registry.npmjs.org/safe-chain-test/-/safe-chain-test-0.0.1-security.tgz"
 
-in_actions() { [ "${GITHUB_ACTIONS:-}" = "true" ]; }
-group() { if in_actions; then echo "::group::$1"; else echo "== $1"; fi; }
-endgroup() { if in_actions; then echo "::endgroup::"; fi; }
+in_actions() {
+    [ "${GITHUB_ACTIONS:-}" = "true" ]
+}
+
+group() {
+    if in_actions; then
+        echo "::group::$1"
+    else
+        echo "== $1"
+    fi
+}
+
+endgroup() {
+    if in_actions; then
+        echo "::endgroup::"
+    fi
+}
+
 fail() {
-    if in_actions; then echo "::error title=Aikido Device Protection::$1"; else echo "Error: $1" >&2; fi
+    if in_actions; then
+        echo "::error title=Aikido Device Protection::$1"
+    else
+        echo "Error: $1" >&2
+    fi
     exit 1
 }
 
@@ -115,15 +134,24 @@ shopt -u nullglob
 [ "${#dropins[@]}" -gt 0 ] || fail "The agent wrote no /etc/profile.d/aikido-*.sh files; nothing to export."
 
 dump_env() {
-    # NUL-separated so values with newlines survive
+    # NUL-separated so values with newlines survive. Exits non-zero if a
+    # drop-in can't be read or fails to load.
     env -i PATH="$PATH" bash --noprofile --norc -c '
-        for f in "$@"; do . "$f"; done
+        for f in "$@"; do
+            . "$f" || { echo "failed to load $f" >&2; exit 1; }
+        done
         unset _ PWD SHLVL OLDPWD
         env -0' bash "$@"
 }
 
+# Capture both environments before writing anything, so a drop-in that fails
+# fails the step instead of leaving later steps with part of the settings.
+dump_env >"$tmp/env.before" || fail "Could not start a clean shell to read the agent's settings."
+dump_env "${dropins[@]}" >"$tmp/env.after" ||
+    fail "Could not load the agent's settings from ${dropins[*]}."
+
 declare -A before=()
-while IFS= read -r -d '' kv; do before["${kv%%=*}"]="${kv#*=}"; done < <(dump_env)
+while IFS= read -r -d '' kv; do before["${kv%%=*}"]="${kv#*=}"; done <"$tmp/env.before"
 
 exported=0
 while IFS= read -r -d '' kv; do
@@ -134,7 +162,7 @@ while IFS= read -r -d '' kv; do
     echo "$name=$value"
     export "$name=$value"
     exported=$((exported + 1))
-done < <(dump_env "${dropins[@]}")
+done <"$tmp/env.after"
 [ "$exported" -gt 0 ] || fail "The drop-ins (${dropins[*]}) set no variables."
 endgroup
 
