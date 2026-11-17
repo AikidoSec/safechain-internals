@@ -1,0 +1,25 @@
+name: Aikido Device Protection
+description: Install Aikido Device Protection on a Linux job so every later step's package downloads are checked.
+author: Aikido Security
+branding:
+  icon: shield
+  color: purple
+
+inputs:
+  token:
+    description: Device Protection token. Store it as a secret, e.g. secrets.AIKIDO_TOKEN.
+    required: true
+  self-check:
+    description: Fail the step unless a known test package is blocked afterwards.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Install and start Aikido Device Protection
+      shell: bash
+      env:
+        AIKIDO_TOKEN: ${{ inputs.token }}
+        AIKIDO_SELF_CHECK: ${{ inputs.self-check }}
+      run: bash "$GITHUB_ACTION_PATH/install.sh"
